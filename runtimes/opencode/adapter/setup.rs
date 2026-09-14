@@ -1,4 +1,3 @@
-use crate::app_paths::unpeel_home;
 use crate::hook_assets::{
     notify_hook_script_path, write_executable_script, write_file_atomic, NOTIFY_HOOK_SCRIPT,
 };
@@ -10,6 +9,10 @@ pub(crate) const OPENCODE_PLUGIN_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/opencode/assets/hooks/plugin.js"
 ));
 
+/// Install the Unpeel notify plugin into OpenCode's own global plugin
+/// directory. OpenCode loads every `plugin/*.js` beneath its config dir, so
+/// a hand-typed `opencode` reports through the plugin without any launch
+/// environment. The plugin no-ops outside an Unpeel session.
 pub fn install_opencode_plugin() -> Result<(), String> {
     let notify_path = notify_hook_script_path();
     write_executable_script(&notify_path, NOTIFY_HOOK_SCRIPT, "notify hook script")?;
@@ -26,9 +29,19 @@ pub fn install_opencode_plugin() -> Result<(), String> {
     write_file_atomic(&opencode_plugin_path(), &plugin, "OpenCode plugin")?;
     Ok(())
 }
+
+/// OpenCode's global config dir: `$XDG_CONFIG_HOME/opencode`, default
+/// `~/.config/opencode`.
 pub fn opencode_config_dir() -> PathBuf {
-    unpeel_home().join("hooks").join("opencode")
+    if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME").filter(|value| !value.is_empty()) {
+        return PathBuf::from(dir).join("opencode");
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".config")
+        .join("opencode")
 }
+
 pub(crate) fn opencode_plugin_dir() -> PathBuf {
     opencode_config_dir().join("plugin")
 }

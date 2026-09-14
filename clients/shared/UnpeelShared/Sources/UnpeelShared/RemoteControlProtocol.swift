@@ -29,6 +29,10 @@ public enum RemoteControlProtocol {
     public static let mobileTLSMinimumServerVersion = "0.5.3"
     public static let openersSetCapability = "settings.openers.set"
     public static let appsInstallCapability = "apps.install"
+    /// Install one runtime's Unpeel integration (hooks + MCP registration)
+    /// on the Host; bootstrap's `availableAgents` rows say whether one exists
+    /// and whether it is installed.
+    public static let integrationsInstallCapability = "integrations.install"
     public static let appsOpenCapability = "apps.open"
 }
 
@@ -2410,6 +2414,31 @@ public struct RemoteAgentSummary: Codable, Equatable, Identifiable, Sendable {
     public let installed: Bool
     public let installCommand: String?
     public let websiteURL: String?
+    /// The runtime ships an Unpeel integration the Host can install.
+    /// `nil` on Hosts that predate `integrations.install`.
+    public let integrationInstallable: Bool?
+    /// The user installed that integration on this Host.
+    public let integrationInstalled: Bool?
+
+    public init(
+        id: String,
+        name: String,
+        command: String,
+        installed: Bool,
+        installCommand: String? = nil,
+        websiteURL: String? = nil,
+        integrationInstallable: Bool? = nil,
+        integrationInstalled: Bool? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.command = command
+        self.installed = installed
+        self.installCommand = installCommand
+        self.websiteURL = websiteURL
+        self.integrationInstallable = integrationInstallable
+        self.integrationInstalled = integrationInstalled
+    }
 }
 
 public struct RemotePluginActivationPatch: Codable, Equatable, Sendable {

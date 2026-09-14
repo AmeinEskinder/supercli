@@ -10,21 +10,16 @@ pub(crate) fn fx_mcp_config_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".fx").join("mcp.json"))
 }
 
-/// The managed `unpeel` entry points at the provider-neutral environment
-/// gate. Deliberately no `environment` block: fx replaces the child's whole
-/// environment when one is declared and inherits the parent's otherwise
-/// (`mcp_runtime.zig` builds an env map only from configured entries), so
-/// omitting it is what carries `UNPEEL_SESSION_ID` and the per-launch grant
-/// variables into each session's gate process. Outside a granted hosted
-/// Session the gate serves a valid endpoint with no tools.
-pub(crate) fn fx_mcp_server_value(executable: &str) -> Value {
+/// The managed `unpeel` entry points at the Unpeel MCP shim. Deliberately no
+/// `environment` block: fx replaces the child's whole environment when one is
+/// declared and inherits the parent's otherwise (`mcp_runtime.zig` builds an
+/// env map only from configured entries), so omitting it is what carries
+/// `UNPEEL_SESSION_ID` into each session's gate process. Outside a granted
+/// hosted Session the gate serves a valid endpoint with no tools.
+pub(crate) fn fx_mcp_server_value(shim: &str) -> Value {
     json!({
         "type": "local",
-        "command": [
-            executable,
-            crate::mcp_gate::MCP_GATE_ARG,
-            crate::mcp_gate::UNIFIED_KIND,
-        ],
+        "command": [shim],
         "enabled": true,
     })
 }
@@ -46,8 +41,8 @@ pub fn install_fx_runtime_support() -> Result<(), String> {
     if !servers.is_object() {
         return Ok(());
     }
-    let executable = crate::session_host::resolve_current_executable()?;
-    let desired = fx_mcp_server_value(&executable.to_string_lossy());
+    let shim = crate::integrations::install::write_mcp_shim()?;
+    let desired = fx_mcp_server_value(&shim.to_string_lossy());
     let servers = servers.as_object_mut().unwrap();
     if servers.get("unpeel") == Some(&desired) {
         return Ok(());
@@ -64,12 +59,9 @@ mod tests {
 
     #[test]
     fn managed_entry_declares_no_environment_so_identity_is_inherited() {
-        let entry = fx_mcp_server_value("/bin/unpeel-host");
+        let entry = fx_mcp_server_value("/home/me/.unpeel/bin/unpeel-mcp");
         assert_eq!(entry["type"], "local");
-        assert_eq!(
-            entry["command"],
-            json!(["/bin/unpeel-host", "__mcp_gate__", "unified"])
-        );
+        assert_eq!(entry["command"], json!(["/home/me/.unpeel/bin/unpeel-mcp"]));
         assert_eq!(entry["enabled"], true);
         assert!(entry.get("environment").is_none());
         assert!(entry.get("env").is_none());

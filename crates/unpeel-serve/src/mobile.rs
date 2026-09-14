@@ -1864,6 +1864,11 @@ fn handle_with_effects(
             let (status, body) = unpeel_core::controller_host::opener_response(&body_json(request));
             (status, body.to_string())
         }
+        ("POST", "/mobile/integrations/install") => {
+            let (status, body) =
+                unpeel_core::controller_host::integration_install_response(&body_json(request));
+            (status, body.to_string())
+        }
         ("POST", "/mobile/apps/install") => {
             let (status, body) =
                 unpeel_core::controller_host::app_install_response(&body_json(request));

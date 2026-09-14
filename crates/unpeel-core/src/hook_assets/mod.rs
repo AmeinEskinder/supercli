@@ -557,26 +557,20 @@ pub(crate) fn notify_hook_script_path() -> PathBuf {
     unpeel_home().join("hooks").join("notify-hook.sh")
 }
 
-// Public compatibility facade. Runtime-owned setup code moved beside each
-// adapter, but these functions were already part of `unpeel_core::hook_assets`.
-// Keep their paths stable for downstream callers while new integrations call
-// the package-local setup modules directly.
+// Public compatibility facade. Runtime-owned setup code lives beside each
+// adapter, but these installers were already part of `unpeel_core::hook_assets`.
+// Keep their paths stable for downstream callers; new code goes through
+// `integrations::install`.
 pub use crate::integrations::{
     amp::setup::{install_amp_plugin, prepare_amp_project_plugin},
-    claude::setup::{
-        claude_browser_mcp_config_path, claude_mcp_config_path, claude_unpeel_mcp_config_path,
-        install_claude_hooks,
-    },
-    cline::setup::{cline_home_dir, install_cline_hooks},
-    codex::setup::{install_codex_wrapper, wrapper_bin_dir},
+    claude::setup::install_claude_hooks,
+    cline::setup::{cline_home_dir, cline_user_mcp_config_path, install_cline_hooks},
+    codex::setup::install_codex_integration,
     copilot::setup::{install_copilot_hook, prepare_copilot_project_hooks},
     cursor_agent::setup::{install_cursor_hooks, write_cursor_mcp_config},
     gemini::setup::install_gemini_hooks,
-    grok::setup::{app_appearance_path, grok_appearance_bin_dir, install_grok_hooks},
-    kimi::setup::{
-        install_kimi_hooks, kimi_browser_mcp_config_path, kimi_global_mcp_config_path,
-        kimi_mcp_config_path, kimi_unpeel_mcp_config_path,
-    },
+    grok::setup::install_grok_hooks,
+    kimi::setup::{install_kimi_hooks, kimi_global_mcp_config_path},
     kiro_cli::setup::install_kiro_hooks,
     muse::setup::{install_muse_hooks, muse_plugin_dir},
     opencode::setup::{install_opencode_plugin, opencode_config_dir},
@@ -594,15 +588,11 @@ pub(crate) use crate::integrations::{
         build_codex_hook_command, build_codex_hook_entry, codex_hooks_feature_is_enabled,
         enable_codex_hooks_feature_in_toml, parse_managed_codex_hook_command,
         reconcile_codex_hooks_json, CODEX_MANAGED_HOOK_SUFFIX, CODEX_NOTIFY_NORMALIZER_SCRIPT,
-        CODEX_WRAPPER_SCRIPT,
     },
     copilot::setup::COPILOT_HOOK_SCRIPT,
     cursor_agent::setup::{merge_cursor_mcp_servers_at, CURSOR_HOOK_SCRIPT},
     gemini::setup::GEMINI_HOOK_SCRIPT,
-    grok::setup::{
-        grok_hooks_json, GROK_COMMAND_WRAPPER_SCRIPT, GROK_DEFAULTS_WRAPPER_SCRIPT,
-        GROK_HOOK_SCRIPT,
-    },
+    grok::setup::{grok_hooks_json, GROK_HOOK_SCRIPT},
     kimi::setup::{reconcile_kimi_config, upsert_kimi_code_managed_mcp, KIMI_HOOK_SCRIPT},
     kiro_cli::setup::{kiro_mcp_server_value, KIRO_HOOK_SCRIPT},
     muse::setup::{muse_plugin_manifest_json, MUSE_HOOK_SCRIPT},

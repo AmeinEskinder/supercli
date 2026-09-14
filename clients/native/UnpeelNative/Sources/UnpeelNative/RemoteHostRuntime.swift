@@ -3451,6 +3451,7 @@ extension RemoteHostRuntime {
         static let workspaceSettingsSet = RemoteControlProtocol.workspaceSettingsSetCapability
         static let openersSet = RemoteControlProtocol.openersSetCapability
         static let appsInstall = RemoteControlProtocol.appsInstallCapability
+        static let integrationsInstall = RemoteControlProtocol.integrationsInstallCapability
         static let appsOpen = RemoteControlProtocol.appsOpenCapability
         static let archiveList = "session.archive.list"
         static let transcriptMarkdown = "session.transcript.markdown"
@@ -3837,6 +3838,18 @@ extension RemoteHostRuntime {
             operation: "App install"
         ) { backend in
             _ = try await backend.installApp(appID: appID)
+        }
+    }
+
+    /// Install one runtime's Unpeel integration (hooks + MCP registration)
+    /// on the selected Host. Bootstrap's `availableAgents` rows carry the
+    /// resulting state.
+    func installIntegration(runtimeID: String) async throws {
+        try await performOrganizationVerb(
+            capability: HostOperation.integrationsInstall,
+            operation: "integration install"
+        ) { backend in
+            _ = try await backend.installIntegration(runtimeID: runtimeID)
         }
     }
 

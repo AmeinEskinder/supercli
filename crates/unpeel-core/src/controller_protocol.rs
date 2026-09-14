@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const HOST_PROTOCOL_MAJOR: u16 = 1;
-pub const HOST_PROTOCOL_MINOR: u16 = 20;
+pub const HOST_PROTOCOL_MINOR: u16 = 21;
 
 pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "approval.answer",
@@ -64,6 +64,7 @@ pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "project.add",
     "filesystem.file.read",
     "artifact.upload.file",
+    "integrations.install",
 ];
 
 pub const HEADLESS_HOST_CAPABILITIES: &[&str] = &[
@@ -114,6 +115,7 @@ pub const HEADLESS_HOST_CAPABILITIES: &[&str] = &[
     "project.add",
     "filesystem.file.read",
     "artifact.upload.file",
+    "integrations.install",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,6 +130,9 @@ pub struct HostProtocolDescriptor {
 /// there has to be a published App release target for its platform
 /// (`app_installer::release_target()`), which is a Host-side fact.
 pub const APPS_INSTALL_CAPABILITY: &str = "apps.install";
+/// Install one runtime's Unpeel integration (hooks + MCP registration) on
+/// the Host: `POST /mobile/integrations/install` with `{"runtimeID": …}`.
+pub const INTEGRATIONS_INSTALL_CAPABILITY: &str = "integrations.install";
 
 impl HostProtocolDescriptor {
     /// The descriptor a native (Mac app) Host advertises in bootstrap.

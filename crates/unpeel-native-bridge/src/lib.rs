@@ -308,6 +308,15 @@ trait RegisteredRemoteBackend: Send + Sync {
             message: "App installation is unavailable on this backend".into(),
         })
     }
+    fn install_integration(&self, _runtime_id: &str) -> Result<u64, NativeRemoteEffectError> {
+        Err(NativeRemoteEffectError {
+            result: ERROR_REMOTE,
+            kind: "notApplied",
+            code: "integration_install_unavailable",
+            operation: "integration install",
+            message: "Integration installation is unavailable on this backend".into(),
+        })
+    }
     fn open_app(
         &self,
         _caller_session_id: &str,
@@ -676,6 +685,13 @@ impl RegisteredRemoteBackend for RegisteredCoreBackend {
     fn install_app(&self, app_id: &str) -> Result<u64, NativeRemoteEffectError> {
         self.backend
             .install_app(app_id)
+            .map(|receipt| receipt.request_id())
+            .map_err(native_remote_effect_error)
+    }
+
+    fn install_integration(&self, runtime_id: &str) -> Result<u64, NativeRemoteEffectError> {
+        self.backend
+            .install_integration(runtime_id)
             .map(|receipt| receipt.request_id())
             .map_err(native_remote_effect_error)
     }
@@ -2263,6 +2279,28 @@ fn install_remote_app(
         .map_err(native_not_applied_effect_error("App install"))?
         .install_app(&wire.app_id)?;
     encode_effect_receipt("App install", request_id)
+}
+
+#[derive(Debug, Deserialize)]
+struct NativeIntegrationInstallWire {
+    #[serde(rename = "runtimeID")]
+    runtime_id: String,
+}
+
+fn install_remote_integration(
+    handle: RemoteHandle,
+    body_json: &[u8],
+) -> Result<Vec<u8>, NativeRemoteEffectError> {
+    let wire: NativeIntegrationInstallWire = serde_json::from_slice(body_json).map_err(|error| {
+        native_not_applied_effect_error("integration install")(NativeRemoteError::invalid_input(
+            "invalid_integration_install_json",
+            format!("integration install request is malformed: {error}"),
+        ))
+    })?;
+    let request_id = remote_backend(handle)
+        .map_err(native_not_applied_effect_error("integration install"))?
+        .install_integration(&wire.runtime_id)?;
+    encode_effect_receipt("integration install", request_id)
 }
 
 #[derive(Debug, Deserialize)]
@@ -4465,6 +4503,37 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_opener_set(
         set_remote_opener(handle, body)
     }));
     finish_remote_effect_ffi(outcome, "resource opener", out_pointer, out_length)
+}
+
+/// Install one runtime's Unpeel integration on the remote Host
+/// (`integrations.install`).
+///
+/// # Safety
+///
+/// A non-empty body must point to readable bytes of its declared length.
+/// Both output pointers must be non-null and writable.
+#[no_mangle]
+pub unsafe extern "C" fn unpeel_native_bridge_remote_integration_install(
+    handle: RemoteHandle,
+    body_json_pointer: *const u8,
+    body_json_length: usize,
+    out_pointer: *mut *mut u8,
+    out_length: *mut usize,
+) -> i32 {
+    if out_pointer.is_null() || out_length.is_null() {
+        return ERROR_INVALID_INPUT;
+    }
+    *out_pointer = ptr::null_mut();
+    *out_length = 0;
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let body = input_bytes(body_json_pointer, body_json_length).map_err(|message| {
+            native_not_applied_effect_error("integration install")(
+                NativeRemoteError::invalid_input("invalid_integration_install_buffer", message),
+            )
+        })?;
+        install_remote_integration(handle, body)
+    }));
+    finish_remote_effect_ffi(outcome, "integration install", out_pointer, out_length)
 }
 
 /// Install one official App on the remote Host (`apps.install`).

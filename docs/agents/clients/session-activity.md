@@ -36,13 +36,12 @@ identity drops the previous latch (both frontends — `observe_foreground_runtim
 in the serve `ActivityEngine`, `observedForegroundIdentities` in
 `UnpeelStore`), so a stale busy/attention latch from a killed run can never
 speak for its replacement, and an old Claude latch never crosses to a later
-Codex in the same shell. The host also self-heals hook installs on the
-observation edge: observing a hook-capable runtime runs the same idempotent
-`install_runtime_support` the managed spawn path uses, so a user who only
-ever types agents into blank terminals gets hooks from their second
-invocation onward (skipped under `UNPEEL_TEST`; the already-running process
-stays neutral until it emits a live hook because providers read hook config at
-startup). The first sighting after an engine/app start is
+Codex in the same shell. Observation never installs anything: hooks come
+from the runtime's Unpeel integration, which the user installs once per Host
+(`unpeel integrations install`, Settings ▸ Agents & Apps) into the
+provider's own global configuration, so a hand-typed agent reports through
+hooks exactly when that integration is installed — the same as a preset
+launch. The first sighting after an engine/app start is
 deliberately not an edge — it must keep a latch built from live events already
 accepted. The disk seed (`last-hook-event.json`) also carries no runtime
 identity and therefore stays launch-command-gated; observed-only sessions

@@ -261,8 +261,11 @@ fn write_executable(path: &Path, body: impl AsRef<[u8]>) {
     fs::set_permissions(path, permissions).unwrap();
 }
 
+/// A launch runs the command exactly as written and records no provider
+/// identity; the integration's hooks capture the conversation id later, and
+/// the same Host-owned plan then switches from continue-last to exact resume.
 #[test]
-fn initial_runtime_preparation_persists_host_minted_identity_before_ready() {
+fn initial_launch_runs_the_command_untouched_and_resumes_from_hook_captured_identity() {
     let home = temp_home("initial-prep");
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
@@ -293,34 +296,47 @@ fn initial_runtime_preparation_persists_host_minted_identity_before_ready() {
     assert!(wait_until(Duration::from_secs(30), || socket.exists()));
 
     let ready = manifest(&home, session_id);
-    let command = ready["session"]["command"].as_str().unwrap();
-    let provider_id = ready["provider_session_id"].as_str().unwrap();
-    assert_eq!(
-        command,
-        format!("claude --model fixture --session-id '{provider_id}'")
-    );
+    assert_eq!(ready["session"]["command"], "claude --model fixture");
+    assert!(ready["provider_session_id"].is_null());
     assert!(ready.get("managed_storage_path").is_none());
-    let marker: Value = serde_json::from_slice(
-        &fs::read(
-            home.join("app-sessions")
-                .join(session_id)
-                .join("provider-session.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(marker["provider_session_id"], provider_id);
+    let marker_path = home
+        .join("app-sessions")
+        .join(session_id)
+        .join("provider-session.json");
+    assert!(!marker_path.exists(), "a launch mints no provider identity");
+    // Nothing was installed or written outside the session on the user's
+    // behalf: provider config is only ever touched by an explicit install.
+    assert!(!home.join(".claude").join("settings.json").exists());
+    assert!(!home.join("integrations").exists());
 
-    // Once the minted conversation exists, the same Host-owned plan switches
-    // from creation to exact resume and publishes its verified failure text
-    // as opaque markers. Native never carries these provider strings.
-    let transcript_dir = home.join(".claude").join("projects").join("fixture");
-    fs::create_dir_all(&transcript_dir).unwrap();
-    fs::write(transcript_dir.join(format!("{provider_id}.jsonl")), b"\n").unwrap();
+    // Before any hook fires the plan is continue-last.
     assert_eq!(
         socket_command(&home, session_id, json!({ "type": "write", "data": "x" }))["ok"],
         true
     );
+    let early_plan = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+        .arg("__resume__")
+        .arg(session_id)
+        .env("UNPEEL_HOME", &home)
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(early_plan.status.success());
+    let early_plan: Value = serde_json::from_slice(&early_plan.stdout).unwrap();
+    assert_eq!(early_plan["command"], "claude --model fixture --continue");
+
+    // Once the integration's hook has captured the conversation id, the same
+    // Host-owned plan switches to exact resume and publishes its verified
+    // failure text as opaque markers. Native never carries these strings.
+    let provider_id = "0f8e1c2a-5b6d-4c7e-8f90-1a2b3c4d5e6f";
+    fs::write(
+        &marker_path,
+        json!({ "provider_session_id": provider_id }).to_string(),
+    )
+    .unwrap();
+    let transcript_dir = home.join(".claude").join("projects").join("fixture");
+    fs::create_dir_all(&transcript_dir).unwrap();
+    fs::write(transcript_dir.join(format!("{provider_id}.jsonl")), b"\n").unwrap();
     let plan_output = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
         .arg("__resume__")
         .arg(session_id)
@@ -432,28 +448,20 @@ fn resume_agent_keeps_host_identity_and_relaunches_exactly_from_owned_shell() {
     let session_dir = home.join("app-sessions").join(session_id);
     fs::write(
         session_dir.join("last-hook-event.json"),
-        br#"{"event":"Stop"}"#,
+        br#"{"hook_event_name":"Stop"}"#,
+    )
+    .unwrap();
+    // The resumable-conversation gate needs a captured provider id paired
+    // with a real lifecycle event; the launch itself recorded neither. Seed
+    // what an installed integration's hook would have captured.
+    fs::write(
+        session_dir.join("provider-session.json"),
+        json!({ "provider_session_id": "pi-captured" }).to_string(),
     )
     .unwrap();
     let before = manifest(&home, session_id);
-    let managed_storage = home.join("pi-sessions").join(session_id);
-    assert_eq!(
-        before["session"]["command"],
-        format!(
-            "pi 300 --session-dir '{}'",
-            managed_storage.to_string_lossy()
-        )
-    );
-    assert_eq!(
-        before["managed_storage_path"],
-        managed_storage.to_string_lossy().as_ref()
-    );
-    assert!(managed_storage.is_dir());
-    // The resumable-conversation gate requires provider-created files inside
-    // the pinned storage (directory existence alone is not evidence). The
-    // fake pi ignores --session-dir, so seed the session data a real run
-    // would have written.
-    fs::write(managed_storage.join("session.jsonl"), b"{}\n").unwrap();
+    assert_eq!(before["session"]["command"], "pi 300");
+    assert!(before.get("managed_storage_path").is_none());
     assert_eq!(before["mcp_enabled"], true);
     assert_eq!(before["browser_mcp_enabled"], true);
     assert_eq!(before["computer_mcp_enabled"], true);
@@ -495,13 +503,7 @@ fn resume_agent_keeps_host_identity_and_relaunches_exactly_from_owned_shell() {
     assert_eq!(after["session"]["id"], session_id);
     assert_eq!(after["pid"].as_u64(), Some(before_pid));
     assert_eq!(after["state"], "running");
-    assert_eq!(
-        after["session"]["command"],
-        format!(
-            "pi 300 --session-dir '{}' --continue",
-            managed_storage.to_string_lossy()
-        )
-    );
+    assert_eq!(after["session"]["command"], "pi 300 --session 'pi-captured'");
     assert_eq!(after["runtime_launch_generation"], 2);
     assert_eq!(after["mcp_client_registered"], false);
     assert_eq!(after["browser_client_registered"], false);
@@ -720,9 +722,18 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
     let _ = fs::remove_dir_all(home);
 }
 
+/// Registration evidence follows the user-installed integration: with the
+/// Kiro integration marker present and both domains granted, the manifest
+/// records sessions + browser evidence and never the retired computer domain.
 #[test]
-fn kiro_registration_evidence_excludes_the_unimplemented_computer_domain() {
+fn kiro_registration_evidence_follows_the_installed_integration() {
     let home = temp_home("kiro-mcp");
+    fs::create_dir_all(home.join("integrations")).unwrap();
+    fs::write(
+        home.join("integrations").join("kiro-cli.json"),
+        br#"{"schema":1,"host_build_id":null,"host_version":"test","installed_at_ms":1}"#,
+    )
+    .unwrap();
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
     let fake_kiro = bin.join("kiro-cli");

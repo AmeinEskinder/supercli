@@ -1064,8 +1064,10 @@ mod tests {
         let command = servers[0]["command"]
             .as_array()
             .expect("command array");
-        assert_eq!(command.len(), 2);
-        assert_eq!(command[1], "__mcp__");
+        assert_eq!(command.len(), 1);
+        assert!(crate::integrations::install::is_mcp_shim_command(
+            command[0].as_str().expect("shim path")
+        ));
     }
 
     #[test]
@@ -1752,36 +1754,6 @@ mod tests {
     }
 
     #[test]
-    fn codex_wrapper_script_installs_notify_hook() {
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("UNPEEL_REAL_CODEX_BIN"));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("UNPEEL_ORIGINAL_PATH"));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("[ \"$REAL_BIN\" -ef \"$0\" ]"));
-        assert!(super::CODEX_WRAPPER_SCRIPT
-            .contains("notify=[\\\"bash\\\",\\\"$UNPEEL_CODEX_NOTIFY_PATH\\\"]"));
-    }
-
-    #[test]
-    fn codex_wrapper_script_can_wait_for_attach_ready() {
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("UNPEEL_WAIT_FOR_ATTACH"));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains(".attach-ready"));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("sleep 0.02"));
-    }
-
-    #[test]
-    fn codex_wrapper_script_registers_the_unified_unpeel_mcp_server() {
-        assert!(super::CODEX_WRAPPER_SCRIPT
-            .contains("mcp_servers.unpeel.command=\\\"$UNPEEL_MCP_BIN\\\""));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("mcp_servers.unpeel.args=[\\\"__mcp__\\\"]"));
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("mcp_servers.unpeel.env={UNPEEL_SESSION_ID="));
-        // Registration must be skipped gracefully when the binary is unknown.
-        assert!(super::CODEX_WRAPPER_SCRIPT.contains("[ -x \"${UNPEEL_MCP_BIN:-}\" ]"));
-        // One server, one block: the legacy per-domain registrations are gone.
-        assert!(!super::CODEX_WRAPPER_SCRIPT.contains("mcp_servers.unpeel-sessions"));
-        assert!(!super::CODEX_WRAPPER_SCRIPT.contains("mcp_servers.unpeel-browser"));
-        assert!(!super::CODEX_WRAPPER_SCRIPT.contains("UNPEEL_BROWSER_MCP_BIN"));
-    }
-
-    #[test]
     fn gemini_hook_script_maps_agent_events() {
         assert!(GEMINI_HOOK_SCRIPT.contains("BeforeAgent"));
         assert!(GEMINI_HOOK_SCRIPT.contains("AfterAgent"));
@@ -1849,19 +1821,29 @@ timeout = 5
             &mut servers,
             "unpeel-sessions",
             crate::mcp_gate::SESSIONS_KIND,
-            json!({
-                "command":"/tmp/unpeel-host",
-                "args":[crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::SESSIONS_KIND]
-            }),
+            json!({"command":"/tmp/home/.unpeel/bin/unpeel-mcp", "args":[]}),
         );
         assert_eq!(
             servers["unpeel-sessions"]["command"],
             Value::String("user-owned-server".to_string())
         );
         assert_eq!(
-            servers["unpeel-sessions-unpeel"]["args"][0],
-            crate::mcp_gate::MCP_GATE_ARG
+            servers["unpeel-sessions-unpeel"]["command"],
+            "/tmp/home/.unpeel/bin/unpeel-mcp"
         );
+        // Legacy gate entries written by older builds still count as ours.
+        servers.insert(
+            "unpeel".to_string(),
+            json!({"command":"/tmp/unpeel-host",
+                   "args":[crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::UNIFIED_KIND]}),
+        );
+        super::upsert_kimi_code_managed_mcp(
+            &mut servers,
+            "unpeel",
+            crate::mcp_gate::UNIFIED_KIND,
+            json!({"command":"/tmp/home/.unpeel/bin/unpeel-mcp", "args":[]}),
+        );
+        assert_eq!(servers["unpeel"]["command"], "/tmp/home/.unpeel/bin/unpeel-mcp");
     }
 
     #[test]
@@ -1951,19 +1933,17 @@ timeout = 5
     }
 
     #[test]
-    fn kiro_mcp_config_explicitly_maps_session_grants_and_identity() {
-        let server = kiro_mcp_server_value(std::path::Path::new("/tmp/unpeel-host"));
-        assert_eq!(server["args"][0], crate::mcp_gate::MCP_GATE_ARG);
-        assert_eq!(server["args"][1], crate::mcp_gate::UNIFIED_KIND);
-        assert_eq!(
-            server["env"]["UNPEEL_SESSIONS_MCP_ENABLED"],
-            "${UNPEEL_KIRO_SESSIONS_MCP_ENABLED}"
-        );
-        assert_eq!(
-            server["env"]["UNPEEL_SESSION_ID"],
-            "${UNPEEL_KIRO_SESSION_ID}"
-        );
-        assert_eq!(server["env"]["UNPEEL_HOME"], "${UNPEEL_KIRO_UNPEEL_HOME}");
+    fn kiro_mcp_config_explicitly_maps_session_identity() {
+        let server = kiro_mcp_server_value(std::path::Path::new("/tmp/home/.unpeel/bin/unpeel-mcp"));
+        assert_eq!(server["command"], "/tmp/home/.unpeel/bin/unpeel-mcp");
+        assert_eq!(server["args"], json!([]));
+        // Kiro v3 passes only the declared block to MCP children; the generic
+        // hosted-shell variables carry identity, and grants come from the
+        // Session manifest inside the gate — never from an env grant.
+        assert_eq!(server["env"]["UNPEEL_SESSION_ID"], "${UNPEEL_SESSION_ID}");
+        assert_eq!(server["env"]["UNPEEL_HOME"], "${UNPEEL_HOME}");
+        assert_eq!(server["env"]["UNPEEL_HOST_BIN"], "${UNPEEL_HOST_BIN}");
+        assert!(server["env"].get("UNPEEL_SESSIONS_MCP_ENABLED").is_none());
     }
 
     #[test]
@@ -2036,21 +2016,6 @@ timeout = 5
         assert!(grok_hooks.contains("\"command\": \"/tmp/grok-hook.sh UserPromptSubmit\""));
         assert!(!grok_hooks.contains("\"command\": \"/tmp/grok-hook.sh Start\""));
         assert!(super::GROK_HOOK_SCRIPT.contains("tool_name"));
-        assert!(super::GROK_DEFAULTS_WRAPPER_SCRIPT.contains("AppleInterfaceStyle"));
-        assert!(super::GROK_DEFAULTS_WRAPPER_SCRIPT.contains("UNPEEL_APP_APPEARANCE_FILE"));
-    }
-
-    #[test]
-    fn grok_command_wrapper_resolves_auto_theme_from_unpeel_appearance() {
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("UNPEEL_REAL_GROK_BIN"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("UNPEEL_GROK_APP_APPEARANCE"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("auto_light_theme"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("auto_dark_theme"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("GROK_HOME=\"$_overlay\""));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("theme = \\\"\" target \"\\\"\""));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("GROK_CLAUDE_HOOKS_ENABLED=false"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("GROK_CURSOR_HOOKS_ENABLED=false"));
-        assert!(super::GROK_COMMAND_WRAPPER_SCRIPT.contains("disable_compat_vendor_hooks"));
     }
 
     #[test]
@@ -2071,166 +2036,6 @@ timeout = 5
             assert_eq!(recorded["hook_event_name"], event);
             assert_eq!(recorded["unpeel_runtime_generation"], 7);
         }
-    }
-
-    #[test]
-    fn grok_command_wrapper_executes_with_resolved_light_overlay_config() {
-        let root = temp_path("grok-wrapper");
-        let real_home = root.join("real-home");
-        fs::create_dir_all(&real_home).expect("create real grok home");
-        fs::write(
-            real_home.join("config.toml"),
-            "[ui]\ntheme = \"auto\"\nauto_light_theme = \"grokday\"\nauto_dark_theme = \"groknight\"\n",
-        )
-        .expect("write real config");
-
-        let fake_grok = root.join("real-grok");
-        super::write_executable_script(
-            &fake_grok,
-            "#!/bin/sh\nprintf 'GROK_HOME=%s\\n' \"$GROK_HOME\"\nprintf 'GROK_CLAUDE_HOOKS_ENABLED=%s\\n' \"$GROK_CLAUDE_HOOKS_ENABLED\"\nprintf 'GROK_CURSOR_HOOKS_ENABLED=%s\\n' \"$GROK_CURSOR_HOOKS_ENABLED\"\ncat \"$GROK_HOME/config.toml\"\n",
-            "fake grok",
-        )
-        .expect("write fake grok");
-
-        let wrapper = root.join("grok");
-        super::write_executable_script(
-            &wrapper,
-            super::GROK_COMMAND_WRAPPER_SCRIPT,
-            "grok wrapper",
-        )
-        .expect("write grok wrapper");
-
-        let output = Command::new(&wrapper)
-            .env("HOME", &root)
-            .env("GROK_HOME", &real_home)
-            .env("UNPEEL_REAL_GROK_BIN", &fake_grok)
-            .env("UNPEEL_GROK_APP_APPEARANCE", "light")
-            .env("UNPEEL_SESSION_ID", "test-session")
-            .output()
-            .expect("run wrapper");
-
-        assert!(output.status.success(), "wrapper failed: {output:?}");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("GROK_HOME="));
-        assert!(stdout.contains("theme = \"grokday\""), "{stdout}");
-        assert!(stdout.contains("[compat.claude]"), "{stdout}");
-        assert!(stdout.contains("[compat.cursor]"), "{stdout}");
-        assert!(stdout.contains("hooks = false"), "{stdout}");
-        assert!(
-            stdout.contains("GROK_CLAUDE_HOOKS_ENABLED=false"),
-            "{stdout}"
-        );
-        assert!(
-            stdout.contains("GROK_CURSOR_HOOKS_ENABLED=false"),
-            "{stdout}"
-        );
-        assert!(fs::read_to_string(real_home.join("config.toml"))
-            .expect("read real config")
-            .contains("theme = \"auto\""));
-    }
-
-    #[test]
-    fn grok_command_wrapper_disables_compat_hooks_when_theme_is_already_set() {
-        let root = temp_path("grok-wrapper-fixed-theme");
-        let real_home = root.join("real-home");
-        fs::create_dir_all(&real_home).expect("create real grok home");
-        fs::write(
-            real_home.join("config.toml"),
-            "[ui]\ntheme = \"groknight\"\n",
-        )
-        .expect("write real config");
-
-        let fake_grok = root.join("real-grok");
-        super::write_executable_script(
-            &fake_grok,
-            "#!/bin/sh\nprintf 'GROK_HOME=%s\\n' \"$GROK_HOME\"\nprintf 'GROK_CLAUDE_HOOKS_ENABLED=%s\\n' \"$GROK_CLAUDE_HOOKS_ENABLED\"\ncat \"$GROK_HOME/config.toml\"\n",
-            "fake grok",
-        )
-        .expect("write fake grok");
-
-        let wrapper = root.join("grok");
-        super::write_executable_script(
-            &wrapper,
-            super::GROK_COMMAND_WRAPPER_SCRIPT,
-            "grok wrapper",
-        )
-        .expect("write grok wrapper");
-
-        let output = Command::new(&wrapper)
-            .env("HOME", &root)
-            .env("GROK_HOME", &real_home)
-            .env("UNPEEL_HOME", root.join("unpeel-home"))
-            .env("UNPEEL_REAL_GROK_BIN", &fake_grok)
-            .env("UNPEEL_GROK_APP_APPEARANCE", "dark")
-            .env("UNPEEL_SESSION_ID", "fixed-theme-session")
-            .output()
-            .expect("run wrapper");
-
-        assert!(output.status.success(), "wrapper failed: {output:?}");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("theme = \"groknight\""), "{stdout}");
-        assert!(stdout.contains("[compat.claude]"), "{stdout}");
-        assert!(stdout.contains("hooks = false"), "{stdout}");
-        assert!(
-            stdout.contains("GROK_CLAUDE_HOOKS_ENABLED=false"),
-            "{stdout}"
-        );
-        assert!(fs::read_to_string(real_home.join("config.toml"))
-            .expect("read real config")
-            .contains("theme = \"groknight\""));
-        assert!(
-            !fs::read_to_string(real_home.join("config.toml"))
-                .expect("read real config")
-                .contains("[compat.claude]"),
-            "must not rewrite the user's real Grok config"
-        );
-    }
-
-    #[test]
-    fn grok_command_wrapper_disables_compat_hooks_without_appearance() {
-        let root = temp_path("grok-wrapper-no-appearance");
-        let real_home = root.join("real-home");
-        fs::create_dir_all(&real_home).expect("create real grok home");
-        fs::write(
-            real_home.join("config.toml"),
-            "[ui]\ntheme = \"groknight\"\n",
-        )
-        .expect("write real config");
-
-        let fake_grok = root.join("real-grok");
-        super::write_executable_script(
-            &fake_grok,
-            "#!/bin/sh\nprintf 'GROK_HOME=%s\\n' \"$GROK_HOME\"\nprintf 'GROK_CLAUDE_HOOKS_ENABLED=%s\\n' \"$GROK_CLAUDE_HOOKS_ENABLED\"\ncat \"$GROK_HOME/config.toml\"\n",
-            "fake grok",
-        )
-        .expect("write fake grok");
-
-        let wrapper = root.join("grok");
-        super::write_executable_script(
-            &wrapper,
-            super::GROK_COMMAND_WRAPPER_SCRIPT,
-            "grok wrapper",
-        )
-        .expect("write grok wrapper");
-
-        let output = Command::new(&wrapper)
-            .env("HOME", &root)
-            .env("GROK_HOME", &real_home)
-            .env("UNPEEL_HOME", root.join("unpeel-home"))
-            .env("UNPEEL_REAL_GROK_BIN", &fake_grok)
-            .env_remove("UNPEEL_GROK_APP_APPEARANCE")
-            .env("UNPEEL_SESSION_ID", "no-appearance-session")
-            .output()
-            .expect("run wrapper");
-
-        assert!(output.status.success(), "wrapper failed: {output:?}");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("[compat.claude]"), "{stdout}");
-        assert!(stdout.contains("hooks = false"), "{stdout}");
-        assert!(
-            stdout.contains("GROK_CLAUDE_HOOKS_ENABLED=false"),
-            "{stdout}"
-        );
     }
 
     #[test]

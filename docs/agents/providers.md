@@ -2,6 +2,29 @@
 
 ## Provider Hook Details
 
+**Launching is provider-neutral.** A preset runs its command in the user's
+login shell exactly as typed; the Host exports only Unpeel's generic session
+environment (`UNPEEL_SESSION_ID`, `UNPEEL_SESSION_DIR`, `UNPEEL_APP_PORT`,
+`UNPEEL_HOST_BIN`, the port registry and trace paths, the Apps bin on `PATH`,
+the workspace accent). No wrapper is put on `PATH`, no flag is appended, no
+provider id is minted, and no provider configuration is edited by a launch or
+by observing a hand-typed agent. Everything provider-specific below is the
+runtime's **integration**, which the user installs once per Host —
+`unpeel integrations install <runtime>` or the `integrations.install` Host
+verb behind Settings ▸ Agents & Apps — into that CLI's own global
+configuration. Installers are idempotent, locked, and content-guarded; the
+workspace worker re-runs the installers of already-installed integrations
+after an upgrade (`integrations::install::refresh_installed`) so hook scripts
+and the MCP shim keep pointing at the running build, and never installs one
+on its own. Every integration registers the same stable shim,
+`~/.unpeel/bin/unpeel-mcp`, as the MCP server: it execs
+`${UNPEEL_HOST_BIN:-<install-time unpeel-host>} __mcp_gate__ unified`, and
+the gate reads the calling Session's manifest grants (or serves no tools
+outside a hosted Session). Without the integration a recognized agent still
+gets identity and tint from detection, Resume falls back to the CLI's own
+continue-last, and busy/idle stays neutral — capability honesty, never
+emulation.
+
 Provider processes hosted by Unpeel never inherit an outer Herdr pane
 identity. The generic Host launch chain strips every `HERDR_*` variable before
 the detached Host starts and again before the provider PTY starts as general
@@ -19,13 +42,14 @@ Claude:
   `/compact` with the new `session_id` + `transcript_path`, so a session
   where the user resumes a different conversation inside Claude re-links to
   it immediately (precise restart-resume and transcript reads follow the
-  resumed conversation, not the minted-at-launch id)
+  resumed conversation); the first such event is also what makes the
+  Session archivable/resumable, since nothing mints an id at launch
+- Registers the MCP shim as the user-scope server `unpeel` in
+  `~/.claude.json` (the file `claude mcp add --scope user` writes), pruning
+  the Unpeel-owned `unpeel-mcp`/`unpeel-sessions`/`unpeel-browser` names
 
 Codex:
 
-- Installs `~/.unpeel/hooks/bin/codex`
-- Prepends wrapper dir into `PATH`
-- Resolves and preserves the real Codex binary path
 - **Primary lifecycle source is native Codex hooks**, not just notify. The
   Codex package installer (`runtimes/codex/adapter/setup.rs`) registers
   Unpeel-managed `SessionStart`, `UserPromptSubmit`, and `PermissionRequest`
@@ -36,13 +60,21 @@ Codex:
   assets install: live hooks for side-by-side `UNPEEL_HOME` instances are
   preserved, while obsolete Unpeel entries are pruned. This prevents a deleted
   temporary/blank-instance hook from producing exit `127` after a reboot.
-- The wrapper also still injects `-c notify=[...]` as the turn-completion (Stop/idle) source and a compatibility bridge for Codex builds without the `hooks` feature.
+- `~/.codex/config.toml` gets the top-level `notify = ["bash", <normalizer>]`
+  reporter (set only when absent or already Unpeel-owned) as the
+  turn-completion (Stop/idle) source and a compatibility bridge for Codex
+  builds without the `hooks` feature, plus `[mcp_servers.unpeel]` pointing
+  at the MCP shim. Codex spawns MCP servers with a minimal environment, so
+  the shim's gate recovers the Session from process ancestry.
 - The Codex package's notify normalizer maps raw event `type`s onto Unpeel states before calling the provider-neutral transport: `agent-turn-complete`/`task_complete`/`turn_aborted` → Stop, `task_started`/`exec_command_begin` → Start, `request_permissions`/`exec_approval_request`/`apply_patch_approval_request`/`approval-requested` → PermissionRequest.
 - Codex's descriptor declares the inherited `CODEX_*` identity variables the generic Host boundary strips, so nested Codex sessions do not cross-fire hooks.
 
 Amp:
 
-- Installs an Amp plugin that maps agent start/end to Start/Stop notify events
+- The shared notify reporter is global; Amp itself reads plugins per project
+  (`.amp/plugins/`, with `PLUGINS=all` in the environment), so the project
+  plugin is written on request: `unpeel integrations install amp --project
+  DIR`. The plugin maps agent start/end to Start/Stop notify events.
 
 Gemini:
 
@@ -56,13 +88,16 @@ Gemini:
 
 OpenCode:
 
-- Installs a plugin under Unpeel-managed OpenCode config
+- Installs the notify plugin into OpenCode's own global plugin directory
+  (`${XDG_CONFIG_HOME:-~/.config}/opencode/plugin/unpeel-notify.js`); it
+  no-ops outside an Unpeel session
 - Plugin tracks busy/idle/permission events and calls the notify hook
 
 Copilot:
 
-- Installs a hook script
-- Writes project-local hook config under `.github/hooks/unpeel-notify.json`
+- Installs the shared hook script globally; Copilot reads hooks per
+  repository, so `.github/hooks/unpeel-notify.json` is written on request:
+  `unpeel integrations install github-copilot --project DIR`
 
 Cursor Agent:
 
@@ -78,22 +113,20 @@ Grok (xAI `grok` CLI):
   (busy), `Stop`/`StopFailure`/`SessionEnd` → Stop (idle),
   `Notification` `approval_required` and `PreToolUse` `ask_user_question` →
   PermissionRequest (attention)
-- `GROK_SESSION_ID` is available to every hook and Unpeel mints the id at
-  launch (`grok --session-id <uuid>`), so restart is precise
-  (`grok --resume <id>`) — see Resume on Restart
+- `GROK_SESSION_ID` is available to every hook; the first hook captures it,
+  so restart is precise (`grok --resume <id>`) from the first prompt on —
+  see Resume on Restart
 - Grok also natively scans `~/.cursor/hooks.json` and `~/.claude/settings.json`
   for compatibility. Those Unpeel hooks are Claude/Cursor-shaped:
   `session_start` used to normalize to busy `Start` and, with Grok's idle TUI
-  re-arming the 5-minute timeout, left every Grok session spinning. Hosted
-  Grok therefore (1) ignores Claude/Cursor Unpeel hooks when
-  `GROK_SESSION_ID` is set, (2) treats `session_start` as HookSeen at the
-  hook server, and (3) disables `[compat.claude]` / `[compat.cursor]` hooks
-  for every hosted session (per-session `GROK_HOME` overlay plus
-  `GROK_CLAUDE_HOOKS_ENABLED` / `GROK_CURSOR_HOOKS_ENABLED`). That overlay
-  is not limited to auto-theme resolution: Claude settings often interpolate
-  unset `$VAR`s as a skip-if-missing check, and Grok refuses to run those
-  hooks with a red `required env var(s) not set` line. Native `unpeel.json`
-  is the lifecycle source.
+  re-arming the 5-minute timeout, left every Grok session spinning. The
+  Claude/Cursor Unpeel hook scripts therefore no-op when `GROK_SESSION_ID`
+  is set, and the hook server treats `session_start` as HookSeen. Native
+  `unpeel.json` is the lifecycle source. Grok runs exactly as the user
+  types it: Unpeel no longer overlays `GROK_HOME` or toggles its
+  `[compat.*]` hooks, so a Claude hook that interpolates an unset `$VAR`
+  shows Grok's own red `required env var(s) not set` line, as it would in
+  any terminal.
 
 Kimi (Moonshot `kimi` CLI, current Kimi Code and legacy Python generations):
 
@@ -108,9 +141,10 @@ Kimi (Moonshot `kimi` CLI, current Kimi Code and legacy Python generations):
   `wire.jsonl` or legacy `context.jsonl` path to Unpeel
 - Uses exact `kimi --session <id>` restart after SessionStart captures the id;
   `--continue` is the fallback before capture or for older sessions
-- Current Kimi Code receives Sessions and Browser MCP through environment-gated
-  persistent entries in `~/.kimi-code/mcp.json`; legacy Kimi receives
-  repeatable `--mcp-config-file` flags while preserving `~/.kimi/mcp.json`
+- Current Kimi Code receives the MCP shim as a persistent `unpeel` entry in
+  `~/.kimi-code/mcp.json` (Unpeel-owned legacy entries are pruned, user
+  names are never replaced); legacy Kimi only took per-launch MCP flags, so
+  it keeps hooks and detection but no MCP
 
 Cline (`cline` CLI):
 
@@ -125,12 +159,13 @@ Cline (`cline` CLI):
   flag
 - Reads semantic `<id>.messages.json` transcripts (messages, reasoning, tools,
   model, and usage)
-- Injects Sessions and Browser MCP through a merged per-session copy selected
-  by `CLINE_MCP_SETTINGS_PATH`; the user's global MCP file is never rewritten
-- Isolates Cline's detached hub per hosted session with
-  `CLINE_HUB_DISCOVERY_PATH` plus an ephemeral port. The shared default hub
-  retains its starter's environment and would otherwise reuse the wrong
-  Unpeel identity/MCP grants. The scoped hub is stopped on provider/shell exit.
+- Merges the MCP shim as `unpeel` into Cline's own user MCP settings
+  (`CLINE_MCP_SETTINGS_PATH`, else `<CLINE_DATA_DIR>/settings/`, else
+  `~/.cline/data/settings/cline_mcp_settings.json`); other entries are kept
+- Cline runs exactly as typed, including its shared detached hub. The hook
+  and the shim's gate resolve the calling Session from the hosted
+  environment or process ancestry, so concurrent sessions stay distinct
+  without per-session hubs.
 - Does not use Cline 3.0.44's advertised `--hooks-dir`: current source assigns
   `CLINE_HOOKS_DIR` but never reads it when resolving hook paths
 - Cline exposes no approval-request hook, so custom `--auto-approve false`
@@ -142,9 +177,10 @@ Pi:
 - No hook-port integration today; Pi has no animated Busy authority. Its
   output remains terminal/recency telemetry and menu detection may still
   surface Attention.
-- Each pi session is pinned to its own storage dir at launch
-  (`--session-dir ~/.unpeel/pi-sessions/<session-id>`), which makes restart's
-  `--continue` exact — see Resume on Restart
+- Nothing to install: Pi reports no lifecycle and registers no MCP, so
+  `unpeel integrations install pi` is refused. `pi` runs exactly as typed;
+  Resume uses Pi's own `--continue`. Older launches that recorded a managed
+  `--session-dir` beneath the Unpeel home keep it across resume and cleanup.
 
 fx (Vercel's `fx`, fx.sh):
 
@@ -160,16 +196,12 @@ fx (Vercel's `fx`, fx.sh):
   (`runtimes/fx/adapter/resume.rs`)
 - MCP (2026-08-21): fx loads MCP servers only from the persistent global
   `~/.fx/mcp.json` (no per-launch flag, env override, or project source), so
-  `install_fx_runtime_support` merges a managed `unpeel` entry pointing at
-  the provider-neutral environment gate (`__mcp_gate__ unified`). The entry
-  deliberately declares **no** `environment` block: fx replaces the child's
-  entire environment when one is declared and inherits the parent's
-  otherwise, and that inheritance is what carries `UNPEEL_SESSION_ID` plus
-  the per-launch grant variables (exported by the adapter's
-  `configure_host_command`, kimi-style) into each session's gate process.
-  Outside a granted hosted Session — including fx runs outside Unpeel and
-  hand-typed fx in a blank terminal — the gate serves a valid endpoint with
-  no tools.
+  the integration merges a managed `unpeel` entry pointing at the MCP shim.
+  The entry deliberately declares **no** `environment` block: fx replaces the
+  child's entire environment when one is declared and inherits the parent's
+  otherwise, and that inheritance is what carries `UNPEEL_SESSION_ID` into
+  each session's gate process. Outside a granted hosted Session — including
+  fx runs outside Unpeel — the gate serves a valid endpoint with no tools.
 - Detection caveat: `fx` is also the name of a popular JSON viewer
   (antonmedv/fx). Detection is alias-based and cannot tell them apart; a
   misdetected viewer only ever gains foreground presentation — output/screen
@@ -189,9 +221,10 @@ Muse Code (Meta `muse` CLI):
   `SessionStart`, `UserPromptSubmit`, `Stop`, `PermissionRequest` (also
   Pre/PostToolUse, Pre/PostLLMCall, PreCompact; `SessionEnd`/`Notification`
   are rejected by the validator).
-- Plugins are experimental in muse, so `runtimes/muse-code/adapter/mod.rs` exports
-  `MUSE_EXPERIMENTAL_PLUGINS=1` into every muse launch — without it the
-  runtime never loads the plugin and no hook fires.
+- Plugins are experimental in muse and load only with
+  `MUSE_EXPERIMENTAL_PLUGINS=1` in muse's environment. Unpeel no longer
+  exports it at launch; set it in your shell (`export
+  MUSE_EXPERIMENTAL_PLUGINS=1`) or the plugin stays inert and no hook fires.
 - Hook payloads are Claude-compatible stdin JSON (`hook_event_name`,
   `session_id`, `prompt`, `last_assistant_message`, `cwd`), so the muse hook
   scripts forward them verbatim; the native hook server normalizes
@@ -223,9 +256,10 @@ Muse Code (Meta `muse` CLI):
   `reasoning_committed` (often provider-encrypted and empty),
   `assistant_tool_calls_committed`, `tool_result_batch_committed` — and the
   model from `run.model.configured`'s `model_id`.
-- Sessions/Browser MCP injection is deferred: muse's
-  plugin `mcpServers` entries have no env gating, so an always-on entry would
-  error for muse runs outside Unpeel.
+- The plugin manifest registers the MCP shim as its `unpeel` server. Muse
+  spawns MCP servers with a stripped environment, so the shim's gate
+  recovers the Session from process ancestry and serves no tools outside
+  Unpeel.
 
 ## Adding a built-in agent runtime
 
@@ -249,13 +283,18 @@ The short checklist:
    `resume.rs`, `context.rs`, and `transcript.rs` modules. Keep generic PTY,
    hook-ingress, locking, MCP authorization, transcript security, activity,
    and protocol enforcement in core.
-3. Put scripts, wrappers, and plugins in `assets/hooks/`. Installers must be
-   idempotent and preserve user configuration. Every owned reporter includes
-   numeric `unpeel_runtime_generation` in both the event and durable seed.
-4. Treat automatic MCP registration as launch evidence per domain, not as a
-   synonym for the Session's saved grants.
-5. Model exact resume, continue-last, picker, or pinned storage honestly.
-   Passive foreground-process observation never creates a relaunch binding.
+3. Put scripts and plugins in `assets/hooks/`. The installer is the whole
+   integration: it must be idempotent, preserve user configuration, register
+   the MCP shim (`integrations::install::write_mcp_shim`) through the
+   provider's persistent mechanism, and never depend on a launch-time
+   environment, wrapper, or flag. Every owned reporter includes numeric
+   `unpeel_runtime_generation` in both the event and durable seed.
+4. Registration evidence on a Session is "the user installed this runtime's
+   integration and the launch granted the domain", never a synonym for the
+   Session's saved grants.
+5. Model exact resume from hook-captured ids, continue-last, or picker
+   honestly; nothing mints an id or pins storage at launch. Passive
+   foreground-process observation never creates a relaunch binding.
 6. Keep transcript path/root validation in shared core and return normalized
    blocks rather than a provider-specific Markdown-only result.
 7. Run `bun run generate:runtimes` and `bun run check:runtimes`, then the full

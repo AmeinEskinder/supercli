@@ -1,6 +1,4 @@
-use super::{shared, Integration};
-use crate::session_host::SessionHostLaunch;
-use portable_pty::CommandBuilder;
+use super::Integration;
 
 mod resume {
     include!(concat!(
@@ -16,61 +14,11 @@ pub(crate) mod setup {
     ));
 }
 
-fn configure_host_command(
-    _launch: &SessionHostLaunch,
-    cmd: &mut CommandBuilder,
-    shell_prelude: &mut Vec<String>,
-) -> Result<(), String> {
-    // Muse Code loads native plugins — the vehicle for Unpeel's lifecycle
-    // hooks (install_muse_hooks) — only when the experimental plugins gate is
-    // set in the environment. Without it the installed unpeel plugin sits
-    // inert and the session never reports busy/idle/attention.
-    cmd.env("MUSE_EXPERIMENTAL_PLUGINS", "1");
-    shell_prelude.push(format!(
-        "export MUSE_EXPERIMENTAL_PLUGINS={}",
-        shared::shell_quote("1")
-    ));
-    Ok(())
-}
-
-fn has_automatic_mcp_setup(_command: &str) -> bool {
-    true
-}
-
-pub(crate) const INTEGRATION: Integration = Integration::new(
-    Some(setup::install_muse_hooks),
-    Some(configure_host_command),
-)
-// Muse 1.0.3 interrupts the foreground turn on ESC without emitting Stop.
-// https://dev.meta.ai/docs/muse-code/interactive#steering
-.with_escape_cancellation()
-.with_automatic_mcp_setup(has_automatic_mcp_setup)
-.with_resume_adapter(resume::ADAPTER);
-
-#[cfg(test)]
-mod tests {
-    use super::configure_host_command;
-    use portable_pty::CommandBuilder;
-
-    #[test]
-    fn exports_the_plugin_gate_for_hook_delivery() {
-        let launch: super::SessionHostLaunch = serde_json::from_value(serde_json::json!({
-            "session": {
-                "id": "muse-session",
-                "project_id": "test-project",
-                "label": "Muse",
-                "command": "muse --yolo"
-            },
-            "cwd": "/tmp",
-            "dark_mode": null,
-            "hook_port": 4321
-        }))
-        .expect("launch fixture");
-        let mut command = CommandBuilder::new("true");
-        let mut prelude = Vec::new();
-        configure_host_command(&launch, &mut command, &mut prelude).expect("configure");
-        assert!(prelude
-            .join("\n")
-            .contains("export MUSE_EXPERIMENTAL_PLUGINS='1'"));
-    }
-}
+/// Muse loads native plugins only with `MUSE_EXPERIMENTAL_PLUGINS=1` in its
+/// environment. Unpeel no longer exports it at launch; the installed
+/// integration documents it and the user's shell sets it.
+pub(crate) const INTEGRATION: Integration = Integration::new(Some(setup::install_muse_hooks))
+    // Muse 1.0.3 interrupts the foreground turn on ESC without emitting Stop.
+    // https://dev.meta.ai/docs/muse-code/interactive#steering
+    .with_escape_cancellation()
+    .with_resume_adapter(resume::ADAPTER);

@@ -14,6 +14,10 @@ struct PluginSettingsItem: Identifiable, Equatable {
     let availableVersion: String?
     let isApp: Bool
     let isCustom: Bool
+    /// The Host can install this runtime's Unpeel integration (hooks + MCP).
+    var integrationInstallable = false
+    /// The user installed it on this Host.
+    var integrationInstalled = false
     var commands: [RemotePresetSummary]
 
     var displayVersion: String? { installed ? installedVersion : availableVersion }
@@ -26,7 +30,10 @@ enum PluginSettingsList {
             PluginSettingsItem(id: $0.id, name: $0.name, command: $0.command, appID: nil,
                                installed: $0.installed, installCommand: $0.installCommand,
                                websiteURL: $0.websiteURL, installedVersion: nil, availableVersion: nil,
-                               isApp: false, isCustom: false, commands: [])
+                               isApp: false, isCustom: false,
+                               integrationInstallable: $0.integrationInstallable ?? false,
+                               integrationInstalled: $0.integrationInstalled ?? false,
+                               commands: [])
         }
         items += (snapshot.availableApps ?? []).map {
             PluginSettingsItem(id: $0.id, name: $0.name, command: $0.command, appID: $0.id,

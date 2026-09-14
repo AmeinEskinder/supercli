@@ -43,17 +43,16 @@ while True:
     elif b"\\r" in data: hook("UserPromptSubmit")
 ''')
     os.chmod(fake, 0o755)
-    # Codex's managed launcher resolves its real executable through the Host
-    # PATH probe before invoking the wrapper. Keep that lookup in this fixture.
     environment["PATH"] = home.path("bin") + os.pathsep + os.environ["PATH"]
-    with open(home.path("path-probe-cache.json"), "w") as handle:
-        json.dump({"dirs": environment["PATH"].split(os.pathsep),
-                   "probed_at_unix_ms": int(time.time() * 1000)}, handle)
     home.preset(label="codex-redraw", command=shlex.quote(fake), preset_id="codex-redraw")
     service = case.serve(env=environment)
     ready = service.ready(timeout=25)
     if not case.check("isolated Host starts", bool(ready), service.log()):
         return
+    # The fake reads ~/.codex/hooks.json, which only the explicitly installed
+    # Codex integration writes; a launch never touches provider config.
+    installed = run_cli(home, ["integrations", "install", "codex"], env=environment)
+    case.check("the Codex integration installs into the private HOME", installed.returncode == 0, installed.stderr)
     launched = run_cli(home, ["new", "--preset", "codex-redraw", "--project", "p"], env=environment)
     ids = re.findall(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", launched.stdout)
     if not case.check("Codex fixture launches in a real PTY", launched.returncode == 0 and bool(ids), launched.stderr):

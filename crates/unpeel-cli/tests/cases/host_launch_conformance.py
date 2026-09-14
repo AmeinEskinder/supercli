@@ -27,7 +27,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from harness import BINARY, CRATES, Home, mcp_post, mobile_request, run  # noqa: E402
+from harness import BINARY, CRATES, Home, mcp_post, mobile_request, run, run_cli  # noqa: E402
 
 
 HOST_BINARY = os.path.join(CRATES, "target", "debug", "unpeel-host")
@@ -343,23 +343,36 @@ def body(case):
         finally:
             launcher.close()
 
+        # Launching the Claude preset must NOT have touched provider config;
+        # only the explicit `integrations.install` verb writes it, and only
+        # into the private test HOME.
         settings_path = case.home.path(".claude", "settings.json")
-        try:
-            with open(settings_path) as handle:
-                settings = json.load(handle)
-        except (OSError, ValueError):
-            settings = {}
-        commands = [
-            hook.get("command")
-            for entries in settings.get("hooks", {}).values()
-            for entry in entries
-            for hook in entry.get("hooks", [])
-        ]
+
+        def claude_hook_commands():
+            try:
+                with open(settings_path) as handle:
+                    settings = json.load(handle)
+            except (OSError, ValueError):
+                settings = {}
+            return [
+                hook.get("command")
+                for entries in settings.get("hooks", {}).values()
+                for entry in entries
+                for hook in entry.get("hooks", [])
+            ]
+
         case.check(
-            f"{name} installs provider hooks only in the private test HOME",
-            os.environ.get("HOME") == case.home.root
-            and home.path("hooks", "claude-hooks.sh") in commands,
+            f"{name} launches without installing provider hooks",
+            home.path("hooks", "claude-hooks.sh") not in claude_hook_commands(),
             settings_path,
+        )
+        installed = run_cli(home, ["integrations", "install", "claude"])
+        case.check(
+            f"{name} installs provider hooks only in the private test HOME on request",
+            installed.returncode == 0
+            and os.environ.get("HOME") == case.home.root
+            and home.path("hooks", "claude-hooks.sh") in claude_hook_commands(),
+            installed.stderr + " " + settings_path,
         )
 
     native = results.get("native", [])

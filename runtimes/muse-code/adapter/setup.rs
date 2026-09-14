@@ -10,6 +10,7 @@ pub(crate) const MUSE_HOOK_SCRIPT: &str = include_str!(concat!(
 ));
 
 pub fn install_muse_hooks() -> Result<(), String> {
+    crate::integrations::install::write_mcp_shim()?;
     let plugin_dir = muse_plugin_dir();
     let hooks_dir = plugin_dir.join("hooks");
     let manifest_dir = plugin_dir.join(".muse-plugin");
@@ -62,10 +63,10 @@ pub(crate) fn muse_plugin_manifest_json() -> Result<String, String> {
         })
         .collect();
     // Static always-on entry (rewritten only when staged content changes):
-    // the unified server fail-closes per session grant, and Muse spawns MCP
+    // the shim's gate fail-closes per session grant, and Muse spawns MCP
     // servers with a stripped env, so identity comes from process ancestry
     // (mcp_host::self_session_id), like cursor-agent.
-    let exe = crate::session_host::resolve_current_executable()?;
+    let shim = crate::integrations::install::mcp_shim_path();
     let manifest = json!({
         "schemaVersion": 1,
         "name": MUSE_PLUGIN_ID,
@@ -77,7 +78,7 @@ pub(crate) fn muse_plugin_manifest_json() -> Result<String, String> {
             "skills": [],
             "commands": [],
             "hooks": hooks,
-            "mcpServers": [{ "id": "unpeel", "command": [exe.to_string_lossy(), crate::mcp_host::MCP_HOST_ARG] }],
+            "mcpServers": [{ "id": "unpeel", "command": [shim.to_string_lossy()] }],
             "reminders": []
         }
     });

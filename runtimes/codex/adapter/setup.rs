@@ -7,16 +7,17 @@ use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const CODEX_WRAPPER_SCRIPT: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../runtimes/codex/assets/hooks/command-wrapper.sh"
-));
 pub(crate) const CODEX_NOTIFY_NORMALIZER_SCRIPT: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../runtimes/codex/assets/hooks/notify-normalizer.sh"
 ));
 
-pub fn install_codex_wrapper() -> Result<(), String> {
+/// Install the Codex integration into Codex's own global configuration:
+/// the native hook registrations in `~/.codex/hooks.json` (with the
+/// `[features] hooks` gate in `config.toml`), the `notify` reporter for
+/// Codex builds that predate native hooks, and the Unpeel MCP shim as
+/// `[mcp_servers.unpeel]`. Nothing wraps the `codex` executable.
+pub fn install_codex_integration() -> Result<(), String> {
     let transport_path = notify_hook_script_path();
     write_executable_script(
         &transport_path,
@@ -28,25 +29,12 @@ pub fn install_codex_wrapper() -> Result<(), String> {
         .replace("{{NOTIFY_PATH}}", transport_path.to_string_lossy().as_ref());
     write_executable_script(&notify_path, &normalizer, "Codex notify normalizer")?;
 
-    let wrapper_path = codex_wrapper_path();
-    let wrapper =
-        CODEX_WRAPPER_SCRIPT.replace("{{NOTIFY_PATH}}", notify_path.to_string_lossy().as_ref());
-    write_executable_script(&wrapper_path, &wrapper, "Codex wrapper script")?;
-
     ensure_codex_hooks_json(&notify_path)?;
-    ensure_codex_hooks_feature_enabled()?;
-    Ok(())
+    let shim = crate::integrations::install::write_mcp_shim()?;
+    ensure_codex_config_toml(&notify_path, &shim)
 }
 pub(crate) fn codex_notify_hook_script_path() -> PathBuf {
     unpeel_home().join("hooks").join("codex-notify-hook.sh")
-}
-
-pub(crate) fn codex_wrapper_path() -> PathBuf {
-    wrapper_bin_dir().join("codex")
-}
-
-pub fn wrapper_bin_dir() -> PathBuf {
-    unpeel_home().join("hooks").join("bin")
 }
 pub(crate) fn codex_hooks_json_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".codex").join("hooks.json"))
@@ -181,7 +169,122 @@ pub(crate) fn finalize_codex_config_toml(lines: Vec<String>) -> Result<String, S
     Ok(updated)
 }
 
-pub(crate) fn ensure_codex_hooks_feature_enabled() -> Result<(), String> {
+/// Reconcile everything Unpeel owns in `~/.codex/config.toml`: the
+/// `[features] hooks` gate, the `[mcp_servers.unpeel]` table pointing at the
+/// shim, and the top-level `notify` reporter (set only when absent or
+/// already Unpeel-owned, so a user's own notify command is never replaced).
+pub(crate) fn reconcile_codex_config_toml(
+    raw: &str,
+    notify_script_path: &Path,
+    shim: &Path,
+) -> Result<String, String> {
+    let with_hooks = enable_codex_hooks_feature_in_toml(raw)?;
+    let with_server = upsert_codex_mcp_server_table(&with_hooks, shim);
+    let updated = ensure_codex_notify(&with_server, notify_script_path);
+    updated
+        .parse::<toml::Value>()
+        .map_err(|e| format!("Failed to reconcile Codex config.toml: {e}"))?;
+    Ok(updated)
+}
+
+pub(crate) fn codex_mcp_server_table(shim: &Path) -> String {
+    format!(
+        "[mcp_servers.unpeel]\ncommand = {}\nargs = []\n",
+        toml_basic_string(&shim.to_string_lossy())
+    )
+}
+
+fn toml_basic_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\t' => escaped.push_str("\\t"),
+            other => escaped.push(other),
+        }
+    }
+    escaped.push('"');
+    escaped
+}
+
+fn is_table_header(line: &str) -> bool {
+    let uncommented = line.split('#').next().unwrap_or("").trim();
+    uncommented.starts_with('[') && uncommented.ends_with(']')
+}
+
+/// Replace (or append) the `[mcp_servers.unpeel]` table. Only that table is
+/// touched; every other line, comment, and table stays byte-identical.
+pub(crate) fn upsert_codex_mcp_server_table(raw: &str, shim: &Path) -> String {
+    let lines = raw.lines().collect::<Vec<_>>();
+    let mut output: Vec<String> = Vec::with_capacity(lines.len() + 4);
+    let mut skipping = false;
+    for line in &lines {
+        if is_table_header(line) {
+            let header = line.split('#').next().unwrap_or("").trim();
+            skipping = header == "[mcp_servers.unpeel]"
+                || header.starts_with("[mcp_servers.unpeel.");
+            if skipping {
+                continue;
+            }
+        }
+        if !skipping {
+            output.push((*line).to_string());
+        }
+    }
+    while output.last().is_some_and(|line| line.trim().is_empty()) {
+        output.pop();
+    }
+    let mut updated = output.join("\n");
+    if !updated.is_empty() {
+        updated.push_str("\n\n");
+    }
+    updated.push_str(&codex_mcp_server_table(shim));
+    updated
+}
+
+/// Set the top-level `notify` reporter when it is absent or Unpeel-owned.
+/// Top-level keys must precede the first table, so an absent key is
+/// inserted before the first header.
+pub(crate) fn ensure_codex_notify(raw: &str, notify_script_path: &Path) -> String {
+    let desired = format!(
+        "notify = [\"bash\", {}]",
+        toml_basic_string(&notify_script_path.to_string_lossy())
+    );
+    let mut lines = raw.lines().map(ToString::to_string).collect::<Vec<_>>();
+    let mut first_header = None;
+    for (index, line) in lines.iter().enumerate() {
+        if is_table_header(line) {
+            first_header = Some(index);
+            break;
+        }
+        let uncommented = line.split('#').next().unwrap_or("").trim();
+        if uncommented.split('=').next().map(str::trim) == Some("notify") {
+            if uncommented == desired || !uncommented.contains("codex-notify-hook.sh") {
+                return raw.to_string();
+            }
+            lines[index] = desired;
+            let mut updated = lines.join("\n");
+            updated.push('\n');
+            return updated;
+        }
+    }
+    let at = first_header.unwrap_or(lines.len());
+    lines.insert(at, desired);
+    if first_header.is_some() {
+        lines.insert(at + 1, String::new());
+    }
+    let mut updated = lines.join("\n");
+    updated.push('\n');
+    updated
+}
+
+pub(crate) fn ensure_codex_config_toml(
+    notify_script_path: &Path,
+    shim: &Path,
+) -> Result<(), String> {
     let Some(config_path) = codex_config_toml_path() else {
         return Ok(());
     };
@@ -193,12 +296,11 @@ pub(crate) fn ensure_codex_hooks_feature_enabled() -> Result<(), String> {
             )
         })?;
     }
-
+    let _lock = crate::app_state::lock_exclusive(&config_path)?;
     let raw = fs::read_to_string(&config_path).unwrap_or_default();
-    let updated = enable_codex_hooks_feature_in_toml(&raw)?;
+    let updated = reconcile_codex_config_toml(&raw, notify_script_path, shim)?;
     if updated != raw {
-        fs::write(&config_path, updated)
-            .map_err(|e| format!("Failed to update Codex config.toml: {e}"))?;
+        write_file_atomic(&config_path, &updated, "Codex config.toml")?;
     }
     Ok(())
 }

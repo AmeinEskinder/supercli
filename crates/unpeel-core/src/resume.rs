@@ -7,42 +7,21 @@
 
 use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreparedNewLaunch {
-    pub command: String,
-    pub provider_session_id: Option<String>,
-    pub managed_storage_path: Option<String>,
-}
-
-impl PreparedNewLaunch {
-    pub fn unchanged(command: &str) -> Self {
-        Self {
-            command: command.to_string(),
-            provider_session_id: None,
-            managed_storage_path: None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct NewLaunchContext<'a> {
-    pub session_id: Option<&'a str>,
-    pub unpeel_home: Option<&'a Path>,
-    /// Compatibility path for the old Pi-specific wrapper. New callers pass
-    /// `session_id` + `unpeel_home` and let the Pi adapter derive the path.
-    pub managed_storage_path_override: Option<&'a str>,
-}
-
-pub type PrepareNewLaunch = for<'a> fn(&str, NewLaunchContext<'a>) -> PreparedNewLaunch;
 pub type ResumeFailureMarkers = fn(&str) -> Option<Vec<String>>;
 
 /// Runtime-owned recipe for relaunching the same agent conversation.
+///
+/// A new launch runs the user's command untouched; conversation identity is
+/// captured from the installed integration's hooks (`provider-session.json`)
+/// and turned into a resume command here, with each runtime's documented
+/// continue-last fallback when no id was captured.
 #[derive(Clone, Copy)]
 pub struct ResumeAdapter {
     pub resumed: fn(&str, Option<&str>) -> String,
     pub fresh: fn(&str) -> String,
-    pub prepare_new_launch: Option<PrepareNewLaunch>,
     pub resume_failure_markers: Option<ResumeFailureMarkers>,
+    /// Recognize Unpeel-managed storage a command already pins (older Pi
+    /// launches), so cleanup and relaunch keep honoring it.
     pub managed_session_dir: Option<fn(&str, &str) -> Option<String>>,
 }
 
@@ -51,18 +30,9 @@ impl ResumeAdapter {
         Self {
             resumed,
             fresh,
-            prepare_new_launch: None,
             resume_failure_markers: None,
             managed_session_dir: None,
         }
-    }
-
-    pub const fn with_new_launch_preparation(
-        mut self,
-        prepare_new_launch: PrepareNewLaunch,
-    ) -> Self {
-        self.prepare_new_launch = Some(prepare_new_launch);
-        self
     }
 
     pub const fn with_failure_markers(
@@ -142,64 +112,12 @@ pub fn fresh(command: &str) -> String {
         .unwrap_or_else(|| command.to_string())
 }
 
-/// Pre-assign a provider conversation id for runtimes that support it.
-pub fn minted_launch(command: &str) -> (String, Option<String>) {
-    adapter(command)
-        .and_then(|adapter| adapter.prepare_new_launch)
-        .map(|prepare| prepare(command, NewLaunchContext::default()))
-        .map(|prepared| (prepared.command, prepared.provider_session_id))
-        .unwrap_or_else(|| (command.to_string(), None))
-}
-
-/// Provider-neutral preparation for a newly created Session. Runtime-owned
-/// recipes may mint a provider conversation id or pin managed storage.
-pub fn prepare_new_launch(
-    command: &str,
-    session_id: &str,
-    unpeel_home: &Path,
-) -> PreparedNewLaunch {
-    adapter(command)
-        .and_then(|adapter| adapter.prepare_new_launch)
-        .map(|prepare| {
-            prepare(
-                command,
-                NewLaunchContext {
-                    session_id: Some(session_id),
-                    unpeel_home: Some(unpeel_home),
-                    managed_storage_path_override: None,
-                },
-            )
-        })
-        .unwrap_or_else(|| PreparedNewLaunch::unchanged(command))
-}
-
 /// Provider-verified markers for a precise-resume conversation-not-found
 /// failure. Unknown and unverified forms return `None` and fail closed.
 pub fn resume_failure_markers(command: &str) -> Option<Vec<String>> {
     adapter(command)
         .and_then(|adapter| adapter.resume_failure_markers)
         .and_then(|markers| markers(command))
-}
-
-/// Preserve the compatibility API used by session creation while delegating
-/// Pi's storage recipe to the Pi runtime package.
-pub fn pinning_pi_session_dir(command: &str, directory: &str) -> (String, bool) {
-    let Some(adapter) = adapter(command).filter(|adapter| adapter.managed_session_dir.is_some())
-    else {
-        return (command.trim().to_string(), false);
-    };
-    let Some(prepare) = adapter.prepare_new_launch else {
-        return (command.trim().to_string(), false);
-    };
-    let prepared = prepare(
-        command,
-        NewLaunchContext {
-            managed_storage_path_override: Some(directory),
-            ..NewLaunchContext::default()
-        },
-    );
-    let pinned = prepared.managed_storage_path.is_some();
-    (prepared.command, pinned)
 }
 
 /// Return an Unpeel-managed Pi storage directory, when the Pi adapter proves
@@ -279,14 +197,6 @@ pub(crate) fn quoted(id: &str) -> String {
 
 fn inline_flag_value<'a>(token: &'a str, flag: &str) -> Option<&'a str> {
     token.strip_prefix(flag)?.strip_prefix('=')
-}
-
-pub(crate) fn has_any_flag(tokens: &[String], flags: &[&str]) -> bool {
-    tokens.iter().any(|token| {
-        flags
-            .iter()
-            .any(|flag| token == flag || inline_flag_value(token, flag).is_some())
-    })
 }
 
 pub(crate) fn has_resume_flag(tokens: &[String], flags: &[(&str, bool)]) -> bool {
@@ -405,6 +315,15 @@ pub(crate) fn strip_leading_subcommands(tokens: Vec<String>, names: &[&str]) -> 
     output
 }
 
+#[cfg(test)]
+pub(crate) fn has_any_flag(tokens: &[String], flags: &[&str]) -> bool {
+    tokens.iter().skip(1).any(|token| {
+        flags.iter().any(|flag| {
+            token == flag || token.starts_with(&format!("{flag}="))
+        })
+    })
+}
+
 /// First matching flag value when it has UUID shape. Picker forms and bare
 /// flags are intentionally excluded.
 pub(crate) fn uuid_flag_value(command: &str, flags: &[&str]) -> Option<String> {
@@ -488,7 +407,6 @@ mod tests {
     fn unknown_commands_are_unchanged() {
         assert_eq!(resumed("bash -lc 'echo hi'", None), "bash -lc 'echo hi'");
         assert_eq!(fresh("htop"), "htop");
-        assert_eq!(minted_launch("codex").1, None);
         assert!(!can_resume("bash"));
     }
 
@@ -513,28 +431,21 @@ mod tests {
     }
 
     #[test]
-    fn compatibility_wrappers_use_the_same_new_launch_adapter() {
-        let prepared = prepare_new_launch("pi", "s1", Path::new("/root/.unpeel"));
+    fn managed_storage_is_recognized_but_never_pinned_on_a_new_launch() {
+        // Older Pi launches recorded `--session-dir` beneath the Unpeel home;
+        // cleanup and relaunch keep honoring it, but nothing adds it now.
         assert_eq!(
-            prepared.command,
-            "pi --session-dir '/root/.unpeel/pi-sessions/s1'"
-        );
-        assert_eq!(
-            prepared.managed_storage_path.as_deref(),
-            Some("/root/.unpeel/pi-sessions/s1")
-        );
-
-        let (pinned, did_pin) = pinning_pi_session_dir("pi --yolo", "/root/pi/s1");
-        assert!(did_pin);
-        assert_eq!(pinned, "pi --yolo --session-dir '/root/pi/s1'");
-        assert_eq!(
-            unpeel_managed_pi_session_dir(&pinned, "/root/pi"),
+            unpeel_managed_pi_session_dir("pi --yolo --session-dir '/root/pi/s1'", "/root/pi"),
             Some("/root/pi/s1".to_string())
         );
-
-        let (minted, provider_id) = minted_launch("gemini --yolo");
-        let provider_id = provider_id.expect("Gemini mints a provider id");
-        assert!(minted.contains(&format!("--session-id '{provider_id}'")));
+        assert_eq!(
+            managed_storage_path("pi --yolo", Path::new("/root/pi")),
+            None
+        );
+        assert_eq!(
+            managed_storage_path("pi --session-dir '/elsewhere/s1'", Path::new("/root/pi")),
+            None
+        );
     }
 
     #[test]

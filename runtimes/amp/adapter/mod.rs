@@ -1,6 +1,4 @@
 use super::Integration;
-use crate::session_host::SessionHostLaunch;
-use portable_pty::CommandBuilder;
 
 mod resume {
     include!(concat!(
@@ -16,19 +14,9 @@ pub(crate) mod setup {
     ));
 }
 
-fn configure_host_command(
-    launch: &SessionHostLaunch,
-    cmd: &mut CommandBuilder,
-    shell_prelude: &mut Vec<String>,
-) -> Result<(), String> {
-    setup::prepare_amp_project_plugin(&launch.cwd)?;
-    cmd.env("PLUGINS", "all");
-    shell_prelude.push("export PLUGINS=all".to_string());
-    Ok(())
-}
-
-pub(crate) const INTEGRATION: Integration = Integration::new(
-    Some(setup::install_amp_plugin),
-    Some(configure_host_command),
-)
-.with_resume_adapter(resume::ADAPTER);
+/// Amp loads plugins from a project's `.amp/plugins/` (with `PLUGINS=all` in
+/// the environment), so the integration installs the shared reporter
+/// globally and the project plugin on request
+/// (`unpeel integrations install amp --project DIR`).
+pub(crate) const INTEGRATION: Integration =
+    Integration::new(Some(setup::install_amp_plugin)).with_resume_adapter(resume::ADAPTER);

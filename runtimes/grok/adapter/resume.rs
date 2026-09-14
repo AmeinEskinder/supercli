@@ -1,6 +1,6 @@
 use crate::resume::{
     has_resume_flag, id_in_command, join, quoted, strip_resume_flags, tokenize, uuid_flag_value,
-    with_flag, NewLaunchContext, PreparedNewLaunch, ResumeAdapter,
+    with_flag, ResumeAdapter,
 };
 
 const RESUME_FLAGS: &[(&str, bool)] = &[
@@ -33,27 +33,13 @@ fn fresh(command: &str) -> String {
     join(strip_resume_flags(tokenize(command), RESUME_FLAGS))
 }
 
-fn prepare_new_launch(command: &str, _context: NewLaunchContext<'_>) -> PreparedNewLaunch {
-    let tokens = tokenize(command);
-    if has_resume_flag(&tokens, RESUME_FLAGS) {
-        return PreparedNewLaunch::unchanged(command);
-    }
-    let id = uuid::Uuid::new_v4().to_string();
-    PreparedNewLaunch {
-        command: join(with_flag(tokens, &["--session-id", &quoted(&id)])),
-        provider_session_id: Some(id),
-        managed_storage_path: None,
-    }
-}
-
 fn failure_markers(command: &str) -> Option<Vec<String>> {
     uuid_flag_value(command.trim(), &["-r", "--resume"])?;
     Some(vec!["Error: Session does not exist".to_string()])
 }
 
-pub(super) const ADAPTER: ResumeAdapter = ResumeAdapter::new(resumed, fresh)
-    .with_new_launch_preparation(prepare_new_launch)
-    .with_failure_markers(failure_markers);
+pub(super) const ADAPTER: ResumeAdapter =
+    ResumeAdapter::new(resumed, fresh).with_failure_markers(failure_markers);
 
 #[cfg(test)]
 mod tests {
@@ -75,17 +61,10 @@ mod tests {
             fresh("grok --session=legacy -s minted --continue --model fast"),
             "grok --model fast"
         );
-        for command in [
-            "grok -r old",
-            "grok -c",
-            "grok --session legacy",
-            "grok -s=minted",
-        ] {
-            assert_eq!(
-                prepare_new_launch(command, NewLaunchContext::default()),
-                PreparedNewLaunch::unchanged(command),
-                "must not mint over {command}"
-            );
-        }
+        // Without a hook-captured id an existing marker is preserved (in its
+        // normalized spelling); nothing mints a new one.
+        assert_eq!(resumed("grok -r old", None), "grok --resume 'old'");
+        assert_eq!(resumed("grok -c", None), "grok -c");
+        assert_eq!(resumed("grok --session legacy", None), "grok --resume 'legacy'");
     }
 }

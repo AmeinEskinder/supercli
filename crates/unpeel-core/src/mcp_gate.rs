@@ -1,8 +1,15 @@
-//! Provider-neutral environment gate for runtimes whose CLI only supports
-//! persistent MCP configuration. A runtime package may install an entry that
-//! always starts this gate, then scope the generic grant variables around its
-//! managed invocation. Outside a granted hosted Session the endpoint remains
-//! valid but advertises no tools.
+//! Provider-neutral gate behind every persistent MCP registration.
+//!
+//! Each installed integration registers the same stable shim
+//! (`integrations::install::mcp_shim_path`), which starts this gate. The gate
+//! resolves the calling Session (`mcp_host::self_session_id`: exported
+//! `UNPEEL_SESSION_ID`, or process ancestry for launchers that strip their
+//! MCP children's environment) and reads that Session's manifest grants to
+//! decide which domains the unified server advertises. Outside a granted
+//! hosted Session — a plain terminal, an agent started elsewhere — the
+//! endpoint stays valid and serves no tools, so a global registration never
+//! surprises the user. The grant environment variables remain readable for
+//! configurations older builds wrote.
 
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
@@ -23,12 +30,22 @@ pub const COMPUTER_ENABLED_ENV: &str = "UNPEEL_COMPUTER_MCP_ENABLED";
 const PROTOCOL_VERSION_FALLBACK: &str = "2025-06-18";
 
 pub fn run_stdio(kind: &str) -> Result<(), String> {
-    // Runtime adapters may recognize only their own pre-migration grant
-    // aliases. The generic gate stays provider-neutral and still requires a
-    // valid hosted Session identity below before advertising any tools.
-    let sessions_granted = env_grant(SESSIONS_ENABLED_ENV)
+    // The calling Session's manifest is the authority for a shim-based
+    // registration. Environment grants (this build's generic names and the
+    // runtime-local aliases older builds exported) remain honored for
+    // configurations that still scope them around a launch.
+    let manifest = crate::mcp_host::self_session_id().and_then(|id| crate::session_host::load_manifest(&id));
+    let manifest_sessions = manifest
+        .as_ref()
+        .is_some_and(|manifest| manifest.sessions_mcp_enabled());
+    let manifest_browser = manifest
+        .as_ref()
+        .is_some_and(|manifest| manifest.browser_mcp_enabled());
+    let sessions_granted = manifest_sessions
+        || env_grant(SESSIONS_ENABLED_ENV)
         || crate::integrations::legacy_mcp_gate_granted(SESSIONS_KIND);
-    let browser_granted = env_grant(BROWSER_ENABLED_ENV)
+    let browser_granted = manifest_browser
+        || env_grant(BROWSER_ENABLED_ENV)
         || crate::integrations::legacy_mcp_gate_granted(BROWSER_KIND);
     let unified_domains = crate::mcp_host::McpDomainMask {
         sessions: sessions_granted,

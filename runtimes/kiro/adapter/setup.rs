@@ -140,9 +140,9 @@ pub(crate) fn write_kiro_mcp_config() -> Result<(), String> {
     if !servers.is_object() {
         return Ok(());
     }
-    let exe = crate::session_host::resolve_current_executable()?;
+    let shim = crate::integrations::install::write_mcp_shim()?;
     let servers = servers.as_object_mut().unwrap();
-    servers.insert("unpeel".into(), kiro_mcp_server_value(&exe));
+    servers.insert("unpeel".into(), kiro_mcp_server_value(&shim));
     // Prune the pre-rename `unpeel-mcp` entry only when its argv matches an
     // Unpeel-owned Kiro server. Keep the legacy argv recognizable across the
     // migration to the provider-neutral MCP gate.
@@ -157,22 +157,23 @@ pub(crate) fn write_kiro_mcp_config() -> Result<(), String> {
     write_file_atomic(&path, &format!("{serialized}\n"), "Kiro mcp.json")
 }
 
-pub(crate) fn kiro_mcp_server_value(exe: &Path) -> Value {
+pub(crate) fn kiro_mcp_server_value(shim: &Path) -> Value {
     json!({
-        "command": exe.to_string_lossy(),
-        "args": [crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::UNIFIED_KIND],
+        "command": shim.to_string_lossy(),
+        "args": [],
         // Kiro v3 intentionally gives MCP subprocesses only the variables
-        // declared in this block. These aliases are always set on an
-        // Unpeel launch, so concurrent Kiro sessions each resolve their own
-        // identity, home, and capability grants without rewriting the shared
-        // settings file.
+        // declared in this block. Every hosted shell exports these generic
+        // Unpeel variables, so concurrent Kiro sessions each resolve their
+        // own identity and home without rewriting the shared settings file;
+        // the shim's gate reads the Session's grants from its manifest.
         "env": {
-            "UNPEEL_SESSIONS_MCP_ENABLED": "${UNPEEL_KIRO_SESSIONS_MCP_ENABLED}",
-            "UNPEEL_BROWSER_MCP_ENABLED": "${UNPEEL_KIRO_BROWSER_MCP_ENABLED}",
-            "UNPEEL_SESSION_ID": "${UNPEEL_KIRO_SESSION_ID}",
-            "UNPEEL_APP_PORT": "${UNPEEL_KIRO_APP_PORT}",
-            "UNPEEL_HOME": "${UNPEEL_KIRO_UNPEEL_HOME}",
-            "UNPEEL_BROWSER_BIN": "${UNPEEL_KIRO_BROWSER_BIN}",
+            "UNPEEL_SESSION_ID": "${UNPEEL_SESSION_ID}",
+            "UNPEEL_SESSION_DIR": "${UNPEEL_SESSION_DIR}",
+            "UNPEEL_APP_PORT": "${UNPEEL_APP_PORT}",
+            "UNPEEL_HOME": "${UNPEEL_HOME}",
+            "UNPEEL_HOST_BIN": "${UNPEEL_HOST_BIN}",
+            "UNPEEL_APP_PORT_REGISTRY_FILE": "${UNPEEL_APP_PORT_REGISTRY_FILE}",
+            "UNPEEL_HOOK_TRACE_FILE": "${UNPEEL_HOOK_TRACE_FILE}",
         },
     })
 }
@@ -189,6 +190,11 @@ fn is_owned_kiro_mcp_entry(entry: &Value) -> bool {
                 if *gate == crate::mcp_gate::MCP_GATE_ARG
                     && *kind == crate::mcp_gate::UNIFIED_KIND
         )
+        || (argv.is_empty()
+            && entry
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(crate::integrations::install::is_mcp_shim_command))
 }
 
 #[cfg(test)]
@@ -208,6 +214,12 @@ mod tests {
         })));
         assert!(!is_owned_kiro_mcp_entry(
             &json!({ "args": ["custom-server"] })
+        ));
+        assert!(is_owned_kiro_mcp_entry(
+            &json!({ "command": "/home/me/.unpeel/bin/unpeel-mcp", "args": [] })
+        ));
+        assert!(!is_owned_kiro_mcp_entry(
+            &json!({ "command": "/usr/local/bin/other-mcp", "args": [] })
         ));
     }
 }

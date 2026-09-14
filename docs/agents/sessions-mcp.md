@@ -40,18 +40,22 @@ channel semantics.
 > pays its context cost — and
 > per-call gates still apply live. Legacy per-tool names and the standalone
 > `__browser_mcp__` argv keep working for sessions launched pre-unification.
-> The separate `*_client_registered` fields say whether Unpeel injected the
-> provider configuration automatically. They remain false for a blank shell;
-> a CLI configured manually with `unpeel-host __mcp__` still receives only the
-> saved grants.
-> Injection is **one config per provider** (claude `claude-unpeel-mcp.json`,
-> codex wrapper `mcp_servers.unpeel` via `UNPEEL_MCP_BIN`, legacy kimi
-> `kimi-unpeel-mcp.json`, Kimi Code `__mcp_gate__ unified`, cursor/cline a
-> single `unpeel` entry, kiro's combined server delegates); the env var /
-> config is present when *any* domain is enabled. Persistent configs
-> (cursor `~/.cursor/mcp.json`, Kimi Code `~/.kimi-code/mcp.json`, kiro
-> `settings/mcp.json`) prune the managed pre-rename `unpeel-mcp` entry the
-> same way the unification pruned `unpeel-sessions`/`unpeel-browser`.
+> The separate `*_client_registered` fields are setup evidence: the user has
+> installed that runtime's Unpeel integration on this Host
+> (`~/.unpeel/integrations/<runtime>.json`), the runtime declares the domain,
+> and the launch granted it. They stay false for a blank shell and for a
+> runtime whose integration was never installed; a CLI configured by hand
+> with `unpeel-host __mcp__` still receives only the saved grants.
+> Registration is **one persistent entry per provider**, written only by the
+> explicit integration install (never by a launch): every provider points at
+> the same shim `~/.unpeel/bin/unpeel-mcp` (claude user-scope `~/.claude.json`,
+> codex `[mcp_servers.unpeel]` in `config.toml`, Kimi Code `~/.kimi-code/
+> mcp.json`, cursor `~/.cursor/mcp.json`, cline's user MCP settings, kiro
+> `settings/mcp.json`, fx `~/.fx/mcp.json`, muse's plugin manifest). The shim
+> runs `__mcp_gate__ unified`; the gate reads the calling Session's manifest
+> grants and serves no tools outside a hosted Session, which is what makes a
+> global registration safe. Persistent configs prune the Unpeel-owned
+> pre-rename `unpeel-mcp`/`unpeel-sessions`/`unpeel-browser` entries.
 >
 
 - Server: `crates/unpeel-core/src/mcp_host.rs`, run as `unpeel-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency.
@@ -158,16 +162,22 @@ other session** (reworked 2026-08-31):
 
 > **Removed (2026-06-22):** the per-project MCP *block* feature (`mcp_blocked_projects`, `Project.mcp_blocked`, the Settings "Block individual projects" section, host/bridge block gates) is gone. The native `AppStateFile`/`Project` decoders still tolerate the old `mcp_blocked*` keys for backward-compatible reads, but nothing writes or enforces them.
 
-Auto-registration per provider:
+Registration per provider (all through the explicitly installed integration,
+`docs/agents/providers.md` has the per-CLI file paths):
 
-- Claude: `install_claude_hooks` writes `~/.unpeel/mcp/claude-unpeel-mcp.json` (rewritten each launch so the exe path — `unpeel-host` — stays current; the legacy `claude-mcp.json`/`claude-browser-mcp.json` are still rewritten for pre-unification live sessions); `claude::startup_command` appends one `--mcp-config <path>` when any domain is enabled (skipped if the user already passes `--mcp-config`).
-- Codex: the wrapper at `~/.unpeel/hooks/bin/codex` injects `-c mcp_servers.unpeel.*` overrides when `UNPEEL_MCP_BIN` is set (exported by `codex::configure_host_command` when any domain is enabled, pointing at `unpeel-host`); session identity is passed via explicit `env` because Codex spawns MCP servers with a minimal environment.
-- Kimi: `install_kimi_hooks` supports both generations. Current Kimi Code gets one merged `~/.kimi-code/mcp.json` entry `unpeel` pointing at `unpeel-host __mcp_gate__ unified` (enabled when either grant env var is set; managed legacy `unpeel-mcp`/`unpeel-sessions`/`unpeel-browser` gate entries are pruned); `kimi::startup_command` probes `kimi --help` and uses the old repeatable `--mcp-config-file` injection (now one `kimi-unpeel-mcp.json`) only for legacy Kimi, preserving its implicit `~/.kimi/mcp.json` behavior.
-- Cline: `cline::configure_host_command` copies the current user MCP settings
-  into `app-sessions/<id>/cline-mcp-settings.json`, adds only the servers
-  granted to that launch, and selects the copy with
-  `CLINE_MCP_SETTINGS_PATH`. Concurrent sessions can have different grants and
-  the user's global file stays untouched.
+- The shim (`integrations::install::write_mcp_shim`) is rewritten by every
+  integration install and by the worker's post-upgrade refresh, so it always
+  execs the current `unpeel-host`; inside a hosted shell it prefers the
+  exported `UNPEEL_HOST_BIN`.
+- Launchers that strip their MCP children's environment (codex, cursor-agent,
+  muse) get identity from `self_session_id`'s process-ancestry fallback; Kiro
+  v3 passes only a declared env block, so its entry forwards the generic
+  `UNPEEL_*` variables; fx and Claude inherit the hosted environment.
+- Per-Session grants never appear in any config file: the gate reads
+  `sessions_mcp_enabled()`/`browser_mcp_enabled()` from the calling Session's
+  manifest per call. The older `UNPEEL_*_MCP_ENABLED` environment grants and
+  the runtime-local aliases remain readable for configurations older builds
+  wrote around a launch.
 
 ## The `apps` and root `skills` domains (2026-08-24)
 

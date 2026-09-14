@@ -82,6 +82,16 @@ makes sense for coding, it does not belong here.
   `runtimes/<slug>/assets/hooks/` report lifecycle to the Host's hook port;
   terminal output never flips busy/idle. Hook scripts broadcast to every
   port in `~/.unpeel/app-ports`.
+- **Launches are plain; integrations are explicit.** A preset runs its
+  command in the user's login shell exactly as typed, with only Unpeel's
+  generic session environment exported. Nothing wraps an executable,
+  appends a flag, mints a conversation id, or edits provider configuration
+  at launch or on observing a hand-typed agent. A runtime's hooks and MCP
+  registration are its *integration*, installed once per Host by the user
+  (`unpeel integrations install`, the `integrations.install` Host verb) into
+  the provider's own global config, pointing at the stable shim
+  `~/.unpeel/bin/unpeel-mcp`; the Host only refreshes what the user
+  installed after an upgrade.
 
 ## Working in this repository
 
@@ -93,7 +103,9 @@ makes sense for coding, it does not belong here.
 - Changing launching or hooks means updating `session_host.rs`, the
   runtime package, and `hook_assets/` together; the failure modes are hooks
   that never fire, busy state that never clears, and sessions that are not
-  persisted or cleaned up.
+  persisted or cleaned up. Provider-specific behavior belongs in the
+  runtime's installer (`runtimes/<slug>/adapter/setup.rs`), never in the
+  launch path.
 - One version for everything: `[workspace.package] version` in
   `crates/Cargo.toml` names the CLI archives, the bridge, and the Mac app.
   Bump it there (then `cargo update --workspace`); nothing else restates it.

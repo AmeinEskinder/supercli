@@ -905,6 +905,40 @@
       }
     },
     {
+      "id": "integrations-install.malformed-id",
+      "method": "POST",
+      "path": "/mobile/integrations/install",
+      "body": {},
+      "expected": {
+        "native": 400,
+        "tui": 400
+      }
+    },
+    {
+      "id": "integrations-install.unknown-runtime",
+      "method": "POST",
+      "path": "/mobile/integrations/install",
+      "body": {
+        "runtimeID": "not-a-runtime"
+      },
+      "expected": {
+        "native": 404,
+        "tui": 404
+      }
+    },
+    {
+      "id": "integrations-install.detection-only-runtime",
+      "method": "POST",
+      "path": "/mobile/integrations/install",
+      "body": {
+        "runtimeID": "pi"
+      },
+      "expected": {
+        "native": 422,
+        "tui": 422
+      }
+    },
+    {
       "id": "apps-open.missing-resource",
       "method": "POST",
       "path": "/mobile/apps/open",

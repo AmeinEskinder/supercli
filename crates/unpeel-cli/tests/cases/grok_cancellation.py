@@ -55,18 +55,17 @@ while True:
     elif b"\\r" in data: hook("UserPromptSubmit")
 ''')
     os.chmod(fake, 0o755)
-    # The Grok runtime launches through its appearance wrapper, which resolves
-    # the provider from the Host's PATH probe. Pin that probe to the fixture.
     environment["PATH"] = home.path("bin") + os.pathsep + os.environ["PATH"]
-    with open(home.path("path-probe-cache.json"), "w") as handle:
-        json.dump({"dirs": environment["PATH"].split(os.pathsep),
-                   "probed_at_unix_ms": int(time.time() * 1000)}, handle)
     home.preset(label="grok-native", command=shlex.quote(fake), preset_id="grok-native")
     service = case.serve(env=environment)
     ready = service.ready(timeout=20)
     case.check("isolated Host starts", bool(ready), service.log())
     if not ready:
         return
+    # The fake reads ~/.grok/hooks/unpeel.json, written only by the explicitly
+    # installed Grok integration.
+    installed = run_cli(home, ["integrations", "install", "grok"], env=environment)
+    case.check("the Grok integration installs into the private HOME", installed.returncode == 0, installed.stderr)
     launched = run_cli(home, ["new", "--preset", "grok-native", "--project", "p"], env=environment)
     ids = re.findall(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", launched.stdout)
     case.check("fake Grok launches with the runtime's real hook configuration", launched.returncode == 0 and bool(ids), launched.stderr)

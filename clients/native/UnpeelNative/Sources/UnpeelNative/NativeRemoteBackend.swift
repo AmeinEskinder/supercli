@@ -203,6 +203,7 @@ protocol NativeRemoteBackendProtocol: Sendable {
     func pluginUpdates() async throws -> RemotePluginUpdates
     func setOpener(selector: String, opener: String) async throws -> NativeRemoteEffectReceipt
     func installApp(appID: String) async throws -> NativeRemoteEffectReceipt
+    func installIntegration(runtimeID: String) async throws -> NativeRemoteEffectReceipt
     func openApp(
         callerSessionID: String,
         appID: String,
@@ -252,6 +253,16 @@ extension NativeRemoteBackendProtocol {
             message: "App installation is unavailable on this backend.",
             kind: "notApplied",
             operation: "App install"
+        )
+    }
+
+    func installIntegration(runtimeID: String) async throws -> NativeRemoteEffectReceipt {
+        throw NativeRemoteBackendError(
+            result: Int32(UNPEEL_NATIVE_BRIDGE_ERROR_REMOTE),
+            code: "integration_install_unavailable",
+            message: "Integration installation is unavailable on this backend.",
+            kind: "notApplied",
+            operation: "integration install"
         )
     }
 
@@ -1521,6 +1532,35 @@ final class NativeRemoteBackend: @unchecked Sendable {
                 pointer: outputPointer,
                 length: outputLength,
                 operation: "App install"
+            )
+        }
+    }
+
+    private struct IntegrationInstallRequest: Encodable {
+        let runtimeID: String
+    }
+
+    func installIntegration(runtimeID: String) async throws -> NativeRemoteEffectReceipt {
+        let handle = try currentIdentityValidatedHandle()
+        let body = try JSONEncoder().encode(IntegrationInstallRequest(runtimeID: runtimeID))
+        return try await Self.runBlocking(priority: .userInitiated) {
+            try Task.checkCancellation()
+            var outputPointer: UnsafeMutablePointer<UInt8>?
+            var outputLength = 0
+            let result = body.withUnsafeBytes { bytes in
+                unpeel_native_bridge_remote_integration_install(
+                    handle,
+                    bytes.bindMemory(to: UInt8.self).baseAddress,
+                    bytes.count,
+                    &outputPointer,
+                    &outputLength
+                )
+            }
+            return try Self.decodeEffect(
+                result: result,
+                pointer: outputPointer,
+                length: outputLength,
+                operation: "integration install"
             )
         }
     }

@@ -46,11 +46,17 @@ pub(crate) fn agents_wire_in_dirs(dirs: &[std::path::PathBuf]) -> Value {
                         install.command.as_ref()
                     }
                 });
+                let integration = crate::integrations::install::status(&runtime.legacy_slug);
                 json!({
                     "id": runtime.id, "name": runtime.label, "command": command,
                     "installed": installed,
                     "installCommand": install_command,
                     "websiteURL": runtime.install.as_ref().map(|install| &install.official_url),
+                    // The runtime's Unpeel integration (hooks + MCP registration)
+                    // on this Host: whether one exists, and whether the user
+                    // installed it. Controllers offer `integrations.install`.
+                    "integrationInstallable": integration.as_ref().is_some_and(|status| status.installable),
+                    "integrationInstalled": integration.as_ref().is_some_and(|status| status.installed),
                 })
             })
             .collect(),

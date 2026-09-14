@@ -651,6 +651,9 @@ pub struct HostRuntime {
     pty_core_status: Option<crate::pty_core_supervisor::CoreStatus>,
     /// Background engine install started at boot; `None` once resolved.
     browser_engine_rx: Option<mpsc::Receiver<Result<PathBuf, String>>>,
+    /// Post-upgrade refresh of user-installed integrations; joined never.
+    #[allow(dead_code)]
+    integrations_refresh: Option<std::thread::JoinHandle<()>>,
     browser_engine_status: unpeel_core::browser_engine::Status,
     link_refresh_rx: Option<mpsc::Receiver<LinkRefreshResult>>,
     link_refresh_retry_at: Instant,
@@ -766,6 +769,7 @@ impl HostRuntime {
             } else {
                 None
             },
+            integrations_refresh: spawn_integrations_refresh(),
             browser_engine_status: if browser_engine_install_enabled() {
                 unpeel_core::browser_engine::Status::installing()
             } else {
@@ -1949,6 +1953,33 @@ fn browser_engine_install_enabled() -> bool {
             .as_str(),
         "0" | "false" | "off" | "no"
     )
+}
+
+/// Keep user-installed integrations current: after an upgrade their hook
+/// scripts and MCP shim must point at this build. Only integrations the
+/// user installed are touched; nothing is ever installed on their behalf.
+/// `UNPEEL_TEST` skips it because provider config paths are global.
+fn spawn_integrations_refresh() -> Option<std::thread::JoinHandle<()>> {
+    if std::env::var("UNPEEL_TEST").as_deref() == Ok("1") {
+        return None;
+    }
+    std::thread::Builder::new()
+        .name("integrations-refresh".into())
+        .spawn(|| {
+            for (runtime, result) in unpeel_core::integrations::install::refresh_installed() {
+                match result {
+                    Ok(()) => crate::tracelog::trace(
+                        "integrations",
+                        &format!("refreshed the {runtime} integration for this build"),
+                    ),
+                    Err(error) => crate::tracelog::trace(
+                        "integrations",
+                        &format!("refresh of the {runtime} integration failed: {error}"),
+                    ),
+                }
+            }
+        })
+        .ok()
 }
 
 fn spawn_browser_engine_install(home: &Path) -> mpsc::Receiver<Result<PathBuf, String>> {

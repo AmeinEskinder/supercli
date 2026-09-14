@@ -9,38 +9,15 @@ pub(crate) const GROK_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/grok/assets/hooks/lifecycle.sh"
 ));
 
-pub(crate) const GROK_DEFAULTS_WRAPPER_SCRIPT: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../runtimes/grok/assets/hooks/defaults-wrapper.sh"
-));
-
-pub(crate) const GROK_COMMAND_WRAPPER_SCRIPT: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../runtimes/grok/assets/hooks/command-wrapper.sh"
-));
-
 pub fn install_grok_hooks() -> Result<(), String> {
     // Grok-native hooks map argv[1] -> Unpeel lifecycle events and POST to the
     // hook port. SessionStart only latches provider metadata; UserPromptSubmit
     // is the turn-opening busy event. Grok also scans Claude/Cursor hook files;
     // those Unpeel scripts no-op when GROK_SESSION_ID is set so a Claude-shaped
-    // session_start cannot latch busy. Hosted Grok also disables
-    // [compat.claude]/[compat.cursor] hooks (overlay + GROK_*_HOOKS_ENABLED)
-    // so vendor commands that interpolate unset $VARs do not fail as a red
-    // session-start error. Real attention comes from Notification/PreToolUse
-    // in unpeel.json.
+    // session_start cannot latch busy. Real attention comes from
+    // Notification/PreToolUse in unpeel.json.
     let script_path = grok_hook_script_path();
     write_executable_script(&script_path, GROK_HOOK_SCRIPT, "Grok hook script")?;
-    write_executable_script(
-        &grok_defaults_wrapper_path(),
-        GROK_DEFAULTS_WRAPPER_SCRIPT,
-        "Grok defaults wrapper",
-    )?;
-    write_executable_script(
-        &grok_command_wrapper_path(),
-        GROK_COMMAND_WRAPPER_SCRIPT,
-        "Grok command wrapper",
-    )?;
     ensure_grok_hooks(&script_path)?;
     Ok(())
 }
@@ -49,21 +26,6 @@ pub(crate) fn grok_hook_script_path() -> PathBuf {
     unpeel_home().join("hooks").join("grok-hook.sh")
 }
 
-pub fn grok_appearance_bin_dir() -> PathBuf {
-    unpeel_home().join("hooks").join("grok-bin")
-}
-
-pub fn app_appearance_path() -> PathBuf {
-    unpeel_home().join("app-appearance")
-}
-
-pub(crate) fn grok_defaults_wrapper_path() -> PathBuf {
-    grok_appearance_bin_dir().join("defaults")
-}
-
-pub(crate) fn grok_command_wrapper_path() -> PathBuf {
-    grok_appearance_bin_dir().join("grok")
-}
 pub(crate) fn grok_hooks_path() -> Option<PathBuf> {
     // Grok merges every `*.json` under ~/.grok/hooks/ (global hooks are always
     // trusted). We own `unpeel.json`, so it can be rewritten wholesale.

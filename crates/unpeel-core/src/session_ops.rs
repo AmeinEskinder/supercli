@@ -255,7 +255,7 @@ fn has_real_provider_lifecycle(session_id: &str) -> bool {
 /// from a command we intended to run into a real provider Session. The path
 /// may be known before the first lifecycle hook reaches Unpeel, so checking
 /// the actual non-empty file avoids a transient false "Remove" affordance
-/// without treating a merely pre-minted provider id as resumable.
+/// without treating a bare provider id as resumable.
 fn provider_transcript_has_resume_data(path: Option<&str>) -> bool {
     let Some(path) = path.map(str::trim).filter(|path| !path.is_empty()) else {
         return false;
@@ -264,9 +264,9 @@ fn provider_transcript_has_resume_data(path: Option<&str>) -> bool {
 }
 
 /// True only after this particular managed runtime has produced durable
-/// resume state. Provider IDs minted before launch are not sufficient: the
-/// provider must have written a transcript, emitted a real lifecycle event,
-/// or populated managed per-Session storage such as Pi's.
+/// resume state: a hook-captured provider id paired with a written
+/// transcript or a real lifecycle event, or populated managed per-Session
+/// storage recorded by an older launch. A launch alone never qualifies.
 pub fn can_archive_manifest(manifest: &HostedSessionManifest) -> bool {
     if !can_archive_command(&manifest.session.command) {
         return false;

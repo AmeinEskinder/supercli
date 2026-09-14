@@ -12,6 +12,7 @@ mod apps_cli;
 mod browser_cli;
 mod cli;
 mod computer_cli;
+mod integrations_cli;
 mod link_cli;
 mod open_cli;
 mod settings_cli;

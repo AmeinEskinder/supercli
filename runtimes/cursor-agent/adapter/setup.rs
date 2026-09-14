@@ -13,7 +13,7 @@ pub fn install_cursor_hooks() -> Result<(), String> {
     let script_path = cursor_hook_script_path();
     write_executable_script(&script_path, CURSOR_HOOK_SCRIPT, "Cursor hook script")?;
     ensure_cursor_hooks(&script_path)?;
-    Ok(())
+    write_cursor_mcp_config()
 }
 pub(crate) fn cursor_hook_script_path() -> PathBuf {
     unpeel_home().join("hooks").join("cursor-hook.sh")
@@ -27,28 +27,26 @@ pub(crate) fn cursor_mcp_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".cursor").join("mcp.json"))
 }
 
-/// Merge Unpeel MCP server entries into `~/.cursor/mcp.json` for cursor-agent.
-/// Called per launch with the session's grant flags so the browser entry
-/// is added or removed. Rewritten every launch so executable paths stay current.
-/// No per-session values are baked into the file (it is global and shared by
-/// concurrent sessions) — and cursor-agent spawns MCP servers with a stripped
-/// environment, so `UNPEEL_SESSION_ID` never arrives by inheritance either.
-/// Caller identity comes from `mcp_host::self_session_id`'s process-ancestry
-/// fallback instead.
-pub fn write_cursor_mcp_config(unified_mcp_enabled: bool) -> Result<(), String> {
-    let exe = crate::session_host::resolve_current_executable()?;
+/// Register the Unpeel MCP shim in `~/.cursor/mcp.json`. The file is global
+/// and shared by concurrent sessions, so nothing per-session is baked in —
+/// and cursor-agent spawns MCP servers with a stripped environment, so
+/// `UNPEEL_SESSION_ID` never arrives by inheritance either. Caller identity
+/// comes from `mcp_host::self_session_id`'s process-ancestry fallback, and
+/// the shim's gate serves no tools outside a granted Unpeel session.
+pub fn write_cursor_mcp_config() -> Result<(), String> {
+    let shim = crate::integrations::install::write_mcp_shim()?;
     let unified = json!({
         "type": "stdio",
-        "command": exe.to_string_lossy(),
-        "args": [crate::mcp_host::MCP_HOST_ARG],
+        "command": shim.to_string_lossy(),
+        "args": [],
     });
-    // One unified entry per launch; the legacy names (`unpeel-mcp` before the
+    // One unified entry; the legacy names (`unpeel-mcp` before the
     // 2026-07-25 rename, the per-domain pair before unification) are pruned
     // so Cursor sessions don't see the same domains twice.
     merge_cursor_mcp_servers_at(
         cursor_mcp_path().as_deref(),
         [
-            ("unpeel", unified_mcp_enabled.then_some(unified)),
+            ("unpeel", Some(unified)),
             ("unpeel-mcp", None),
             ("unpeel-sessions", None),
             ("unpeel-browser", None),

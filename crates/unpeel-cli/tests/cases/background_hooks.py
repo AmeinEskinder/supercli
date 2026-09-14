@@ -46,6 +46,10 @@ while True:
     case.check("isolated Host starts", bool(ready), service.log())
     if not ready:
         return
+    # Hooks come from the explicitly installed Claude integration (never
+    # from a launch); the fake reads the private HOME's settings.json.
+    installed = run_cli(home, ["integrations", "install", "claude"], env=environment)
+    case.check("the Claude integration installs into the private HOME", installed.returncode == 0, installed.stderr)
     launched = run_cli(home, ["new", "--preset", "background", "--project", "p"], env=environment)
     ids = re.findall(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", launched.stdout)
     case.check("Claude fixture launches in a real PTY", launched.returncode == 0 and bool(ids), launched.stderr)

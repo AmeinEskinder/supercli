@@ -186,6 +186,9 @@ impl ControllerHostRuntime {
             ("GET", "/mobile/plugin-updates") => (200, crate::plugin_updates::request()),
             ("POST", "/mobile/openers") => opener_response(&request.body),
             ("POST", "/mobile/apps/install") => app_install_response(&request.body),
+            ("POST", "/mobile/integrations/install") => {
+                integration_install_response(&request.body)
+            }
             ("POST", "/mobile/apps/open") => app_open_response(&request.body, self.hook_port),
             ("POST", "/mobile/resize-desktop") => resize_desktop(request),
             // Approval queues live inside the native app or TUI. This
@@ -589,6 +592,37 @@ pub fn app_install_response(body: &Value) -> (u16, Value) {
     match crate::app_installer::install(&crate::app_paths::unpeel_home(), app_id) {
         Ok(path) => (200, json!({ "ok": true, "path": path })),
         Err(error) => (502, json!({ "error": error })),
+    }
+}
+
+/// Shared Host semantics for `integrations.install`: install one runtime's
+/// Unpeel integration (hooks + MCP registration) into that CLI's global
+/// configuration on this Host. The runtime is resolved through the embedded
+/// catalog only; no caller-provided path is accepted.
+pub fn integration_install_response(body: &Value) -> (u16, Value) {
+    let Some(runtime) = body
+        .get("runtimeID")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (400, json!({ "error": "runtimeID must be a string" }));
+    };
+    let Some(status) = crate::integrations::install::status(runtime) else {
+        return (
+            404,
+            json!({ "error": format!("Unknown runtime '{runtime}'.") }),
+        );
+    };
+    if !status.installable {
+        return (
+            422,
+            json!({ "error": format!("{} has no Unpeel integration to install.", status.label) }),
+        );
+    }
+    match crate::integrations::install::install(runtime) {
+        Ok(status) => (200, json!({ "ok": true, "integration": status })),
+        Err(error) => (500, json!({ "error": error })),
     }
 }
 

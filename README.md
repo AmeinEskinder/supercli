@@ -146,8 +146,13 @@ request here plus a version bump on the client side.
 
 Provider knowledge lives in one package per agent under
 [`runtimes/<slug>/`](runtimes/): a `runtime.toml` descriptor, a Rust adapter
-(launch and setup, resume identity, transcript discovery), hook assets, and
-fixtures. The build discovers the packages and generates the registry, so
+(the integration installer, resume identity, transcript discovery), hook
+assets, and fixtures. Launching is provider-neutral: a preset runs its command
+in your login shell exactly as typed. Each agent's hooks and MCP registration
+are its *integration*, installed once per Host with
+`unpeel integrations install <runtime>` (or from Settings ▸ Agents & Apps)
+into that CLI's own configuration, and kept current by the Host after
+upgrades. The build discovers the packages and generates the registry, so
 adding an agent never touches a central list. Contribution contract:
 [`runtimes/README.md`](runtimes/README.md); per-provider notes:
 [`docs/agents/providers.md`](docs/agents/providers.md).

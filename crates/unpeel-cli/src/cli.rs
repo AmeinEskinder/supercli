@@ -48,6 +48,8 @@ unpeel — run and steer CLI agent sessions
   unpeel settings list|get <key>|set <key> <value> [--json]
   unpeel apps list|install <app-id> [--check] [--json]
                                   MCP gates apply to Sessions launched afterward
+  unpeel integrations [list]      Unpeel's hooks + MCP integration per agent CLI
+  unpeel integrations install <runtime|--all> [--project DIR]
   unpeel presets [list | add <label> <command> | remove <label>]
   unpeel presets star|unstar|enable|disable <label|id>
   unpeel presets edit <label|id> [--label L] [--command C]
@@ -954,6 +956,7 @@ pub fn run(args: &[String]) -> i32 {
             _ => crate::settings_cli::run(&parsed.positional[1..], parsed.has("json")).map(|_| 0),
         },
         "apps" => Ok(crate::apps_cli::run(&args[1..])),
+        "integrations" => crate::integrations_cli::run(&args[1..], parsed.has("json")),
         // Lane 5 (2026-09-03): the one Browser MCP engine verb; the logic
         // lives in unpeel_core::browser_engine, this is only the dispatch.
         "browser" => Ok(crate::browser_cli::run(&args[1..])),

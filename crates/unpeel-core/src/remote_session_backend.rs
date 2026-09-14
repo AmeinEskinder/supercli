@@ -71,6 +71,7 @@ const OPENERS_CAPABILITY: &str = "settings.openers.set";
 const WORKSPACE_SETTINGS_CAPABILITY: &str = "settings.workspace.set";
 const APPS_INSTALL_CAPABILITY: &str = "apps.install";
 const APPS_OPEN_CAPABILITY: &str = "apps.open";
+const INTEGRATIONS_INSTALL_CAPABILITY: &str = "integrations.install";
 const ARCHIVE_LIST_CAPABILITY: &str = "session.archive.list";
 const TRANSCRIPT_MARKDOWN_CAPABILITY: &str = "session.transcript.markdown";
 const METRICS_CAPABILITY: &str = "session.metrics.read";
@@ -98,6 +99,7 @@ pub const REMOTE_CAPABILITY_PRESETS_SET: &str = PRESETS_CAPABILITY;
 pub const REMOTE_CAPABILITY_OPENERS_SET: &str = OPENERS_CAPABILITY;
 pub const REMOTE_CAPABILITY_WORKSPACE_SETTINGS_SET: &str = WORKSPACE_SETTINGS_CAPABILITY;
 pub const REMOTE_CAPABILITY_APPS_INSTALL: &str = APPS_INSTALL_CAPABILITY;
+pub const REMOTE_CAPABILITY_INTEGRATIONS_INSTALL: &str = INTEGRATIONS_INSTALL_CAPABILITY;
 pub const REMOTE_CAPABILITY_APPS_OPEN: &str = APPS_OPEN_CAPABILITY;
 pub const REMOTE_CAPABILITY_ARCHIVE_LIST: &str = ARCHIVE_LIST_CAPABILITY;
 pub const REMOTE_CAPABILITY_TRANSCRIPT_MARKDOWN: &str = TRANSCRIPT_MARKDOWN_CAPABILITY;
@@ -119,6 +121,7 @@ const PRESETS_PATH: &str = "/mobile/presets";
 const OPENERS_PATH: &str = "/mobile/openers";
 const WORKSPACE_SETTINGS_PATH: &str = "/mobile/workspace-settings";
 const APPS_INSTALL_PATH: &str = "/mobile/apps/install";
+const INTEGRATIONS_INSTALL_PATH: &str = "/mobile/integrations/install";
 const APPS_OPEN_PATH: &str = "/mobile/apps/open";
 const ARCHIVE_LIST_PATH: &str = "/mobile/archive";
 const TRANSCRIPT_MARKDOWN_PATH: &str = "/mobile/transcript-markdown";
@@ -1094,6 +1097,12 @@ struct AppInstallWire<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct IntegrationInstallWire<'a> {
+    #[serde(rename = "runtimeID")]
+    runtime_id: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct AppOpenResourceWire<'a> {
     kind: &'a str,
     id: &'a str,
@@ -1293,6 +1302,14 @@ pub struct RemoteAgentSummary {
     pub install_command: Option<String>,
     #[serde(rename = "websiteURL")]
     pub website_url: Option<String>,
+    /// The runtime ships an Unpeel integration (hooks + MCP registration) a
+    /// Controller may offer to install through `integrations.install`.
+    /// Absent on Hosts that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration_installable: Option<bool>,
+    /// The user installed that integration on this Host.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration_installed: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2523,6 +2540,37 @@ impl RemoteSessionBackend {
             OPERATION,
             APPS_INSTALL_CAPABILITY,
             APPS_INSTALL_PATH,
+            body,
+            APP_INSTALL_EFFECT_TIMEOUT,
+        )
+    }
+
+    /// Install one runtime's Unpeel integration (hooks + MCP registration)
+    /// on the Host. The Host resolves the runtime through its embedded
+    /// catalog and edits only that CLI's own global configuration.
+    pub fn install_integration(
+        &self,
+        runtime_id: &str,
+    ) -> Result<RemoteEffectReceipt, RemoteEffectFailure> {
+        const OPERATION: &str = "integration install";
+        let effect_turn = self.inner.begin_effect();
+        effect_preflight(OPERATION, || {
+            if runtime_id.is_empty()
+                || runtime_id.len() > 128
+                || !runtime_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            {
+                return Err(invalid_effect_input(OPERATION, "invalid runtime id"));
+            }
+            Ok(())
+        })?;
+        let body = encode_effect_body(OPERATION, &IntegrationInstallWire { runtime_id })?;
+        self.inner.perform_effect_with_timeout(
+            &effect_turn,
+            OPERATION,
+            INTEGRATIONS_INSTALL_CAPABILITY,
+            INTEGRATIONS_INSTALL_PATH,
             body,
             APP_INSTALL_EFFECT_TIMEOUT,
         )

@@ -1203,32 +1203,14 @@ fn resume_agent_in_place(
         session_id,
         crate::session_ops::RelaunchMode::Restart { force_fresh: false },
     )?;
-    if integrations::has_runtime_support_installer(expected_runtime_id) {
-        integrations::install_runtime_support(expected_runtime_id)?;
-    }
     let mcp_enabled = manifest.sessions_mcp_enabled();
     let browser_mcp_enabled = manifest.browser_mcp_enabled();
-    let computer_mcp_enabled = manifest.computer_mcp_enabled();
-    integrations::prepare_runtime_launch(
+    let registration = integrations::mcp_registration_evidence(
         expected_runtime_id,
         mcp_enabled,
         browser_mcp_enabled,
-        computer_mcp_enabled,
-    )?;
-    let automatic_mcp_registration = integrations::automatic_mcp_registration(
-        expected_runtime_id,
-        &relaunch_command,
-        mcp_enabled,
-        browser_mcp_enabled,
-        computer_mcp_enabled,
     );
-    let startup_command = integrations::startup_command(
-        expected_runtime_id,
-        &relaunch_command,
-        mcp_enabled,
-        browser_mcp_enabled,
-        computer_mcp_enabled,
-    );
+    let startup_command = relaunch_command.trim().to_string();
 
     let guard = runtime
         .lock()
@@ -1379,9 +1361,9 @@ fn resume_agent_in_place(
         manifest.runtime_launch_pending = true;
         manifest.runtime_launched_at = Some(launched_at);
         manifest.runtime_launch_output_offset = launch_output_offset;
-        manifest.mcp_client_registered = automatic_mcp_registration.sessions;
-        manifest.browser_client_registered = automatic_mcp_registration.browser;
-        manifest.computer_client_registered = automatic_mcp_registration.computer;
+        manifest.mcp_client_registered = registration.sessions;
+        manifest.browser_client_registered = registration.browser;
+        manifest.computer_client_registered = false;
         manifest.menu_prompt_active = false;
     });
     // Wake/reset the observer only after the clearing manifest write. If this
@@ -4188,10 +4170,11 @@ pub fn apply_manifest_auto_title(session_id: &str, candidate: &str) -> bool {
         return true;
     }
     // "Label differs from command" used to mean "already auto-titled", but the
-    // label holds the *display* command while spawn decorates the real command
-    // with appended flags (minted `--session-id`, pi `--session-dir`, restart
-    // resume flags). A label that is still a prefix of the command is the
-    // untitled initial state; only a non-prefix label means titling settled.
+    // label holds the *display* command while the stable command may carry
+    // appended resume flags (`--resume <id>`, `--continue`) or, from older
+    // launches, a managed `--session-dir`. A label that is still a prefix of
+    // the command is the untitled initial state; only a non-prefix label
+    // means titling settled.
     if !is_blank_terminal && !session.command.starts_with(session.label.as_str()) {
         return true;
     }
@@ -5385,13 +5368,6 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
         let mut tracker = RuntimeObservationTracker::default();
         let mut observed_generation = generation_for_runtime_observer.load(Ordering::Acquire);
         let mut previous_foreground_was_shell = false;
-        // Self-healing hook installs for hand-started runtimes. Managed
-        // launches install their provider's hook assets at spawn; a
-        // hook-capable CLI the user types into this PTY may never have
-        // been launched through a preset anywhere, leaving it on output
-        // heuristics forever. Seeded with the launch runtime (already
-        // installed at spawn) so the common managed case never re-runs.
-        let mut installed_support_runtime_id = runtime_observer_expected_id.clone();
         // First scan runs immediately, then every scan interval after the
         // previous scan finished (the old thread slept after each pass).
         Some(HostTimerJob::new(
@@ -5564,31 +5540,10 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
                         }
                     }
                 }
-                // Install/refresh the observed runtime's hook assets on the
-                // observation edge. The running process keeps its heuristic
-                // (providers read hook config at startup); the NEXT invocation
-                // reports through hooks. Installers are idempotent, locked,
-                // and rewrite only on content change — the same guarantees
-                // the managed spawn path relies on. Recorded even on failure
-                // so a broken environment is not retried at scan cadence.
-                // `UNPEEL_TEST` guards the operator's real provider configs:
-                // PTY test cases observe fake catalog-named binaries under an
-                // isolated UNPEEL_HOME, but provider settings paths (for
-                // example `~/.claude/settings.json`) are genuinely global.
-                if let Some(Some(observation)) = next.as_ref() {
-                    let runtime_id = observation.runtime_id.as_str();
-                    if installed_support_runtime_id.as_deref() != Some(runtime_id)
-                        && integrations::has_runtime_support_installer(runtime_id)
-                        && std::env::var("UNPEEL_TEST").as_deref() != Ok("1")
-                    {
-                        if let Err(error) = integrations::install_runtime_support(runtime_id) {
-                            log::warn!(
-                            "Failed to install runtime support for observed {runtime_id}: {error}"
-                        );
-                        }
-                        installed_support_runtime_id = Some(runtime_id.to_string());
-                    }
-                }
+                // Observation grants identity and presentation only. It never
+                // installs or rewrites provider configuration: a hand-typed
+                // agent reports through hooks exactly when the user has
+                // installed that runtime's Unpeel integration.
                 true
             },
         ))
@@ -5778,28 +5733,15 @@ pub(crate) fn start_host(
             launch.session.source_preset_id = None;
         }
         ensure_session_dir(&launch.session.id)?;
-        // THE initial-launch preparation boundary. Every frontend submits its
-        // original command; the Host invokes the selected runtime adapter once
-        // before any manifest is visible or provider process can start.
-        let prepared = crate::resume::prepare_new_launch(
-            &launch.session.command,
-            &launch.session.id,
-            &unpeel_home,
-        );
-        launch.session.command = prepared.command;
-        let managed_storage_path = prepared
-            .managed_storage_path
-            .map(PathBuf::from)
-            .or_else(|| crate::resume::managed_storage_path(&launch.session.command, &unpeel_home));
+        // The command launches exactly as the user wrote it. Provider
+        // conversation ids are captured from the installed integration's
+        // hooks once the agent runs, never minted here. A command that
+        // already pins Unpeel-managed storage (an older Pi launch, or a
+        // resumed one) still gets its directory created beneath the home.
+        let managed_storage_path =
+            crate::resume::managed_storage_path(&launch.session.command, &unpeel_home);
         if let Some(path) = managed_storage_path.as_deref() {
             ensure_managed_storage_path(&unpeel_home, path)?;
-        }
-        if let Some(provider_session_id) = prepared.provider_session_id.as_deref() {
-            crate::session_ops::set_provider_session(
-                &launch.session.id,
-                Some(provider_session_id),
-                None,
-            )?;
         }
         let resume_failure_markers =
             crate::resume::resume_failure_markers(&launch.session.command).unwrap_or_default();
@@ -5844,9 +5786,8 @@ pub(crate) fn start_host(
         let initial_runtime_completion_path = runtime_launch_completion_path(&launch.session.id);
         prepare_runtime_launch_completion_marker(&initial_runtime_completion_path)?;
 
-        // Write a preliminary manifest immediately, before provider-specific
-        // setup (e.g. codex resolving its real binary + installing its wrapper)
-        // and the PTY spawn run. A client (unpeel-attach) spawned in parallel
+        // Write a preliminary manifest immediately, before the environment is
+        // assembled and the PTY spawn runs. A client (unpeel-attach) spawned in parallel
         // only waits a couple seconds for the manifest to appear; slow
         // providers like codex could miss that window, leaving the surface on
         // the bare login shell ("No session manifest", plus the uncleared
@@ -5872,7 +5813,7 @@ pub(crate) fn start_host(
             host_build_id: host_build_id.clone(),
             host_protocol_version: Some(SESSION_HOST_PROTOCOL_VERSION),
             has_been_written_to: false,
-            provider_session_id: prepared.provider_session_id.clone(),
+            provider_session_id: None,
             provider_transcript_path: None,
             managed_storage_path: managed_storage_path
                 .as_ref()
@@ -5891,8 +5832,8 @@ pub(crate) fn start_host(
             mcp_enabled: Some(launch.mcp_enabled),
             browser_mcp_enabled: Some(launch.browser_mcp_enabled),
             computer_mcp_enabled: Some(launch.computer_mcp_enabled),
-            // Provider setup has not completed yet. Never publish launch
-            // grants as registration evidence in this preliminary record.
+            // Never publish launch grants as registration evidence in this
+            // preliminary record; the final write records real evidence.
             mcp_client_registered: false,
             browser_client_registered: false,
             computer_client_registered: false,
@@ -5922,28 +5863,14 @@ pub(crate) fn start_host(
         // integration callback and foreground observation uses the stable
         // compatibility identity. Unknown commands keep their generic head and
         // all optional runtime callbacks below fail open.
+        // The runtime only names the integration whose installed state is
+        // recorded as MCP registration evidence below. Nothing is installed,
+        // wrapped, or rewritten on a launch: a preset runs its command in the
+        // user's login shell as typed, and the user installs the runtime's
+        // Unpeel integration explicitly (`unpeel integrations install`).
         let runtime_id = integrations::runtime_for_command(&launch.session.command)
             .map(|runtime| runtime.legacy_slug.as_str())
             .unwrap_or(command_head.as_str());
-        // Install/refresh provider hook assets (hook scripts, codex wrapper,
-        // claude-mcp.json) host-side so every frontend gets them — the native
-        // app spawns this host directly without going through pty_manager.
-        let mut runtime_support_ready = true;
-        if integrations::has_runtime_support_installer(runtime_id) {
-            if let Err(error) = integrations::install_runtime_support(runtime_id) {
-                log::warn!("Failed to install runtime support for {runtime_id}: {error}");
-                runtime_support_ready = false;
-            }
-        }
-        if let Err(error) = integrations::prepare_runtime_launch(
-            runtime_id,
-            launch.mcp_enabled,
-            launch.browser_mcp_enabled,
-            launch.computer_mcp_enabled,
-        ) {
-            log::warn!("Failed to prepare runtime launch for {runtime_id}: {error}");
-            runtime_support_ready = false;
-        }
         let mut shell_prelude: Vec<String> = Vec::new();
         let launch_shell_family = shell_family(&shell);
         let trimmed_command = launch.session.command.trim();
@@ -5992,42 +5919,28 @@ pub(crate) fn start_host(
             Some(true) | None => cmd.env("COLORFGBG", "15;0"),
             Some(false) => cmd.env("COLORFGBG", "0;15"),
         };
-        integrations::configure_host_command(runtime_id, &launch, &mut cmd, &mut shell_prelude)?;
-        let mut automatic_mcp_registration = integrations::automatic_mcp_registration(
+        integrations::configure_host_command(&launch, &mut cmd, &mut shell_prelude)?;
+        let registration = integrations::mcp_registration_evidence(
             runtime_id,
-            trimmed_command,
             launch.mcp_enabled,
             launch.browser_mcp_enabled,
-            launch.computer_mcp_enabled,
         );
-        if !runtime_support_ready {
-            automatic_mcp_registration = integrations::AutomaticMcpRegistration::default();
-        }
-        let mcp_client_registered = automatic_mcp_registration.sessions;
-        let browser_client_registered = automatic_mcp_registration.browser;
-        let computer_client_registered = automatic_mcp_registration.computer;
+        let mcp_client_registered = registration.sessions;
+        let browser_client_registered = registration.browser;
+        let computer_client_registered = false;
         // Hold a foreground provider launch until the attach client has synced
         // the surface's real grid to the PTY, so the CLI's first paint matches
         // the window rather than the launch-time initial grid (already-printed
         // banners never reflow on a later resize). Prepended so nothing runs
-        // before the size is settled; the provider exports above are size-inert.
-        // Codex already waits in its wrapper; this is a harmless second gate for
-        // it and the primary gate for Claude/Gemini/etc. See the snippet doc.
+        // before the size is settled; the exports above are size-inert.
         if launch.wait_for_attach {
             shell_prelude.insert(0, attach_ready_wait_snippet(&launch.session.id));
         }
         if trimmed_command.is_empty() {
             cmd.args(["-l", "-i"]);
         } else {
-            let startup_command = integrations::startup_command(
-                runtime_id,
-                trimmed_command,
-                launch.mcp_enabled,
-                launch.browser_mcp_enabled,
-                launch.computer_mcp_enabled,
-            );
             let startup_command =
-                runtime_generation_scoped_command(ShellFamily::Posix, &startup_command, 1);
+                runtime_generation_scoped_command(ShellFamily::Posix, trimmed_command, 1);
             let startup_command = if launches_resume_agent_runtime {
                 runtime_launch_completion_command(
                     ShellFamily::Posix,
@@ -6827,17 +6740,8 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         let inherited_path = std::env::var("PATH").unwrap_or_default();
         let path = format!("{}:{inherited_path}", temp.path().display());
 
-        for (runtime, startup_command) in [
-            (
-                "kimi",
-                crate::integrations::startup_command("kimi", "kimi", true, false, false),
-            ),
-            (
-                "cline",
-                crate::integrations::startup_command("cline", "cline", false, false, false),
-            ),
-        ] {
-            let scoped = runtime_generation_scoped_command(ShellFamily::Fish, &startup_command, 23);
+        for (runtime, startup_command) in [("kimi", "kimi"), ("cline", "cline")] {
+            let scoped = runtime_generation_scoped_command(ShellFamily::Fish, startup_command, 23);
             let fish_script = format!(
                 "{scoped}; set -l __unpeel_test_status $status; \
                  set -l __unpeel_test_after leaked; \
@@ -7323,10 +7227,10 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
 
     #[test]
     fn apply_manifest_auto_title_tolerates_launch_decorated_commands() {
-        // spawnSession decorates the real command (minted --session-id,
-        // pi --session-dir) while the label stays the display command, so
-        // label != command must not read as "already titled".
-        let session_id = unique_session_id("auto-title-minted");
+        // Resume rewrites the stable command (`--resume <id>`, an older
+        // launch's `--session-dir`) while the label stays the display
+        // command, so label != command must not read as "already titled".
+        let session_id = unique_session_id("auto-title-resumed");
         let manifest = manifest_for_auto_title(
             &session_id,
             "claude --dangerously-skip-permissions --session-id 'd8b453d8-7271-4317-a562-2de769187aa3'",

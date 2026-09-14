@@ -9,18 +9,15 @@ pub(crate) const KIMI_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/kimi/assets/hooks/lifecycle.sh"
 ));
 
+/// Install the Kimi integration: the lifecycle hook block in Kimi's config
+/// (both generations) and the Unpeel MCP shim as a persistent entry in Kimi
+/// Code's `mcp.json`. Legacy Kimi, which only took per-launch MCP flags,
+/// keeps hooks and detection but no MCP.
 pub fn install_kimi_hooks() -> Result<(), String> {
     let script_path = kimi_hook_script_path();
     write_executable_script(&script_path, KIMI_HOOK_SCRIPT, "Kimi hook script")?;
     ensure_kimi_config_hooks()?;
-    write_kimi_unpeel_mcp_config()?;
-    // Legacy per-domain configs: still referenced by launch commands of
-    // sessions started before the unified server. New launches only use the
-    // unified config.
-    write_kimi_mcp_config()?;
-    write_kimi_browser_mcp_config()?;
-    write_kimi_code_mcp_config()?;
-    Ok(())
+    write_kimi_code_mcp_config()
 }
 pub(crate) fn kimi_share_dir() -> Option<PathBuf> {
     std::env::var_os("KIMI_SHARE_DIR")
@@ -59,18 +56,6 @@ pub(crate) fn kimi_code_mcp_config_path() -> Option<PathBuf> {
 
 pub fn kimi_global_mcp_config_path() -> Option<PathBuf> {
     Some(kimi_share_dir()?.join("mcp.json"))
-}
-
-pub fn kimi_unpeel_mcp_config_path() -> PathBuf {
-    unpeel_home().join("mcp").join("kimi-unpeel-mcp.json")
-}
-
-pub fn kimi_mcp_config_path() -> PathBuf {
-    unpeel_home().join("mcp").join("kimi-mcp.json")
-}
-
-pub fn kimi_browser_mcp_config_path() -> PathBuf {
-    unpeel_home().join("mcp").join("kimi-browser-mcp.json")
 }
 pub(crate) const KIMI_MANAGED_HOOKS_START: &str = "# BEGIN UNPEEL MANAGED KIMI HOOKS";
 pub(crate) const KIMI_MANAGED_HOOKS_END: &str = "# END UNPEEL MANAGED KIMI HOOKS";
@@ -231,67 +216,21 @@ pub(crate) fn ensure_kimi_config_hooks() -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn write_kimi_mcp_file(path: &Path, server_name: &str, arg: &str) -> Result<(), String> {
-    let exe = crate::session_host::resolve_current_executable()?;
-    let mut servers = serde_json::Map::new();
-    servers.insert(
-        server_name.to_string(),
-        json!({
-            "command": exe.to_string_lossy(),
-            "args": [arg],
-        }),
-    );
-    let config = json!({
-        "mcpServers": Value::Object(servers)
-    });
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            format!(
-                "Failed to create Kimi MCP config dir {}: {e}",
-                parent.display()
-            )
-        })?;
-    }
-    let serialized = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize Kimi MCP config: {e}"))?;
-    write_file_atomic(path, &format!("{serialized}\n"), "Kimi MCP config")
-}
-
-pub(crate) fn write_kimi_unpeel_mcp_config() -> Result<(), String> {
-    // File name keeps the pre-rename spelling (recorded launch commands
-    // reference it); the server key inside is `unpeel`.
-    write_kimi_mcp_file(
-        &kimi_unpeel_mcp_config_path(),
-        "unpeel",
-        crate::mcp_host::MCP_HOST_ARG,
-    )
-}
-
-pub(crate) fn write_kimi_mcp_config() -> Result<(), String> {
-    write_kimi_mcp_file(
-        &kimi_mcp_config_path(),
-        "unpeel-sessions",
-        crate::mcp_host::MCP_HOST_ARG,
-    )
-}
-
-pub(crate) fn write_kimi_browser_mcp_config() -> Result<(), String> {
-    write_kimi_mcp_file(
-        &kimi_browser_mcp_config_path(),
-        "unpeel-browser",
-        crate::browser_mcp::BROWSER_MCP_ARG,
-    )
-}
-
-pub(crate) fn kimi_code_managed_mcp_entry(executable: &Path, kind: &str) -> Value {
+pub(crate) fn kimi_code_managed_mcp_entry(shim: &Path) -> Value {
     json!({
-        "command": executable.to_string_lossy(),
-        "args": [crate::mcp_gate::MCP_GATE_ARG, kind],
+        "command": shim.to_string_lossy(),
+        "args": [],
     })
 }
 
+/// An entry is Unpeel-owned when it starts the shim, or (older builds) the
+/// Host binary through the gate with this `kind`.
 pub(crate) fn kimi_code_entry_is_managed(value: &Value, kind: &str) -> bool {
-    value
+    let shim = value
+        .get("command")
+        .and_then(Value::as_str)
+        .is_some_and(crate::integrations::install::is_mcp_shim_command);
+    shim || value
         .get("args")
         .and_then(Value::as_array)
         .is_some_and(|args| {
@@ -320,10 +259,10 @@ pub(crate) fn upsert_kimi_code_managed_mcp(
     }
 }
 
-/// Kimi Code 0.27 removed the legacy per-launch MCP flags. Install persistent
-/// entries that start `mcp_gate`; the gate exposes the real tools only when the
-/// hosted session exports the corresponding grant. Outside Unpeel (and in
-/// ungranted sessions) these servers stay connected with an empty tool list.
+/// Kimi Code only reads persistent MCP configuration. Install one `unpeel`
+/// entry that starts the shim; its gate exposes the real tools only inside a
+/// granted hosted Session. Outside Unpeel (and in ungranted sessions) the
+/// server stays connected with an empty tool list.
 pub(crate) fn write_kimi_code_mcp_config() -> Result<(), String> {
     let Some(path) = kimi_code_mcp_config_path() else {
         return Ok(());
@@ -353,12 +292,12 @@ pub(crate) fn write_kimi_code_mcp_config() -> Result<(), String> {
         return Ok(());
     };
 
-    let executable = crate::session_host::resolve_current_executable()?;
+    let shim = crate::integrations::install::write_mcp_shim()?;
     upsert_kimi_code_managed_mcp(
         servers,
         "unpeel",
         crate::mcp_gate::UNIFIED_KIND,
-        kimi_code_managed_mcp_entry(&executable, crate::mcp_gate::UNIFIED_KIND),
+        kimi_code_managed_mcp_entry(&shim),
     );
     // The `unpeel` entry supersedes the older names: `unpeel-mcp` (pre-rename
     // unified entry) and the per-domain gate entries. Remove ours (identified

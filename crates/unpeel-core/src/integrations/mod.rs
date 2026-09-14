@@ -1,5 +1,6 @@
 use portable_pty::CommandBuilder;
 
+pub mod install;
 pub mod shared;
 
 use crate::session_host::SessionHostLaunch;
@@ -9,26 +10,8 @@ use crate::session_host::SessionHostLaunch;
 pub const HOST_BIN_ENV: &str = "UNPEEL_HOST_BIN";
 const APP_ACCENT_ENV: &str = "UNPEEL_APP_ACCENT";
 
-type ConfigureHostCommand =
-    fn(&SessionHostLaunch, &mut CommandBuilder, &mut Vec<String>) -> Result<(), String>;
-type PrepareStartupCommand = fn(&str, RuntimeLaunchOptions) -> String;
-type HasAutomaticMcpSetup = fn(&str) -> bool;
-type PrepareRuntimeLaunch = fn(RuntimeLaunchOptions) -> Result<(), String>;
 type LegacyMcpGateKind = fn(&str) -> Option<&'static str>;
 type LegacyMcpGateGranted = fn(&str) -> bool;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RuntimeLaunchOptions {
-    pub sessions_mcp: bool,
-    pub browser_mcp: bool,
-    pub computer_mcp: bool,
-}
-
-impl RuntimeLaunchOptions {
-    pub fn any_mcp(self) -> bool {
-        self.sessions_mcp || self.browser_mcp || self.computer_mcp
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct BuiltinPresetDefinition {
@@ -38,34 +21,40 @@ pub struct BuiltinPresetDefinition {
     pub quick_launch: bool,
 }
 
+/// A built-in runtime's compiled adapter.
+///
+/// Launching is provider-neutral: a preset runs its command in the user's
+/// own login shell exactly as typed, with only Unpeel's generic session
+/// environment exported (see [`configure_host_command`]). Nothing here
+/// rewrites the command, wraps the executable, or edits provider
+/// configuration at launch. Provider-specific behavior is limited to the
+/// explicitly installed integration ([`Integration::install`]) and the
+/// resume recipe.
 #[derive(Clone, Copy)]
 pub struct Integration {
     /// Escape interrupts the foreground turn in this runtime. Opt in only
     /// from a documented provider contract; generic terminal input has no
     /// lifecycle authority.
     pub escape_cancels_turn: bool,
-    pub install_runtime_support: Option<fn() -> Result<(), String>>,
-    pub configure_host_command: Option<ConfigureHostCommand>,
-    pub prepare_startup_command: Option<PrepareStartupCommand>,
-    pub has_automatic_mcp_setup: Option<HasAutomaticMcpSetup>,
-    pub prepare_runtime_launch: Option<PrepareRuntimeLaunch>,
+    /// Install this runtime's Unpeel integration — lifecycle hooks and the
+    /// persistent registration of the unified `unpeel` MCP server — into the
+    /// provider's own global configuration. Idempotent, locked, and
+    /// content-guarded. It runs only when the user asks
+    /// (`unpeel integrations install`, the `integrations.install` Host verb)
+    /// or when the Host refreshes an integration the user already installed
+    /// after an upgrade; never as a side effect of launching or observing
+    /// an agent.
+    pub install: Option<fn() -> Result<(), String>>,
     pub resume_adapter: Option<crate::resume::ResumeAdapter>,
     pub legacy_mcp_gate_kind: Option<LegacyMcpGateKind>,
     pub legacy_mcp_gate_granted: Option<LegacyMcpGateGranted>,
 }
 
 impl Integration {
-    pub const fn new(
-        install_runtime_support: Option<fn() -> Result<(), String>>,
-        configure_host_command: Option<ConfigureHostCommand>,
-    ) -> Self {
+    pub const fn new(install: Option<fn() -> Result<(), String>>) -> Self {
         Self {
             escape_cancels_turn: false,
-            install_runtime_support,
-            configure_host_command,
-            prepare_startup_command: None,
-            has_automatic_mcp_setup: None,
-            prepare_runtime_launch: None,
+            install,
             resume_adapter: None,
             legacy_mcp_gate_kind: None,
             legacy_mcp_gate_granted: None,
@@ -74,30 +63,6 @@ impl Integration {
 
     pub const fn with_escape_cancellation(mut self) -> Self {
         self.escape_cancels_turn = true;
-        self
-    }
-
-    pub const fn with_startup_command(
-        mut self,
-        prepare_startup_command: PrepareStartupCommand,
-    ) -> Self {
-        self.prepare_startup_command = Some(prepare_startup_command);
-        self
-    }
-
-    pub const fn with_automatic_mcp_setup(
-        mut self,
-        has_automatic_mcp_setup: HasAutomaticMcpSetup,
-    ) -> Self {
-        self.has_automatic_mcp_setup = Some(has_automatic_mcp_setup);
-        self
-    }
-
-    pub const fn with_runtime_launch_preparation(
-        mut self,
-        prepare_runtime_launch: PrepareRuntimeLaunch,
-    ) -> Self {
-        self.prepare_runtime_launch = Some(prepare_runtime_launch);
         self
     }
 
@@ -171,11 +136,17 @@ pub(crate) fn integration_for_command(command: &str) -> Option<&'static Integrat
     integration_for_id(&runtime.legacy_slug)
 }
 
-fn runtime_for_dispatch(
+pub(crate) fn runtime_for_dispatch(
     runtime_or_command: &str,
 ) -> Option<&'static crate::runtime_catalog::RuntimeDescriptor> {
-    crate::runtime_catalog::builtin_runtime_catalog()
+    let catalog = crate::runtime_catalog::builtin_runtime_catalog();
+    catalog
         .by_legacy_slug_for_current_platform(runtime_or_command)
+        .or_else(|| {
+            catalog
+                .by_id(runtime_or_command)
+                .filter(|runtime| runtime.supports_current_platform())
+        })
         .or_else(|| runtime_for_command(runtime_or_command))
 }
 
@@ -204,44 +175,28 @@ pub fn uses_hook_port(tool: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn has_runtime_support_installer(tool: &str) -> bool {
-    integration_for_dispatch(tool)
-        .is_some_and(|integration| integration.install_runtime_support.is_some())
+/// Whether `tool` (a legacy slug, catalog id, or command) names a runtime
+/// with an installable Unpeel integration.
+pub fn has_integration_installer(tool: &str) -> bool {
+    integration_for_dispatch(tool).is_some_and(|integration| integration.install.is_some())
 }
 
-pub fn install_runtime_support(tool: &str) -> Result<(), String> {
-    let Some(integration) = integration_for_dispatch(tool) else {
-        return Ok(());
-    };
-
-    if let Some(install) = integration.install_runtime_support {
-        install()
-    } else {
-        Ok(())
+/// Run the runtime's integration installer. Callers are the explicit install
+/// surfaces and the post-upgrade refresh in [`install`]; the launch path
+/// never calls this.
+pub(crate) fn run_integration_installer(tool: &str) -> Result<(), String> {
+    match integration_for_dispatch(tool).and_then(|integration| integration.install) {
+        Some(installer) => installer(),
+        None => Err(format!("{tool} has no Unpeel integration to install")),
     }
 }
 
-pub fn prepare_runtime_launch(
-    tool: &str,
-    mcp_enabled: bool,
-    browser_mcp_enabled: bool,
-    computer_mcp_enabled: bool,
-) -> Result<(), String> {
-    let options = RuntimeLaunchOptions {
-        sessions_mcp: mcp_enabled,
-        browser_mcp: browser_mcp_enabled,
-        computer_mcp: computer_mcp_enabled,
-    };
-    if let Some(prepare) =
-        integration_for_dispatch(tool).and_then(|integration| integration.prepare_runtime_launch)
-    {
-        prepare(options)?;
-    }
-    Ok(())
-}
-
+/// Export Unpeel's generic session environment into a hosted PTY. This is
+/// the whole of what a launch adds on top of the user's login shell: the
+/// session identity hook scripts and the MCP server read, the Host binary,
+/// the installed-Apps bin, the workspace accent, and the hook port.
+/// Provider-specific variables never appear here.
 pub fn configure_host_command(
-    tool: &str,
     launch: &SessionHostLaunch,
     cmd: &mut CommandBuilder,
     shell_prelude: &mut Vec<String>,
@@ -300,7 +255,9 @@ pub fn configure_host_command(
     // Every hosted child must reach THIS Host's own binary — never whatever
     // `unpeel-host` happens to sit on the user's PATH (a stale CLI install
     // there answers with an older protocol). Unpeel Apps use it to spawn the
-    // unified MCP server for peer discovery and agent handoff.
+    // unified MCP server for peer discovery and agent handoff, and the
+    // installed MCP shim (`integrations::install::mcp_shim_path`) prefers it
+    // over the path recorded at install time.
     if let Ok(host_bin) = crate::session_host::resolve_current_executable() {
         let host_bin = host_bin.to_string_lossy().to_string();
         cmd.env(HOST_BIN_ENV, &host_bin);
@@ -342,12 +299,6 @@ pub fn configure_host_command(
         shell_prelude.push("unset UNPEEL_APP_PORT".to_string());
     }
 
-    if let Some(configure) =
-        integration_for_dispatch(tool).and_then(|integration| integration.configure_host_command)
-    {
-        configure(launch, cmd, shell_prelude)?;
-    }
-
     Ok(())
 }
 
@@ -360,66 +311,52 @@ fn normalize_app_accent(value: &str) -> Option<String> {
     Some(format!("#{}", digits.to_ascii_uppercase()))
 }
 
-pub fn startup_command(
-    tool: &str,
-    command: &str,
-    mcp_enabled: bool,
-    browser_mcp_enabled: bool,
-    computer_mcp_enabled: bool,
-) -> String {
-    let options = RuntimeLaunchOptions {
-        sessions_mcp: mcp_enabled,
-        browser_mcp: browser_mcp_enabled,
-        computer_mcp: computer_mcp_enabled,
-    };
-    integration_for_dispatch(tool)
-        .and_then(|integration| integration.prepare_startup_command)
-        .map(|prepare| prepare(command, options))
-        .unwrap_or_else(|| command.trim().to_string())
-}
-
-/// Whether this launch receives Unpeel's unified MCP client configuration
-/// automatically. Domain authorization is recorded independently on the
-/// Session manifest; this function is only provider-setup evidence.
-///
-/// Keep this aligned with `startup_command` plus each integration's
-/// `configure_host_command`. A provider that merely runs in the PTY (or a
-/// managed provider with no MCP integration) must remain false so clients do
-/// not mistake a launch grant for completed provider configuration.
+/// Evidence that the agent this Session launches can actually reach the
+/// unified `unpeel` MCP server: the runtime declares the domain, the user has
+/// installed its Unpeel integration on this Host, and the launch grants the
+/// domain. Domain authorization is recorded independently on the Session
+/// manifest; this is only setup evidence, so clients never mistake a launch
+/// grant for a configured provider.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct AutomaticMcpRegistration {
+pub struct McpRegistrationEvidence {
     pub sessions: bool,
     pub browser: bool,
-    pub computer: bool,
 }
 
-pub fn automatic_mcp_registration(
+pub fn mcp_registration_evidence(
     tool: &str,
-    command: &str,
     mcp_enabled: bool,
     browser_mcp_enabled: bool,
-    computer_mcp_enabled: bool,
-) -> AutomaticMcpRegistration {
-    if !(mcp_enabled || browser_mcp_enabled || computer_mcp_enabled) {
-        return AutomaticMcpRegistration::default();
+) -> McpRegistrationEvidence {
+    mcp_registration_evidence_in(
+        &crate::app_paths::unpeel_home(),
+        tool,
+        mcp_enabled,
+        browser_mcp_enabled,
+    )
+}
+
+pub fn mcp_registration_evidence_in(
+    home: &std::path::Path,
+    tool: &str,
+    mcp_enabled: bool,
+    browser_mcp_enabled: bool,
+) -> McpRegistrationEvidence {
+    if !(mcp_enabled || browser_mcp_enabled) {
+        return McpRegistrationEvidence::default();
     }
     let Some(runtime) = runtime_for_dispatch(tool) else {
-        return AutomaticMcpRegistration::default();
+        return McpRegistrationEvidence::default();
     };
-    let unified = integration_for_id(&runtime.legacy_slug)
-        .and_then(|integration| integration.has_automatic_mcp_setup)
-        .is_some_and(|has_setup| has_setup(command));
+    if !install::is_installed_in(home, &runtime.legacy_slug) {
+        return McpRegistrationEvidence::default();
+    }
     let supports = |capability| runtime.capabilities.contains(&capability);
-    AutomaticMcpRegistration {
-        sessions: unified
-            && mcp_enabled
+    McpRegistrationEvidence {
+        sessions: mcp_enabled
             && supports(crate::runtime_catalog::RuntimeCapability::McpSessions),
-        browser: unified
-            && browser_mcp_enabled
+        browser: browser_mcp_enabled
             && supports(crate::runtime_catalog::RuntimeCapability::McpBrowser),
-        computer: unified
-            && computer_mcp_enabled
-            && supports(crate::runtime_catalog::RuntimeCapability::McpComputer),
     }
 }
 
@@ -503,9 +440,9 @@ mod tests {
 
             let integration = integration_for_id(legacy_slug).expect("generated integration");
             assert_eq!(
-                has_runtime_support_installer(legacy_slug),
-                integration.install_runtime_support.is_some(),
-                "{legacy_slug}: support-install dispatch must follow the adapter callback"
+                has_integration_installer(legacy_slug),
+                integration.install.is_some(),
+                "{legacy_slug}: installer dispatch must follow the adapter callback"
             );
             let declares_mcp = runtime.capabilities.iter().any(|capability| {
                 matches!(
@@ -515,17 +452,18 @@ mod tests {
                         | crate::runtime_catalog::RuntimeCapability::McpComputer
                 )
             });
-            assert_eq!(
-                integration.has_automatic_mcp_setup.is_some(),
-                declares_mcp,
-                "{legacy_slug}: MCP capabilities and automatic setup callback disagree"
-            );
-            if runtime.lifecycle.uses_hook_port() {
+            if declares_mcp || runtime.lifecycle.uses_hook_port() {
                 assert!(
-                    integration.install_runtime_support.is_some(),
-                    "{legacy_slug}: hook-owned lifecycle needs an installer"
+                    integration.install.is_some(),
+                    "{legacy_slug}: hooks or MCP capabilities need an installer"
                 );
             }
+            // Catalog ids dispatch like legacy slugs, so every install
+            // surface can accept either spelling.
+            assert!(std::ptr::eq(
+                integration_for_dispatch(&runtime.id).expect("id dispatch"),
+                integration
+            ));
         }
     }
 
@@ -563,85 +501,41 @@ mod tests {
         }
 
         assert!(integration_for_command("/opt/unpeel/bin/not-an-agent --flag").is_none());
-        assert!(!has_runtime_support_installer(
-            "/opt/unpeel/bin/not-an-agent"
-        ));
-        assert!(install_runtime_support("/opt/unpeel/bin/not-an-agent").is_ok());
-        assert_eq!(
-            startup_command(
-                "/opt/unpeel/bin/not-an-agent",
-                "/opt/unpeel/bin/not-an-agent --flag",
-                true,
-                true,
-                true,
-            ),
-            "/opt/unpeel/bin/not-an-agent --flag"
-        );
+        assert!(!has_integration_installer("/opt/unpeel/bin/not-an-agent"));
+        assert!(run_integration_installer("/opt/unpeel/bin/not-an-agent").is_err());
     }
 
+    /// A launch grant is never registration evidence on its own: the
+    /// runtime must declare the domain and the user must have installed its
+    /// integration on this Host (nothing is installed in a test home).
     #[test]
-    fn absolute_path_dispatch_reaches_runtime_startup_callback() {
-        let command = startup_command(
-            "/opt/unpeel/bin/cursor-agent",
-            "/opt/unpeel/bin/cursor-agent --force",
-            false,
-            true,
-            false,
+    fn registration_evidence_requires_an_installed_integration() {
+        let home = std::path::PathBuf::from(format!("/tmp/upe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        for tool in ["codex", "claude", "kiro-cli", "pi", "cat"] {
+            assert_eq!(
+                mcp_registration_evidence_in(&home, tool, true, true),
+                McpRegistrationEvidence::default(),
+                "{tool}"
+            );
+        }
+        // Installed + declared + granted is the only true shape.
+        std::fs::create_dir_all(home.join("integrations")).unwrap();
+        std::fs::write(
+            home.join("integrations").join("claude.json"),
+            r#"{"schema":1,"host_build_id":"x","host_version":"0","installed_at_ms":1}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            mcp_registration_evidence_in(&home, "claude", true, false),
+            McpRegistrationEvidence { sessions: true, browser: false }
         );
         assert_eq!(
-            command,
-            "/opt/unpeel/bin/cursor-agent --force --approve-mcps"
+            mcp_registration_evidence_in(&home, "claude", false, false),
+            McpRegistrationEvidence::default()
         );
-    }
-
-    #[test]
-    fn runtime_catalog_automatic_mcp_registration_matches_setup_and_capabilities() {
-        assert_eq!(
-            automatic_mcp_registration("codex", "codex", true, false, true),
-            AutomaticMcpRegistration {
-                sessions: true,
-                browser: false,
-                computer: true,
-            }
-        );
-        assert_eq!(
-            automatic_mcp_registration("cline", "cline", false, true, false),
-            AutomaticMcpRegistration {
-                sessions: false,
-                browser: true,
-                computer: false,
-            }
-        );
-        assert_eq!(
-            automatic_mcp_registration("kiro-cli", "kiro-cli", true, true, true),
-            AutomaticMcpRegistration {
-                sessions: true,
-                browser: true,
-                computer: false,
-            }
-        );
-        assert_eq!(
-            automatic_mcp_registration("pi", "pi", true, true, true),
-            AutomaticMcpRegistration::default()
-        );
-        assert_eq!(
-            automatic_mcp_registration("cat", "cat", true, true, true),
-            AutomaticMcpRegistration::default()
-        );
-        assert_eq!(
-            automatic_mcp_registration(
-                "claude",
-                "claude --mcp-config /tmp/custom.json",
-                true,
-                false,
-                false
-            ),
-            AutomaticMcpRegistration::default()
-        );
-        assert_eq!(
-            automatic_mcp_registration("claude", "claude", false, false, false),
-            AutomaticMcpRegistration::default()
-        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     /// The hook env block must pin the registry/trace fallback paths to this
@@ -663,7 +557,7 @@ mod tests {
         .expect("launch fixture");
         let mut cmd = CommandBuilder::new("true");
         let mut prelude = Vec::new();
-        configure_host_command("sh", &launch, &mut cmd, &mut prelude).expect("configure");
+        configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
         let exports = prelude.join("\n");
         let home = crate::app_paths::unpeel_home();
         let registry = shared::shell_quote(&home.join("app-ports").to_string_lossy());
@@ -695,7 +589,7 @@ mod tests {
         let mut cmd = CommandBuilder::new("true");
         let mut prelude = Vec::new();
 
-        configure_host_command("sh", &launch, &mut cmd, &mut prelude).expect("configure");
+        configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
 
         assert_eq!(
             cmd.get_env(APP_ACCENT_ENV),
@@ -724,7 +618,7 @@ mod tests {
         cmd.env(APP_ACCENT_ENV, "#D97757");
         let mut prelude = Vec::new();
 
-        configure_host_command("sh", &launch, &mut cmd, &mut prelude).expect("configure");
+        configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
 
         let session_dir = crate::app_paths::app_sessions_root().join("headless-session");
         let home = crate::app_paths::unpeel_home();
@@ -771,9 +665,46 @@ mod tests {
         )));
     }
 
+    /// A launched agent command reaches the PTY untouched: no provider
+    /// variable, wrapper directory, or injected flag appears in what the
+    /// login shell runs.
     #[test]
-    fn cursor_approves_the_unified_server_when_browser_is_the_only_domain() {
-        let command = startup_command("cursor-agent", "cursor-agent --force", false, true, false);
-        assert_eq!(command, "cursor-agent --force --approve-mcps");
+    fn launch_environment_carries_no_provider_specific_variables() {
+        let launch: SessionHostLaunch = serde_json::from_value(serde_json::json!({
+            "session": {
+                "id": "plain-session",
+                "project_id": "test-project",
+                "label": "test",
+                "command": "codex --dangerously-bypass-approvals-and-sandbox"
+            },
+            "cwd": "/tmp",
+            "dark_mode": null,
+            "hook_port": 4321,
+            "mcp_enabled": true,
+            "browser_mcp_enabled": true
+        }))
+        .expect("launch fixture");
+        let mut cmd = CommandBuilder::new("true");
+        let mut prelude = Vec::new();
+        configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
+        let exports = prelude.join("\n");
+        for forbidden in [
+            "UNPEEL_MCP_BIN",
+            "UNPEEL_REAL_CODEX_BIN",
+            "UNPEEL_ORIGINAL_PATH",
+            "hooks/bin",
+            "UNPEEL_SESSIONS_MCP_ENABLED",
+            "UNPEEL_KIRO_",
+            "CLINE_",
+            "MUSE_EXPERIMENTAL_PLUGINS",
+            "OPENCODE_CONFIG_DIR",
+            "GROK_",
+        ] {
+            assert!(!exports.contains(forbidden), "{forbidden} leaked: {exports}");
+            assert!(
+                cmd.get_env(forbidden).is_none(),
+                "{forbidden} set on the child"
+            );
+        }
     }
 }

@@ -15,14 +15,25 @@ runtimes/<slug>/
 ├── runtime.toml
 ├── adapter/
 │   ├── mod.rs
-│   ├── setup.rs          # optional: hooks, wrappers, config merge, MCP
-│   ├── resume.rs         # optional: resume/fresh/launch identity
+│   ├── setup.rs          # optional: the integration installer (hooks + MCP registration)
+│   ├── resume.rs         # optional: resume/fresh recipes from hook-captured ids
 │   └── transcript.rs     # optional: transcript discovery and parsing
 ├── assets/
 │   ├── icon.svg          # optional client-embedded runtime mark
-│   └── hooks/            # optional scripts, plugins, and wrappers
+│   └── hooks/            # optional hook scripts and plugins
 └── fixtures/             # add provider-owned fixtures as behavior grows
 ```
+
+**Launching is provider-neutral.** A preset runs its command in the user's
+login shell exactly as typed, with only Unpeel's generic session environment
+exported. An adapter never rewrites the command, wraps the executable, mints
+a conversation id, or edits provider configuration at launch. Everything
+provider-specific is the runtime's **integration** — the `setup.rs`
+installer that registers lifecycle hooks and the Unpeel MCP shim
+(`integrations::install::write_mcp_shim`) in the provider's own global
+configuration — which the user installs explicitly
+(`unpeel integrations install <runtime>`, or Settings ▸ Agents & Apps) and
+the Host keeps current after upgrades.
 
 Provider-neutral enforcement remains in `unpeel-core`: PTY ownership,
 PID/start-time checks, hook ingress and generation ordering, locked/atomic
@@ -119,6 +130,9 @@ active runtime.
    `unpeel_runtime_generation`. It must no-op outside an Unpeel Session,
    report to the direct hook port and current port registry, and forward only
    the provider conversation ID/path fields the Host knows how to validate.
+   The reporter reads its Session from the generic hosted environment (or,
+   for launchers that scrub it, from its parent process); it never depends on
+   a launch-time wrapper or provider variable.
    Finish bounded delivery before returning; provider-level asynchronous
    hooks can reorder opening and closing events even when the script waits
    for its own HTTP requests. An adapter may opt into
@@ -126,13 +140,15 @@ active runtime.
    turn interrupt. The Host owns input parsing, durable cancellation fences,
    and rearming on the next submitted opening hook; see
    [Session activity](../docs/agents/clients/session-activity.md#escape-cancellation-and-hook-delivery).
-6. Automatic MCP setup must use the provider's additive mechanism and must
-   report registration evidence per domain. A Session grant is not proof that
-   an MCP client was configured.
+6. MCP registration is part of the installer, uses the provider's persistent
+   additive mechanism, and always points at the MCP shim; the shim's gate
+   fail-closes outside a granted hosted Session. Registration evidence on a
+   Session means "the integration is installed and the launch granted the
+   domain" — a grant alone is not proof of a configured client.
 7. Resume/restart code must preserve the original semantic command, support
-   only verified identity modes (exact ID, documented continue-last, picker,
-   or pinned storage), and never turn passive process observation into a
-   launch recipe.
+   only verified identity modes (hook-captured exact ID, documented
+   continue-last, or picker), and never turn passive process observation
+   into a launch recipe. Nothing mints an id or pins storage at launch.
 8. Transcript code returns normalized records and provider path claims. Core
    still canonicalizes roots, rejects traversal/symlink escape, and applies
    read/search limits.
@@ -147,13 +163,19 @@ A runtime does not need Claude-level capabilities to be valid:
 - A generic preset runs any command in a durable terminal.
 - Detection adds an active logo/tint while a matching foreground process is
   present. Detection alone is presentation-only.
-- A managed built-in may add setup, lifecycle, MCP, conversation resume,
-  context, fork, and transcript support independently.
+- An installed integration adds lifecycle authority (busy/idle/attention,
+  notify-when-done), hook-captured conversation identity (precise resume,
+  archive), and the MCP registration. It applies to every way the agent
+  starts — a preset, a hand-typed command in a blank terminal, an agent
+  started from a script — because it lives in the provider's own global
+  configuration, not in a launch.
+- Resume Agent still requires the Session's launch command to name the
+  runtime: a hand-typed agent in a blank terminal keeps the blank launch as
+  its stable binding.
 
-Capability honesty is more important than feature parity. In particular, an
-agent typed later into a blank Terminal is still an observed occupant: it does
-not inherit the package's hooks, MCP injection, conversation binding, or
-Resume Agent action unless Unpeel owned its launch.
+Capability honesty is more important than feature parity: a runtime with no
+safe hook or MCP mechanism (Pi) is detection-only and refuses installation
+rather than emulating a stronger integration.
 
 ## Verification
 

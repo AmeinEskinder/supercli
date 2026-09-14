@@ -2,13 +2,21 @@
   "schemaVersion": 1,
   "protocol": {
     "major": 1,
-    "minor": 20,
+    "minor": 21,
     "compatibility": {
       "major": "must-match",
       "minor": "additive",
       "unknownCapabilities": "ignore"
     },
     "history": [
+      {
+        "minor": 21,
+        "release": "0.7.0",
+        "summary": "Explicit agent integrations: a preset launches its command in the login shell as typed, and the user installs a runtime's hooks + MCP registration once per Host. Bootstrap's availableAgents rows carry integrationInstallable/integrationInstalled.",
+        "capabilities": [
+          "integrations.install"
+        ]
+      },
       {
         "minor": 20,
         "release": "0.6.2",
@@ -428,6 +436,13 @@
       "id": "artifact.upload.file",
       "method": "POST",
       "path": "/mobile/file-upload-chunk",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "integrations.install",
+      "method": "POST",
+      "path": "/mobile/integrations/install",
       "native": true,
       "tui": true
     }

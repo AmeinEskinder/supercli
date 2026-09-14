@@ -176,6 +176,32 @@ path:    /Users/me/.unpeel/browser/bin/agent-browser
 browser: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 ```
 
+### Agent integrations (`unpeel integrations`)
+
+A preset launches its command in your login shell exactly as typed. What
+makes a recognized agent report busy/idle/attention and reach the unified
+`unpeel` MCP server is its **integration**: lifecycle hooks plus the MCP
+shim registered in that CLI's own global configuration. It is installed
+once per Host, explicitly, and never as a side effect of a launch:
+
+```text
+unpeel integrations [list] [--json]
+unpeel integrations install <runtime> [--project DIR] [--json]
+unpeel integrations install --all [--json]      # every installable runtime whose CLI is on PATH
+```
+
+`<runtime>` is the short name (`claude`, `codex`, `gemini`, …), the catalog
+id, or the command. `list` shows `installed`, `installed (refreshing)` (the
+Host will rewrite it for this build), `not installed`, or `detection only`
+(Pi: nothing to install). Amp and GitHub Copilot read hooks per project;
+`--project DIR` writes that project's file. A marker under
+`~/.unpeel/integrations/` records the installing build; the workspace
+worker re-runs installed integrations' installers after an upgrade so hook
+scripts and `~/.unpeel/bin/unpeel-mcp` keep pointing at the running binary.
+The Host verb is `integrations.install` (`POST /mobile/integrations/install`,
+`{"runtimeID": …}`), and bootstrap's `availableAgents` rows carry
+`integrationInstallable`/`integrationInstalled` for Settings ▸ Agents & Apps.
+
 ### Unpeel Apps (`unpeel apps`)
 
 Official App discovery and installation are Host-owned, so the same commands
