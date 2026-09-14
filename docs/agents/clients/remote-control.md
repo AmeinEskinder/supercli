@@ -185,6 +185,27 @@ One per-Session upload lock serializes chunks, quota decisions, and cleanup;
 staging with no accepted activity for 24 hours is securely expired on the next
 upload request, while complete and failed receipts retain their id binding.
 
+Host folder selection and file transfer (protocol minor 20) extend that same
+storage discipline to the Host user's own folders. `filesystem.directories.list`
+(`GET /mobile/directories`, paged, hidden folders opt-in),
+`filesystem.directories.create`, `project.add`, and `filesystem.file.read`
+(`GET /mobile/files/read`, bounded pages of base64 bytes) resolve every path on
+the Host inside an explicit scope: the registered project roots plus the Host
+user's home minus Unpeel's own storage and SSH material (a project
+registered at `~` or above never re-exposes those; a worktree registered
+inside `~/.unpeel/worktrees` stays a project). The walk opens one
+component at a time with `O_NOFOLLOW` from an opened root after an lstat, so a
+symlinked parent or leaf is refused with `403` rather than followed, `..` is
+rejected before anything is opened, and a path outside the scope never touches
+disk. `artifact.upload.file` (`POST /mobile/file-upload-chunk`) reuses the
+resumable chunk protocol with a Controller-supplied file name validated by the
+same rule the artifact read routes apply; whole files are bounded at 64 MiB,
+incomplete staging at 128 MiB per Session and 512 MiB Host-wide, and the
+workspace worker sweeps abandoned staging every 15 minutes so a Session that
+never hears from its uploader again cannot hold bytes forever. Paired
+Controllers are owner-equivalent today, so the scope is defense in depth and
+the seam where per-principal authorization tightens for shared workspaces.
+
 The Rust relay adapter now preserves tunneled `contentType` and treats the
 shipped phone's `auth` value as the complete `Authorization` header, with
 shipped-Swift conformance guarding both. Frame safety is also enforced at the

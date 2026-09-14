@@ -1546,6 +1546,82 @@ pub struct RemoteSessionMetrics {
 }
 
 impl RemoteSessionBackend {
+    /// Narrow resource operations over the existing Host transport. Paths and
+    /// capabilities are fixed here; the bridge cannot dispatch arbitrary routes.
+    pub fn resource_request(
+        &self,
+        operation: &str,
+        parameters: &HashMap<String, String>,
+        bytes: Vec<u8>,
+    ) -> Result<Vec<u8>, RemoteEffectFailure> {
+        const OPERATION: &str = "Host resource";
+        let value = |key: &str| parameters.get(key).map(String::as_str).unwrap_or_default();
+        if operation == "uploadFile" {
+            let uploaded = self.upload_attachment_chunks(
+                value("session_id"),
+                "application/octet-stream",
+                bytes,
+                Some(value("filename")),
+            )?;
+            return Ok(serde_json::json!({"path":uploaded.path})
+                .to_string()
+                .into_bytes());
+        }
+        let (method, capability, path, keys): (&str, &str, &str, &[&str]) = match operation {
+            "directories" => (
+                "GET",
+                "filesystem.directories.list",
+                "/mobile/directories",
+                &["path", "after", "hidden"],
+            ),
+            "createDirectory" => (
+                "POST",
+                "filesystem.directories.create",
+                "/mobile/directories/create",
+                &["path"],
+            ),
+            "addProject" => ("POST", "project.add", "/mobile/projects/add", &["path"]),
+            "readFile" => (
+                "GET",
+                "filesystem.file.read",
+                "/mobile/files/read",
+                &["path", "offset"],
+            ),
+            _ => {
+                return Err(effect_failure(
+                    OPERATION,
+                    RemoteEffectFailureKind::NotApplied,
+                    invalid_effect_input(OPERATION, "Unknown Host resource operation"),
+                ))
+            }
+        };
+        let query: Vec<_> = keys
+            .iter()
+            .map(|key| (*key, value(key).to_owned()))
+            .collect();
+        if method == "GET" {
+            self.inner
+                .perform_read(OPERATION, capability, path, &query)
+                .map_err(|error| {
+                    effect_failure(OPERATION, RemoteEffectFailureKind::NotApplied, error)
+                })
+        } else {
+            let turn = self.inner.begin_effect();
+            let body: HashMap<_, _> = query.into_iter().collect();
+            self.inner
+                .perform_effect_exchange(
+                    &turn,
+                    OPERATION,
+                    capability,
+                    path,
+                    &[],
+                    "application/json",
+                    serde_json::to_vec(&body).expect("string map"),
+                    DEFAULT_EFFECT_TIMEOUT,
+                )
+                .map(|exchange| exchange.body)
+        }
+    }
     pub fn new(connection: Arc<dyn HostConnection>) -> Self {
         Self::with_timeouts(
             connection,
@@ -2660,6 +2736,14 @@ impl RemoteSessionBackend {
         content_type: &str,
         bytes: Vec<u8>,
     ) -> Result<RemoteUploadedAttachment, RemoteEffectFailure> {
+        if let Some(session_id) = session_id {
+            if self
+                .last_bootstrap()
+                .is_some_and(|value| value.snapshot.supports("artifact.upload.resumable"))
+            {
+                return self.upload_attachment_chunks(session_id, content_type, bytes, None);
+            }
+        }
         const OPERATION: &str = "attachment upload";
         let effect_turn = self.inner.begin_effect();
         // The Host derives the stored extension from the content type; only
@@ -2725,6 +2809,118 @@ impl RemoteSessionBackend {
             },
             path: response.path,
         })
+    }
+
+    fn upload_attachment_chunks(
+        &self,
+        session_id: &str,
+        content_type: &str,
+        bytes: Vec<u8>,
+        filename: Option<&str>,
+    ) -> Result<RemoteUploadedAttachment, RemoteEffectFailure> {
+        use sha2::{Digest, Sha256};
+        const OPERATION: &str = "attachment upload";
+        let content_type = match content_type {
+            "application/octet-stream" if filename.is_some() => "application/octet-stream",
+            "image/png" => "image/png",
+            "image/jpeg" => "image/jpeg",
+            _ => {
+                return Err(effect_failure(
+                    OPERATION,
+                    RemoteEffectFailureKind::NotApplied,
+                    invalid_effect_input(OPERATION, "Only PNG and JPEG images are supported"),
+                ))
+            }
+        };
+        effect_preflight(OPERATION, || {
+            validate_session_id(session_id)?;
+            if bytes.is_empty()
+                || bytes.len()
+                    > if filename.is_some() {
+                        64 * 1024 * 1024
+                    } else {
+                        4 * 1024 * 1024
+                    }
+            {
+                return Err(invalid_effect_input(
+                    OPERATION,
+                    "The file is empty or exceeds this Host upload size limit",
+                ));
+            }
+            Ok(())
+        })?;
+        let upload_id = uuid::Uuid::new_v4().to_string();
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        let total_size = bytes.len();
+        // Release the effect gate between chunks so a file transfer never
+        // holds up terminal input. Every chunk remains generation-bound.
+        for (index, chunk) in bytes.chunks(256 * 1024).enumerate() {
+            let offset = index * 256 * 1024;
+            let turn = self.inner.begin_effect();
+            let mut query = vec![
+                ("session_id", session_id.to_owned()),
+                ("upload_id", upload_id.clone()),
+                ("offset", offset.to_string()),
+                ("total_size", total_size.to_string()),
+                ("sha256", digest.clone()),
+            ];
+            if let Some(filename) = filename {
+                query.push(("filename", filename.to_owned()));
+            }
+            let (capability, path) = if filename.is_some() {
+                ("artifact.upload.file", "/mobile/file-upload-chunk")
+            } else {
+                ("artifact.upload.resumable", "/mobile/upload-chunk")
+            };
+            let exchange = self.inner.perform_effect_exchange(
+                &turn,
+                OPERATION,
+                capability,
+                path,
+                &query,
+                content_type,
+                chunk.to_vec(),
+                DEFAULT_EFFECT_TIMEOUT,
+            )?;
+            let receipt: serde_json::Value =
+                serde_json::from_slice(&exchange.body).map_err(|error| {
+                    self.inner.effect_receipt_unknown(
+                        OPERATION,
+                        exchange.generation,
+                        error.to_string(),
+                    )
+                })?;
+            let complete = offset + chunk.len() == total_size;
+            if receipt["uploadID"].as_str() != Some(&upload_id)
+                || receipt["nextOffset"].as_u64() != Some((offset + chunk.len()) as u64)
+                || receipt["complete"].as_bool() != Some(complete)
+            {
+                return Err(self.inner.effect_receipt_unknown(
+                    OPERATION,
+                    exchange.generation,
+                    "Host returned an invalid upload acknowledgement".into(),
+                ));
+            }
+            if complete {
+                let path = receipt["path"]
+                    .as_str()
+                    .filter(|path| path.starts_with('/'))
+                    .ok_or_else(|| {
+                        self.inner.effect_receipt_unknown(
+                            OPERATION,
+                            exchange.generation,
+                            "Host did not return an absolute uploaded path".into(),
+                        )
+                    })?;
+                return Ok(RemoteUploadedAttachment {
+                    receipt: RemoteEffectReceipt {
+                        request_id: exchange.request_id,
+                    },
+                    path: path.to_owned(),
+                });
+            }
+        }
+        unreachable!("nonempty upload has a final chunk")
     }
 
     /// List one project's archived Sessions (`session.archive.list`) — a

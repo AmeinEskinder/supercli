@@ -31,7 +31,10 @@ pub const RESUMABLE_UPLOAD_MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024;
 /// Per-session bound for uploads which have not reached durable publication.
 pub const RESUMABLE_UPLOAD_MAX_ACTIVE: usize = 8;
 /// Per-session bound for the declared sizes of incomplete uploads.
-pub const RESUMABLE_UPLOAD_MAX_STAGED_BYTES: u64 = 16 * 1024 * 1024;
+pub const RESUMABLE_UPLOAD_MAX_STAGED_BYTES: u64 = 128 * 1024 * 1024;
+/// Host-wide bound for the declared sizes of incomplete uploads across every
+/// Session, so abandoned staging can never fill the disk.
+pub const RESUMABLE_UPLOAD_MAX_HOST_STAGED_BYTES: u64 = 512 * 1024 * 1024;
 /// Incomplete uploads with no accepted activity for this long are abandoned.
 pub const RESUMABLE_UPLOAD_INCOMPLETE_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
 
@@ -371,6 +374,23 @@ fn upload_now_unix_ms() -> u64 {
 fn validate_upload_request(
     request: ResumableArtifactUploadRequest<'_>,
 ) -> Result<ValidatedUpload<'_>, ResumableArtifactUploadError> {
+    validate_upload_request_with_file(request, None)
+}
+
+#[cfg(unix)]
+fn validate_upload_request_with_file<'a>(
+    request: ResumableArtifactUploadRequest<'a>,
+    filename: Option<&str>,
+) -> Result<ValidatedUpload<'a>, ResumableArtifactUploadError> {
+    if let Some(name) = filename {
+        if !safe_upload_filename(name) {
+            return Err(upload_error(
+                400,
+                "invalid_filename",
+                "Use a file name without path separators, '..', or control characters",
+            ));
+        }
+    }
     if !safe_segment(request.session_id) {
         return Err(upload_error(
             400,
@@ -408,6 +428,7 @@ fn validate_upload_request(
         ));
     }
     let (content_type, extension) = match request.content_type {
+        "application/octet-stream" if filename.is_some() => ("application/octet-stream", "bin"),
         "image/png" => ("image/png", "png"),
         "image/jpeg" => ("image/jpeg", "jpg"),
         _ => {
@@ -435,7 +456,14 @@ fn validate_upload_request(
             format!("upload chunks may not exceed {RESUMABLE_UPLOAD_MAX_CHUNK_BYTES} bytes"),
         ));
     }
-    if request.total_size == 0 || request.total_size > RESUMABLE_UPLOAD_MAX_TOTAL_BYTES {
+    if request.total_size == 0
+        || request.total_size
+            > if filename.is_some() {
+                64 * 1024 * 1024
+            } else {
+                RESUMABLE_UPLOAD_MAX_TOTAL_BYTES
+            }
+    {
         return Err(upload_error(
             413,
             "upload_too_large",
@@ -458,7 +486,10 @@ fn validate_upload_request(
 
     let principal_sha256 = sha256_hex(request.principal.as_bytes());
     let upload_key = sha256_hex(request.upload_id.as_bytes());
-    let final_name = format!("upload-{}.{}", &upload_key[..32], extension);
+    let final_name = match filename {
+        Some(name) => format!("upload-{}-{name}", &upload_key[..32]),
+        None => format!("upload-{}.{}", &upload_key[..32], extension),
+    };
     Ok(ValidatedUpload {
         session_id: request.session_id,
         upload_id: request.upload_id,
@@ -509,6 +540,23 @@ fn upload_resumable_artifact_chunk_at(
     request: ResumableArtifactUploadRequest<'_>,
 ) -> Result<ResumableArtifactUploadResult, ResumableArtifactUploadError> {
     let upload = validate_upload_request(request)?;
+    store_validated_upload(sessions_root, upload)
+}
+
+#[cfg(unix)]
+pub fn upload_resumable_file_chunk(
+    request: ResumableArtifactUploadRequest<'_>,
+    filename: &str,
+) -> Result<ResumableArtifactUploadResult, ResumableArtifactUploadError> {
+    let upload = validate_upload_request_with_file(request, Some(filename))?;
+    store_validated_upload(&app_paths::app_sessions_root(), upload)
+}
+
+#[cfg(unix)]
+fn store_validated_upload(
+    sessions_root: &Path,
+    upload: ValidatedUpload<'_>,
+) -> Result<ResumableArtifactUploadResult, ResumableArtifactUploadError> {
     let sessions = secure_fs::open_configured_root(sessions_root)
         .map_err(|_| upload_error(404, "session_not_found", "session not found"))?;
     let session = secure_fs::open_dir_at(&sessions, upload.session_id)
@@ -613,6 +661,7 @@ fn process_upload_chunk(
                 ));
             }
             enforce_upload_quota(uploads, upload.total_size)?;
+            enforce_host_upload_quota(sessions_root, upload.total_size)?;
             let state = ResumableUploadState::new(upload, now_unix_ms);
             persist_upload_state(uploads, state_name.as_bytes(), &state)?;
             state
@@ -856,9 +905,10 @@ fn recover_expired_uploads(uploads: &std::fs::File) -> Result<(), ResumableArtif
 fn expire_incomplete_uploads(
     uploads: &std::fs::File,
     now_unix_ms: u64,
-) -> Result<(), ResumableArtifactUploadError> {
+) -> Result<usize, ResumableArtifactUploadError> {
     let names = secure_fs::entry_names(uploads)
         .map_err(|error| upload_storage_error("scan incomplete uploads", error))?;
+    let mut expired_count = 0;
     for state_name in names {
         let Some(key) = upload_key_from_internal_name(&state_name, ".json") else {
             continue;
@@ -894,15 +944,93 @@ fn expire_incomplete_uploads(
             .map_err(|error| upload_storage_error("finish upload expiry", error))?;
         secure_fs::sync_directory(uploads)
             .map_err(|error| upload_storage_error("sync upload expiry", error))?;
+        expired_count += 1;
+    }
+    Ok(expired_count)
+}
+
+/// Expire abandoned incomplete uploads in every Session on this Host. The
+/// upload path only sweeps a Session when another chunk arrives, so a Host
+/// that never hears from an uploader again would keep its staging bytes
+/// forever; the workspace worker calls this on its periodic tick.
+#[cfg(unix)]
+pub fn sweep_incomplete_uploads(now_unix_ms: u64) -> Result<usize, String> {
+    let sessions = match secure_fs::open_configured_root(&app_paths::app_sessions_root()) {
+        Ok(sessions) => sessions,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut expired = 0;
+    for name in secure_fs::entry_names(&sessions).map_err(|error| error.to_string())? {
+        let Ok(name) = String::from_utf8(name) else {
+            continue;
+        };
+        if !safe_segment(&name) {
+            continue;
+        }
+        let Ok(session) = secure_fs::open_dir_at(&sessions, &name) else {
+            continue;
+        };
+        let Ok(uploads) = secure_fs::open_dir_chain(&session, &["artifacts", "uploads"]) else {
+            continue;
+        };
+        let Ok(_lock) = secure_fs::open_and_lock_file(&uploads, b".unpeel-upload.lock") else {
+            continue;
+        };
+        if recover_expired_uploads(&uploads).is_err() {
+            continue;
+        }
+        if let Ok(count) = expire_incomplete_uploads(&uploads, now_unix_ms) {
+            expired += count;
+        }
+    }
+    Ok(expired)
+}
+
+/// Sum of declared sizes of incomplete uploads in every Session, for the
+/// Host-wide staging bound. Read-only and unlocked: an approximate figure is
+/// enough to keep abandoned staging from filling the disk.
+#[cfg(unix)]
+fn enforce_host_upload_quota(
+    sessions_root: &Path,
+    new_total_size: u64,
+) -> Result<(), ResumableArtifactUploadError> {
+    let sessions = secure_fs::open_configured_root(sessions_root)
+        .map_err(|error| upload_storage_error("open sessions root", error))?;
+    let mut staged_bytes = 0_u64;
+    for name in secure_fs::entry_names(&sessions)
+        .map_err(|error| upload_storage_error("scan sessions for upload quota", error))?
+    {
+        let Ok(name) = String::from_utf8(name) else {
+            continue;
+        };
+        if !safe_segment(&name) {
+            continue;
+        }
+        let Ok(session) = secure_fs::open_dir_at(&sessions, &name) else {
+            continue;
+        };
+        let Ok(uploads) = secure_fs::open_dir_chain(&session, &["artifacts", "uploads"]) else {
+            continue;
+        };
+        if let Ok((_, bytes)) = staged_upload_usage(&uploads) {
+            staged_bytes = staged_bytes.saturating_add(bytes);
+        }
+    }
+    if staged_bytes.saturating_add(new_total_size) > RESUMABLE_UPLOAD_MAX_HOST_STAGED_BYTES {
+        return Err(upload_error(
+            429,
+            "upload_quota_exceeded",
+            "too many incomplete uploads on this Host",
+        ));
     }
     Ok(())
 }
 
 #[cfg(unix)]
-fn enforce_upload_quota(
+fn staged_upload_usage(
     uploads: &std::fs::File,
-    new_total_size: u64,
-) -> Result<(), ResumableArtifactUploadError> {
+) -> Result<(usize, u64), ResumableArtifactUploadError> {
     let names = secure_fs::entry_names(uploads)
         .map_err(|error| upload_storage_error("read upload quota state", error))?;
     let mut active = 0_usize;
@@ -938,6 +1066,15 @@ fn enforce_upload_quota(
             }
         }
     }
+    Ok((active, staged_bytes))
+}
+
+#[cfg(unix)]
+fn enforce_upload_quota(
+    uploads: &std::fs::File,
+    new_total_size: u64,
+) -> Result<(), ResumableArtifactUploadError> {
+    let (active, staged_bytes) = staged_upload_usage(uploads)?;
     if active >= RESUMABLE_UPLOAD_MAX_ACTIVE
         || staged_bytes.saturating_add(new_total_size) > RESUMABLE_UPLOAD_MAX_STAGED_BYTES
     {
@@ -1077,6 +1214,7 @@ fn validate_complete_file(
                 && signature[1] == 0xd8
                 && signature[2] == 0xff
         }
+        "application/octet-stream" => true,
         _ => false,
     };
     if !signature_matches {
@@ -1376,6 +1514,14 @@ fn safe_segment(value: &str) -> bool {
         && !value.contains('\0')
 }
 
+/// Every stored artifact name must pass `safe_segment` to be listed or read
+/// back, so an upload name is validated with that same rule plus the stricter
+/// authoring bounds. Accepting a name here that `safe_segment` rejects would
+/// store a file no artifact route could ever serve.
+pub(crate) fn safe_upload_filename(name: &str) -> bool {
+    safe_segment(name) && name != "." && name.len() <= 180 && !name.chars().any(char::is_control)
+}
+
 pub fn list(session_id: &str) -> Vec<SessionArtifactMetadata> {
     if !safe_segment(session_id) {
         return Vec::new();
@@ -1598,7 +1744,7 @@ fn delete_opened_root(
 }
 
 #[cfg(unix)]
-mod secure_fs {
+pub(crate) mod secure_fs {
     use std::ffi::{CStr, CString};
     use std::fs::{File, OpenOptions};
     use std::io::{self, Read, Write};
@@ -1611,6 +1757,8 @@ mod secure_fs {
 
     pub struct Metadata {
         pub regular_file: bool,
+        pub directory: bool,
+        pub symlink: bool,
         pub size: u64,
         pub modified_at_unix_ms: u64,
     }
@@ -1782,6 +1930,8 @@ mod secure_fs {
         };
         Ok(Metadata {
             regular_file: metadata.st_mode & libc::S_IFMT == libc::S_IFREG,
+            directory: metadata.st_mode & libc::S_IFMT == libc::S_IFDIR,
+            symlink: metadata.st_mode & libc::S_IFMT == libc::S_IFLNK,
             size: metadata.st_size.max(0) as u64,
             modified_at_unix_ms,
         })
@@ -3332,5 +3482,30 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(outside);
         let _ = std::fs::remove_dir_all(uploads_outside);
+    }
+}
+
+#[cfg(test)]
+mod upload_filename_tests {
+    use super::*;
+
+    #[test]
+    fn upload_names_round_trip_through_the_artifact_read_rules() {
+        for accepted in ["report.pdf", "Screen Shot 2026.png", "notes.v2.final.txt"] {
+            assert!(safe_upload_filename(accepted), "{accepted}");
+            assert!(safe_segment(accepted), "{accepted}");
+        }
+        for rejected in [
+            "v2..final.pdf",
+            "..",
+            ".",
+            "",
+            "dir/file",
+            "dir\\file",
+            "tab\tname",
+        ] {
+            assert!(!safe_upload_filename(rejected), "{rejected:?}");
+        }
+        assert!(!safe_upload_filename(&"x".repeat(181)));
     }
 }

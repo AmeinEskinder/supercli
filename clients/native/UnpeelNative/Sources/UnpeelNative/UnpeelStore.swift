@@ -4036,9 +4036,47 @@ final class UnpeelStore: ObservableObject {
 
     /// Open a folder picker and reuse-or-add it as a project. Reports the
     /// chosen path back to the caller; reports `nil` if the user cancels.
+    var canPickProjectFolder: Bool {
+        selectedHostScope.isLocalMachine || (remoteHostRuntime.supportsHostOperation("filesystem.directories.list")
+            && remoteHostRuntime.supportsHostOperation("project.add"))
+    }
+
+    @Published var remoteFolderPickerPresented = false
+    private var remoteFolderCompletion: (@MainActor (String?) -> Void)?
+    private var remoteFolderScope: SelectedHostScope?
+
+    func finishRemoteFolderPicker(_ path: String?) {
+        remoteFolderPickerPresented = false
+        let completion = remoteFolderCompletion
+        remoteFolderCompletion = nil
+        guard let path, selectedHostScope == remoteFolderScope else { completion?(nil); return }
+        let scope = selectedHostScope
+        Task {
+            do {
+                let data = try await remoteHostRuntime.resourceRequest(operation: "addProject", capability: "project.add", parameters: ["path": path])
+                guard selectedHostScope == scope else { completion?(nil); return }
+                struct ProjectReceipt: Decodable { let id: String }
+                let project = try JSONDecoder().decode(ProjectReceipt.self, from: data)
+                settingsVisible = false; archivedProjectID = nil; selectedSessionID = nil
+                expandedProjectIDs.insert(project.id)
+                launcherProjectID = project.id
+                completion?(path)
+            } catch {
+                let alert = NSAlert(); alert.messageText = "Couldn’t add project"
+                alert.informativeText = error.localizedDescription
+                if let window = NSApp.keyWindow { alert.beginSheetModal(for: window, completionHandler: nil) }
+                completion?(nil)
+            }
+        }
+    }
+
     func pickProjectFolder(completion: @escaping @MainActor (String?) -> Void) {
         guard selectedHostScope.isLocalMachine else {
-            completion(nil)
+            guard remoteHostRuntime.supportsHostOperation("filesystem.directories.list"),
+                  remoteHostRuntime.supportsHostOperation("project.add") else { completion(nil); return }
+            remoteFolderScope = selectedHostScope
+            remoteFolderCompletion = completion
+            remoteFolderPickerPresented = true
             return
         }
         let panel = NSOpenPanel()
@@ -13768,7 +13806,7 @@ final class UnpeelStore: ObservableObject {
     /// handleAddProject:1099-1120): folder picker, then the project appears
     /// in the tree. Stored natively; never written to app-state.json.
     func addProjectFolder() {
-        guard selectedHostScope.isLocalMachine else { return }
+        guard selectedHostScope.isLocalMachine else { pickProjectFolder { _ in }; return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

@@ -2,13 +2,25 @@
   "schemaVersion": 1,
   "protocol": {
     "major": 1,
-    "minor": 19,
+    "minor": 20,
     "compatibility": {
       "major": "must-match",
       "minor": "additive",
       "unknownCapabilities": "ignore"
     },
     "history": [
+      {
+        "minor": 20,
+        "release": "0.6.2",
+        "summary": "Host folder selection and file transfers for every Controller.",
+        "capabilities": [
+          "filesystem.directories.list",
+          "filesystem.directories.create",
+          "project.add",
+          "filesystem.file.read",
+          "artifact.upload.file"
+        ]
+      },
       {
         "minor": 19,
         "release": "0.6.0",
@@ -381,6 +393,41 @@
       "id": "settings.plugins.updates.read",
       "method": "GET",
       "path": "/mobile/plugin-updates",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.directories.list",
+      "method": "GET",
+      "path": "/mobile/directories",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.directories.create",
+      "method": "POST",
+      "path": "/mobile/directories/create",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "project.add",
+      "method": "POST",
+      "path": "/mobile/projects/add",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.file.read",
+      "method": "GET",
+      "path": "/mobile/files/read",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.upload.file",
+      "method": "POST",
+      "path": "/mobile/file-upload-chunk",
       "native": true,
       "tui": true
     }

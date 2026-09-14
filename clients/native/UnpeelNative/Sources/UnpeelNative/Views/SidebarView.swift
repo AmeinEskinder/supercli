@@ -663,7 +663,7 @@ struct SidebarView: View {
             ZStack {
                 if !store.settingsVisible {
                     SidebarFooter(
-                        localVerbsVisible: store.selectedHostScope.isLocalMachine,
+                        localVerbsVisible: store.canPickProjectFolder,
                         onAddProject: { store.addProjectFolder() },
                         onOpenSettings: { store.openSettings() },
                         onAddWorkspace: { addWorkspaceSheetMethod = .thisMac }
@@ -809,7 +809,7 @@ struct SidebarView: View {
             .environment(\.sidebarSessionDragController, sessionDragController)
             .overlay {
                 if store.displayNodes.isEmpty {
-                    if store.selectedHostScope.isLocalMachine {
+                    if store.canPickProjectFolder {
                         // A `.localWorkspace` is the same machine — offer Add
                         // Project against its scoped home.
                         SidebarEmptyProjectsView {

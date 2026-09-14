@@ -18,6 +18,7 @@ controller-core = [
     "dep:base64",
     "dep:serde",
     "dep:serde_json",
+    "dep:sha2",
     "dep:uuid",
 ]
 native-host = [

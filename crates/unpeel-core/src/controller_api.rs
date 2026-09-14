@@ -1577,6 +1577,9 @@ fn route_uncached(
     create_context: Option<&HostCreateContext>,
     effects: Option<&ControllerEffects>,
 ) -> Option<ControllerResponse> {
+    if let Some(response) = crate::host_resources::route(request) {
+        return Some(response);
+    }
     let body = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/mobile/bootstrap") => match bootstrap {
             Some(context) => bootstrap_body(context),
@@ -1926,7 +1929,7 @@ fn route_uncached(
                 }
             }
         }
-        ("POST", "/mobile/upload-chunk") => {
+        ("POST", "/mobile/upload-chunk" | "/mobile/file-upload-chunk") => {
             let session_id = match query_session_id(&request.query) {
                 Ok(session_id) => session_id,
                 Err(error) => {
@@ -1994,18 +1997,29 @@ fn route_uncached(
                 None => Vec::new(),
             };
             let principal = upload_principal_key(&request.principal);
-            match session_artifacts::upload_resumable_artifact_chunk(
-                session_artifacts::ResumableArtifactUploadRequest {
-                    session_id: &session_id,
-                    upload_id,
-                    offset,
-                    total_size,
-                    sha256,
-                    content_type: &content_type,
-                    principal: &principal,
-                    bytes: &bytes,
-                },
-            ) {
+            let upload_request = session_artifacts::ResumableArtifactUploadRequest {
+                session_id: &session_id,
+                upload_id,
+                offset,
+                total_size,
+                sha256,
+                content_type: &content_type,
+                principal: &principal,
+                bytes: &bytes,
+            };
+            let result = if request.path == "/mobile/file-upload-chunk" {
+                session_artifacts::upload_resumable_file_chunk(
+                    upload_request,
+                    request
+                        .query
+                        .get("filename")
+                        .map(String::as_str)
+                        .unwrap_or_default(),
+                )
+            } else {
+                session_artifacts::upload_resumable_artifact_chunk(upload_request)
+            };
+            match result {
                 Ok(progress) => {
                     let mut body = json!({
                         "sessionID": session_id,

@@ -147,6 +147,8 @@ struct NativeRemoteCreatedSession: Decodable, Equatable, Sendable {
 }
 
 protocol NativeRemoteBackendProtocol: Sendable {
+    func resourceRequest(operation: String, parameters: [String: String], bytes: Data) async throws -> Data
+
     func bootstrap() async throws -> RemoteBootstrapSnapshot
     func pollOutput(
         sessionID: String,
@@ -294,6 +296,10 @@ extension NativeRemoteBackendProtocol {
             kind: "notApplied",
             operation: "approval answer"
         )
+    }
+
+    func resourceRequest(operation: String, parameters: [String: String], bytes: Data) async throws -> Data {
+        throw NativeRemoteBackendError(result: -1, code: "resource_unavailable", message: "This Host does not support this operation.")
     }
 
     /// Default for backends that predate attachment upload: an honest
@@ -1646,6 +1652,29 @@ final class NativeRemoteBackend: @unchecked Sendable {
                     output: output,
                     operation: "pairing invitation"
                 )
+            }
+            return output
+        }
+    }
+
+    func resourceRequest(operation: String, parameters: [String: String], bytes: Data) async throws -> Data {
+        let handle = try currentIdentityValidatedHandle()
+        struct Request: Encodable { let operation: String; let parameters: [String: String] }
+        let request = try JSONEncoder().encode(Request(operation: operation, parameters: parameters))
+        return try await Self.runBlocking(priority: .userInitiated) {
+            try Task.checkCancellation()
+            var pointer: UnsafeMutablePointer<UInt8>?
+            var length = 0
+            let result = request.withUnsafeBytes { requestBytes in
+                bytes.withUnsafeBytes { payload in
+                    unpeel_native_bridge_remote_resource(handle,
+                        requestBytes.bindMemory(to: UInt8.self).baseAddress, requestBytes.count,
+                        payload.bindMemory(to: UInt8.self).baseAddress, payload.count, &pointer, &length)
+                }
+            }
+            let output = Self.takeOutput(pointer, length: length)
+            guard result == UNPEEL_NATIVE_BRIDGE_OK else {
+                throw Self.effectBridgeError(result: result, output: output, operation: "Host resource")
             }
             return output
         }

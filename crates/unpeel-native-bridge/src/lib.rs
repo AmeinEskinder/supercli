@@ -347,6 +347,20 @@ trait RegisteredRemoteBackend: Send + Sync {
             message: "Pairing invitations are unavailable on this backend".into(),
         })
     }
+    fn resource_request(
+        &self,
+        _operation: &str,
+        _parameters: &std::collections::HashMap<String, String>,
+        _bytes: Vec<u8>,
+    ) -> Result<Vec<u8>, NativeRemoteEffectError> {
+        Err(NativeRemoteEffectError {
+            result: ERROR_REMOTE,
+            kind: "notApplied",
+            code: "resource_unavailable",
+            operation: "Host resource",
+            message: "Host resources are unavailable".into(),
+        })
+    }
     fn upload_attachment(
         &self,
         _session_id: Option<&str>,
@@ -704,6 +718,16 @@ impl RegisteredRemoteBackend for RegisteredCoreBackend {
             .map_err(native_remote_effect_error)
     }
 
+    fn resource_request(
+        &self,
+        operation: &str,
+        parameters: &std::collections::HashMap<String, String>,
+        bytes: Vec<u8>,
+    ) -> Result<Vec<u8>, NativeRemoteEffectError> {
+        self.backend
+            .resource_request(operation, parameters, bytes)
+            .map_err(native_remote_effect_error)
+    }
     fn upload_attachment(
         &self,
         session_id: Option<&str>,
@@ -4623,6 +4647,50 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_pairing_invitation(
         exchange_remote_pairing_invitation(handle, request_json)
     }));
     finish_remote_effect_ffi(outcome, "pairing invitation", out_pointer, out_length)
+}
+
+/// Exchange a typed Host resource operation. File payloads remain separate from JSON.
+///
+/// # Safety
+/// All input buffers must be readable and both output pointers writable.
+#[no_mangle]
+pub unsafe extern "C" fn unpeel_native_bridge_remote_resource(
+    handle: RemoteHandle,
+    request_pointer: *const u8,
+    request_length: usize,
+    bytes_pointer: *const u8,
+    bytes_length: usize,
+    out_pointer: *mut *mut u8,
+    out_length: *mut usize,
+) -> i32 {
+    if out_pointer.is_null() || out_length.is_null() {
+        return ERROR_INVALID_INPUT;
+    }
+    *out_pointer = ptr::null_mut();
+    *out_length = 0;
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let invalid = |message| {
+            native_not_applied_effect_error("Host resource")(NativeRemoteError::invalid_input(
+                "invalid_resource",
+                message,
+            ))
+        };
+        if request_length > 64 * 1024 || bytes_length > 64 * 1024 * 1024 {
+            return Err(invalid("Resource request is too large".to_string()));
+        }
+        let raw = input_bytes(request_pointer, request_length).map_err(invalid)?;
+        #[derive(serde::Deserialize)]
+        struct Request {
+            operation: String,
+            parameters: std::collections::HashMap<String, String>,
+        }
+        let request: Request = serde_json::from_slice(raw).map_err(|e| invalid(e.to_string()))?;
+        let bytes = input_bytes(bytes_pointer, bytes_length).map_err(invalid)?;
+        let backend =
+            remote_backend(handle).map_err(native_not_applied_effect_error("Host resource"))?;
+        backend.resource_request(&request.operation, &request.parameters, bytes.to_vec())
+    }));
+    finish_remote_effect_ffi(outcome, "Host resource", out_pointer, out_length)
 }
 
 /// Upload raw image bytes to the selected Host (`artifact.upload`) and return

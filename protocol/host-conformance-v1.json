@@ -1082,6 +1082,51 @@
         "native": 200,
         "tui": 200
       }
+    },
+    {
+      "id": "filesystem.directories.create.missing-path",
+      "method": "POST",
+      "path": "/mobile/directories/create",
+      "body": {},
+      "expected": {
+        "native": 400,
+        "tui": 400
+      }
+    },
+    {
+      "id": "project.add.missing-path",
+      "method": "POST",
+      "path": "/mobile/projects/add",
+      "body": {},
+      "expected": {
+        "native": 400,
+        "tui": 400
+      }
+    },
+    {
+      "id": "filesystem.file.read.unpeel-storage-denied",
+      "method": "GET",
+      "path": "/mobile/files/read",
+      "query": {
+        "path": "~/.unpeel/app-state.json",
+        "offset": "0"
+      },
+      "expected": {
+        "native": 403,
+        "tui": 403
+      }
+    },
+    {
+      "id": "filesystem.directories.list.outside-scope",
+      "method": "GET",
+      "path": "/mobile/directories",
+      "query": {
+        "path": "/"
+      },
+      "expected": {
+        "native": 403,
+        "tui": 403
+      }
     }
   ],
   "additiveBootstrapFields": [

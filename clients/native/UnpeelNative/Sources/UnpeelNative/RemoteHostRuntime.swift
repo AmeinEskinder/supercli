@@ -3456,6 +3456,7 @@ extension RemoteHostRuntime {
         static let transcriptMarkdown = "session.transcript.markdown"
         static let pairingInvitation = "pairing.invitation"
         static let artifactUpload = "artifact.upload"
+        static let artifactUploadResumable = "artifact.upload.resumable"
         static let projectSet = "session.project.set"
         static let pushRegister = "push.register"
         static let notifyWhenDoneSet = "session.notify_when_done.set"
@@ -3472,7 +3473,8 @@ extension RemoteHostRuntime {
     ) async throws -> String {
         var path: String?
         try await performOrganizationVerb(
-            capability: HostOperation.artifactUpload,
+            capability: supportsHostOperation(HostOperation.artifactUploadResumable)
+                ? HostOperation.artifactUploadResumable : HostOperation.artifactUpload,
             operation: "attachment upload"
         ) { backend in
             path = try await backend.uploadAttachment(
@@ -3495,6 +3497,27 @@ extension RemoteHostRuntime {
     /// Never guessed and never probed: absent ledger means unsupported.
     func supportsHostOperation(_ operation: String) -> Bool {
         snapshot?.hostProtocol?.supports(operation) == true
+    }
+
+    func resourceRequest(operation: String, capability: String, parameters: [String: String], bytes: Data = Data()) async throws -> Data {
+        let (connection, _) = try requireConnection(capability: capability, operation: operation)
+        await connection.effectStartBarrier?.value
+        guard isCurrent(connection), connectionBootstrapped else { throw CancellationError() }
+        let result = try await connection.backend.resourceRequest(operation: operation, parameters: parameters, bytes: bytes)
+        guard isCurrent(connection) else { throw CancellationError() }
+        if operation == "addProject" { requestImmediateRefresh() }
+        return result
+    }
+
+    func uploadFile(sessionID: String, filename: String, bytes: Data) async throws -> String {
+        struct Receipt: Decodable { let path: String }
+        let data = try await resourceRequest(operation: "uploadFile", capability: "artifact.upload.file",
+            parameters: ["session_id": sessionID, "filename": filename], bytes: bytes)
+        let receipt = try JSONDecoder().decode(Receipt.self, from: data)
+        guard receipt.path.hasPrefix("/"), !receipt.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            throw RemoteHostVerbError(operation: "attachment upload", message: "The Host returned an invalid file path.", outcomeIsUnknown: true)
+        }
+        return receipt.path
     }
 
     func renameSession(_ sessionID: String, to title: String) async throws {

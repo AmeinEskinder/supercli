@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const HOST_PROTOCOL_MAJOR: u16 = 1;
-pub const HOST_PROTOCOL_MINOR: u16 = 19;
+pub const HOST_PROTOCOL_MINOR: u16 = 20;
 
 pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "approval.answer",
@@ -59,6 +59,11 @@ pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "settings.plugins.set",
     "settings.plugins.order",
     "settings.plugins.updates.read",
+    "filesystem.directories.list",
+    "filesystem.directories.create",
+    "project.add",
+    "filesystem.file.read",
+    "artifact.upload.file",
 ];
 
 pub const HEADLESS_HOST_CAPABILITIES: &[&str] = &[
@@ -104,6 +109,11 @@ pub const HEADLESS_HOST_CAPABILITIES: &[&str] = &[
     "settings.plugins.set",
     "settings.plugins.order",
     "settings.plugins.updates.read",
+    "filesystem.directories.list",
+    "filesystem.directories.create",
+    "project.add",
+    "filesystem.file.read",
+    "artifact.upload.file",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

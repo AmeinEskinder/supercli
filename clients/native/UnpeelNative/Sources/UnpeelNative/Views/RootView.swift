@@ -109,6 +109,9 @@ struct RootView: View {
         // slides to the settings nav (SidebarView) and the content pane
         // swaps to the settings panel without animation (ContentArea).
         appLayout
+            .sheet(isPresented: $store.remoteFolderPickerPresented, onDismiss: { store.finishRemoteFolderPicker(nil) }) {
+                RemoteFolderPicker(runtime: store.remoteHostRuntime) { store.finishRemoteFolderPicker($0) }
+            }
             // Pane-title chips use the same detached Session drag controller
             // as sidebar rows, so they can sort the split or land at an exact
             // sidebar insertion gap with one continuous gesture.

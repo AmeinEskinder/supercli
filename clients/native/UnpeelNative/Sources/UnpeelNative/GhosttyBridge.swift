@@ -26,6 +26,7 @@
 //
 
 import AppKit
+import Darwin
 import GhosttyKit
 import GhosttyTerminal
 import SwiftUI
@@ -1302,6 +1303,7 @@ final class GhosttyTerminalPane: NSView {
     /// must upload (Controller paths mean nothing there), or plain text
     /// (non-file links) pasted as-is.
     enum RemoteDropPayload {
+        case file(URL)
         case upload(contentType: String, data: Data)
         case text(String)
     }
@@ -1310,14 +1312,16 @@ final class GhosttyTerminalPane: NSView {
     /// survive past the drop callback). Image files carry their own bytes;
     /// non-JPEG/PNG images are converted to PNG; non-image files are skipped
     /// — a remote Host has no way to receive them yet.
-    fileprivate static func remoteDropPayloads(
-        from pasteboard: NSPasteboard
+    static func remoteDropPayloads(
+        from pasteboard: NSPasteboard,
+        filesSupported: Bool = false
     ) -> [RemoteDropPayload] {
         if let fileURLs = pasteboard.readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]
         ) as? [URL], !fileURLs.isEmpty {
             return fileURLs.compactMap { url in
+                if filesSupported { return .file(url) }
                 switch url.pathExtension.lowercased() {
                 case "png":
                     return (try? Data(contentsOf: url)).map {
@@ -1354,6 +1358,29 @@ final class GhosttyTerminalPane: NSView {
         return images.compactMap { image in
             imagePNGData(image).map { .upload(contentType: "image/png", data: $0) }
         }
+    }
+
+    @concurrent
+    static func remoteFileBytes(at url: URL) async throws -> Data {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let fd = Darwin.open(url.path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW)
+        guard fd >= 0 else { throw CocoaError(.fileReadNoPermission) }
+        let file = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        defer { try? file.close() }
+        var metadata = stat()
+        guard fstat(fd, &metadata) == 0, metadata.st_mode & S_IFMT == S_IFREG else {
+            throw CocoaError(.fileReadUnsupportedScheme)
+        }
+        guard metadata.st_size > 0, metadata.st_size <= 64 * 1024 * 1024 else {
+            throw NSError(domain: "UnpeelAttachment", code: 1, userInfo: [NSLocalizedDescriptionKey: "Files must be nonempty and no larger than 64 MB."])
+        }
+        try Task.checkCancellation()
+        let bytes = try file.read(upToCount: 64 * 1024 * 1024 + 1) ?? Data()
+        guard bytes.count == metadata.st_size else {
+            throw NSError(domain: "UnpeelAttachment", code: 2, userInfo: [NSLocalizedDescriptionKey: "The file changed while it was being read. Drop it again."])
+        }
+        return bytes
     }
 
     private static func imagePNGData(_ image: NSImage) -> Data? {
@@ -2084,9 +2111,13 @@ final class RemoteGhosttyTerminalPane: NSView {
     /// (the phone attach flow's operation) and the returned HOST path is
     /// pasted instead. nil when the Host does not advertise the capability.
     var remoteUploader: ((_ contentType: String, _ bytes: Data) async throws -> String)?
+    var remoteFileUploader: ((_ filename: String, _ bytes: Data) async throws -> String)?
+    private var remoteDropTask: Task<Void, Never>?
+    private var uploadProgress: NSProgressIndicator?
+
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        (fileDropsEnabled || remoteUploader != nil)
+        remoteDropTask == nil && (fileDropsEnabled || remoteUploader != nil || remoteFileUploader != nil)
             && GhosttyTerminalPane.canReadDropReferences(
                 from: sender.draggingPasteboard
             ) ? .copy : []
@@ -2106,34 +2137,48 @@ final class RemoteGhosttyTerminalPane: NSView {
             pasteDropReferences(references)
             return true
         }
-        guard let remoteUploader else { return false }
-        // Pasteboard content must be read before this callback returns; the
-        // uploads themselves ride an ordinary async verb per payload.
+        guard remoteDropTask == nil, remoteUploader != nil || remoteFileUploader != nil else { return false }
+        let uploadImage = remoteUploader
+        let uploadFile = remoteFileUploader
         let payloads = GhosttyTerminalPane.remoteDropPayloads(
-            from: sender.draggingPasteboard
-        )
+            from: sender.draggingPasteboard, filesSupported: uploadFile != nil)
         guard !payloads.isEmpty else { return false }
-        Task { @MainActor [weak self] in
+        let progress = NSProgressIndicator()
+        progress.style = .spinning; progress.controlSize = .small
+        progress.toolTip = "Uploading attachment"
+        progress.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(progress)
+        NSLayoutConstraint.activate([progress.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            progress.topAnchor.constraint(equalTo: topAnchor, constant: 14)])
+        progress.startAnimation(nil); uploadProgress = progress
+        remoteDropTask = Task { @MainActor [weak self] in
+            defer { self?.uploadProgress?.removeFromSuperview(); self?.uploadProgress = nil; self?.remoteDropTask = nil }
             var references: [String] = []
-            for payload in payloads {
-                switch payload {
-                case .text(let reference):
-                    references.append(reference)
-                case .upload(let contentType, let data):
-                    do {
-                        references.append(
-                            try await remoteUploader(contentType, data)
-                        )
-                    } catch {
-                        NSLog(
-                            "[UnpeelNative] remote drop upload failed: %@",
-                            error.localizedDescription
-                        )
+            do {
+                for payload in payloads {
+                    try Task.checkCancellation()
+                    switch payload {
+                    case .text(let reference): references.append(reference)
+                    case .file(let url):
+                        guard let uploadFile else { throw CancellationError() }
+                        let bytes = try await GhosttyTerminalPane.remoteFileBytes(at: url)
+                        references.append(try await uploadFile(url.lastPathComponent, bytes))
+                    case .upload(let contentType, let data):
+                        if let uploadFile {
+                            references.append(try await uploadFile(contentType == "image/jpeg" ? "image.jpg" : "image.png", data))
+                        } else if let uploadImage {
+                            references.append(try await uploadImage(contentType, data))
+                        }
                     }
                 }
+                try Task.checkCancellation()
+                if !references.isEmpty { self?.pasteDropReferences(references) }
+            } catch is CancellationError {} catch {
+                let alert = NSAlert()
+                alert.messageText = "Couldn’t attach file"
+                alert.informativeText = error.localizedDescription
+                if let window = self?.window { alert.beginSheetModal(for: window, completionHandler: nil) }
             }
-            guard !references.isEmpty else { return }
-            self?.pasteDropReferences(references)
         }
         return true
     }

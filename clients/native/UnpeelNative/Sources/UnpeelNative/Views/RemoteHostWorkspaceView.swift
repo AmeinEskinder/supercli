@@ -71,11 +71,13 @@ struct RemoteScopeTerminalMount: View {
                 // upload operation and the returned Host path is pasted —
                 // capability-gated, never probed.
                 remoteUploader: !store.selectedHostScope.isLocalMachine
-                    && runtime.supportsHostOperation(
+                    && (runtime.supportsHostOperation(
                         RemoteHostRuntime.HostOperation.artifactUpload
-                    )
-                    ? { [weak runtime] contentType, bytes in
-                        guard let runtime else {
+                    ) || runtime.supportsHostOperation(
+                        RemoteHostRuntime.HostOperation.artifactUploadResumable
+                    ))
+                    ? { [weak runtime, expectedHostID = runtime.snapshot?.macID] contentType, bytes in
+                        guard let runtime, runtime.snapshot?.macID == expectedHostID else {
                             throw RemoteHostVerbError(
                                 operation: "attachment upload",
                                 message: "The Host connection went away.",
@@ -88,7 +90,13 @@ struct RemoteScopeTerminalMount: View {
                             bytes: bytes
                         )
                     }
-                    : nil
+                    : nil,
+                remoteFileUploader: !store.selectedHostScope.isLocalMachine
+                    && runtime.supportsHostOperation("artifact.upload.file")
+                    ? { [weak runtime, expectedHostID = runtime.snapshot?.macID] filename, bytes in
+                        guard let runtime, runtime.snapshot?.macID == expectedHostID else { throw CancellationError() }
+                        return try await runtime.uploadFile(sessionID: session.id, filename: filename, bytes: bytes)
+                    } : nil
             )
         } else {
             RemoteTerminalPreparingView(
@@ -212,6 +220,7 @@ struct RemoteTerminalPaneHostView: NSViewRepresentable {
     var fileDropsEnabled: Bool = false
     var dropStabilizeHome: URL? = nil
     var remoteUploader: ((String, Data) async throws -> String)? = nil
+    var remoteFileUploader: ((String, Data) async throws -> String)? = nil
 
     @MainActor
     final class SwapContainer: NSView, TerminalPaneActivating {
@@ -293,6 +302,7 @@ struct RemoteTerminalPaneHostView: NSViewRepresentable {
         pane.fileDropsEnabled = fileDropsEnabled
         pane.dropStabilizeHome = dropStabilizeHome ?? LaunchConfig.unpeelDir
         pane.remoteUploader = remoteUploader
+        pane.remoteFileUploader = remoteFileUploader
         let attached = container.attach(pane)
 
         if attached {

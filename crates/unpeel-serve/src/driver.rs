@@ -625,6 +625,8 @@ pub struct HostRuntime {
     unread_ids: HashSet<String>,
     /// Host-owned auto-stop-and-archive sweep (`auto_archive.rs`).
     auto_archive: crate::auto_archive::Sweeper,
+    /// Last Host-wide sweep of abandoned resumable uploads.
+    last_upload_sweep: Option<Instant>,
     last_activity_state_signature: Option<crate::activity_snapshot::ActivityStateSignature>,
     snapshot: SharedSnapshot,
     approvals: Arc<ApprovalHub>,
@@ -758,6 +760,7 @@ impl HostRuntime {
             pty_core,
             pty_core_status: None,
             auto_archive: crate::auto_archive::Sweeper::default(),
+            last_upload_sweep: None,
             browser_engine_rx: if browser_engine_install_enabled() {
                 Some(spawn_browser_engine_install(&home))
             } else {
@@ -888,6 +891,7 @@ impl HostRuntime {
             self.last_scan = Instant::now();
             self.reconcile_direct(&mut emitted);
             self.sweep_auto_archive(&mut emitted);
+            self.sweep_incomplete_uploads();
         }
         self.reconcile_link(&mut emitted);
         self.supervise_streamer(&mut emitted);
@@ -1034,6 +1038,35 @@ impl HostRuntime {
                     );
                 }
             }
+        }
+    }
+
+    /// Expire abandoned resumable uploads Host-wide. The upload path only
+    /// sweeps a Session when another chunk arrives, so this tick covers the
+    /// Sessions that never hear from their uploader again.
+    fn sweep_incomplete_uploads(&mut self) {
+        const INTERVAL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+        if self
+            .last_upload_sweep
+            .is_some_and(|last| last.elapsed() < INTERVAL)
+        {
+            return;
+        }
+        self.last_upload_sweep = Some(Instant::now());
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
+        match unpeel_core::session_artifacts::sweep_incomplete_uploads(now_ms) {
+            Ok(0) => {}
+            Ok(expired) => crate::tracelog::trace(
+                "host-worker",
+                &format!("expired {expired} abandoned incomplete uploads"),
+            ),
+            Err(error) => crate::tracelog::trace(
+                "host-worker",
+                &format!("incomplete upload sweep failed: {error}"),
+            ),
         }
     }
 

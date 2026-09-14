@@ -59,6 +59,8 @@ pub mod host_connection;
 #[cfg(feature = "native-host")]
 pub mod host_name;
 #[cfg(feature = "native-host")]
+pub mod host_resources;
+#[cfg(feature = "native-host")]
 pub mod http_fetch;
 #[cfg(feature = "native-host")]
 pub mod integrations;

@@ -547,6 +547,14 @@ int32_t unpeel_native_bridge_remote_pairing_invitation(
  * owned JSON {path} naming the HOST-side file to paste as an attachable
  * reference; failures use the effect error envelope (never auto-replayed).
  */
+/* Typed Host resources; raw file bytes are bounded separately from metadata. */
+int32_t unpeel_native_bridge_remote_resource(
+    unpeel_native_bridge_remote_handle_t handle,
+    const uint8_t *request_pointer, size_t request_length,
+    const uint8_t *bytes_pointer, size_t bytes_length,
+    uint8_t **out_pointer, size_t *out_length
+);
+
 int32_t unpeel_native_bridge_remote_upload_attachment(
     unpeel_native_bridge_remote_handle_t handle,
     const uint8_t *session_id_pointer,
