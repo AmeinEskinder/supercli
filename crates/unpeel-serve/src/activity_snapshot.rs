@@ -23,6 +23,7 @@ struct ActivityStateEntrySignature {
     id: String,
     activity_status: &'static str,
     raw_status: &'static str,
+    activity_source: &'static str,
     unread: bool,
     completed: bool,
 }
@@ -38,6 +39,8 @@ struct ActivityStateFile<'a> {
 struct ActivityStateEntry {
     activity_status: &'static str,
     raw_status: &'static str,
+    /// "hooks" | "screen" | "none": where `raw_status` came from.
+    activity_source: &'static str,
     unread: bool,
     completed: bool,
     updated_at: u64,
@@ -65,6 +68,7 @@ pub(crate) fn publish(
                 ActivityStateEntry {
                     activity_status: entry.activity_status,
                     raw_status: entry.raw_status,
+                    activity_source: entry.activity_source,
                     unread: entry.unread,
                     completed: entry.completed,
                     updated_at,
@@ -123,6 +127,7 @@ fn signature(
                 id: row.id.clone(),
                 activity_status,
                 raw_status,
+                activity_source: row.status_source.word(),
                 unread,
                 completed: engine.is_completed(&row.id),
             }
@@ -190,6 +195,7 @@ mod tests {
             resume_agent_available: false,
             running: status != Status::Exited,
             status,
+            status_source: crate::sessions::StatusSource::None,
             created_at: 1,
             pinned: false,
             archived: false,

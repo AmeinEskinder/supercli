@@ -38,9 +38,16 @@ strip_inherited = ["CODEX_CI", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "CODEX_SHEL
 [lifecycle]
 source = "hooks"
 authority = "complete"
-fallback = "none"
+fallback = "screen"
 completion_reliable = true
 attention_reliable = true
+
+# Screen fallback (no integration installed): "• Working (12s • Esc to
+# interrupt)" while a turn runs; the "› Ask Codex to do anything" prompt
+# when idle.
+[screen]
+working = ["esc to interrupt", "• Working"]
+idle_prompt = ["›"]
 
 [[usage.stores]]
 root = ".codex/sessions"

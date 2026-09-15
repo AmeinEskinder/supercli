@@ -360,6 +360,14 @@ pub struct HostedSessionManifest {
     /// and default false.
     #[serde(default)]
     pub menu_prompt_active: bool,
+    /// Screen-derived verdict ("working" / "idle") for a recognized agent
+    /// whose runtime declares `[screen]` rules, edge-written by the same
+    /// viewport scan (`crate::screen_activity`). The worker uses it only
+    /// while the Session has no hook latch — the Herdr-style fallback for an
+    /// agent whose Unpeel integration is not installed. Absent when no rules
+    /// apply or nothing matched yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_activity: Option<String>,
     /// Wall-clock ms when the parsed screen TEXT last changed, written by the
     /// same viewport scan (coalesced to at most one manifest write per ~2s).
     /// This is the "really doing something" signal: idle repaint loops that
@@ -1365,6 +1373,7 @@ fn resume_agent_in_place(
         manifest.browser_client_registered = registration.browser;
         manifest.computer_client_registered = false;
         manifest.menu_prompt_active = false;
+        manifest.screen_activity = None;
     });
     // Wake/reset the observer only after the clearing manifest write. If this
     // edge came first, a fast new runtime could be observed and then erased by
@@ -5566,6 +5575,8 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
     let viewport_for_menu = Arc::clone(&viewport);
     let menu_job = {
         let mut last_active = false;
+        let mut last_screen_activity: Option<String> = None;
+        let mut last_classified_hash: Option<u64> = None;
         let mut last_modes: Option<crate::terminal_viewport::TerminalModeState> = None;
         let mut url_tracker = crate::local_urls::LocalUrlTracker::default();
         let mut screen_tracker = ScreenChangeTracker::default();
@@ -5601,6 +5612,37 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
                     let _ = update_manifest_session(&menu_session_id, |manifest| {
                         manifest.menu_prompt_active = active;
                     });
+                }
+                // Screen fallback tier: classify the bottom of the screen
+                // with the observed runtime's `[screen]` rules. Only when
+                // the text changed (steady screens cost nothing), and only
+                // edge-written; the worker ignores it once hooks latch.
+                let screen_hash = {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    screen.hash(&mut hasher);
+                    hasher.finish()
+                };
+                if last_classified_hash != Some(screen_hash) {
+                    last_classified_hash = Some(screen_hash);
+                    let verdict = load_manifest(&menu_session_id)
+                        .as_ref()
+                        .and_then(active_runtime_id)
+                        .and_then(crate::screen_activity::rules_for_runtime)
+                        .and_then(|rules| crate::screen_activity::classify(&screen, rules))
+                        .map(|activity| activity.as_str().to_string());
+                    // An unrecognized screen keeps the previous verdict while
+                    // rules still apply; a runtime without rules clears it.
+                    let next = match (&verdict, &last_screen_activity) {
+                        (Some(_), _) => verdict.clone(),
+                        (None, previous) => previous.clone(),
+                    };
+                    if next != last_screen_activity {
+                        last_screen_activity = next.clone();
+                        let _ = update_manifest_session(&menu_session_id, |manifest| {
+                            manifest.screen_activity = next.clone();
+                        });
+                    }
                 }
                 let saw_new_url = url_tracker.observe_screen(&screen);
                 ticks_since_probe += 1;
@@ -5838,6 +5880,7 @@ pub(crate) fn start_host(
             browser_client_registered: false,
             computer_client_registered: false,
             menu_prompt_active: false,
+            screen_activity: None,
             terminal_modes: None,
             screen_changed_at: None,
             detected_local_urls: Vec::new(),
@@ -6956,6 +6999,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
             browser_client_registered: false,
             computer_client_registered: false,
             menu_prompt_active: false,
+            screen_activity: None,
             terminal_modes: None,
             screen_changed_at: None,
             detected_local_urls: Vec::new(),
@@ -7076,6 +7120,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
             browser_client_registered: false,
             computer_client_registered: false,
             menu_prompt_active: false,
+            screen_activity: None,
             terminal_modes: None,
             screen_changed_at: None,
             detected_local_urls: Vec::new(),

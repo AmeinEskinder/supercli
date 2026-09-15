@@ -39,6 +39,11 @@ pub struct RuntimeDescriptor {
     #[serde(default)]
     pub environment: RuntimeEnvironment,
     pub lifecycle: RuntimeLifecycle,
+    /// Screen-derived busy/idle rules for the fallback tier
+    /// (`crate::screen_activity`), required when
+    /// `lifecycle.fallback = "screen"` and forbidden otherwise.
+    #[serde(default)]
+    pub screen: Option<RuntimeScreenRules>,
     #[serde(default)]
     pub capabilities: Vec<RuntimeCapability>,
     /// Client-safe hints for ranking already-installed runtimes by their
@@ -214,6 +219,18 @@ impl RuntimeLifecycle {
     pub fn uses_hook_port(&self) -> bool {
         self.source == RuntimeLifecycleSource::Hooks
     }
+}
+
+/// Bottom-of-screen markers a runtime shows while working and at its idle
+/// prompt. Substring matches, case-insensitive for `working`; `idle_prompt`
+/// entries match the first non-blank characters of a line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeScreenRules {
+    #[serde(default)]
+    pub working: Vec<String>,
+    #[serde(default)]
+    pub idle_prompt: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -910,6 +927,26 @@ pub fn validate_runtime_descriptors(
             errors.push(format!(
                 "{prefix}: lifecycle authority = 'none' must use fallback = 'none'"
             ));
+        }
+        let screen_fallback = descriptor.lifecycle.fallback == RuntimeLifecycleFallback::Screen;
+        match &descriptor.screen {
+            Some(rules) if !screen_fallback => {
+                let _ = rules;
+                errors.push(format!(
+                    "{prefix}: [screen] rules require lifecycle fallback = 'screen'"
+                ));
+            }
+            Some(rules) if rules.working.is_empty() || rules.idle_prompt.is_empty() => {
+                errors.push(format!(
+                    "{prefix}: [screen] needs at least one working and one idle_prompt marker"
+                ));
+            }
+            None if screen_fallback => {
+                errors.push(format!(
+                    "{prefix}: lifecycle fallback = 'screen' needs a [screen] rules section"
+                ));
+            }
+            _ => {}
         }
         if descriptor.lifecycle.completion_reliable
             != descriptor

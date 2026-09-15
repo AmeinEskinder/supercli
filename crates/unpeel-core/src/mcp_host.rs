@@ -4218,6 +4218,7 @@ mod tests {
             browser_client_registered: false,
             computer_client_registered: false,
             menu_prompt_active: false,
+            screen_activity: None,
             terminal_modes: None,
             screen_changed_at: None,
             detected_local_urls: Vec::new(),

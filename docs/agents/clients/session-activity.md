@@ -11,15 +11,21 @@ snapshot). Since 2026-09-03 the app ingests no hook events itself: the
 `persistActivitySnapshot`, and the menu-prompt notification publisher are
 deleted; every edge below describes the worker.
 
-Animated Busy has one fail-closed authority: explicit lifecycle events. A
-shell, build, server, pager, watcher, unknown CLI, or recognized hookless agent
-remains visually idle no matter how often it prints or repaints — terminal
-output is not evidence of semantic agent work. This keeps every non-authority
-Session iTerm-like and prevents intermittent or perpetual sidebar spinners.
-Runtime observation still provides identity, icon, tint, capabilities, and
-safe hook-install repair; it does not grant activity authority. Hookless
-agents such as Pi and fx therefore have no animated Busy state until they gain
-an authoritative lifecycle source in their runtime package.
+Animated Busy has one exact authority: explicit lifecycle events from the
+runtime's installed Unpeel integration. Below it sits one fallback tier, the
+Herdr-style **screen tier**: a recognized agent whose runtime declares
+`[screen]` rules (`lifecycle.fallback = "screen"`; Claude, Codex, Gemini)
+takes a busy/idle verdict the Host derives from the bottom of its parsed
+viewport while the Session has no hook latch — an integration that is not
+installed, or one that has not spoken yet. Hooks win the moment they latch.
+The tier is deliberately lower confidence: it animates the sidebar and is
+published as `activitySource: "screen"`, but a screen-derived busy→idle edge
+never sends a completion notification and never marks a turn completed. A
+shell, build, server, pager, watcher, unknown CLI, or recognized agent
+without screen rules (Pi, fx) remains visually idle no matter how often it
+prints or repaints — output growth is never evidence of work. Runtime
+observation provides identity, icon, tint, and capabilities; it never
+installs anything.
 
 The Host's live foreground-runtime observation also grants hook authority
 (2026-08-21). A hook-capable agent the user starts by hand inside a blank or
@@ -104,11 +110,15 @@ Hook-driven sessions:
   Restarting the Host or repainting an idle terminal cannot revive that
   expired opener; a newer opening hook or a new runtime launch can.
 
-Recognized non-hook agent sessions:
+Recognized agent sessions without a hook latch:
 
 - Foreground observation still selects provider presentation and capabilities.
 - Output growth and `screen_changed_at` remain terminal/recency telemetry, not
   lifecycle authority, and never start an animated Busy state.
+- If the runtime declares `[screen]` rules, the Host's viewport scan
+  (`crate::screen_activity`, 500 ms, edge-written `screen_activity` on the
+  manifest) supplies "working"/"idle"; the worker reports it with
+  `activitySource: "screen"` and sends no completion notification for it.
 - `menu_prompt_active` may still surface Attention when the Host positively
   recognizes an agent-drawn input menu.
 

@@ -40,6 +40,28 @@ pub enum Status {
     Exited,
 }
 
+/// Where a running Session's busy/idle came from. Hooks are exact; the
+/// screen tier is a lower-confidence fallback for a recognized agent with
+/// no hook latch (its Unpeel integration is not installed, or has not
+/// spoken yet). Controllers may hint at the upgrade; the worker never sends
+/// completion notifications from a screen-derived edge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatusSource {
+    Hooks,
+    Screen,
+    None,
+}
+
+impl StatusSource {
+    pub fn word(self) -> &'static str {
+        match self {
+            StatusSource::Hooks => "hooks",
+            StatusSource::Screen => "screen",
+            StatusSource::None => "none",
+        }
+    }
+}
+
 impl Status {
     pub fn glyph(self) -> &'static str {
         match self {
@@ -109,6 +131,8 @@ pub struct SessionRow {
     pub resume_agent_available: bool,
     pub running: bool,
     pub status: Status,
+    /// Provenance of `status` while running; `None` otherwise.
+    pub status_source: StatusSource,
     pub created_at: u64,
     pub pinned: bool,
     pub archived: bool,
@@ -239,6 +263,7 @@ fn pid_alive(pid: u32) -> bool {
     rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
+#[cfg(test)]
 fn derive_status(
     engine: &mut ActivityEngine,
     manifest: &HostedSessionManifest,
@@ -247,8 +272,32 @@ fn derive_status(
     now: SystemTime,
     menu_attention_detection: bool,
 ) -> Status {
+    derive_status_with_source(engine, manifest, running, dir, now, menu_attention_detection).0
+}
+
+/// The screen fallback tier: a recognized agent whose runtime declares
+/// `[screen]` rules and whose Session has no hook latch takes the Host's
+/// screen-derived verdict. Hooks win the moment they latch.
+fn screen_fallback_status(manifest: &HostedSessionManifest) -> Option<Status> {
+    let runtime = unpeel_core::session_host::active_runtime_id(manifest)?;
+    unpeel_core::screen_activity::rules_for_runtime(runtime)?;
+    let verdict = manifest.screen_activity.as_deref()?;
+    match unpeel_core::screen_activity::ScreenActivity::parse(verdict)? {
+        unpeel_core::screen_activity::ScreenActivity::Working => Some(Status::Busy),
+        unpeel_core::screen_activity::ScreenActivity::Idle => Some(Status::Idle),
+    }
+}
+
+fn derive_status_with_source(
+    engine: &mut ActivityEngine,
+    manifest: &HostedSessionManifest,
+    running: bool,
+    dir: &std::path::Path,
+    now: SystemTime,
+    menu_attention_detection: bool,
+) -> (Status, StatusSource) {
     if !running {
-        return Status::Exited;
+        return (Status::Exited, StatusSource::None);
     }
     let lifecycle = crate::runtime_presentation::lifecycle(&manifest.session.command);
     let observed_runtime_command = unpeel_core::session_host::active_runtime_id(manifest)
@@ -312,12 +361,20 @@ fn derive_status(
             });
         engine.observe_foreground_runtime(id, observed_identity.as_deref());
     }
+    let mut source = StatusSource::None;
     let mut status = if !hooks_own_activity {
         // Runtime observation is presentation, not lifecycle authority.
         // Hookless agents, shells, builds, servers, pagers, and repainting
-        // TUIs remain neutral no matter how often their screen changes.
+        // TUIs remain neutral no matter how often their screen changes —
+        // unless the recognized runtime declares screen rules.
         engine.clear_output_baseline(id);
-        Status::Idle
+        match screen_fallback_status(manifest) {
+            Some(status) => {
+                source = StatusSource::Screen;
+                status
+            }
+            None => Status::Idle,
+        }
     } else {
         let output_size = fs::metadata(dir.join("output.bin"))
             .map(|m| m.len())
@@ -360,7 +417,7 @@ fn derive_status(
                 else {
                     // Missing evidence is not an answer. Keep the old output
                     // baseline so the next scan retries even if output stops.
-                    return Status::Attention;
+                    return (Status::Attention, StatusSource::Hooks);
                 };
                 let screen = viewport
                     .viewport_rows
@@ -376,17 +433,26 @@ fn derive_status(
             // declared beside the runtime's hooks rather than guessed from
             // its command name here.
             engine.note_output_and_sweep(id, activity_signal, allow_attention_clear, now);
+            source = StatusSource::Hooks;
             match engine.hook_owned_state(id) {
                 Some(HookState::Busy) => Status::Busy,
                 Some(HookState::Attention) => Status::Attention,
                 Some(HookState::Idle) | None => Status::Idle,
             }
         } else {
-            // Pre-latch output is never promoted to Busy. A hook-capable
-            // runtime typed into a reusable shell becomes active only after
-            // its first live hook proves authority.
+            // Pre-latch output is never promoted to Busy by growth alone. A
+            // hook-capable runtime typed into a reusable shell becomes
+            // hook-owned only after its first live hook proves authority;
+            // until then (no integration installed, or not yet spoken) the
+            // screen fallback tier may carry a lower-confidence verdict.
             engine.clear_output_baseline(id);
-            Status::Idle
+            match screen_fallback_status(manifest) {
+                Some(status) => {
+                    source = StatusSource::Screen;
+                    status
+                }
+                None => Status::Idle,
+            }
         }
     };
 
@@ -397,7 +463,7 @@ fn derive_status(
     {
         status = Status::Attention;
     }
-    status
+    (status, source)
 }
 
 /// A project's working directory, by id. The "+ New session" row has no
@@ -620,7 +686,7 @@ pub fn scan_sidebar(
                 &dir.join(unpeel_core::session_ops::ARCHIVE_MARKER),
                 || unpeel_core::session_ops::archived_marker(&manifest.session.id),
             );
-            let status = derive_status(
+            let (status, status_source) = derive_status_with_source(
                 engine,
                 manifest,
                 running,
@@ -687,6 +753,7 @@ pub fn scan_sidebar(
                 resume_agent_available,
                 running,
                 status,
+                status_source,
                 created_at: manifest.session.created_at,
                 pinned: pinned_ids.contains(&manifest.session.id),
                 archived: marker_at.is_some()
@@ -1271,6 +1338,7 @@ pub fn model_from_bridge(
                 },
                 running,
                 status,
+                status_source: StatusSource::None,
                 created_at,
                 pinned: session
                     .get("pinned")
@@ -1805,6 +1873,10 @@ pub fn mobile_snapshot(
                 .max(latest_alert.map(|entry| entry.at).unwrap_or(0)),
             "status": status,
             "activity": activity,
+            // Provenance of `activity` while running: "hooks" (exact) or
+            // "screen" (fallback tier: integration not installed / no
+            // hook latch yet). Additive; older Controllers ignore it.
+            "activitySource": row.running.then(|| row.status_source.word()),
             "unread": unread,
             "pinned": row.pinned,
             "notifyWhenDone": false,
@@ -2279,6 +2351,7 @@ mod tests {
             resume_agent_available: running,
             running,
             status,
+            status_source: StatusSource::None,
             created_at: 1,
             pinned,
             archived: false,
@@ -2812,6 +2885,7 @@ mod tests {
             resume_agent_available: true,
             running: true,
             status: Status::Idle,
+            status_source: StatusSource::None,
             created_at: 1,
             pinned: false,
             archived: false,
@@ -2867,6 +2941,7 @@ mod tests {
             resume_agent_available: false,
             running: true,
             status: Status::Busy,
+            status_source: StatusSource::None,
             created_at: 1,
             pinned: false,
             archived: false,
@@ -2921,6 +2996,7 @@ mod tests {
             resume_agent_available: false,
             running: true,
             status: Status::Busy,
+            status_source: StatusSource::None,
             created_at: 1,
             pinned: false,
             archived: false,
@@ -3071,6 +3147,59 @@ mod tests {
         assert_eq!(sessions[1]["capabilities"]["appendSystemContext"], false);
         assert_eq!(sessions[2]["capabilities"]["fork"], false);
         assert_eq!(sessions[2]["capabilities"]["appendSystemContext"], false);
+    }
+
+    /// The screen fallback tier: a recognized agent with `[screen]` rules and
+    /// no hook latch takes the Host's screen verdict (source "screen");
+    /// hooks win the moment they latch; a runtime without rules stays neutral.
+    #[test]
+    fn screen_fallback_animates_unlatched_agents_until_hooks_latch() {
+        let manifest_for = |runtime: &str, verdict: &str| -> HostedSessionManifest {
+            serde_json::from_value(serde_json::json!({
+                "session": {
+                    "id": "screen-fallback",
+                    "project_id": "project",
+                    "label": "Terminal",
+                    "command": ""
+                },
+                "cwd": "/tmp",
+                "state": "running",
+                "pid": 123,
+                "exit_code": null,
+                "runtime": { "currentObservation": { "id": runtime, "pid": 124, "pid_started_at": 5, "processGroupID": 124 } },
+                "screen_activity": verdict
+            }))
+            .expect("manifest decodes")
+        };
+        let directory = std::env::temp_dir().join("unpeel-screen-fallback-no-seed");
+        let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
+
+        let mut engine = ActivityEngine::default();
+        let working = manifest_for("claude", "working");
+        assert_eq!(
+            derive_status_with_source(&mut engine, &working, true, &directory, now, true),
+            (Status::Busy, StatusSource::Screen)
+        );
+        let idle = manifest_for("claude", "idle");
+        assert_eq!(
+            derive_status_with_source(&mut engine, &idle, true, &directory, now, true),
+            (Status::Idle, StatusSource::Screen)
+        );
+        // A runtime that declares no screen rules never animates from the screen.
+        let pi = manifest_for("pi", "working");
+        assert_eq!(
+            derive_status_with_source(&mut engine, &pi, true, &directory, now, true),
+            (Status::Idle, StatusSource::None)
+        );
+        // Once a live hook latches, the exact source owns the state even if the
+        // screen still says working. (Re-observe Claude first: the pi sighting
+        // above was a foreground-identity edge that reset the entry.)
+        derive_status_with_source(&mut engine, &working, true, &directory, now, true);
+        engine.apply_hook_event("screen-fallback", "Stop", None, now);
+        assert_eq!(
+            derive_status_with_source(&mut engine, &working, true, &directory, now, true),
+            (Status::Idle, StatusSource::Hooks)
+        );
     }
 
     #[test]

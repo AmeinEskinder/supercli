@@ -35,9 +35,15 @@ script_path_signatures = []
 [lifecycle]
 source = "hooks"
 authority = "complete"
-fallback = "none"
+fallback = "screen"
 completion_reliable = true
 attention_reliable = true
+
+# Screen fallback (no integration installed): Gemini shows "(esc to cancel"
+# beside its spinner; its idle input box carries the placeholder text.
+[screen]
+working = ["esc to cancel"]
+idle_prompt = ["Type your message", "> Type your message"]
 
 [[usage.stores]]
 root = ".gemini/tmp"

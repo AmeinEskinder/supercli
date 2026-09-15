@@ -79,6 +79,8 @@ pub mod mcp_host;
 #[cfg(feature = "native-host")]
 pub mod menu_prompt;
 #[cfg(feature = "native-host")]
+pub mod screen_activity;
+#[cfg(feature = "native-host")]
 mod pane_context;
 #[cfg(feature = "native-host")]
 pub mod plugin_updates;

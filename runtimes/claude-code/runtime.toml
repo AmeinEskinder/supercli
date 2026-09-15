@@ -42,9 +42,16 @@ strip_inherited = ["CLAUDE_CODE_CHILD_SESSION", "CLAUDECODE", "CLAUDE_CODE_ENTRY
 [lifecycle]
 source = "hooks"
 authority = "complete"
-fallback = "none"
+fallback = "screen"
 completion_reliable = true
 attention_reliable = true
+
+# Screen fallback (no integration installed): the spinner line reads
+# "✻ Levitating… (1m 52s · ↓ 5.1k tokens)" (older builds add "esc to
+# interrupt"); the "❯" input prompt is visible in both states.
+[screen]
+working = ["… (", "esc to interrupt"]
+idle_prompt = ["❯"]
 
 [[usage.stores]]
 root = ".claude/projects"

@@ -667,6 +667,11 @@ public struct RemoteSessionSummary: Codable, Equatable, Identifiable, Sendable {
     public let updatedAtUnixMs: Int64?
     public let status: RemoteSessionStatus
     public let activity: RemoteActivityState
+    /// Where `activity` came from while running: `"hooks"` (exact, the
+    /// runtime's Unpeel integration) or `"screen"` (the Host's screen
+    /// fallback for a recognized agent with no hook latch — lower
+    /// confidence, never a completion notification). Absent on older Hosts.
+    public let activitySource: String?
     public let unread: Bool
     public let pinned: Bool
     public let worktreePath: String?
@@ -741,6 +746,7 @@ public struct RemoteSessionSummary: Codable, Equatable, Identifiable, Sendable {
         updatedAtUnixMs: Int64? = nil,
         status: RemoteSessionStatus,
         activity: RemoteActivityState,
+        activitySource: String? = nil,
         unread: Bool = false,
         pinned: Bool = false,
         worktreePath: String? = nil,
@@ -777,6 +783,7 @@ public struct RemoteSessionSummary: Codable, Equatable, Identifiable, Sendable {
         self.updatedAtUnixMs = updatedAtUnixMs
         self.status = status
         self.activity = activity
+        self.activitySource = activitySource
         self.unread = unread
         self.pinned = pinned
         self.worktreePath = worktreePath
@@ -815,6 +822,7 @@ public struct RemoteSessionSummary: Codable, Equatable, Identifiable, Sendable {
         case phoneFitColumns, phoneFitRows, phoneFitSinceUnixMs
         case latestAlertBody, latestAlertAtUnixMs
         case cwd
+        case activitySource
     }
 
     public init(from decoder: Decoder) throws {
@@ -835,6 +843,7 @@ public struct RemoteSessionSummary: Codable, Equatable, Identifiable, Sendable {
         updatedAtUnixMs = try c.decodeIfPresent(Int64.self, forKey: .updatedAtUnixMs)
         status = try c.decode(RemoteSessionStatus.self, forKey: .status)
         activity = try c.decode(RemoteActivityState.self, forKey: .activity)
+        activitySource = try c.decodeIfPresent(String.self, forKey: .activitySource)
         unread = try c.decodeIfPresent(Bool.self, forKey: .unread) ?? false
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         worktreePath = try c.decodeIfPresent(String.self, forKey: .worktreePath)

@@ -2021,6 +2021,10 @@ fn session_summary_with_menu_attention(
         .and_then(|value| value.get("activity_status"))
         .or_else(|| activity.and_then(|value| value.get("activityStatus")))
         .and_then(Value::as_str);
+    let persisted_source = activity
+        .and_then(|value| value.get("activity_source"))
+        .and_then(Value::as_str)
+        .filter(|source| matches!(*source, "hooks" | "screen"));
     let activity_name = if !running {
         if unread {
             "done"
@@ -2061,6 +2065,7 @@ fn session_summary_with_menu_attention(
         "updatedAtUnixMs": updated_at,
         "status": if running { "running" } else { "exited" },
         "activity": activity_name,
+        "activitySource": running.then_some(persisted_source).flatten(),
         "unread": unread,
         "pinned": pinned,
         "notifyWhenDone": false,
@@ -2713,6 +2718,7 @@ mod tests {
             browser_client_registered: false,
             computer_client_registered: false,
             menu_prompt_active: false,
+            screen_activity: None,
             terminal_modes: None,
             screen_changed_at: None,
             detected_local_urls: Vec::new(),

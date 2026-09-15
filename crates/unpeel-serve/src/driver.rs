@@ -1101,6 +1101,9 @@ impl HostRuntime {
             } else if row.status == Status::Attention && old != Some(Status::Attention) {
                 Some(unpeel_core::activity_log::ActivityLogKind::NeedsInput)
             } else if row.status == Status::Idle
+                // A screen-derived edge is not proof of completion: the
+                // fallback tier animates the sidebar but never notifies.
+                && row.status_source != crate::sessions::StatusSource::Screen
                 && (!self.engine.is_latched(&row.id) || self.engine.is_completed(&row.id))
                 && matches!(
                     old,

@@ -95,8 +95,14 @@ Important fields:
   flags default to `true`; declare only runtime-specific exceptions. The
   legacy `distrust_stops_while_output_grows` field is accepted but ignored:
   output never reopens a settled turn.
-  `authority = "none"` must use `fallback = "none"`: raw output/screen
-  changes remain telemetry and never start animated Busy.
+  `authority = "none"` must use `fallback = "none"`: raw output changes
+  remain telemetry and never start animated Busy. `fallback = "screen"`
+  requires a `[screen]` section — `working` substrings the agent shows near
+  the bottom of its screen while a turn runs (a spinner line, "esc to
+  interrupt") and `idle_prompt` prefixes of its input prompt line — which
+  the Host applies while the Session has no hook latch (integration not
+  installed); hooks always win once they latch, and screen verdicts never
+  send completion notifications.
 - `capabilities`: only behavior actually implemented by the adapter.
 
 Current capabilities are `lifecycle_hooks`, `resume`, `restart_agent`,

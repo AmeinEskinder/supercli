@@ -82,8 +82,12 @@ makes sense for coding, it does not belong here.
   Unpeel never ships or requires a Node runtime.
 - **Hooks are the busy/idle authority.** Provider hook assets under
   `runtimes/<slug>/assets/hooks/` report lifecycle to the Host's hook port;
-  terminal output never flips busy/idle. Hook scripts broadcast to every
-  port in `~/.unpeel/app-ports`.
+  raw output growth never flips busy/idle, and nothing overrides a hook
+  latch. The one fallback is the screen tier: a runtime's declared
+  `[screen]` rules classify the parsed viewport while no hook has latched
+  (integration not installed), published as `activitySource: "screen"` and
+  never a completion notification. Hook scripts broadcast to every port in
+  `~/.unpeel/app-ports`.
 - **Launches are plain; integrations are explicit.** A preset runs its
   command in the user's login shell exactly as typed, with only Unpeel's
   generic session environment exported. Nothing wraps an executable,
