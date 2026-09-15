@@ -79,7 +79,7 @@ struct TerminalLifecycleTests {
         let controller = TerminalController()
         var wakeups = 0
 
-        controller.shouldProcessWakeup = { false }
+        controller.shouldRenderOnWakeup = { false }
         controller.onWakeup = {
             wakeups += 1
         }

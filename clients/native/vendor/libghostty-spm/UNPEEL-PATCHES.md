@@ -263,3 +263,20 @@ both are small and generally useful).
     Pointer hit testing also
     rejects points in the top/left padding before integer conversion.
     `viewportRowHit` continues to report grid columns for semantic drag maps.
+
+22. **Wakeups always tick; only rendering is gated** (2026-09-15, Swift
+    wrapper only, no core rebuild) — `TerminalController.handleWakeup()`
+    now calls `ghostty_app_tick` unconditionally and consults the renamed
+    `shouldRenderOnWakeup` (was `shouldProcessWakeup`) only for the
+    follow-up frame. Ghostty's app mailbox is a 64-slot blocking queue that
+    nothing but `ghostty_app_tick` drains, and a surface's io and reader
+    threads push into it with an infinite timeout (child exit, password
+    input, title, pwd, mouse shape, progress reports). Skipping the tick for
+    a detached or occluded surface (any cached but hidden pane, or every
+    pane while the app was inactive) let that queue fill, wedged the pane's
+    io thread, filled its termio mailbox, and the next synchronous surface
+    call from the main thread — `ghostty_surface_set_focus` when the pane
+    was adopted on a session or workspace switch — blocked forever on that
+    mailbox. Four hang reports on 2026-09-15 all show that exact stack
+    (main in `becomeFirstResponder → __ulock_wait2`, one pane's `io` and
+    `io-gather` threads in `__ulock_wait2`, its `renderer` idle at QoS 47).

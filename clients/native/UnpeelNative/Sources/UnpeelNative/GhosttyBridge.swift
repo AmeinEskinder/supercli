@@ -625,8 +625,11 @@ final class GhosttyTerminalPane: NSView {
     /// in an occluded/minimized window must not keep Ghostty's renderer
     /// drawing frames nobody sees. The wrapper exposes this as
     /// `TerminalView.setSurfaceVisible(_:)` → `ghostty_surface_set_occlusion`
-    /// plus suspension of its wakeup→tick→draw loop, mirroring what Ghostty
-    /// itself does on `NSWindow.occlusionState` changes.
+    /// plus suspension of the draw that follows each wakeup, mirroring what
+    /// Ghostty itself does on `NSWindow.occlusionState` changes. The wakeup's
+    /// tick (draining Ghostty's app mailbox) always runs: a hidden surface
+    /// whose mailbox stops draining wedges its io thread and deadlocks the
+    /// main thread on the next focus (see `shouldRenderOnWakeup`).
     private var occlusionObserver: NSObjectProtocol?
     var onPresentationVisibilityChanged: (() -> Void)?
     private var lastThemeSamplingVisibility = false
@@ -635,12 +638,14 @@ final class GhosttyTerminalPane: NSView {
     }
 
     // NOTE for pre-warmed panes (WarmPaneHostView): they are mounted inside
-    // a HIDDEN container but must NOT be paused via setSurfaceVisible(false)
-    // — that suspends the wrapper's wakeup→tick loop, and a surface that
-    // never ticks while its attach client floods the replay wedges its IO;
-    // the next synchronous surface call from the main thread (adoption on
-    // click) then deadlocks. Hidden-but-ticking is the safe state; the
-    // hidden container already keeps them out of the compositor.
+    // a HIDDEN container and are not paused via setSurfaceVisible(false).
+    // Pausing used to suspend the wrapper's wakeup→tick loop too, and a
+    // surface that never ticks while its attach client floods the replay
+    // wedges its IO; the next synchronous surface call from the main thread
+    // (adoption on click) then deadlocked. The wrapper now ticks paused
+    // surfaces as well (only the draw is skipped), so the same deadlock no
+    // longer reaches detached SurfaceCache panes or a backgrounded app; the
+    // hidden container already keeps warm panes out of the compositor.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let observer = occlusionObserver {
