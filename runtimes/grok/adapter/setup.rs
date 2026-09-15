@@ -9,7 +9,7 @@ pub(crate) const GROK_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/grok/assets/hooks/lifecycle.sh"
 ));
 
-pub fn install_grok_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     // Grok-native hooks map argv[1] -> Unpeel lifecycle events and POST to the
     // hook port. SessionStart only latches provider metadata; UserPromptSubmit
     // is the turn-opening busy event. Grok also scans Claude/Cursor hook files;

@@ -557,23 +557,22 @@ pub(crate) fn notify_hook_script_path() -> PathBuf {
     unpeel_home().join("hooks").join("notify-hook.sh")
 }
 
-// Public compatibility facade. Runtime-owned setup code lives beside each
-// adapter, but these installers were already part of `unpeel_core::hook_assets`.
-// Keep their paths stable for downstream callers; new code goes through
-// `integrations::install`.
+// Public compatibility facade. Every package's installer is `setup::install`;
+// these aliases keep the names downstream callers already use. New code goes
+// through `integrations::install`.
 pub use crate::integrations::{
-    amp::setup::{install_amp_plugin, prepare_amp_project_plugin},
-    claude::setup::install_claude_hooks,
-    cline::setup::{cline_home_dir, cline_user_mcp_config_path, install_cline_hooks},
-    codex::setup::install_codex_integration,
-    copilot::setup::{install_copilot_hook, prepare_copilot_project_hooks},
-    cursor_agent::setup::{install_cursor_hooks, write_cursor_mcp_config},
-    gemini::setup::install_gemini_hooks,
-    grok::setup::install_grok_hooks,
-    kimi::setup::{install_kimi_hooks, kimi_global_mcp_config_path},
-    kiro_cli::setup::install_kiro_hooks,
-    muse::setup::{install_muse_hooks, muse_plugin_dir},
-    opencode::setup::{install_opencode_plugin, opencode_config_dir},
+    amp::setup::{install as install_amp_plugin, prepare_amp_project_plugin},
+    claude::setup::install as install_claude_hooks,
+    cline::setup::{cline_home_dir, cline_user_mcp_config_path, install as install_cline_hooks},
+    codex::setup::install as install_codex_integration,
+    copilot::setup::{install as install_copilot_hook, prepare_copilot_project_hooks},
+    cursor_agent::setup::{install as install_cursor_hooks, write_cursor_mcp_config},
+    gemini::setup::install as install_gemini_hooks,
+    grok::setup::install as install_grok_hooks,
+    kimi::setup::{install as install_kimi_hooks, kimi_global_mcp_config_path},
+    kiro_cli::setup::install as install_kiro_hooks,
+    muse::setup::{install as install_muse_hooks, muse_plugin_dir},
+    opencode::setup::{install as install_opencode_plugin, opencode_config_dir},
 };
 
 #[cfg(test)]
@@ -599,8 +598,23 @@ pub(crate) use crate::integrations::{
     opencode::setup::OPENCODE_PLUGIN_SCRIPT,
 };
 
+/// Shared fixtures for the hook-reporter tests (package tests under
+/// `runtimes/<slug>/adapter/tests.rs` and the provider-neutral ones below).
 #[cfg(test)]
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../runtimes/setup_conformance_tests.rs"
-));
+#[allow(dead_code, unused_imports)]
+pub(crate) mod test_support {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../runtimes/test_support.rs"
+    ));
+}
+
+/// Provider-neutral reporter/transport conformance tests.
+#[cfg(test)]
+#[allow(unused_imports)]
+mod hook_reporter_tests {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../runtimes/hook_reporter_tests.rs"
+    ));
+}

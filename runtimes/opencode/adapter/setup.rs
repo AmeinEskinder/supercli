@@ -13,7 +13,7 @@ pub(crate) const OPENCODE_PLUGIN_SCRIPT: &str = include_str!(concat!(
 /// directory. OpenCode loads every `plugin/*.js` beneath its config dir, so
 /// a hand-typed `opencode` reports through the plugin without any launch
 /// environment. The plugin no-ops outside an Unpeel session.
-pub fn install_opencode_plugin() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let notify_path = notify_hook_script_path();
     write_executable_script(&notify_path, NOTIFY_HOOK_SCRIPT, "notify hook script")?;
 

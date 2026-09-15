@@ -27,7 +27,7 @@ pub(crate) const HOOK_EVENTS: &[&str] = &[
 /// user-scope MCP server in `~/.claude.json` (the file `claude mcp add
 /// --scope user` writes). Both merges preserve every foreign entry and
 /// rewrite only on change.
-pub fn install_claude_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let script_path = claude_hook_script_path();
     write_executable_script(&script_path, CLAUDE_HOOK_SCRIPT, "Claude hook script")?;
     ensure_claude_settings_hook(&script_path)?;

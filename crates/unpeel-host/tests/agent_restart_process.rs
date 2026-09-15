@@ -641,9 +641,9 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
     );
 
     // Persisted Kiro configs from before the generic gate rename invoke the
-    // legacy argv and carry only Kiro's Sessions/Browser aliases. Even though
-    // this Session manifest also grants Computer, that unregistered domain
-    // must remain absent and uncallable.
+    // legacy argv. It answers as the unified gate: grants come from this
+    // Session's manifest (the old Kiro env aliases are ignored), and the
+    // retired Computer domain stays absent and uncallable.
     let mut legacy_kiro_mcp = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
         .arg("__kiro_mcp__")
         .env("UNPEEL_HOME", &home)

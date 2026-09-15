@@ -9,7 +9,7 @@ pub(crate) const MUSE_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/muse-code/assets/hooks/lifecycle.sh"
 ));
 
-pub fn install_muse_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     crate::integrations::install::write_mcp_shim()?;
     let plugin_dir = muse_plugin_dir();
     let hooks_dir = plugin_dir.join("hooks");

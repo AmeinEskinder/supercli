@@ -12,17 +12,23 @@ new Unpeel build. Downloadable third-party adapters are not supported yet.
 
 ```text
 runtimes/<slug>/
-├── runtime.toml
+├── runtime.toml          # identity, detection, lifecycle policy, [screen] rules
 ├── adapter/
-│   ├── mod.rs
-│   ├── setup.rs          # optional: the integration installer (hooks + MCP registration)
-│   ├── resume.rs         # optional: resume/fresh recipes from hook-captured ids
-│   └── transcript.rs     # optional: transcript discovery and parsing
+│   ├── setup.rs          # optional: `pub fn install()` — hooks + MCP shim registration
+│   ├── resume.rs         # optional: `ADAPTER` — resume/fresh recipes from hook-captured ids
+│   ├── transcript.rs     # optional: transcript discovery and parsing
+│   └── tests.rs          # optional: the package's own conformance tests
 ├── assets/
 │   ├── icon.svg          # optional client-embedded runtime mark
 │   └── hooks/            # optional hook scripts and plugins
 └── fixtures/             # add provider-owned fixtures as behavior grows
 ```
+
+There is no hand-written module file: `unpeel-core/build.rs` generates the
+package module from what exists on disk (`setup::install`, `resume::ADAPTER`,
+`tests.rs`) plus the descriptor's flags. A runtime with only `runtime.toml`
+is already a complete package — detection gives it identity and tint, and
+`[screen]` rules give it busy/idle without any Rust.
 
 **Launching is provider-neutral.** A preset runs its command in the user's
 login shell exactly as typed, with only Unpeel's generic session environment
@@ -92,9 +98,11 @@ Important fields:
 - `lifecycle`: source, authority, fallback, reliability claims, and the
   controller-side output semantics used to restore hook state
   (`anchor_start_event_to_output` and `attention_clears_on_output`). These
-  flags default to `true`; declare only runtime-specific exceptions. The
-  legacy `distrust_stops_while_output_grows` field is accepted but ignored:
-  output never reopens a settled turn.
+  flags default to `true`; declare only runtime-specific exceptions.
+  `escape_cancels_turn = true` opts the runtime into the Host's Escape
+  cancellation fence (only where Escape is a verified interrupt that fires
+  no Stop hook). The legacy `distrust_stops_while_output_grows` field is
+  accepted but ignored: output never reopens a settled turn.
   `authority = "none"` must use `fallback = "none"`: raw output changes
   remain telemetry and never start animated Busy. `fallback = "screen"`
   requires a `[screen]` section — `working` substrings the agent shows near
@@ -116,16 +124,33 @@ active runtime.
 
 ## Adding a runtime
 
-1. Research the provider before writing code: executable/wrapper signatures,
-   official install path, lifecycle events, conversation identity, exact
-   resume semantics, MCP configuration, transcript roots and format, and any
-   version-dependent behavior.
-2. Copy the smallest similar runtime directory, then replace its descriptor.
-   Keep aliases exact and add false-positive tests for generic executable
-   names or wrappers.
-3. Add only the adapter modules the provider needs. A runtime with no safe
-   hook or resume primitive should omit that capability instead of emulating
-   a stronger integration.
+The recipe is five files, each optional after the first:
+
+1. `runtime.toml` — id, slug, label, detection aliases, lifecycle policy. Add
+   `[screen]` rules (`lifecycle.fallback = "screen"`) if the agent draws a
+   recognizable status line and prompt; that alone gives busy/idle. Copy the
+   closest existing descriptor and keep aliases exact; add false-positive
+   tests for generic executable names.
+2. `adapter/setup.rs` — `pub fn install() -> Result<(), String>`: write the
+   hook script under `~/.unpeel/hooks/`, register it in the provider's own
+   global hook config, and register the MCP shim
+   (`crate::integrations::install::write_mcp_shim()`) through the
+   provider's persistent MCP mechanism. Use the shared primitives in
+   `hook_assets` (`read_mergeable_json_object`, `write_file_atomic`,
+   `write_executable_script`). Declare `lifecycle_hooks` / `mcp_*`
+   capabilities only when this file provides them.
+3. `adapter/resume.rs` — `pub(super) const ADAPTER: ResumeAdapter`: how a
+   hook-captured conversation id becomes a resume command, and the
+   documented continue-last fallback.
+4. `adapter/transcript.rs` — normalized records from provider storage.
+5. `adapter/tests.rs` — the package's conformance tests; shared fixtures come
+   from `crate::hook_assets::test_support::*`.
+
+A runtime with no safe hook or resume primitive omits that capability
+instead of emulating a stronger integration. Research the provider before
+writing code: executable signatures, official install path, lifecycle
+events, conversation identity, exact resume semantics, MCP configuration,
+transcript roots and format, and version-dependent behavior.
 4. Put provider-owned scripts, plugins, and optional `icon.svg` in `assets/`.
    Load setup assets with `include_str!`; the catalog generator embeds the
    declared icon for shared clients. Record an upstream URL or explicit

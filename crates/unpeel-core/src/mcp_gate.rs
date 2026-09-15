@@ -31,9 +31,8 @@ const PROTOCOL_VERSION_FALLBACK: &str = "2025-06-18";
 
 pub fn run_stdio(kind: &str) -> Result<(), String> {
     // The calling Session's manifest is the authority for a shim-based
-    // registration. Environment grants (this build's generic names and the
-    // runtime-local aliases older builds exported) remain honored for
-    // configurations that still scope them around a launch.
+    // registration. The generic environment grants remain honored for
+    // configurations older builds scoped around a launch.
     let manifest = crate::mcp_host::self_session_id().and_then(|id| crate::session_host::load_manifest(&id));
     let manifest_sessions = manifest
         .as_ref()
@@ -41,12 +40,8 @@ pub fn run_stdio(kind: &str) -> Result<(), String> {
     let manifest_browser = manifest
         .as_ref()
         .is_some_and(|manifest| manifest.browser_mcp_enabled());
-    let sessions_granted = manifest_sessions
-        || env_grant(SESSIONS_ENABLED_ENV)
-        || crate::integrations::legacy_mcp_gate_granted(SESSIONS_KIND);
-    let browser_granted = manifest_browser
-        || env_grant(BROWSER_ENABLED_ENV)
-        || crate::integrations::legacy_mcp_gate_granted(BROWSER_KIND);
+    let sessions_granted = manifest_sessions || env_grant(SESSIONS_ENABLED_ENV);
+    let browser_granted = manifest_browser || env_grant(BROWSER_ENABLED_ENV);
     let unified_domains = crate::mcp_host::McpDomainMask {
         sessions: sessions_granted,
         agents: sessions_granted,

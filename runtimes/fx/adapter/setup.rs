@@ -24,7 +24,7 @@ pub(crate) fn fx_mcp_server_value(shim: &str) -> Value {
     })
 }
 
-pub fn install_fx_runtime_support() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let Some(path) = fx_mcp_config_path() else {
         return Ok(());
     };

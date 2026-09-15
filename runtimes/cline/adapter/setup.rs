@@ -26,7 +26,7 @@ pub(crate) const CLINE_HOOK_EVENTS: &[&str] = &[
 /// started it; the hook and gate both resolve the calling Session from the
 /// hosted environment (or process ancestry), so concurrent sessions stay
 /// distinct without per-session hubs.
-pub fn install_cline_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let script_path = cline_hook_script_path();
     write_executable_script(&script_path, CLINE_HOOK_SCRIPT, "Cline hook script")?;
 

@@ -279,10 +279,11 @@ The short checklist:
    legacy slug, conservative command/process recognition, lifecycle policy,
    suggested presets, presentation/install metadata, and only implemented
    capabilities.
-2. Put provider behavior beside it in optional `adapter/setup.rs`,
-   `resume.rs`, `context.rs`, and `transcript.rs` modules. Keep generic PTY,
-   hook-ingress, locking, MCP authorization, transcript security, activity,
-   and protocol enforcement in core.
+2. Put provider behavior beside it in optional `adapter/setup.rs`
+   (`pub fn install`), `resume.rs`, `transcript.rs`, and `tests.rs`; the
+   build generates the package module. Keep generic PTY, hook-ingress,
+   locking, MCP authorization, transcript security, activity, and protocol
+   enforcement in core.
 3. Put scripts and plugins in `assets/hooks/`. The installer is the whole
    integration: it must be idempotent, preserve user configuration, register
    the MCP shim (`integrations::install::write_mcp_shim`) through the

@@ -38,6 +38,7 @@ authority = "complete"
 fallback = "none"
 completion_reliable = true
 attention_reliable = true
+escape_cancels_turn = true
 anchor_start_event_to_output = false
 attention_clears_on_output = false
 

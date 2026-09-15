@@ -126,19 +126,17 @@ fn main() {
         return;
     }
 
-    // Runtime-local compatibility aliases keep persisted MCP configurations
-    // from older Unpeel builds working without teaching this binary provider
-    // argv spellings.
-    if let Some(kind) = args
-        .first()
-        .and_then(|argument| unpeel_core::integrations::legacy_mcp_gate_kind(argument))
-    {
-        if let Err(error) = mcp_gate::run_stdio(kind) {
+    // Kiro configs written by builds before the generic gate invoke this
+    // argv directly. Keep it answering as the unified gate (grants come from
+    // the Session manifest) until those users reinstall the integration.
+    if args.first().map(String::as_str) == Some("__kiro_mcp__") {
+        if let Err(error) = mcp_gate::run_stdio(mcp_gate::UNIFIED_KIND) {
             eprintln!("{error}");
             std::process::exit(1);
         }
         return;
     }
+
 
     if args.first().map(String::as_str) == Some(browser_mcp::BROWSER_CLEANUP_ARG) {
         args.remove(0);

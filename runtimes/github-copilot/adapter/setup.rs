@@ -10,7 +10,7 @@ pub(crate) const COPILOT_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/github-copilot/assets/hooks/lifecycle.sh"
 ));
 
-pub fn install_copilot_hook() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let script_path = copilot_hook_script_path();
     write_executable_script(&script_path, COPILOT_HOOK_SCRIPT, "Copilot hook script")?;
     Ok(())

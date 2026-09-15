@@ -33,6 +33,7 @@ authority = "complete"
 fallback = "none"
 completion_reliable = true
 attention_reliable = true
+escape_cancels_turn = true
 
 [[usage.stores]]
 root = ".local/share/muse/sessions"

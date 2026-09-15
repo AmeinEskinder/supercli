@@ -17,7 +17,7 @@ pub(crate) const CODEX_NOTIFY_NORMALIZER_SCRIPT: &str = include_str!(concat!(
 /// `[features] hooks` gate in `config.toml`), the `notify` reporter for
 /// Codex builds that predate native hooks, and the Unpeel MCP shim as
 /// `[mcp_servers.unpeel]`. Nothing wraps the `codex` executable.
-pub fn install_codex_integration() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let transport_path = notify_hook_script_path();
     write_executable_script(
         &transport_path,
@@ -457,8 +457,8 @@ pub(crate) fn reconcile_codex_hooks_json(
 }
 
 /// Writes Unpeel hook definitions into `~/.codex/hooks.json`.
-/// Native Codex hooks provide the authoritative start/stop/approval lifecycle.
-/// The wrapper watcher remains as a fallback and for richer TUI/session metadata.
+/// Native Codex hooks provide the authoritative start/stop/approval lifecycle;
+/// the `notify` reporter in config.toml is the fallback for builds without them.
 pub(crate) fn ensure_codex_hooks_json(notify_script_path: &Path) -> Result<(), String> {
     let Some(hooks_path) = codex_hooks_json_path() else {
         return Ok(());

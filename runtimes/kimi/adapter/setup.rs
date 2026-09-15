@@ -13,7 +13,7 @@ pub(crate) const KIMI_HOOK_SCRIPT: &str = include_str!(concat!(
 /// (both generations) and the Unpeel MCP shim as a persistent entry in Kimi
 /// Code's `mcp.json`. Legacy Kimi, which only took per-launch MCP flags,
 /// keeps hooks and detection but no MCP.
-pub fn install_kimi_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let script_path = kimi_hook_script_path();
     write_executable_script(&script_path, KIMI_HOOK_SCRIPT, "Kimi hook script")?;
     ensure_kimi_config_hooks()?;

@@ -38,6 +38,7 @@ authority = "complete"
 fallback = "screen"
 completion_reliable = true
 attention_reliable = true
+escape_cancels_turn = true
 
 # Screen fallback (no integration installed): Gemini shows "(esc to cancel"
 # beside its spinner; its idle input box carries the placeholder text.

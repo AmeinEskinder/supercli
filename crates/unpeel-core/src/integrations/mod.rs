@@ -10,9 +10,6 @@ use crate::session_host::SessionHostLaunch;
 pub const HOST_BIN_ENV: &str = "UNPEEL_HOST_BIN";
 const APP_ACCENT_ENV: &str = "UNPEEL_APP_ACCENT";
 
-type LegacyMcpGateKind = fn(&str) -> Option<&'static str>;
-type LegacyMcpGateGranted = fn(&str) -> bool;
-
 #[derive(Clone, Copy)]
 pub struct BuiltinPresetDefinition {
     pub id: &'static str,
@@ -46,8 +43,6 @@ pub struct Integration {
     /// an agent.
     pub install: Option<fn() -> Result<(), String>>,
     pub resume_adapter: Option<crate::resume::ResumeAdapter>,
-    pub legacy_mcp_gate_kind: Option<LegacyMcpGateKind>,
-    pub legacy_mcp_gate_granted: Option<LegacyMcpGateGranted>,
 }
 
 impl Integration {
@@ -56,8 +51,6 @@ impl Integration {
             escape_cancels_turn: false,
             install,
             resume_adapter: None,
-            legacy_mcp_gate_kind: None,
-            legacy_mcp_gate_granted: None,
         }
     }
 
@@ -73,48 +66,12 @@ impl Integration {
         self.resume_adapter = Some(resume_adapter);
         self
     }
-
-    pub const fn with_legacy_mcp_gate_kind(
-        mut self,
-        legacy_mcp_gate_kind: LegacyMcpGateKind,
-    ) -> Self {
-        self.legacy_mcp_gate_kind = Some(legacy_mcp_gate_kind);
-        self
-    }
-
-    pub const fn with_legacy_mcp_gate_grant(
-        mut self,
-        legacy_mcp_gate_granted: LegacyMcpGateGranted,
-    ) -> Self {
-        self.legacy_mcp_gate_granted = Some(legacy_mcp_gate_granted);
-        self
-    }
 }
 
 include!(concat!(
     env!("OUT_DIR"),
     "/integration_adapters_generated.rs"
 ));
-
-/// Resolve an argv alias owned by a runtime adapter into the provider-neutral
-/// MCP gate kind. This exists only for persisted configs from older releases.
-pub fn legacy_mcp_gate_kind(argument: &str) -> Option<&'static str> {
-    INTEGRATIONS.iter().find_map(|(_, integration)| {
-        integration
-            .legacy_mcp_gate_kind
-            .and_then(|resolve| resolve(argument))
-    })
-}
-
-/// Ask runtime adapters whether one of their pre-migration environment aliases
-/// grants this MCP domain. The shared gate still enforces Session identity.
-pub fn legacy_mcp_gate_granted(kind: &str) -> bool {
-    INTEGRATIONS.iter().any(|(_, integration)| {
-        integration
-            .legacy_mcp_gate_granted
-            .is_some_and(|granted| granted(kind))
-    })
-}
 
 pub(crate) fn integration_for_id(tool: &str) -> Option<&'static Integration> {
     let normalized = tool.trim();
@@ -363,15 +320,6 @@ pub fn mcp_registration_evidence_in(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn legacy_mcp_gate_argv_is_resolved_by_its_runtime_adapter() {
-        assert_eq!(
-            legacy_mcp_gate_kind("__kiro_mcp__"),
-            Some(crate::mcp_gate::UNIFIED_KIND)
-        );
-        assert_eq!(legacy_mcp_gate_kind("__unknown_mcp__"), None);
-    }
 
     #[test]
     fn runtime_catalog_generated_registry_preserves_legacy_order_and_metadata() {

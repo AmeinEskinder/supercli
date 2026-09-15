@@ -9,7 +9,7 @@ pub(crate) const AMP_PLUGIN_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/amp/assets/hooks/plugin.js"
 ));
 
-pub fn install_amp_plugin() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let notify_path = notify_hook_script_path();
     write_executable_script(&notify_path, NOTIFY_HOOK_SCRIPT, "notify hook script")?;
     Ok(())

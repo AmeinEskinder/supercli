@@ -9,7 +9,7 @@ pub(crate) const GEMINI_HOOK_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/gemini/assets/hooks/lifecycle.sh"
 ));
 
-pub fn install_gemini_hooks() -> Result<(), String> {
+pub fn install() -> Result<(), String> {
     let script_path = gemini_hook_script_path();
     write_executable_script(&script_path, GEMINI_HOOK_SCRIPT, "Gemini hook script")?;
     ensure_gemini_settings_hook(&script_path)?;
