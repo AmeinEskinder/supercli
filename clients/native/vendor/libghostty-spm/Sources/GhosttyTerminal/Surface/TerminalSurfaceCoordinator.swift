@@ -210,7 +210,7 @@ final class TerminalSurfaceCoordinator {
         if let displayID = currentDisplayID() {
             newSurface.setDisplayID(displayID)
         }
-        controller.shouldProcessWakeup = { [weak self] in
+        controller.shouldRenderOnWakeup = { [weak self] in
             self?.canRenderFrame == true
         }
         controller.onWakeup = { [weak self] in
@@ -478,7 +478,7 @@ final class TerminalSurfaceCoordinator {
             session.clearSurface(ifMatches: surface?.rawValue)
         }
         controller?.onWakeup = nil
-        controller?.shouldProcessWakeup = nil
+        controller?.shouldRenderOnWakeup = nil
         bridge.rawSurface = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
