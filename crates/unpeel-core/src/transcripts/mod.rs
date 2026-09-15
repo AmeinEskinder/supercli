@@ -231,8 +231,29 @@ pub fn provider_label_for_command(command: &str) -> String {
         .to_ascii_lowercase()
 }
 
+/// The provider whose storage holds this Session's conversation: the launch
+/// command when it names a runtime, else the runtime recorded when a hook
+/// captured the conversation, else the runtime currently observed in the
+/// foreground. The fallbacks are what make a hand-typed agent in a blank
+/// terminal transcript-backed and auto-titled like a preset launch.
+pub fn transcript_provider_for_manifest(
+    manifest: &HostedSessionManifest,
+) -> Option<TranscriptProvider> {
+    if let Some(provider) = transcript_provider_for_command(&manifest.session.command) {
+        return Some(provider);
+    }
+    if !manifest.session.command.trim().is_empty() {
+        // A command that names something else (a shell script, an App) is
+        // not an agent launch; only a blank launch defers to the occupant.
+        return None;
+    }
+    crate::session_ops::provider_session_runtime(&manifest.session.id)
+        .or_else(|| crate::session_host::active_runtime_id(manifest).map(str::to_owned))
+        .and_then(|runtime| TranscriptProvider::for_legacy_slug(&runtime))
+}
+
 pub fn transcript_status_hint(manifest: &HostedSessionManifest) -> &'static str {
-    let Some(provider) = transcript_provider_for_command(&manifest.session.command) else {
+    let Some(provider) = transcript_provider_for_manifest(manifest) else {
         return "none";
     };
     if provider.not_yet_file_backed() {
@@ -265,7 +286,7 @@ pub fn resume_id_from_command(provider: TranscriptProvider, command: &str) -> Op
 pub fn resolve_provider_transcript(
     manifest: &HostedSessionManifest,
 ) -> Result<ProviderTranscript, String> {
-    let provider = transcript_provider_for_command(&manifest.session.command).ok_or_else(|| {
+    let provider = transcript_provider_for_manifest(manifest).ok_or_else(|| {
         format!(
             "Session '{}' is not a supported transcript-backed provider session.",
             manifest.session.id
@@ -766,10 +787,12 @@ pub fn auto_title_session_from_transcript(session_id: &str) -> bool {
     };
     let session = &manifest.session;
     // Same settled checks as apply_manifest_auto_title, done up front so a
-    // titled session never pays for a transcript read.
-    if session.command.is_empty()
-        || session.custom_title
-        || !session.command.starts_with(session.label.as_str())
+    // titled session never pays for a transcript read. A blank terminal
+    // (hand-typed agent) is untitled until its one auto-title marks it
+    // custom; a launched command is untitled while the label is still its
+    // prefix.
+    if session.custom_title
+        || (!session.command.is_empty() && !session.command.starts_with(session.label.as_str()))
     {
         return false;
     }

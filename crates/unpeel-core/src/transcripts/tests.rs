@@ -104,6 +104,53 @@ fn test_manifest(command: &str) -> HostedSessionManifest {
     }
 }
 
+/// A hand-typed agent in a blank terminal has no launch command naming its
+/// provider; the runtime recorded at hook capture (or the live foreground
+/// observation) resolves it, while a non-agent command never defers.
+#[test]
+fn blank_launch_resolves_provider_from_captured_or_observed_runtime() {
+    let mut manifest = test_manifest("");
+    manifest.session.id = "blank-1".to_string();
+    assert!(transcript_provider_for_manifest(&manifest).is_none());
+    assert_eq!(transcript_status_hint(&manifest), "none");
+
+    // Live observation, nothing captured yet.
+    manifest.runtime = Some(crate::session_host::HostedSessionRuntime {
+        current_observation: Some(crate::runtime_observer::ActiveRuntimeObservation {
+            runtime_id: "claude".into(),
+            pid: 1,
+            pid_started_at: None,
+            process_group_id: 1,
+            process_name: "claude".into(),
+            argv: None,
+        }),
+    });
+    assert_eq!(
+        serde_json::to_value(transcript_provider_for_manifest(&manifest).unwrap()).unwrap(),
+        Value::String("claude".into())
+    );
+
+    // The marker records the runtime that captured the conversation, merges
+    // with what is already there, and is quiet when nothing changes.
+    let dir = std::env::temp_dir().join(format!("unpeel-blank-provider-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    assert!(crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, None).unwrap());
+    assert_eq!(crate::session_ops::provider_session_runtime_at(&dir), None);
+    assert!(crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, Some("codex")).unwrap());
+    assert_eq!(crate::session_ops::provider_session_runtime_at(&dir).as_deref(), Some("codex"));
+    assert_eq!(crate::session_ops::provider_session_marker_at(&dir).0.as_deref(), Some("conv-1"));
+    assert!(!crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, Some("codex")).unwrap());
+    assert!(crate::session_ops::set_provider_session_at(&dir, None, Some("/tmp/t.jsonl"), None).unwrap());
+    assert_eq!(crate::session_ops::provider_session_runtime_at(&dir).as_deref(), Some("codex"));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // A non-agent launch never defers to the occupant.
+    let mut script = test_manifest("./run-things.sh");
+    script.session.id = "blank-1".to_string();
+    assert!(transcript_provider_for_manifest(&script).is_none());
+}
+
 #[test]
 fn command_parsing_detects_provider_and_resume_ids() {
     assert_eq!(

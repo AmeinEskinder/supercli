@@ -14,7 +14,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::app_paths;
@@ -409,21 +409,55 @@ pub fn set_provider_session(
     provider_session_id: Option<&str>,
     transcript_path: Option<&str>,
 ) -> Result<bool, String> {
+    set_provider_session_with_runtime(session_id, provider_session_id, transcript_path, None)
+}
+
+/// [`set_provider_session`] that also records which runtime produced the
+/// conversation (its legacy slug, from the Host's foreground observation at
+/// capture time). A hand-typed agent in a blank terminal has no launch
+/// command naming its provider; this is what lets transcript reads and
+/// auto-titling resolve it after the process has gone.
+pub fn set_provider_session_with_runtime(
+    session_id: &str,
+    provider_session_id: Option<&str>,
+    transcript_path: Option<&str>,
+    runtime: Option<&str>,
+) -> Result<bool, String> {
+    set_provider_session_at(
+        &session_dir(session_id),
+        provider_session_id,
+        transcript_path,
+        runtime,
+    )
+}
+
+/// [`set_provider_session_with_runtime`] against an explicit session dir.
+pub fn set_provider_session_at(
+    dir: &Path,
+    provider_session_id: Option<&str>,
+    transcript_path: Option<&str>,
+    runtime: Option<&str>,
+) -> Result<bool, String> {
     if provider_session_id.is_none() && transcript_path.is_none() {
         return Ok(false);
     }
-    let dir = session_dir(session_id);
     if !dir.exists() {
-        return Err(format!("no session dir for {session_id}"));
+        return Err(format!("no session dir at {}", dir.display()));
     }
     // Merge: an id-only event must not erase a previously captured
     // transcript path, and vice versa.
-    let (current_id, current_path) = provider_session_marker(session_id);
+    let (current_id, current_path) = provider_session_marker_at(dir);
+    let current_runtime = provider_session_runtime_at(dir);
     let next_id = provider_session_id
         .map(str::to_owned)
         .or(current_id.clone());
     let next_path = transcript_path.map(str::to_owned).or(current_path.clone());
-    if next_id == current_id && next_path == current_path {
+    let next_runtime = runtime
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or(current_runtime.clone());
+    if next_id == current_id && next_path == current_path && next_runtime == current_runtime {
         return Ok(false); // hooks fire constantly; unchanged must cost nothing
     }
     let mut body = serde_json::Map::new();
@@ -433,6 +467,9 @@ pub fn set_provider_session(
     if let Some(path) = &next_path {
         body.insert("provider_transcript_path".into(), serde_json::json!(path));
     }
+    if let Some(runtime) = &next_runtime {
+        body.insert("provider_runtime".into(), serde_json::json!(runtime));
+    }
     body.insert("captured_at".into(), serde_json::json!(now_ms()));
     let tmp = dir.join(".provider-session.json.tmp");
     std::fs::write(&tmp, serde_json::to_vec(&body).map_err(|e| e.to_string())?)
@@ -441,9 +478,29 @@ pub fn set_provider_session(
     Ok(true)
 }
 
+/// The runtime (legacy slug) recorded when the conversation was captured.
+pub fn provider_session_runtime(session_id: &str) -> Option<String> {
+    provider_session_runtime_at(&session_dir(session_id))
+}
+
+pub fn provider_session_runtime_at(dir: &Path) -> Option<String> {
+    let raw = std::fs::read(dir.join(PROVIDER_MARKER)).ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&raw).ok()?;
+    value
+        .get("provider_runtime")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
 /// (provider_session_id, provider_transcript_path) from the marker.
 pub fn provider_session_marker(session_id: &str) -> (Option<String>, Option<String>) {
-    let raw = match std::fs::read(session_dir(session_id).join(PROVIDER_MARKER)) {
+    provider_session_marker_at(&session_dir(session_id))
+}
+
+pub fn provider_session_marker_at(dir: &Path) -> (Option<String>, Option<String>) {
+    let raw = match std::fs::read(dir.join(PROVIDER_MARKER)) {
         Ok(raw) => raw,
         Err(_) => return (None, None),
     };

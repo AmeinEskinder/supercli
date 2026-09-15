@@ -2344,8 +2344,19 @@ fn agent_ref_json(manifest: &HostedSessionManifest) -> Option<Value> {
 fn transcript_binding_json(manifest: &HostedSessionManifest) -> Value {
     let active_runtime = session_host::active_runtime_id(manifest);
     let launch_runtime = crate::integrations::runtime_for_command(&manifest.session.command)
-        .map(|runtime| runtime.legacy_slug.as_str());
-    let bound = active_runtime.is_some() && active_runtime == launch_runtime;
+        .map(|runtime| runtime.legacy_slug.to_string())
+        // A blank launch binds to the runtime whose hooks captured the
+        // conversation (a hand-typed agent), never to a bare observation.
+        .or_else(|| {
+            manifest
+                .session
+                .command
+                .trim()
+                .is_empty()
+                .then(|| crate::session_ops::provider_session_runtime(&manifest.session.id))
+                .flatten()
+        });
+    let bound = active_runtime.is_some() && active_runtime == launch_runtime.as_deref();
     json!({
         "status": if bound { transcript_status_hint(manifest) } else { "unbound" },
         "bound_to_active_agent": bound,
