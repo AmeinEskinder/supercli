@@ -176,6 +176,46 @@ path:    /Users/me/.unpeel/browser/bin/agent-browser
 browser: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 ```
 
+### The CLI as an MCP peer (`unpeel mcp` and friends)
+
+Everything the unified `unpeel` MCP server can do, the CLI can do, through
+the same in-process dispatcher (`unpeel_core::mcp_host::call_tool`): the
+same caller identity (`UNPEEL_SESSION_ID`, or process ancestry), the same
+per-call grants from the Session manifest, and the same cooperative write
+policy with its approval prompt. An agent that prefers shell verbs over an
+MCP client loses nothing.
+
+```text
+unpeel mcp                                   # the tools
+unpeel mcp <tool>                            # that tool's help (the MCP help text)
+unpeel mcp <tool> <action> [key=value ...] [--json '{...}']
+unpeel browser open <url> | snapshot | click <target> | fill <target> <text>
+              | type <target> <text> | press <key> | get <what> [target]
+              | screenshot [--full] [--annotate] | scroll <dir> | wait [ms=…|selector=…]
+unpeel artifacts publish <image>             # artifacts add_to_gallery
+unpeel current                               # sessions current: you + pane neighbors
+unpeel report <summary> [--status update|done|blocked] [--details TEXT]
+unpeel worktree create <name> [--branch B] [--base REF] [--project ID]
+unpeel agents <action> [key=value ...]       # occupants, transcripts, wait
+unpeel skills <action> [key=value ...]
+unpeel apps describe|search|context [key=value ...]
+```
+
+`key=value` values that parse as JSON (`true`, `42`, `["down","enter"]`,
+`"quoted"`) are passed as JSON; anything else is a string. Exit 1 prints the
+tool's own error text, exactly what an MCP client would see. Outside a hosted
+Session the caller is unknown and most actions refuse, like the server.
+
+**`unpeel send` / `unpeel keys` follow the write policy.** From a terminal
+outside Unpeel they write straight to the Session socket (the operator is
+the user). From inside a hosted Session — an agent's subprocess — they are
+the MCP `send_text` / `send_keys` actions: the first write to another
+Session blocks on the user's approval (desktop or phone), an approved pair is
+remembered per the app-wide policy, a denial writes nothing, and a Session
+can never write into itself. Inside a Session `keys` takes key names one per
+word (`down enter`, `ctrl+c`); outside it keeps its raw escape sequence.
+PTY proof: `cli_write_policy`.
+
 ### Agent integrations (`unpeel integrations`)
 
 A preset launches its command in your login shell exactly as typed. What

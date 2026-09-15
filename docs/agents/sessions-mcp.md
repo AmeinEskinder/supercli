@@ -58,7 +58,7 @@ channel semantics.
 > pre-rename `unpeel-mcp`/`unpeel-sessions`/`unpeel-browser` entries.
 >
 
-- Server: `crates/unpeel-core/src/mcp_host.rs`, run as `unpeel-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency.
+- Server: `crates/unpeel-core/src/mcp_host.rs`, run as `unpeel-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency. The `unpeel` CLI is a second client of the same dispatcher (`mcp_host::call_tool`, `unpeel mcp …` and the family verbs in `docs/agents/cli.md`), so an agent working from the shell gets identical identity, grants, and write approvals — including `unpeel send` from inside a Session.
 - It talks directly to per-session artifacts (`manifest.json`, `output.bin`, `session.sock`) under `~/.unpeel/app-sessions/`; it does not need the app running, only the session hosts.
 - Each provider/client starts its own stdio sidecar process. This is
   intentionally not embedded in the long-lived `unpeel serve` worker: MCP

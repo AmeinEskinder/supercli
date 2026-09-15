@@ -162,6 +162,50 @@ pub fn run_stdio() -> Result<(), String> {
     run_stdio_with_domains(McpDomainMask::ALL)
 }
 
+/// Execute one tool call in-process for a client that is not an MCP stdio
+/// peer — the `unpeel` CLI. Identical to what the stdio server does for
+/// `tools/call` under the full registration mask: the same caller identity
+/// (`self_session_id`), the same per-call manifest gates, and the same
+/// cooperative write policy with its approval prompt. Returns the tool's
+/// text result or its error text.
+pub fn call_tool(name: &str, arguments: &Value) -> Result<String, String> {
+    let params = json!({ "name": name, "arguments": arguments });
+    match tools_call_with_domains(&params, McpDomainMask::ALL) {
+        Ok(result) => {
+            let text = result["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|item| item.get("text").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if result["isError"].as_bool().unwrap_or(false) {
+                Err(text)
+            } else {
+                Ok(text)
+            }
+        }
+        Err(error) => Err(error["message"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| error.to_string())),
+    }
+}
+
+/// The tool names the unified server exposes, in the order tools/list
+/// returns them, for clients that render their own help.
+pub fn tool_names() -> Vec<&'static str> {
+    vec![
+        SESSIONS_TOOL,
+        AGENTS_TOOL,
+        WORKSPACE_TOOL,
+        ARTIFACTS_TOOL,
+        BROWSER_TOOL,
+        APPS_TOOL,
+        SKILLS_TOOL,
+    ]
+}
+
 /// A `tools/call` handed from the stdio reader to the tool worker.
 struct QueuedToolCall {
     message: Value,
@@ -3801,7 +3845,7 @@ fn send_initial_text_to_session(session_id: &str, text: &str, submit: bool) -> R
     }
 }
 
-pub(crate) fn self_session_id() -> Option<String> {
+pub fn self_session_id() -> Option<String> {
     env_session_id().or_else(ancestral_session_id)
 }
 

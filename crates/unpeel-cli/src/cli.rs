@@ -36,7 +36,7 @@ unpeel — run and steer CLI agent sessions
   unpeel --workspace NAME [...]   run any command in an isolated workspace
   unpeel ls [--json]              list sessions (status, project, command)
   unpeel new [--preset L | --command C] [--cwd D] [--json]
-  unpeel send <id> <text...> [--enter]
+  unpeel send <id> <text...> [--enter]  in a session: MCP send_text + approval policy
   unpeel keys <id> <sequence>     send raw bytes (\\r, \\t, \\e escapes)
   unpeel screen <id> [--cols N] [--rows N]
   unpeel logs <id> [--lines N] [--follow]
@@ -50,6 +50,11 @@ unpeel — run and steer CLI agent sessions
                                   MCP gates apply to Sessions launched afterward
   unpeel integrations [list]      Unpeel's hooks + MCP integration per agent CLI
   unpeel integrations install <runtime|--all> [--project DIR]
+  unpeel mcp [<tool> [<action> key=value ...]]
+                                  every Unpeel MCP action from the shell
+  unpeel browser open <url>|snapshot|click <t>|fill <t> <text>|screenshot|...
+  unpeel artifacts publish <image>   unpeel current   unpeel report <summary>
+  unpeel worktree create <name>      unpeel agents|skills <action> [key=value ...]
   unpeel presets [list | add <label> <command> | remove <label>]
   unpeel presets star|unstar|enable|disable <label|id>
   unpeel presets edit <label|id> [--label L] [--command C]
@@ -879,8 +884,16 @@ pub fn run(args: &[String]) -> i32 {
         }
         "new" => new_session(&parsed).map(|_| 0),
         "add" => add_here(&parsed).map(|_| 0),
+        // Inside a hosted Session a write to another Session is an agent-class
+        // effect: it takes the MCP `send_text`/`send_keys` path with the user's
+        // cooperative write policy (approval prompt, remembered pairs). From a
+        // terminal outside Unpeel the user is the operator and writes directly.
         "send" => reference_arg().and_then(|reference| {
             let row = resolve(&reference)?;
+            if crate::mcp_cli::inside_session() {
+                let text = parsed.positional[2..].join(" ");
+                return Ok(crate::mcp_cli::send_text(&row.id, &text, parsed.has("enter")));
+            }
             let mut text = parsed.positional[2..].join(" ");
             if parsed.has("enter") {
                 text.push('\r');
@@ -889,9 +902,19 @@ pub fn run(args: &[String]) -> i32 {
         }),
         "keys" => reference_arg().and_then(|reference| {
             let row = resolve(&reference)?;
+            if crate::mcp_cli::inside_session() {
+                return Ok(crate::mcp_cli::send_keys(&row.id, &parsed.positional[2..]));
+            }
             let sequence = unescape(&parsed.positional[2..].join(" "));
             unpeel_serve::control::send_text(&row.dir(), &sequence).map(|_| 0)
         }),
+        "mcp" => Ok(crate::mcp_cli::run(&args[1..])),
+        "current" => Ok(crate::mcp_cli::current(&args[1..])),
+        "report" => Ok(crate::mcp_cli::report(&args[1..])),
+        "worktree" | "worktrees" => Ok(crate::mcp_cli::worktree(&args[1..])),
+        "artifacts" => Ok(crate::mcp_cli::artifacts(&args[1..])),
+        "agents" => Ok(crate::mcp_cli::agents(&args[1..])),
+        "skills" => Ok(crate::mcp_cli::skills(&args[1..])),
         "screen" | "--snapshot" => reference_arg().and_then(|reference| {
             let row = resolve(&reference)?;
             let cols = parsed.number("cols").unwrap_or(100) as u16;
@@ -955,11 +978,18 @@ pub fn run(args: &[String]) -> i32 {
             }
             _ => crate::settings_cli::run(&parsed.positional[1..], parsed.has("json")).map(|_| 0),
         },
-        "apps" => Ok(crate::apps_cli::run(&args[1..])),
+        "apps" => match args.get(1).map(String::as_str) {
+            Some("describe" | "search" | "context") => Ok(crate::mcp_cli::apps(&args[1..])),
+            _ => Ok(crate::apps_cli::run(&args[1..])),
+        },
         "integrations" => crate::integrations_cli::run(&args[1..], parsed.has("json")),
-        // Lane 5 (2026-09-03): the one Browser MCP engine verb; the logic
-        // lives in unpeel_core::browser_engine, this is only the dispatch.
-        "browser" => Ok(crate::browser_cli::run(&args[1..])),
+        // `install` is the Host-owned engine verb (unpeel_core::browser_engine);
+        // every other browser action drives this session's isolated browser
+        // through the same dispatcher as the MCP `browser` tool.
+        "browser" => match args.get(1).map(String::as_str) {
+            None | Some("install" | "--help" | "-h") => Ok(crate::browser_cli::run(&args[1..])),
+            Some(_) => Ok(crate::mcp_cli::browser(&args[1..])),
+        },
         // Lane A (2026-09-03): the one Computer Use engine verb, same shape.
         "computer" => Ok(crate::computer_cli::run(&args[1..])),
         "link" => Ok(crate::link_cli::run(

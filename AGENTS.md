@@ -70,10 +70,12 @@ makes sense for coding, it does not belong here.
   notification channel.
 - **Cooperative MCP policy, not a sandbox.** The unified `unpeel` MCP server
   (`unpeel-host __mcp__`) has open reads and approval-controlled writes to
-  other Sessions; browser use is Off/Ask/On. Hosted
-  commands run as the user's account, so Ask/Deny is a cooperative control
-  for agents using Unpeel's tools, never a hard boundary. Agent Session
-  creation and closing are user-only.
+  other Sessions; browser use is Off/Ask/On. The `unpeel` CLI is a peer of
+  that server (`unpeel mcp`, `unpeel browser`, `unpeel send` from inside a
+  Session all run `mcp_host::call_tool`), so the policy holds whichever
+  client an agent uses. Hosted commands run as the user's account, so
+  Ask/Deny is a cooperative control for agents using Unpeel's tools, never
+  a hard boundary. Agent Session creation and closing are user-only.
 - **Engines are Host-owned and pinned.** The browser engine
   (`protocol/browser-engine-v1.json`) is installed and hash-verified by
   the Host. Desktop automation belongs to the agent or VM environment.
