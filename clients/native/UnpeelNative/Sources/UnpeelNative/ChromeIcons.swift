@@ -70,6 +70,8 @@ enum ChromeIcon: String, CaseIterable {
     /// Phosphor "flask" — Settings ▸ Features (shipped toggles plus the
     /// Experimental section).
     case settingsFeatures
+    /// Phosphor "plug" — Settings ▸ Unpeel MCP ▸ MCP Settings.
+    case settingsMCP
     /// Phosphor "chats" — Settings ▸ Sessions use.
     case settingsSessions
     /// Phosphor "cursor-click" — Settings ▸ Computer use.
@@ -242,6 +244,12 @@ enum ChromeIcon: String, CaseIterable {
                 gradientID: "settingsFeaturesGlass",
                 inverted: inverted
             )
+        case .settingsMCP:
+            return Self.glassSVG(
+                path: ##"M237.66,66.34l-48-48a8,8,0,0,0-11.32,11.32L192,43.31,163.31,72,148,56.69,132.69,72,146.34,85.66,85.66,146.34,72,132.69,56.69,148,72,163.31,43.31,192,29.66,178.34a8,8,0,0,0-11.32,11.32l48,48a8,8,0,0,0,11.32-11.32L64,212.69,92.69,184l15.31,15.31L123.31,184,109.66,170.34l60.68-60.68L184,123.31l15.31-15.31L184,92.69,212.69,64l13.65,13.66a8,8,0,0,0,11.32-11.32ZM99,157,157,99l-4.69-4.69L94.34,152.34Z"##,
+                gradientID: "settingsMCPGlass",
+                inverted: inverted
+            )
         case .settingsSessions:
             return Self.glassSVG(
                 path: ##"M232,96a16,16,0,0,0-16-16H184V48a16,16,0,0,0-16-16H40A16,16,0,0,0,24,48V176a8,8,0,0,0,13,6.22L72,154V184a16,16,0,0,0,16,16h93.59L219,230.22a8,8,0,0,0,5,1.78,8,8,0,0,0,8-8Zm-42.55,89.78a8,8,0,0,0-5-1.78H88V152h80a16,16,0,0,0,16-16V96h32V207.25Z"##,
@@ -369,6 +377,7 @@ struct ChromeIconView: View {
         case .settingsTranscripts: return "doc.text"
         case .settingsNotifications: return "bell"
         case .settingsFeatures: return "testtube.2"
+        case .settingsMCP: return "powerplug"
         case .settingsSessions: return "bubble.left.and.bubble.right"
         case .settingsComputer: return "cursorarrow.click"
         case .settingsBrowser: return "globe"

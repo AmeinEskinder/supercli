@@ -52,6 +52,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case mobile
     case transcripts
     case notifications
+    /// Settings ▸ Unpeel MCP ▸ MCP Settings: connected agents + manual setup.
+    /// Leads the MCP group; enum order is nav order.
+    case mcp
     case sessions
     case browser
     case computer
@@ -112,8 +115,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// `settings.presets.set` is the first.
     static var hostScopedCases: [SettingsTab] {
         [
-            .agentsApps, .presets, .appearance, .transcripts, .notifications, .sessions,
-            .browser, .computer, .features, .advanced,
+            .agentsApps, .presets, .appearance, .transcripts, .notifications, .mcp,
+            .sessions, .browser, .computer, .features, .advanced,
         ]
     }
 
@@ -126,6 +129,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .workspaces: return "Workspaces"
         case .transcripts: return "Transcripts"
         case .notifications: return "Notifications"
+        case .mcp: return "MCP Settings"
         case .sessions: return "Sessions use"
         case .browser: return "Browser use"
         case .computer: return "Computer use"
@@ -146,6 +150,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .workspaces: return .settingsWorkspaces
         case .transcripts: return .settingsTranscripts
         case .notifications: return .settingsNotifications
+        case .mcp: return .settingsMCP
         case .sessions: return .settingsSessions
         case .browser: return .settingsBrowser
         case .computer: return .settingsComputer
@@ -160,7 +165,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// domain per panel).
     var isBuiltInMCP: Bool {
         switch self {
-        case .sessions, .browser, .computer: return true
+        case .mcp, .sessions, .browser, .computer: return true
         default: return false
         }
     }
@@ -2210,8 +2215,11 @@ struct SettingsContentHost: View {
             TranscriptsSettingsPanel(store: store)
         case .notifications:
             NotificationsSettingsPanel(store: store)
+        case .mcp:
+            MCPSettingsPanel(store: store, runtime: store.remoteHostRuntime)
+                .id(store.selectedHostScope.paneScopeID)
         case .sessions:
-            UnpeelMCPSettingsPanel(store: store, runtime: store.remoteHostRuntime)
+            UnpeelMCPSettingsPanel(store: store)
         case .browser:
             BrowserSettingsPanel(store: store)
         case .computer:
