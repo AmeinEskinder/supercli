@@ -56,3 +56,6 @@ id = "fx"
 label = "fx"
 command = "fx"
 quick_launch = false
+
+[integration]
+summary = "Adds the unpeel MCP server to ~/.fx/mcp.json."

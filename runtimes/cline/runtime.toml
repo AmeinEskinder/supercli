@@ -39,6 +39,9 @@ fallback = "none"
 completion_reliable = true
 attention_reliable = false
 
+[integration]
+summary = "Installs one managed hook per event under ~/.cline/hooks and adds the unpeel server to Cline's MCP settings."
+
 [[usage.stores]]
 root = ".cline/data/sessions"
 extensions = ["json"]

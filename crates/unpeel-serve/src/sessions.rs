@@ -2217,6 +2217,9 @@ pub fn mobile_snapshot(
         &mut create_presets,
     );
     workspace_settings["availableAgents"] = agents;
+    workspace_settings["mcpShimPath"] = serde_json::json!(
+        unpeel_core::integrations::install::mcp_shim_path().to_string_lossy()
+    );
     let openers = unpeel_core::controller_host::wire_openers(&workspace_state);
     let app_presentations = unpeel_core::app_presentations::controller_app_presentations_wire()
         .unwrap_or_else(

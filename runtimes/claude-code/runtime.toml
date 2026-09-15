@@ -54,6 +54,10 @@ escape_cancels_turn = true
 working = ["… (", "esc to interrupt"]
 idle_prompt = ["❯"]
 
+[integration]
+summary = "Registers Unpeel's lifecycle hooks in ~/.claude/settings.json and the unpeel MCP server in ~/.claude.json (user scope)."
+manual_command = "claude mcp add --scope user unpeel {shim}"
+
 [[usage.stores]]
 root = ".claude/projects"
 extensions = ["jsonl"]

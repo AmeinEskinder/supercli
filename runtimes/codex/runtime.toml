@@ -49,6 +49,9 @@ attention_reliable = true
 working = ["esc to interrupt", "• Working"]
 idle_prompt = ["›"]
 
+[integration]
+summary = "Registers native hooks in ~/.codex/hooks.json, the notify reporter and [mcp_servers.unpeel] in ~/.codex/config.toml."
+
 [[usage.stores]]
 root = ".codex/sessions"
 extensions = ["jsonl"]

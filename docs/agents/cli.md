@@ -240,7 +240,7 @@ worker re-runs installed integrations' installers after an upgrade so hook
 scripts and `~/.unpeel/bin/unpeel-mcp` keep pointing at the running binary.
 The Host verb is `integrations.install` (`POST /mobile/integrations/install`,
 `{"runtimeID": …}`), and bootstrap's `availableAgents` rows carry
-`integrationInstallable`/`integrationInstalled` for Settings ▸ Agents & Apps.
+`integrationInstallable`/`integrationInstalled`, plus the package's `integrationSummary` / `integrationManualCommand` and the Host's `mcpShimPath`, for Settings ▸ Unpeel MCP ▸ Connected agents.
 
 ### Unpeel Apps (`unpeel apps`)
 

@@ -42,6 +42,9 @@ escape_cancels_turn = true
 anchor_start_event_to_output = false
 attention_clears_on_output = false
 
+[integration]
+summary = "Writes Unpeel's hook file ~/.grok/hooks/unpeel.json."
+
 [[usage.stores]]
 root = ".grok/sessions"
 extensions = ["jsonl"]

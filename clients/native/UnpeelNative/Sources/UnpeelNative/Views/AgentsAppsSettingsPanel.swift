@@ -64,9 +64,6 @@ struct AgentsAppsSettingsPanel: View {
             && runtime.snapshot?.projects.isEmpty == false && startingInstallation == nil
     }
     private var canActivate: Bool { runtime.supportsHostOperation(RemoteControlProtocol.pluginsSetCapability) }
-    private var canInstallIntegration: Bool {
-        runtime.supportsHostOperation(RemoteHostRuntime.HostOperation.integrationsInstall)
-    }
     private var canEdit: Bool { runtime.supportsHostOperation(RemoteHostRuntime.HostOperation.presetsSet) }
     private var canReorder: Bool { runtime.supportsHostOperation(RemoteControlProtocol.pluginsOrderCapability) }
     private var items: [PluginSettingsItem] {
@@ -293,33 +290,17 @@ struct AgentsAppsSettingsPanel: View {
         .allowsHitTesting(!preview)
     }
 
-    /// A preset launches its command in the login shell as typed; the
-    /// integration (hooks + MCP registration in the CLI's own config) is
-    /// what makes the agent report busy/idle and reach Unpeel's MCP server.
-    /// Installed once per Host, explicitly, here or with
-    /// `unpeel integrations install`.
+    /// Passive only: connecting an agent (hooks + MCP registration in the
+    /// CLI's own config) lives under Settings ▸ Unpeel MCP ▸ Connected agents.
     @ViewBuilder
     private func integrationControl(_ item: PluginSettingsItem) -> some View {
-        if item.installed, item.integrationInstallable, canInstallIntegration {
-            if item.integrationInstalled {
-                Label("Integrated", systemImage: "checkmark.circle")
-                    .labelStyle(.iconOnly)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.mutedForeground)
-                    .frame(width: 22, height: 24)
-                    .help("Unpeel's hooks and MCP server are registered with \(item.name) on this Host")
-            } else if isPending("integration:\(item.id)") {
-                ProgressView().controlSize(.small).frame(width: 22, height: 24)
-            } else {
-                Button("Integrate") {
-                    perform(id: "integration:\(item.id)") {
-                        try await runtime.installIntegration(runtimeID: item.id)
-                    }
-                }
-                .buttonStyle(.bordered).controlSize(.small)
-                .help("Register Unpeel's hooks and MCP server with \(item.name) so it reports busy/idle and can use Unpeel's tools")
-                .background(PluginDragExclusion(controller: drag))
-            }
+        if item.installed, item.integrationInstallable, item.integrationInstalled {
+            Label("Connected to Unpeel MCP", systemImage: "checkmark.circle")
+                .labelStyle(.iconOnly)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.mutedForeground)
+                .frame(width: 22, height: 24)
+                .help("Connected to Unpeel MCP: hooks and the unpeel server are registered with \(item.name). Manage under Unpeel MCP.")
         }
     }
 

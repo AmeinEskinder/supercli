@@ -1268,6 +1268,10 @@ pub struct RemoteWorkspaceSettings {
     pub plugin_activation: Option<HashMap<String, bool>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub available_agents: Option<Vec<RemoteAgentSummary>>,
+    /// `~/.unpeel/bin/unpeel-mcp` on this Host: the one command every
+    /// provider's MCP config points at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_shim_path: Option<String>,
     #[serde(default)]
     pub transcript_settings: Option<RemoteTranscriptSettings>,
     #[serde(default)]
@@ -1310,6 +1314,12 @@ pub struct RemoteAgentSummary {
     /// The user installed that integration on this Host.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub integration_installed: Option<bool>,
+    /// What the installer edits, in the user's words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration_summary: Option<String>,
+    /// The provider's own command for registering the MCP shim by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration_manual_command: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

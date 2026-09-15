@@ -2428,6 +2428,10 @@ public struct RemoteAgentSummary: Codable, Equatable, Identifiable, Sendable {
     public let integrationInstallable: Bool?
     /// The user installed that integration on this Host.
     public let integrationInstalled: Bool?
+    /// What the installer edits, in the user's words.
+    public let integrationSummary: String?
+    /// The provider's own command for registering the MCP shim by hand.
+    public let integrationManualCommand: String?
 
     public init(
         id: String,
@@ -2437,7 +2441,9 @@ public struct RemoteAgentSummary: Codable, Equatable, Identifiable, Sendable {
         installCommand: String? = nil,
         websiteURL: String? = nil,
         integrationInstallable: Bool? = nil,
-        integrationInstalled: Bool? = nil
+        integrationInstalled: Bool? = nil,
+        integrationSummary: String? = nil,
+        integrationManualCommand: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -2447,6 +2453,8 @@ public struct RemoteAgentSummary: Codable, Equatable, Identifiable, Sendable {
         self.websiteURL = websiteURL
         self.integrationInstallable = integrationInstallable
         self.integrationInstalled = integrationInstalled
+        self.integrationSummary = integrationSummary
+        self.integrationManualCommand = integrationManualCommand
     }
 }
 
@@ -2525,6 +2533,8 @@ public struct RemoteWorkspaceSettings: Codable, Equatable, Sendable {
     public let pluginOrder: [String]?
     public let pluginActivation: [String: Bool]?
     public let availableAgents: [RemoteAgentSummary]?
+    /// The Host's MCP shim path, the one command every provider config points at.
+    public let mcpShimPath: String?
     public let transcriptSettings: RemoteTranscriptSettings?
     public let appearanceSettings: RemoteAppearanceSettings?
     public let notificationSettings: RemoteNotificationSettings?
@@ -2541,6 +2551,7 @@ public struct RemoteWorkspaceSettings: Codable, Equatable, Sendable {
         pluginOrder: [String]? = nil,
         pluginActivation: [String: Bool]? = nil,
         availableAgents: [RemoteAgentSummary]? = nil,
+        mcpShimPath: String? = nil,
         transcriptSettings: RemoteTranscriptSettings? = nil,
         appearanceSettings: RemoteAppearanceSettings? = nil,
         notificationSettings: RemoteNotificationSettings? = nil,
@@ -2556,6 +2567,7 @@ public struct RemoteWorkspaceSettings: Codable, Equatable, Sendable {
         self.pluginOrder = pluginOrder
         self.pluginActivation = pluginActivation
         self.availableAgents = availableAgents
+        self.mcpShimPath = mcpShimPath
         self.transcriptSettings = transcriptSettings
         self.appearanceSettings = appearanceSettings
         self.notificationSettings = notificationSettings

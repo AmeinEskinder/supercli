@@ -11,7 +11,8 @@ mod schema;
 pub use schema::{
     RuntimeCapability, RuntimeCatalogError, RuntimeDescriptor, RuntimeDetection, RuntimeDisplay,
     RuntimeInstall, RuntimeKind, RuntimeLifecycle, RuntimeLifecycleAuthority,
-    RuntimeLifecycleFallback, RuntimeLifecycleSource, RuntimePlatform, RuntimeScreenRules,
+    RuntimeIntegrationInfo, RuntimeLifecycleFallback, RuntimeLifecycleSource, RuntimePlatform,
+    RuntimeScreenRules,
     RuntimeScriptPathSignature, RuntimeSuggestedPreset, RuntimeUpdates,
     RUNTIME_DESCRIPTOR_SCHEMA_VERSION,
 };

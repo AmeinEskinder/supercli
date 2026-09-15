@@ -33,3 +33,6 @@ authority = "complete"
 fallback = "none"
 completion_reliable = true
 attention_reliable = true
+
+[integration]
+summary = "Installs the shared reporter; Copilot reads hooks per repository (unpeel integrations install github-copilot --project DIR)."

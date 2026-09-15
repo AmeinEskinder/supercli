@@ -47,6 +47,8 @@ pub(crate) fn agents_wire_in_dirs(dirs: &[std::path::PathBuf]) -> Value {
                     }
                 });
                 let integration = crate::integrations::install::status(&runtime.legacy_slug);
+                let shim = crate::integrations::install::mcp_shim_path();
+                let shim = shim.to_string_lossy();
                 json!({
                     "id": runtime.id, "name": runtime.label, "command": command,
                     "installed": installed,
@@ -57,6 +59,10 @@ pub(crate) fn agents_wire_in_dirs(dirs: &[std::path::PathBuf]) -> Value {
                     // installed it. Controllers offer `integrations.install`.
                     "integrationInstallable": integration.as_ref().is_some_and(|status| status.installable),
                     "integrationInstalled": integration.as_ref().is_some_and(|status| status.installed),
+                    "integrationSummary": runtime.integration.as_ref().map(|info| info.summary.as_str()),
+                    "integrationManualCommand": runtime.integration.as_ref()
+                        .and_then(|info| info.manual_command.as_deref())
+                        .map(|command| command.replace("{shim}", &shim)),
                 })
             })
             .collect(),

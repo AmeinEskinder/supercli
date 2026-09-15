@@ -41,6 +41,9 @@ fallback = "none"
 completion_reliable = true
 attention_reliable = true
 
+[integration]
+summary = "Registers hooks in ~/.cursor/hooks.json and the unpeel MCP server in ~/.cursor/mcp.json."
+
 [[usage.stores]]
 root = ".cursor/projects"
 extensions = ["jsonl"]

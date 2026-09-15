@@ -2211,7 +2211,7 @@ struct SettingsContentHost: View {
         case .notifications:
             NotificationsSettingsPanel(store: store)
         case .sessions:
-            UnpeelMCPSettingsPanel(store: store)
+            UnpeelMCPSettingsPanel(store: store, runtime: store.remoteHostRuntime)
         case .browser:
             BrowserSettingsPanel(store: store)
         case .computer:

@@ -38,6 +38,9 @@ fallback = "none"
 completion_reliable = true
 attention_reliable = true
 
+[integration]
+summary = "Writes ~/.kiro/hooks/unpeel.json (v3), the compatibility agent for v2, and the unpeel server in ~/.kiro/settings/mcp.json."
+
 [[usage.stores]]
 root = ".kiro/sessions"
 extensions = ["jsonl"]

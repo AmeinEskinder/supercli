@@ -417,6 +417,8 @@ impl DiskCatalog {
         }
         let mut workspace_settings = wire_workspace_settings(&state);
         workspace_settings["availableAgents"] = agents;
+        workspace_settings["mcpShimPath"] =
+            json!(crate::integrations::install::mcp_shim_path().to_string_lossy());
         let openers = wire_openers(&state);
         let app_presentations = crate::app_presentations::controller_app_presentations_wire()
             .unwrap_or_else(|_| json!({ "version": 1, "instances": [], "presentations": [] }));

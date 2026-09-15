@@ -39,6 +39,9 @@ fallback = "none"
 completion_reliable = true
 attention_reliable = true
 
+[integration]
+summary = "Installs the unpeel notify plugin in ~/.config/opencode/plugin."
+
 [[usage.stores]]
 root = ".local/share/opencode/storage/session"
 extensions = ["json"]

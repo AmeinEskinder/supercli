@@ -44,6 +44,11 @@ pub struct RuntimeDescriptor {
     /// `lifecycle.fallback = "screen"` and forbidden otherwise.
     #[serde(default)]
     pub screen: Option<RuntimeScreenRules>,
+    /// User-facing description of what the package's installer edits, and
+    /// the provider's own command for registering the MCP shim by hand
+    /// (`{shim}` is replaced with the shim path). Published in bootstrap.
+    #[serde(default)]
+    pub integration: Option<RuntimeIntegrationInfo>,
     #[serde(default)]
     pub capabilities: Vec<RuntimeCapability>,
     /// Client-safe hints for ranking already-installed runtimes by their
@@ -224,6 +229,16 @@ impl RuntimeLifecycle {
     pub fn uses_hook_port(&self) -> bool {
         self.source == RuntimeLifecycleSource::Hooks
     }
+}
+
+/// What `unpeel integrations install` edits for this runtime, in the user's
+/// words, and the provider's documented manual equivalent for the MCP half.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeIntegrationInfo {
+    pub summary: String,
+    #[serde(default)]
+    pub manual_command: Option<String>,
 }
 
 /// Bottom-of-screen markers a runtime shows while working and at its idle
