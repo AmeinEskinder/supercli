@@ -3556,7 +3556,10 @@ pub(crate) fn app_request_with_timeout(
                 .into(),
         );
     }
-    let token = std::fs::read_to_string(crate::mcp_auth::auth_token_path())
+    // Mint the shared token if this home never had one: the worker only
+    // verifies (and lazily creates) it when a request arrives, so a fresh
+    // workspace home reached its first approval prompt with no file at all.
+    let token = crate::mcp_auth::ensure_auth_token()
         .map_err(|e| format!("Failed to read MCP auth token: {e}"))?;
     bridge_request_over(
         &ports,

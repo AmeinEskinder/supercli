@@ -120,7 +120,7 @@ worker's.
   MCP client timeout). The MCP host tries launch-time `UNPEEL_APP_PORT`, then
   `~/.unpeel/app-ports` newest-first. App-less `unpeel serve` Hosts serve the
   same routes and the same shared approval queue.
-- Auth: unlike hook routes, `/mcp/*` requires the `x-unpeel-auth` header matching `~/.unpeel/mcp/auth-token` (0600, created at hook-server start by `mcp_auth.rs` / the native `MCPAuth`) — the endpoints can launch arbitrary commands, and localhost is reachable by browser CSRF.
+- Auth: unlike hook routes, `/mcp/*` requires the `x-unpeel-auth` header matching `<UNPEEL_HOME>/mcp/auth-token` (0600; the workspace worker mints it at start and the MCP host mints it on first use via `mcp_auth::ensure_auth_token`, so a fresh workspace home never reaches its first approval prompt without one — that gap broke every agent write in a new workspace until 2026-09-16) — the endpoints can launch arbitrary commands, and localhost is reachable by browser CSRF.
 - Worktree creation maps onto the same native path as its UI verb. The MCP host defaults `project_id` to the calling session's project.
 
 > **Security scope (2026-08-14): these are cooperative controls, not

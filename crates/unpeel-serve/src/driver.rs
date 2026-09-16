@@ -769,7 +769,15 @@ impl HostRuntime {
             } else {
                 None
             },
-            integrations_refresh: spawn_integrations_refresh(),
+            integrations_refresh: {
+                // The /mcp/* approval bridge needs the shared auth token; mint
+                // it for this home at start so the first agent write never
+                // races the file into existence.
+                if let Err(error) = unpeel_core::mcp_auth::ensure_auth_token() {
+                    eprintln!("unpeel serve: MCP auth token: {error}");
+                }
+                spawn_integrations_refresh()
+            },
             browser_engine_status: if browser_engine_install_enabled() {
                 unpeel_core::browser_engine::Status::installing()
             } else {
