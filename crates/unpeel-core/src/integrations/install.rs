@@ -5,7 +5,7 @@
 //! makes busy/idle/attention reliable, and the persistent registration of the
 //! unified `unpeel` MCP server. It is installed once, by the user, per Host
 //! (`unpeel integrations install <runtime>`, or the `integrations.install`
-//! Host verb behind Connect on Settings ▸ Agents). Launching a preset or
+//! Host verb behind Install integration on Settings ▸ Agents). Launching a preset or
 //! observing a hand-typed agent never installs anything.
 //!
 //! What Unpeel keeps doing on its own is keeping an installed integration

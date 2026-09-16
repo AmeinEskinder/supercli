@@ -62,7 +62,7 @@ shows what the Host can install, and empty sections are hidden. Commands edit
 inline; the "+" shown on command hover inserts another command below. Each
 agent or plugin has one cursor-shaped Quick Launch toggle for all its
 commands. New variants inherit that choice. Controls appear in this order:
-Connect (agents), Install/Update, Quick Launch, activation, and the details
+Install integration (agents), Install/Update, Quick Launch, activation, and the details
 chevron (agents). Plugins show their installed version, or the available
 catalog version when uninstalled, beside the command column. Uninstalled rows
 show only Install at the far right. Single-command rows are 36 points tall;
@@ -72,16 +72,15 @@ Sessions use and Browser use routes redirect to Agent access.
 
 The Agents page owns the per-agent **Unpeel integration** (hooks + the
 `unpeel` MCP server registered in the CLI's own configuration, once per
-Host). A row-level **Connect** runs the Host's `integrations.install` verb; a
-connected row shows a checkmark. The expanded row states the connection,
+Host). A row-level **Install integration** runs the Host's `integrations.install`
+verb; an installed row shows a checkmark. The expanded row states the integration state,
 what the installer edits (the runtime package's `integrationSummary`), what
-the agent can do connected versus not (hooks are the busy/idle authority; a
-runtime with declared screen rules reads busy/idle from the screen until
-connected; detection alone grants identity), a Reinstall action, and the
+the agent can do with and without it (hooks are the busy/idle authority; a
+runtime with declared screen rules reads busy/idle from the screen without
+it; detection alone grants identity), a Reinstall action, and the
 provider's own MCP registration command for hand setup. A dismissible banner
-at the top offers to connect every installed-but-unconnected agent at once
-(the dismissal is a per-Mac UserDefaults convenience; row Connect buttons
-never hide). "Manual setup" at the bottom shows the Host's shim path and the
+at the top offers to install every missing integration at once (the
+dismissal is a per-Mac UserDefaults convenience; row buttons never hide). "Manual setup" at the bottom shows the Host's shim path and the
 CLI verb. The Plugins page links to Appearance ▸ Open resources, where file
 openers are chosen next to the editor.
 

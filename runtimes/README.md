@@ -38,7 +38,7 @@ provider-specific is the runtime's **integration** — the `setup.rs`
 installer that registers lifecycle hooks and the Unpeel MCP shim
 (`integrations::install::write_mcp_shim`) in the provider's own global
 configuration — which the user installs explicitly
-(`unpeel integrations install <runtime>`, or Connect on Settings ▸ Agents) and
+(`unpeel integrations install <runtime>`, or Install integration on Settings ▸ Agents) and
 the Host keeps current after upgrades.
 
 Provider-neutral enforcement remains in `unpeel-core`: PTY ownership,
@@ -111,7 +111,7 @@ Important fields:
   the Host applies while the Session has no hook latch (integration not
   installed); hooks always win once they latch, and screen verdicts never
   send completion notifications.
-- `integration`: user-facing copy for Settings ▸ Agents ▸ Connect
+- `integration`: user-facing copy for Settings ▸ Agents ▸ Install integration
   agents — `summary` says which of the provider's own files the installer
   edits; optional `manual_command` is the provider's documented way to
   register the MCP shim by hand (`{shim}` is replaced with its path).

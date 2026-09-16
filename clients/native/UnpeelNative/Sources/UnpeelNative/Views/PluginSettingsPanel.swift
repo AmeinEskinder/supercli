@@ -5,8 +5,8 @@ import UnpeelShared
 /// scopes over the Host's plugin inventory. The selected Host owns inventory,
 /// commands, activation, and row order (one shared `plugin_order` across both
 /// pages; reordering a page moves only its rows). The Agents scope adds the
-/// per-agent Unpeel integration (Connect / Reinstall, what it edits, what the
-/// agent can do connected vs. not) and the manual setup recipe; the Plugins
+/// per-agent Unpeel integration (Install integration / Reinstall, what it edits,
+/// what the agent can do with and without it) and the manual setup recipe; the Plugins
 /// scope is the Unpeel Apps catalog under its user-facing name.
 struct PluginSettingsPanel: View {
     enum Scope { case agents, plugins }
@@ -39,8 +39,8 @@ struct PluginSettingsPanel: View {
     @State private var bannerDismissed = UserDefaults.standard.bool(forKey: PluginSettingsPanel.bannerDismissedKey)
     @ObservedObject private var terminalFont = TerminalFontModel.shared
 
-    /// Per-viewer convenience only: the "connect these agents?" banner stays
-    /// dismissed on this Mac; the row-level Connect buttons never hide.
+    /// Per-viewer convenience only: the "install these integrations?" banner
+    /// stays dismissed on this Mac; the row-level buttons never hide.
     static let bannerDismissedKey = "unpeel.native.agentsConnectBannerDismissed"
 
     private struct Installation: Identifiable {
@@ -77,7 +77,7 @@ struct PluginSettingsPanel: View {
     private var description: String {
         switch scope {
         case .agents:
-            return "Install agent CLIs on this Host, connect them to Unpeel, and choose what each one launches."
+            return "Install agent CLIs on this Host, install their Unpeel integrations, and choose what each one launches."
         case .plugins:
             return "Unpeel Apps that open files and resources in a pane beside your agents. "
                 + "Install and update them here; develop your own with `unpeel apps link`."
@@ -360,7 +360,7 @@ struct PluginSettingsPanel: View {
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.mutedForeground)
                     .accessibilityLabel(expanded.contains(item.id) ? "Hide \(item.name) details" : "Show \(item.name) details")
-                    .help(expanded.contains(item.id) ? "Hide details" : "Connection, capabilities, and manual setup")
+                    .help(expanded.contains(item.id) ? "Hide details" : "Integration, capabilities, and manual setup")
                     .background(PluginDragExclusion(controller: drag))
                 }
             }
@@ -369,7 +369,7 @@ struct PluginSettingsPanel: View {
 
     // MARK: Unpeel integration (Agents scope)
 
-    /// The row-level connection state. Connecting runs the Host's
+    /// The row-level integration state. Installing runs the Host's
     /// `integrations.install` verb: hooks + the unpeel MCP server registered
     /// in the CLI's own configuration, once per Host. The Controller knows
     /// nothing about provider file formats; a remote Host renders identically.
@@ -379,19 +379,19 @@ struct PluginSettingsPanel: View {
             if pendingIntegrations.contains(item.id) {
                 ProgressView().controlSize(.small).frame(width: 22, height: 24)
             } else if item.integrationInstalled {
-                Label("Connected to Unpeel", systemImage: "checkmark.circle")
+                Label("Integration installed", systemImage: "checkmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.mutedForeground)
                     .frame(width: 22, height: 24)
-                    .help("Connected: Unpeel's hooks and MCP server are registered with \(item.name).")
+                    .help("Integration installed: Unpeel's hooks and MCP server are registered in \(item.name)'s own config.")
             } else {
-                Button("Connect") { connect(item) }
+                Button("Install integration") { connect(item) }
                     .buttonStyle(.bordered).controlSize(.small)
                     .disabled(!canConnect)
                     .help(canConnect
-                        ? "Register Unpeel's hooks and MCP server with \(item.name)"
-                        : "This Host does not support connecting agents")
+                        ? "Register Unpeel's hooks and MCP server in \(item.name)'s own config"
+                        : "This Host does not support installing integrations")
                     .background(PluginDragExclusion(controller: drag))
             }
         }
@@ -422,7 +422,7 @@ struct PluginSettingsPanel: View {
     }
 
     /// First-run nudge: agents were found on the Host that Unpeel could
-    /// connect. One click connects them all; each connection edits that
+    /// integrate. One click installs them all; each integration edits that
     /// agent's own global configuration once.
     private var connectBanner: some View {
         let count = unconnectedAgents.count
@@ -431,17 +431,17 @@ struct PluginSettingsPanel: View {
                 .frame(width: 22, height: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(count == 1
-                    ? "\(unconnectedAgents[0].name) is installed but not connected to Unpeel"
-                    : "\(count) agents are installed but not connected to Unpeel")
+                    ? "\(unconnectedAgents[0].name) is installed without its Unpeel integration"
+                    : "\(count) agents are installed without their Unpeel integration")
                     .font(.system(size: 12, weight: .semibold))
-                Text("Connect for exact busy and idle, done notifications, transcripts, precise resume, "
-                    + "and Unpeel's tools inside each agent. Each connection registers Unpeel's hooks and "
+                Text("Install it for exact busy and idle, done notifications, transcripts, precise resume, "
+                    + "and Unpeel's tools inside each agent. Each integration registers Unpeel's hooks and "
                     + "MCP server in that agent's own configuration once.")
                     .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Button(count == 1 ? "Connect" : "Connect all") { connectAll() }
+            Button(count == 1 ? "Install integration" : "Install all") { connectAll() }
                 .buttonStyle(.borderedProminent).controlSize(.small)
                 .disabled(!pendingIntegrations.isEmpty)
             Button { dismissBanner() } label: {
@@ -455,8 +455,8 @@ struct PluginSettingsPanel: View {
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1))
     }
 
-    /// The expanded agent row: connection status, what connecting edits (copy
-    /// from the runtime package), what the agent can do connected vs. not,
+    /// The expanded agent row: integration status, what installing edits (copy
+    /// from the runtime package), what the agent can do with and without it,
     /// and the provider's own MCP registration command for hand setup.
     private func agentDetails(_ item: PluginSettingsItem) -> some View {
         let meta = UnpeelRuntimeCatalog.runtime(id: item.id)
@@ -482,7 +482,7 @@ struct PluginSettingsPanel: View {
                             .disabled(!canConnect)
                             .help("Rewrite the hook script and MCP registration for this Host build")
                     } else {
-                        Button("Connect") { connect(item) }
+                        Button("Install integration") { connect(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                             .disabled(!canConnect)
                     }
@@ -508,7 +508,7 @@ struct PluginSettingsPanel: View {
 
     private func integrationTitle(_ item: PluginSettingsItem) -> String {
         guard item.integrationInstallable else { return "No Unpeel integration" }
-        return item.integrationInstalled ? "Connected to Unpeel" : "Not connected to Unpeel"
+        return item.integrationInstalled ? "Unpeel integration installed" : "Unpeel integration not installed"
     }
     private func integrationSummary(_ item: PluginSettingsItem) -> String {
         guard item.integrationInstallable else {
@@ -526,9 +526,9 @@ struct PluginSettingsPanel: View {
         }
         if item.integrationInstallable {
             return meta?.lifecycleFallback == "screen"
-                ? "Until connected: busy and idle are read from the screen; no done notifications, "
+                ? "Without it: busy and idle are read from the screen; no done notifications, "
                     + "transcripts, precise resume, or Unpeel tools."
-                : "Until connected: identity and tint only; no busy and idle, done notifications, "
+                : "Without it: identity and tint only; no busy and idle, done notifications, "
                     + "transcripts, precise resume, or Unpeel tools."
         }
         return meta?.lifecycleFallback == "screen"
@@ -542,9 +542,9 @@ struct PluginSettingsPanel: View {
     private var manualSetup: some View {
         DisclosureGroup("Manual setup", isExpanded: $showManualSetup) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Every connected agent's MCP config points at one launcher on this Host. "
+                Text("Every integration points the agent's MCP config at one launcher on this Host. "
                     + "Register it with an agent's own command (in the agent's details above) to "
-                    + "get Unpeel's tools without the hooks; Connect does both.")
+                    + "get Unpeel's tools without the hooks; Install integration does both.")
                     .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
                     .fixedSize(horizontal: false, vertical: true)
                 if let shim = runtime.snapshot?.workspaceSettings?.mcpShimPath {

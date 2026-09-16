@@ -150,7 +150,7 @@ Provider knowledge lives in one package per agent under
 assets, and fixtures. Launching is provider-neutral: a preset runs its command
 in your login shell exactly as typed. Each agent's hooks and MCP registration
 are its *integration*, installed once per Host with
-`unpeel integrations install <runtime>` (or Connect on Settings ▸ Agents)
+`unpeel integrations install <runtime>` (or Install integration on Settings ▸ Agents)
 into that CLI's own configuration, and kept current by the Host after
 upgrades. The build discovers the packages and generates the registry, so
 adding an agent never touches a central list. Contribution contract:
