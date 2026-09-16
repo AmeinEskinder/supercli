@@ -296,13 +296,18 @@ struct RootView: View {
         )
         // The window title strip — WINDOW chrome, not content chrome: the
         // current page's title centers on the whole window like a macOS
-        // window title, sidebar open or collapsed, and the workspace's
-        // trailing Open-in/site chips sit at the window's edge. Every page
-        // keeps a matching-height spacer. Under the resizers so the 8pt
-        // edge handles still win at the strip's ends.
+        // window title, and the workspace's trailing Open-in/site chips sit
+        // at the window's edge. Shown for a collapsed sidebar, Settings, and
+        // the libraries (`showsWindowTitleStrip`); with the sidebar open the
+        // terminal panes run to the window top. Every page keeps a matching
+        // spacer. Under the resizers so the 8pt edge handles still win at
+        // the strip's ends.
         .overlay(alignment: .top) {
-            WindowTitleStrip(store: store)
-                .padding(.top, surfaceInset)
+            if store.showsWindowTitleStrip {
+                WindowTitleStrip(store: store)
+                    .padding(.top, surfaceInset)
+                    .transition(.opacity)
+            }
         }
         .overlay(alignment: .topLeading) {
             if !store.sidebarCollapsed {

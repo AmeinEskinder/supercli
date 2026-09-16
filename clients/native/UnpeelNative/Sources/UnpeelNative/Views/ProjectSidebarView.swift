@@ -49,9 +49,9 @@ struct ProjectSidebarView: View {
             let launcherOpen = launcherProject != nil
             let slotCount = sessions.count + (launcherOpen ? 1 : 0)
             let gaps = CGFloat(max(0, slotCount - 1)) * inset
-            // The main panes sit below the title strip — the panel panes
-            // follow so their tops align.
-            let topOffset: CGFloat = Theme.titleStripHeight
+            // While the title strip is shown the main panes sit below it —
+            // the panel panes follow so their tops align.
+            let topOffset: CGFloat = store.showsWindowTitleStrip ? Theme.titleStripHeight : 0
             let available = max(
                 0, geo.size.height - inset * 2 - gaps - topOffset
             )

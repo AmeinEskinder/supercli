@@ -242,12 +242,17 @@ struct ContentArea: View {
 
     private var workspacePane: some View {
         VStack(spacing: 0) {
-            // Every page sits below the window title strip — the panes
-            // and the full-content cards slide down and the page's title
-            // reads centered above them, in both sidebar states. RootView
-            // owns the visible strip; keep only the matching height here.
-            Color.clear
-                .frame(height: Theme.titleStripHeight)
+            // No title strip while the sidebar is open: the terminal panes
+            // run all the way to the window top and carry their own header
+            // chrome. The strip comes back for the main-pane libraries
+            // (their only title and window-drag surface) and a COLLAPSED
+            // sidebar — the panes slide down and the current project/branch
+            // fades in centered. RootView owns the visible strip; keep only
+            // the matching height here.
+            if store.showsWindowTitleStrip {
+                Color.clear
+                    .frame(height: Theme.titleStripHeight)
+            }
             // Remote connection state (reconnecting / repair / offline)
             // surfaces as a banner in the same slot the local restart /
             // resume banners use.
@@ -337,6 +342,12 @@ struct ContentArea: View {
         // corner bleed) shows the ONE window-spanning frame backdrop. A
         // second frame paint here doubled the wash whenever the frame was
         // translucent, reading as a lighter pane behind the strip.
+        // The collapsed-sidebar title strip fades in while the panes slide
+        // down under it — same curve as the sidebar collapse itself.
+        .animation(
+            .timingCurve(0.25, 0.1, 0.25, 1, duration: 0.15),
+            value: store.sidebarCollapsed
+        )
     }
 
     /// The full-content pages (libraries, launcher, empty/dead states)

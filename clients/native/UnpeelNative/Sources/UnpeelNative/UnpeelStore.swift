@@ -14249,6 +14249,16 @@ final class UnpeelStore: ObservableObject {
 
     /// Title-strip segments while a main-pane library (All recent, Archived)
     /// covers the workspace; nil for the workspace itself.
+    /// Whether the window title strip is shown above the content. With the
+    /// sidebar open, the workspace's terminal panes run to the window top
+    /// and carry their own header chrome (the active project's branch sits
+    /// in the sidebar row instead); the strip is the title and drag surface
+    /// for a collapsed sidebar, for Settings, and for the main-pane
+    /// libraries, which have no other title.
+    var showsWindowTitleStrip: Bool {
+        sidebarCollapsed || settingsVisible || libraryTitlebarSegments != nil
+    }
+
     var libraryTitlebarSegments: [String]? {
         if recentActivityVisible {
             return ["Recent"]

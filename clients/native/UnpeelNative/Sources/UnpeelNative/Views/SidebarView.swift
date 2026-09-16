@@ -1366,6 +1366,10 @@ struct ProjectNodeView: View {
             localSiteURLs: isLocalScope && node.project.parentProjectID == nil
                 ? store.localSiteURLs(forProjectFamilyOf: node.id)
                 : [],
+            // Plain git projects (worktree children already carry their
+            // branch in the model) show the checked-out branch while they
+            // hold the selected session.
+            activeBranchStore: node.project.worktreeBranch == nil ? store : nil,
             // Top-level projects reorder among projects; child groups and
             // worktrees already interleave with sessions through the same
             // detached controller. Every reorderable project row therefore
@@ -1945,6 +1949,12 @@ struct ProjectRowView: View {
     /// Non-empty shows the globe link button beside the name and the Links
     /// section of the context menu. Top-level local projects only.
     var localSiteURLs: [String] = []
+    /// Plain git projects show their checked-out branch beside the name
+    /// while they hold the selected session (the sidebar's stand-in for the
+    /// window title strip, which is hidden while the sidebar is open). Not
+    /// observed here: the leaf label watches selection + branch state so
+    /// a branch update never re-evaluates the row.
+    var activeBranchStore: UnpeelStore?
     let onToggle: () -> Void
     let onLaunchPreset: (Preset) -> Void
     var onCreateWorktree: () -> Void = {}
@@ -2152,18 +2162,9 @@ struct ProjectRowView: View {
             // 12px branch icon + mono branch name at 0.55 opacity; the name
             // is omitted when it equals the project title.
             if let branch = node.project.worktreeBranch {
-                HStack(spacing: 3) {
-                    ChromeIconView(icon: .branch, size: 12)
-                    if branch != node.project.name {
-                        Text(branch)
-                            .font(.system(size: 10, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: 110, alignment: .leading)
-                    }
-                }
-                .foregroundStyle(Theme.mutedForeground)
-                .opacity(0.55)
+                SidebarBranchLabel(branch: branch, projectName: node.project.name)
+            } else if let store = activeBranchStore {
+                ActiveProjectBranchLabel(store: store, projectID: node.project.id)
             }
 
             Spacer(minLength: 4)
@@ -4020,6 +4021,65 @@ struct RemoveConfirmDismissMonitor: NSViewRepresentable {
             MainActor.assumeIsolated {
                 for monitor in monitors { NSEvent.removeMonitor(monitor) }
             }
+        }
+    }
+}
+
+// MARK: - Project branch labels
+
+/// 12px branch icon + mono branch name at 0.55 opacity; the name is omitted
+/// when it equals the project title.
+struct SidebarBranchLabel: View {
+    let branch: String
+    let projectName: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ChromeIconView(icon: .branch, size: 12)
+            if branch != projectName {
+                Text(branch)
+                    .font(.system(size: 10, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 110, alignment: .leading)
+            }
+        }
+        .foregroundStyle(Theme.mutedForeground)
+        .opacity(0.55)
+    }
+}
+
+/// The checked-out branch of the project that holds the selected session,
+/// beside its name in the sidebar. A leaf on purpose: it observes the hot
+/// selection state and the store's async branch resolution
+/// (`refreshTitlebarBranch`, the same source the collapsed-sidebar title
+/// strip shows), so neither invalidates the project row around it. Renders
+/// nothing for every other project.
+struct ActiveProjectBranchLabel: View {
+    let store: UnpeelStore
+    let projectID: String
+    @ObservedObject private var selection: SessionSelectionState
+    @ObservedObject private var branchState: TitlebarBranchState
+
+    init(store: UnpeelStore, projectID: String) {
+        self.store = store
+        self.projectID = projectID
+        self.selection = store.sessionSelection
+        self.branchState = store.titlebarBranchState
+    }
+
+    private var isActiveProject: Bool {
+        selection.sessionID.flatMap { store.displaySessionsByID[$0] }?.projectID == projectID
+    }
+
+    var body: some View {
+        if isActiveProject, !branchState.presentation.isWorktree,
+           let branch = branchState.presentation.name {
+            SidebarBranchLabel(
+                branch: branch,
+                projectName: store.displayProjectsByID[projectID]?.name ?? ""
+            )
+            .transition(.opacity)
         }
     }
 }
