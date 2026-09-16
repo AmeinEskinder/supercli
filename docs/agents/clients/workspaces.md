@@ -45,11 +45,13 @@ Core pieces (`UnpeelWorkspaceRegistry.swift`):
   homes remain under `~/.unpeel/profiles/<slug>`. These shipped names are
   compatibility identifiers, not current product terminology. Never resolve
   the registry through `LaunchConfig.unpeelDir`: every instance must see one
-  registry. Homes are minted **permanently** because provider hook configs
-  (`~/.claude/settings.json`,
-  `~/.codex/hooks.json`, …) bake absolute script paths into whichever home
-  installed hooks last; scripts are byte-identical across homes, so shared
-  configs keep working as long as no home dir vanishes.
+  registry. Homes are minted **permanently**. Provider configs
+  (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.claude.json`, …)
+  are per user, so the integration they point at (hook scripts, the MCP shim,
+  the installed markers) lives in the **machine home** — the real `~/.unpeel`,
+  exported to every workspace worker as `UNPEEL_MACHINE_HOME` — never in a
+  workspace home: installing from one local workspace installs for all, and
+  Settings ▸ Agents shows the same status in each.
 - **Launch** (`UnpeelWorkspaceLauncher.launch`): direct `Process` exec of
   `Bundle.main.executableURL` with `UNPEEL_HOME` in the env — **never
   `open`/NSWorkspace** (env not forwarded; same bundle id re-focuses).

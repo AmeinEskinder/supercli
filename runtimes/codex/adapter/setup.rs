@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{
     notify_hook_script_path, read_mergeable_json_object, write_executable_script,
     write_file_atomic, NOTIFY_HOOK_SCRIPT,
@@ -34,7 +34,7 @@ pub fn install() -> Result<(), String> {
     ensure_codex_config_toml(&notify_path, &shim)
 }
 pub(crate) fn codex_notify_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("codex-notify-hook.sh")
+    machine_home().join("hooks").join("codex-notify-hook.sh")
 }
 pub(crate) fn codex_hooks_json_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".codex").join("hooks.json"))

@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{read_mergeable_json_object, write_executable_script, write_file_atomic};
 use serde_json::{json, Value};
 use std::fs;
@@ -101,7 +101,7 @@ pub(crate) fn ensure_claude_user_mcp_server(shim: &Path) -> Result<(), String> {
     }
     // Lock beside Unpeel's own state rather than dropping a `.claude.lock`
     // into the home directory root.
-    let lock_target = unpeel_home().join("integrations").join("claude-user-config.json");
+    let lock_target = machine_home().join("integrations").join("claude-user-config.json");
     if let Some(parent) = lock_target.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
     }
@@ -120,7 +120,7 @@ pub(crate) fn ensure_claude_user_mcp_server(shim: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn claude_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("claude-hooks.sh")
+    machine_home().join("hooks").join("claude-hooks.sh")
 }
 pub(crate) fn claude_settings_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".claude").join("settings.json"))

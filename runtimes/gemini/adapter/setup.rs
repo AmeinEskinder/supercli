@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{read_mergeable_json_object, write_executable_script, write_file_atomic};
 use serde_json::json;
 use std::fs;
@@ -16,7 +16,7 @@ pub fn install() -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn gemini_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("gemini-hook.sh")
+    machine_home().join("hooks").join("gemini-hook.sh")
 }
 
 pub(crate) fn gemini_settings_path() -> Option<PathBuf> {

@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{read_mergeable_json_object, write_executable_script, write_file_atomic};
 use serde_json::{json, Value};
 use std::fs;
@@ -151,7 +151,7 @@ pub(crate) fn write_cline_event_hook(
     write_executable_script(&target, contents, "Cline lifecycle hook")
 }
 pub(crate) fn cline_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("cline-hook.sh")
+    machine_home().join("hooks").join("cline-hook.sh")
 }
 
 pub fn cline_home_dir() -> PathBuf {

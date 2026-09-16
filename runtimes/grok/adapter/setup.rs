@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{write_executable_script, write_file_atomic};
 use serde_json::json;
 use std::fs;
@@ -23,7 +23,7 @@ pub fn install() -> Result<(), String> {
 }
 
 pub(crate) fn grok_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("grok-hook.sh")
+    machine_home().join("hooks").join("grok-hook.sh")
 }
 
 pub(crate) fn grok_hooks_path() -> Option<PathBuf> {

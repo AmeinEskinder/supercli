@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{read_mergeable_json_object, write_executable_script, write_file_atomic};
 use serde_json::{json, Value};
 use std::fs;
@@ -25,7 +25,7 @@ pub(crate) fn kiro_home_dir() -> Option<PathBuf> {
 }
 
 pub(crate) fn kiro_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("kiro-hook.sh")
+    machine_home().join("hooks").join("kiro-hook.sh")
 }
 
 pub(crate) fn kiro_v3_hooks_path() -> Option<PathBuf> {

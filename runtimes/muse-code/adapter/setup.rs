@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{append_trace_log_line, write_executable_script, write_file_atomic};
 use serde_json::{json, Value};
 use std::fs;
@@ -163,11 +163,11 @@ pub(crate) fn run_muse_plugins_command(muse_bin: &str, args: &[&str]) -> Result<
     Ok(())
 }
 pub fn muse_plugin_dir() -> PathBuf {
-    unpeel_home().join("hooks").join("muse-plugin")
+    machine_home().join("hooks").join("muse-plugin")
 }
 
 pub(crate) fn muse_plugin_marker_path() -> PathBuf {
-    unpeel_home().join("hooks").join("muse-plugin.installed")
+    machine_home().join("hooks").join("muse-plugin.installed")
 }
 
 /// Muse Code's data dir (`$XDG_DATA_HOME/muse`, default

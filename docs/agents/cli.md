@@ -238,9 +238,17 @@ Host will rewrite it for this build), `not installed`, or `detection only`
 `~/.unpeel/integrations/` records the installing build; the workspace
 worker re-runs installed integrations' installers after an upgrade so hook
 scripts and `~/.unpeel/bin/unpeel-mcp` keep pointing at the running binary.
+The integration is per user, like the provider configs it edits: markers,
+hook scripts, and the shim live under the **machine home**
+(`app_paths::machine_home()` — the real `~/.unpeel`, exported to workspace
+workers and to `unpeel --workspace` processes as `UNPEEL_MACHINE_HOME`; an
+isolated `UNPEEL_HOME` with no such export, i.e. a blank instance or a test,
+is its own machine home), so installing from any local workspace installs
+for all of them and every workspace reports the same status. A remote Host
+has its own machine home.
 The Host verb is `integrations.install` (`POST /mobile/integrations/install`,
 `{"runtimeID": …}`), and bootstrap's `availableAgents` rows carry
-`integrationInstallable`/`integrationInstalled`, plus the package's `integrationSummary` / `integrationManualCommand` and the Host's `mcpShimPath`, for Settings ▸ Unpeel MCP ▸ Connected agents.
+`integrationInstallable`/`integrationInstalled`, plus the package's `integrationSummary` / `integrationManualCommand` and the Host's `mcpShimPath`, for Settings ▸ Agents.
 
 ### Unpeel Apps (`unpeel apps`)
 

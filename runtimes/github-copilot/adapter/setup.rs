@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{
     ensure_project_exclude_entry, write_executable_script, write_project_file_no_symlinks,
 };
@@ -43,5 +43,5 @@ pub fn prepare_copilot_project_hooks(cwd: &str) -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn copilot_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("copilot-hook.sh")
+    machine_home().join("hooks").join("copilot-hook.sh")
 }

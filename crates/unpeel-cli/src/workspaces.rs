@@ -326,6 +326,15 @@ pub fn enter(reference: &str) -> Result<(), String> {
     // The home was minted at create; recreate it if it vanished so a stale
     // registry entry degrades to an empty workspace instead of a crash.
     std::fs::create_dir_all(&record.home).map_err(|e| e.to_string())?;
+    // Integrations are per user: remember the machine root before re-homing
+    // so `unpeel --workspace X integrations …` reads and writes the same
+    // markers, hook scripts, and shim as every other local workspace.
+    if std::env::var_os(unpeel_core::app_paths::MACHINE_HOME_ENV).is_none_or(|v| v.is_empty()) {
+        std::env::set_var(
+            unpeel_core::app_paths::MACHINE_HOME_ENV,
+            unpeel_core::app_paths::machine_home(),
+        );
+    }
     std::env::set_var("UNPEEL_HOME", &record.home);
     Ok(())
 }

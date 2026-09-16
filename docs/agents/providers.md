@@ -9,7 +9,8 @@ environment (`UNPEEL_SESSION_ID`, `UNPEEL_SESSION_DIR`, `UNPEEL_APP_PORT`,
 the workspace accent). No wrapper is put on `PATH`, no flag is appended, no
 provider id is minted, and no provider configuration is edited by a launch or
 by observing a hand-typed agent. Everything provider-specific below is the
-runtime's **integration**, which the user installs once per Host —
+runtime's **integration**, which the user installs once per Host (per user
+account: every local workspace shares it, see `app_paths::machine_home`) —
 `unpeel integrations install <runtime>` or the `integrations.install` Host
 verb behind Settings ▸ Agents ▸ Install integration — into that CLI's own global
 configuration. Installers are idempotent, locked, and content-guarded; the

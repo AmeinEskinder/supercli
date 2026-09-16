@@ -9,12 +9,19 @@
 //! observing a hand-typed agent never installs anything.
 //!
 //! What Unpeel keeps doing on its own is keeping an installed integration
-//! current: a marker under `<UNPEEL_HOME>/integrations/` records which Host
+//! current: a marker under `<machine home>/integrations/` records which Host
 //! build installed it, and the workspace worker re-runs the (idempotent,
 //! content-guarded) installer after an upgrade so hook scripts and the MCP
 //! shim keep pointing at the running binary.
+//!
+//! The integration is a per-user fact, because the provider configs it edits
+//! are per user: every local workspace of one account shares one set of
+//! markers, hook scripts, and one shim under `app_paths::machine_home()`
+//! (the machine's `~/.unpeel`, or the isolated home itself for a blank
+//! instance or a test). Installing from any local workspace installs for
+//! all of them; a remote Host has its own machine home.
 
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,9 +35,9 @@ pub const MCP_SHIM_NAME: &str = "unpeel-mcp";
 
 const MARKER_SCHEMA: u8 = 1;
 
-/// `<UNPEEL_HOME>/bin/unpeel-mcp`.
+/// `<machine home>/bin/unpeel-mcp`.
 pub fn mcp_shim_path() -> PathBuf {
-    mcp_shim_path_in(&unpeel_home())
+    mcp_shim_path_in(&machine_home())
 }
 
 pub fn mcp_shim_path_in(home: &Path) -> PathBuf {
@@ -191,7 +198,7 @@ fn status_for(
 /// a legacy slug, catalog id, or command; unknown runtimes are never
 /// installed.
 pub fn is_installed(tool: &str) -> bool {
-    is_installed_in(&unpeel_home(), tool)
+    is_installed_in(&machine_home(), tool)
 }
 
 pub fn is_installed_in(home: &Path, tool: &str) -> bool {
@@ -201,7 +208,7 @@ pub fn is_installed_in(home: &Path, tool: &str) -> bool {
 
 /// Status of one runtime's integration, or `None` for an unknown runtime.
 pub fn status(tool: &str) -> Option<IntegrationStatus> {
-    status_in(&unpeel_home(), tool)
+    status_in(&machine_home(), tool)
 }
 
 pub fn status_in(home: &Path, tool: &str) -> Option<IntegrationStatus> {
@@ -210,7 +217,7 @@ pub fn status_in(home: &Path, tool: &str) -> Option<IntegrationStatus> {
 
 /// Every agent runtime on this platform, in catalog order.
 pub fn list() -> Vec<IntegrationStatus> {
-    list_in(&unpeel_home())
+    list_in(&machine_home())
 }
 
 pub fn list_in(home: &Path) -> Vec<IntegrationStatus> {
@@ -232,7 +239,7 @@ pub fn list_in(home: &Path) -> Vec<IntegrationStatus> {
 
 /// Install (or refresh) `tool`'s integration and record the marker.
 pub fn install(tool: &str) -> Result<IntegrationStatus, String> {
-    install_in(&unpeel_home(), tool)
+    install_in(&machine_home(), tool)
 }
 
 pub fn install_in(home: &Path, tool: &str) -> Result<IntegrationStatus, String> {
@@ -270,7 +277,7 @@ pub fn install_in(home: &Path, tool: &str) -> Result<IntegrationStatus, String> 
 /// assets after an upgrade. Never installs anything new. Returns one result
 /// per refreshed runtime.
 pub fn refresh_installed() -> Vec<(String, Result<(), String>)> {
-    refresh_installed_in(&unpeel_home())
+    refresh_installed_in(&machine_home())
 }
 
 pub fn refresh_installed_in(home: &Path) -> Vec<(String, Result<(), String>)> {

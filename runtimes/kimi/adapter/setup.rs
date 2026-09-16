@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::machine_home;
 use crate::hook_assets::{write_executable_script, write_file_atomic};
 use serde_json::{json, Value};
 use std::fs;
@@ -27,7 +27,7 @@ pub(crate) fn kimi_share_dir() -> Option<PathBuf> {
 }
 
 pub(crate) fn kimi_hook_script_path() -> PathBuf {
-    unpeel_home().join("hooks").join("kimi-hook.sh")
+    machine_home().join("hooks").join("kimi-hook.sh")
 }
 
 pub(crate) fn kimi_config_path() -> Option<PathBuf> {
