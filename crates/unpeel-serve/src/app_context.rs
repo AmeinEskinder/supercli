@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use unpeel_core::session_host::HostedSessionManifest;
 use unpeel_core::state::AppState;
 
@@ -56,19 +56,6 @@ struct ProjectRecord {
     path: String,
     parent_id: Option<String>,
     worktree_branch: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct WorkspaceRegistry {
-    #[serde(default, rename = "profiles")]
-    workspaces: Vec<WorkspaceRecord>,
-}
-
-#[derive(Deserialize)]
-struct WorkspaceRecord {
-    id: String,
-    name: String,
-    home: String,
 }
 
 pub(crate) fn response_with_overlay(
@@ -271,15 +258,10 @@ fn workspace_at(
         };
     };
     let target = normalized_path(explicit_home);
-    let registry = std::fs::read(real_unpeel.join("profiles.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_slice::<WorkspaceRegistry>(&raw).ok());
-    if let Some(record) = registry.and_then(|registry| {
-        registry
-            .workspaces
-            .into_iter()
-            .find(|record| normalized_path(Path::new(&record.home)) == target)
-    }) {
+    if let Some(record) = unpeel_core::app_paths::read_workspace_registry(real_unpeel)
+        .into_iter()
+        .find(|record| normalized_path(&record.home) == target)
+    {
         if valid_wire_text(&record.name, 1024) {
             return WorkspaceContext {
                 id: valid_wire_text(&record.id, 256).then_some(record.id),

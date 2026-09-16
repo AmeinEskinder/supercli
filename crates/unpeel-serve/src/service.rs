@@ -432,13 +432,6 @@ fn spawn_workspace(executable: &Path, target: &WorkspaceTarget) -> Result<Child,
     } else {
         command.env("UNPEEL_HOME", &target.home);
     }
-    // Integrations (markers, hook scripts, the MCP shim) are per user, so
-    // every worker — and every hosted shell under it — keeps pointing at
-    // this supervisor's root rather than the workspace's isolated home.
-    command.env(
-        unpeel_core::app_paths::MACHINE_HOME_ENV,
-        unpeel_core::app_paths::machine_home(),
-    );
     command
         .spawn()
         .map_err(|error| format!("launch {}: {error}", executable.display()))

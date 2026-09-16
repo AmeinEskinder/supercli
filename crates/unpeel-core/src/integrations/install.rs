@@ -17,9 +17,11 @@
 //! The integration is a per-user fact, because the provider configs it edits
 //! are per user: every local workspace of one account shares one set of
 //! markers, hook scripts, and one shim under `app_paths::machine_home()`
-//! (the machine's `~/.unpeel`, or the isolated home itself for a blank
-//! instance or a test). Installing from any local workspace installs for
-//! all of them; a remote Host has its own machine home.
+//! (the machine's `~/.unpeel` whenever `UNPEEL_HOME` is a workspace in the
+//! machine's registry, the isolated home itself otherwise — a blank
+//! instance or a test is never registered). Installing from any local
+//! workspace installs for all of them; a remote Host has its own machine
+//! home.
 
 use crate::app_paths::machine_home;
 use serde::{Deserialize, Serialize};
