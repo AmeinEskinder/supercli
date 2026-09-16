@@ -1321,7 +1321,7 @@ struct ProjectNodeView: View {
     @ViewBuilder
     private var projectRow: some View {
         // `showsLocalProjectVerbs` is the pure-`.local` gate: native preset
-        // management (Settings ▸ Agents & Apps edits THIS instance's home).
+        // management (Settings ▸ Agents edits THIS instance's home).
         // `isLocalMachine` gates the verbs that ARE valid against a scoped
         // local workspace on this Mac: organization verbs (folder color, sort,
         // groups, rename — Host carriers or the scoped home's own records),
@@ -1408,7 +1408,7 @@ struct ProjectNodeView: View {
             onSetSessionDateSorted: { dateSorted in
                 store.setSessionDateSorted(dateSorted, for: node.id)
             },
-            onManagePresets: { store.openSettings(tab: .agentsApps) },
+            onManagePresets: { store.openSettings(tab: .agents) },
             workspaceMoveTargets: node.project.parentProjectID == nil
                 && isLocalMachine
                 ? workspaceMoveTargets
@@ -1578,7 +1578,7 @@ struct ProjectNodeView: View {
                             sourcePresetID: preset.command.isEmpty ? nil : preset.id
                         )
                     },
-                    onManagePresets: { store.openSettings(tab: .agentsApps) },
+                    onManagePresets: { store.openSettings(tab: .agents) },
                     showsManagePresets: store.selectedHostScope == .local,
                     archivedCount: archivedSessionCount,
                     onOpenArchived: { store.openArchivedSessions(projectID: node.id) }
@@ -2235,7 +2235,7 @@ struct ProjectRowView: View {
                 }
                 if showsLocalProjectVerbs {
                     Divider()
-                    Button("Manage Agents & Apps…") { onManagePresets() }
+                    Button("Manage Agents…") { onManagePresets() }
                 }
             }
             // Folder color is a MAIN-project verb: groups and worktrees stay
@@ -2668,7 +2668,7 @@ func newSessionMenuContent(
         Button {
             onManagePresets()
         } label: {
-            Text("Manage Agents & Apps…")
+            Text("Manage Agents…")
         }
     }
 }

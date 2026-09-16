@@ -1,10 +1,19 @@
 import SwiftUI
 import UnpeelShared
 
-/// The selected Host owns inventory, commands, activation, and row order.
-struct AgentsAppsSettingsPanel: View {
+/// Settings ▸ Agents and Settings ▸ Plugins: one list implementation, two
+/// scopes over the Host's plugin inventory. The selected Host owns inventory,
+/// commands, activation, and row order (one shared `plugin_order` across both
+/// pages; reordering a page moves only its rows). The Agents scope adds the
+/// per-agent Unpeel integration (Connect / Reinstall, what it edits, what the
+/// agent can do connected vs. not) and the manual setup recipe; the Plugins
+/// scope is the Unpeel Apps catalog under its user-facing name.
+struct PluginSettingsPanel: View {
+    enum Scope { case agents, plugins }
+
     @ObservedObject var store: UnpeelStore
     @ObservedObject var runtime: RemoteHostRuntime
+    let scope: Scope
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Only the small row modifiers observe drag publications.
     @State private var drag = PluginListDragController()
@@ -23,7 +32,16 @@ struct AgentsAppsSettingsPanel: View {
     @State private var startingInstallation: String?
     @State private var updates: [String: RemotePluginUpdate] = [:]
     @State private var checkingUpdates = false
+    @State private var expanded: Set<String> = []
+    @State private var pendingIntegrations: Set<String> = []
+    @State private var integrationErrors: [String: String] = [:]
+    @State private var showManualSetup = false
+    @State private var bannerDismissed = UserDefaults.standard.bool(forKey: PluginSettingsPanel.bannerDismissedKey)
     @ObservedObject private var terminalFont = TerminalFontModel.shared
+
+    /// Per-viewer convenience only: the "connect these agents?" banner stays
+    /// dismissed on this Mac; the row-level Connect buttons never hide.
+    static let bannerDismissedKey = "unpeel.native.agentsConnectBannerDismissed"
 
     private struct Installation: Identifiable {
         let id: String
@@ -55,6 +73,23 @@ struct AgentsAppsSettingsPanel: View {
             switch self { case .header(let title): "header:\(title)"; case .item(let item): item.id }
         }
     }
+    private var title: String { scope == .agents ? "Agents" : "Plugins" }
+    private var description: String {
+        switch scope {
+        case .agents:
+            return "Install agent CLIs on this Host, connect them to Unpeel, and choose what each one launches."
+        case .plugins:
+            return "Unpeel Apps that open files and resources in a pane beside your agents. "
+                + "Install and update them here; develop your own with `unpeel apps link`."
+        }
+    }
+    private var searchPrompt: String { scope == .agents ? "Search agents" : "Search plugins" }
+    private var emptyText: String {
+        scope == .agents ? "No agents match your search." : "No plugins match your search."
+    }
+    private var canConnect: Bool {
+        runtime.supportsHostOperation(RemoteHostRuntime.HostOperation.integrationsInstall)
+    }
     private var motion: Animation? {
         reduceMotion ? nil : SidebarSessionDragController.slotAnimation
     }
@@ -67,7 +102,7 @@ struct AgentsAppsSettingsPanel: View {
     private var canEdit: Bool { runtime.supportsHostOperation(RemoteHostRuntime.HostOperation.presetsSet) }
     private var canReorder: Bool { runtime.supportsHostOperation(RemoteControlProtocol.pluginsOrderCapability) }
     private var items: [PluginSettingsItem] {
-        let source = PluginSettingsList.items(in: runtime.snapshot)
+        let source = PluginSettingsList.items(in: runtime.snapshot).filter { scope == .plugins ? $0.isApp : !$0.isApp }
         guard let orderOverride else { return source }
         let ranks = Dictionary(orderOverride.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: min)
         return source.enumerated().sorted {
@@ -86,12 +121,12 @@ struct AgentsAppsSettingsPanel: View {
     private var activeIDs: [String] { visibleItems.filter(isActive).map(\.id) }
     private var entries: [ListEntry] {
         let visible = visibleItems
-        let sections: [(String, [PluginSettingsItem])] = [
-            ("Active", visible.filter(isActive)),
-            ("Apps", visible.filter { !$0.installed && $0.isApp }),
-            ("Inactive", visible.filter { $0.installed && !isActive($0) }),
-            ("Agents", visible.filter { !$0.installed && !$0.isApp }),
-        ]
+        let active = ("Active", visible.filter(isActive))
+        let inactive = ("Inactive", visible.filter { $0.installed && !isActive($0) })
+        let available = ("Available to install", visible.filter { !$0.installed })
+        let sections: [(String, [PluginSettingsItem])] = scope == .agents
+            ? [active, inactive, available]
+            : [active, available, inactive]
         return sections.filter { !$0.1.isEmpty }.flatMap { title, items in
             [.header(title)] + items.map(ListEntry.item)
         }
@@ -101,16 +136,21 @@ struct AgentsAppsSettingsPanel: View {
             ?? runtime.snapshot?.workspaceSettings?.pluginActivation?[item.id] ?? true)
     }
     private func isPending(_ id: String) -> Bool { (pending[id] ?? 0) > 0 }
+    /// Installed agent CLIs whose Unpeel integration the Host can install
+    /// but the user has not yet.
+    private var unconnectedAgents: [PluginSettingsItem] {
+        guard scope == .agents else { return [] }
+        return items.filter { $0.installed && !$0.isCustom && $0.integrationInstallable && !$0.integrationInstalled }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsPaneHeader(title: "Agents & Apps",
-                description: "Install, activate, and customize launch commands for this workspace.")
+            SettingsPaneHeader(title: title, description: description)
                 .padding(20)
             HStack(spacing: 16) {
                 HStack(spacing: 7) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Theme.mutedForeground)
-                    TextField("Search agents and apps", text: $search).textFieldStyle(.plain)
+                    TextField(searchPrompt, text: $search).textFieldStyle(.plain)
                 }
                 .padding(8)
                 .background(Theme.foreground.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
@@ -133,8 +173,11 @@ struct AgentsAppsSettingsPanel: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 5) {
                         if !canReorder {
-                            Label("Update Unpeel on this Host to reorder agents and apps.", systemImage: "info.circle")
+                            Label("Update Unpeel on this Host to reorder \(title.lowercased()).", systemImage: "info.circle")
                                 .font(.system(size: 12)).foregroundStyle(Theme.mutedForeground)
+                        }
+                        if !unconnectedAgents.isEmpty, canConnect, !bannerDismissed, search.isEmpty {
+                            connectBanner.padding(.bottom, 8)
                         }
                         // One identity space lets a row travel between sections
                         // without destroying its command editors or draft text.
@@ -154,10 +197,12 @@ struct AgentsAppsSettingsPanel: View {
                             }
                         }
                         if visibleItems.isEmpty {
-                            Text("No agents or apps match your search.")
+                            Text(emptyText)
                                 .font(.system(size: 13)).foregroundStyle(Theme.mutedForeground)
                         }
-                        if canEdit { customCommandRow.padding(.top, 8) }
+                        if scope == .agents, canEdit { customCommandRow.padding(.top, 8) }
+                        if scope == .agents { manualSetup.padding(.top, 12) }
+                        if scope == .plugins { openersRow.padding(.top, 12) }
                     }
                     .padding(.horizontal, 20).padding(.bottom, 24)
                     .background(PluginDragMonitor(controller: drag, ids: activeIDs,
@@ -236,6 +281,31 @@ struct AgentsAppsSettingsPanel: View {
     }
 
     private func pluginRow(_ item: PluginSettingsItem, preview: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rowContent(item, preview: preview)
+            if !preview, hasDetails(item), expanded.contains(item.id) {
+                Rectangle().fill(Theme.resizerLine.opacity(0.55)).frame(height: 1).padding(.top, 6)
+                agentDetails(item)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.resizerLine.opacity(0.55), lineWidth: 1))
+        .allowsHitTesting(!preview)
+    }
+
+    /// Agent rows expand to their integration details; plugins and custom
+    /// commands have none.
+    private func hasDetails(_ item: PluginSettingsItem) -> Bool {
+        scope == .agents && item.installed && !item.isCustom
+    }
+    private func toggleExpanded(_ id: String) {
+        withAnimation(motion) {
+            if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+        }
+    }
+
+    private func rowContent(_ item: PluginSettingsItem, preview: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ToolIconView(appID: item.appID, command: item.command, size: 19)
                 .frame(width: 22, height: 24)
@@ -282,26 +352,225 @@ struct AgentsAppsSettingsPanel: View {
                     .background(PluginDragExclusion(controller: drag))
                     .frame(width: 32, height: 24)
                 }
+                if hasDetails(item) {
+                    Button { toggleExpanded(item.id) } label: {
+                        Image(systemName: expanded.contains(item.id) ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .frame(width: 18, height: 24)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Theme.mutedForeground)
+                    .accessibilityLabel(expanded.contains(item.id) ? "Hide \(item.name) details" : "Show \(item.name) details")
+                    .help(expanded.contains(item.id) ? "Hide details" : "Connection, capabilities, and manual setup")
+                    .background(PluginDragExclusion(controller: drag))
+                }
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.resizerLine.opacity(0.55), lineWidth: 1))
-        .allowsHitTesting(!preview)
     }
 
-    /// Passive only: connecting an agent (hooks + MCP registration in the
-    /// CLI's own config) lives under Settings ▸ Unpeel MCP ▸ Connected agents.
+    // MARK: Unpeel integration (Agents scope)
+
+    /// The row-level connection state. Connecting runs the Host's
+    /// `integrations.install` verb: hooks + the unpeel MCP server registered
+    /// in the CLI's own configuration, once per Host. The Controller knows
+    /// nothing about provider file formats; a remote Host renders identically.
     @ViewBuilder
     private func integrationControl(_ item: PluginSettingsItem) -> some View {
-        if item.installed, item.integrationInstallable, item.integrationInstalled {
-            Label("Connected to Unpeel MCP", systemImage: "checkmark.circle")
-                .labelStyle(.iconOnly)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.mutedForeground)
-                .frame(width: 22, height: 24)
-                .help("Connected to Unpeel MCP: hooks and the unpeel server are registered with \(item.name). Manage under Unpeel MCP.")
+        if scope == .agents, item.installed, !item.isCustom, item.integrationInstallable {
+            if pendingIntegrations.contains(item.id) {
+                ProgressView().controlSize(.small).frame(width: 22, height: 24)
+            } else if item.integrationInstalled {
+                Label("Connected to Unpeel", systemImage: "checkmark.circle")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.mutedForeground)
+                    .frame(width: 22, height: 24)
+                    .help("Connected: Unpeel's hooks and MCP server are registered with \(item.name).")
+            } else {
+                Button("Connect") { connect(item) }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .disabled(!canConnect)
+                    .help(canConnect
+                        ? "Register Unpeel's hooks and MCP server with \(item.name)"
+                        : "This Host does not support connecting agents")
+                    .background(PluginDragExclusion(controller: drag))
+            }
         }
+    }
+
+    private func connect(_ item: PluginSettingsItem) {
+        pendingIntegrations.insert(item.id)
+        integrationErrors.removeValue(forKey: item.id)
+        Task { @MainActor in
+            defer { pendingIntegrations.remove(item.id) }
+            do {
+                try await runtime.installIntegration(runtimeID: item.id)
+                runtime.requestImmediateRefresh()
+            } catch {
+                integrationErrors[item.id] = error.localizedDescription
+                withAnimation(motion) { expanded.insert(item.id) }
+            }
+        }
+    }
+
+    private func connectAll() {
+        for item in unconnectedAgents where !pendingIntegrations.contains(item.id) { connect(item) }
+    }
+
+    private func dismissBanner() {
+        withAnimation(motion) { bannerDismissed = true }
+        UserDefaults.standard.set(true, forKey: Self.bannerDismissedKey)
+    }
+
+    /// First-run nudge: agents were found on the Host that Unpeel could
+    /// connect. One click connects them all; each connection edits that
+    /// agent's own global configuration once.
+    private var connectBanner: some View {
+        let count = unconnectedAgents.count
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Color.accentColor)
+                .frame(width: 22, height: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(count == 1
+                    ? "\(unconnectedAgents[0].name) is installed but not connected to Unpeel"
+                    : "\(count) agents are installed but not connected to Unpeel")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Connect for exact busy and idle, done notifications, transcripts, precise resume, "
+                    + "and Unpeel's tools inside each agent. Each connection registers Unpeel's hooks and "
+                    + "MCP server in that agent's own configuration once.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(count == 1 ? "Connect" : "Connect all") { connectAll() }
+                .buttonStyle(.borderedProminent).controlSize(.small)
+                .disabled(!pendingIntegrations.isEmpty)
+            Button { dismissBanner() } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).frame(width: 18, height: 24)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.mutedForeground)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1))
+    }
+
+    /// The expanded agent row: connection status, what connecting edits (copy
+    /// from the runtime package), what the agent can do connected vs. not,
+    /// and the provider's own MCP registration command for hand setup.
+    private func agentDetails(_ item: PluginSettingsItem) -> some View {
+        let meta = UnpeelRuntimeCatalog.runtime(id: item.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(integrationTitle(item)).font(.system(size: 12, weight: .semibold))
+                    Text(integrationSummary(item))
+                        .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(capabilitiesLine(item, meta: meta))
+                        .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if item.integrationInstallable {
+                    if pendingIntegrations.contains(item.id) {
+                        ProgressView().controlSize(.small)
+                    } else if item.integrationInstalled {
+                        Button("Reinstall") { connect(item) }
+                            .buttonStyle(.plain).font(.system(size: 11))
+                            .foregroundStyle(Theme.mutedForeground)
+                            .disabled(!canConnect)
+                            .help("Rewrite the hook script and MCP registration for this Host build")
+                    } else {
+                        Button("Connect") { connect(item) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(!canConnect)
+                    }
+                }
+            }
+            if let manual = item.integrationManualCommand, !manual.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MCP only, by hand (no hooks):")
+                        .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
+                    Text(manual)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+            if let error = integrationErrors[item.id] {
+                Text(error).font(.system(size: 11)).foregroundStyle(Theme.danger)
+                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 8).padding(.bottom, 2)
+        .background(PluginDragExclusion(controller: drag))
+    }
+
+    private func integrationTitle(_ item: PluginSettingsItem) -> String {
+        guard item.integrationInstallable else { return "No Unpeel integration" }
+        return item.integrationInstalled ? "Connected to Unpeel" : "Not connected to Unpeel"
+    }
+    private func integrationSummary(_ item: PluginSettingsItem) -> String {
+        guard item.integrationInstallable else {
+            return "\(item.name) has no hooks or MCP configuration Unpeel can register; Unpeel still recognizes it by name."
+        }
+        return item.integrationSummary
+            ?? "Registers Unpeel's hooks and the unpeel MCP server in \(item.name)'s own configuration."
+    }
+    /// Capability honesty per state: hooks are the busy/idle authority, the
+    /// screen tier is the declared fallback, detection alone grants identity.
+    private func capabilitiesLine(_ item: PluginSettingsItem, meta: UnpeelRuntimeMetadata?) -> String {
+        if item.integrationInstallable && item.integrationInstalled {
+            return "Exact busy and idle from hooks, done notifications, transcripts, precise resume, "
+                + "and Unpeel's tools inside \(item.name)."
+        }
+        if item.integrationInstallable {
+            return meta?.lifecycleFallback == "screen"
+                ? "Until connected: busy and idle are read from the screen; no done notifications, "
+                    + "transcripts, precise resume, or Unpeel tools."
+                : "Until connected: identity and tint only; no busy and idle, done notifications, "
+                    + "transcripts, precise resume, or Unpeel tools."
+        }
+        return meta?.lifecycleFallback == "screen"
+            ? "Identity and tint from detection; busy and idle from the screen; Resume uses \(item.name)'s own continue-last."
+            : "Identity and tint from detection; Resume uses \(item.name)'s own continue-last."
+    }
+
+    /// The transparent alternative at the bottom of the Agents page: the one
+    /// shim every integration registers, and the CLI verb. Per-agent
+    /// commands sit in each row's details.
+    private var manualSetup: some View {
+        DisclosureGroup("Manual setup", isExpanded: $showManualSetup) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Every connected agent's MCP config points at one launcher on this Host. "
+                    + "Register it with an agent's own command (in the agent's details above) to "
+                    + "get Unpeel's tools without the hooks; Connect does both.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let shim = runtime.snapshot?.workspaceSettings?.mcpShimPath {
+                    Text(shim).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                }
+                Text("Or from any terminal: unpeel integrations install <agent>")
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.mutedForeground)
+                    .textSelection(.enabled)
+            }
+            .padding(.top, 4)
+        }
+        .font(.system(size: 12)).padding(.horizontal, 10)
+    }
+
+    /// Which plugin opens each file type is chosen next to the editor
+    /// choice under Appearance ▸ Open resources (one place for all openers).
+    private var openersRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.forward.app").foregroundStyle(Theme.mutedForeground)
+            Text("Choose which plugin opens each file type under Appearance ▸ Open resources.")
+                .foregroundStyle(Theme.mutedForeground)
+            Spacer(minLength: 8)
+            Button("Open resources…") { store.settingsTab = .appearance }
+                .buttonStyle(.bordered).controlSize(.small)
+        }
+        .font(.system(size: 12)).padding(10)
     }
 
     @ViewBuilder
@@ -496,7 +765,7 @@ struct AgentsAppsSettingsPanel: View {
                 Button {
                     runtime.requestImmediateRefresh()
                 } label: { Image(systemName: "arrow.clockwise") }
-                .help("Refresh installed agents and apps")
+                .help("Refresh installed \(title.lowercased())")
                 Button {
                     selectedInstallationID = nil
                 } label: { Image(systemName: "xmark") }

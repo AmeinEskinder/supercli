@@ -222,7 +222,7 @@ button) is a **unified per-session image view**, not just the agent's browser
 captures. It lists four artifact kinds under `~/.unpeel/app-sessions/<id>/
 artifacts/`, newest-first: `browser/screenshots` and `browser/downloads`
 (browser-MCP output), legacy `computer/screenshots`, and `uploads` (images the user,
-phone, or Sessions `add_to_gallery` action added). Settings ▸ Sessions use can
+phone, or Sessions `add_to_gallery` action added). Settings ▸ Agent access can
 keep ordinary Browser MCP screenshots out of the gallery; those captures land
 under unlisted `browser/captures` until explicitly published. The kind→dir mapping lives in the shared `SessionArtifactStore`
 (`SessionArtifacts.swift`), read by both galleries; `/mobile/artifacts` lists

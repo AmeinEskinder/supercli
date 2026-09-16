@@ -1106,7 +1106,7 @@ final class UnpeelStore: ObservableObject {
 
     /// Active settings tab (App.svelte shellView.tab); defaults to the
     /// first tab in the nav.
-    @Published var settingsTab: SettingsTab = .agentsApps
+    @Published var settingsTab: SettingsTab = .agents
 
     /// Keys of the features (Settings ▸ Features) that are currently
     /// enabled. Seeded from the registry so an env override or a
@@ -4017,10 +4017,10 @@ final class UnpeelStore: ObservableObject {
     func openSettings(tab: SettingsTab? = nil) {
         if let tab {
             settingsTab = (tab == .mobile && !UnpeelFeatureFlags.mobileRemoteControlEnabled)
-                ? .presets
+                ? .agents
                 : tab
         } else if settingsTab == .mobile && !UnpeelFeatureFlags.mobileRemoteControlEnabled {
-            settingsTab = .agentsApps
+            settingsTab = .agents
         }
         // The settings nav takes over the sidebar list area; drop the
         // main-pane library so Back always returns to the project tree.
@@ -15272,7 +15272,7 @@ final class UnpeelStore: ObservableObject {
         // local `spawnSession` path below. The runtime selects the Host-
         // minted row when its refreshed snapshot lands; keeping Settings
         // mounted hid that selection for sibling workspaces and remote
-        // Hosts (most visibly after Agents & Apps → Install).
+        // Hosts (most visibly after Agents → Install).
         settingsVisible = false
         let presetID = sourcePresetID
             ?? remotePresetSummaries.first { $0.command == command }?.id

@@ -18,6 +18,10 @@ struct PluginSettingsItem: Identifiable, Equatable {
     var integrationInstallable = false
     /// The user installed it on this Host.
     var integrationInstalled = false
+    /// What the installer edits, in the user's words (runtime package copy).
+    var integrationSummary: String?
+    /// The provider's own command for registering the MCP shim by hand.
+    var integrationManualCommand: String?
     var commands: [RemotePresetSummary]
 
     var displayVersion: String? { installed ? installedVersion : availableVersion }
@@ -33,6 +37,8 @@ enum PluginSettingsList {
                                isApp: false, isCustom: false,
                                integrationInstallable: $0.integrationInstallable ?? false,
                                integrationInstalled: $0.integrationInstalled ?? false,
+                               integrationSummary: $0.integrationSummary,
+                               integrationManualCommand: $0.integrationManualCommand,
                                commands: [])
         }
         items += (snapshot.availableApps ?? []).map {

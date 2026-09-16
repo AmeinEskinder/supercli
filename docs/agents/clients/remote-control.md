@@ -551,7 +551,7 @@ construct terminal escapes. The prompt asks the active agent to use Unpeel
 Browser's screenshot action with `gallery=true` and save a session screenshot
 artifact, while explicitly allowing the agent to report that a non-visual task
 has nothing to capture. That explicit Controller request overrides the ordinary
-Sessions use auto-gallery preference.
+Agent access auto-gallery preference.
 
 The iOS terminal surface exposes the action only when bootstrap advertises
 `artifact.request_screenshot` and `artifact.list`. It samples the current

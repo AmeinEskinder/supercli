@@ -347,7 +347,7 @@ impl McpNonChildWriteAccess {
 ///
 /// Defaults to `On`: the engine uses only Unpeel-managed project profiles (no
 /// access to the user's own browser data), and Unpeel agents already run with
-/// full shell access. Settings ▸ Browser ▸ Off is the master disable;
+/// full shell access. Settings ▸ Agent access ▸ Browser access ▸ Off is the master disable;
 /// personal-profile or live-user-browser modes would still require opt-in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -804,7 +804,7 @@ pub struct AppState {
     pub browser_access: HashMap<String, BrowserAccess>,
     /// The default Unpeel Browser MCP grant for any session without an explicit
     /// override in `browser_access`. Defaults to [`BrowserAccess::On`]; setting
-    /// it to Off in Settings ▸ Browser is the master disable.
+    /// it to Off in Settings ▸ Agent access is the master disable.
     #[serde(default)]
     pub browser_default_access: BrowserAccess,
     /// App-wide Browser MCP engine options (window visibility, site rules,
@@ -817,7 +817,7 @@ pub struct AppState {
     #[serde(default)]
     pub browser_approvals: Vec<String>,
     /// Whether sessions may create Unpeel-managed worktrees through the
-    /// sessions tool (Settings ▸ Sessions use). Default off; session
+    /// sessions tool (Settings ▸ Agent access). Default off; session
     /// creation stays user-only regardless — this grants git/project prep,
     /// not agent spawning.
     #[serde(default)]

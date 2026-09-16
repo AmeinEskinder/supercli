@@ -11,7 +11,7 @@ provider id is minted, and no provider configuration is edited by a launch or
 by observing a hand-typed agent. Everything provider-specific below is the
 runtime's **integration**, which the user installs once per Host —
 `unpeel integrations install <runtime>` or the `integrations.install` Host
-verb behind Settings ▸ Agents & Apps — into that CLI's own global
+verb behind Settings ▸ Agents ▸ Connect — into that CLI's own global
 configuration. Installers are idempotent, locked, and content-guarded; the
 workspace worker re-runs the installers of already-installed integrations
 after an upgrade (`integrations::install::refresh_installed`) so hook scripts

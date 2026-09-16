@@ -1,17 +1,18 @@
 //
-//  BrowserSettingsPanel.swift
+//  BrowserAccessSections.swift
 //  UnpeelNative
 //
-//  Extracted from SettingsView.swift — Settings ▸ Browser use panel.
+//  The Browser half of Settings ▸ Agent access.
 //
 
 import SwiftUI
 
-/// Settings home for the Unpeel Browser MCP: engine status, options, and the
-/// app-wide Browser Access. Access is the single `browser_default_access` field
-/// in app-state.json (read per call by the `__browser_mcp__` host gate) — one
-/// global on/off, no per-session override.
-struct BrowserSettingsPanel: View {
+/// The Unpeel Browser MCP policies, rendered as Form sections inside
+/// `AgentAccessSettingsPanel`: engine status, the app-wide access default
+/// (`browser_default_access` in app-state.json, read per call by the
+/// `__browser_mcp__` host gate — one global setting, no per-session
+/// override), approvals, options, and site rules.
+struct BrowserAccessSections: View {
     @ObservedObject var store: UnpeelStore
 
     /// The Host's published engine state (`serve.json.browserEngine`,
@@ -20,32 +21,17 @@ struct BrowserSettingsPanel: View {
     @State private var engine: HostBrowserEngineStatus?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Form {
-                Section {} header: {
-                    SettingsPaneHeader(
-                        title: "Browser MCP",
-                        description: "Browser MCP lets an agent session drive a real browser — "
-                            + "open pages, click, fill forms, and take screenshots. By default, "
-                            + "sessions in a project share one browser window and logins, with "
-                            + "each agent safely pinned to its own tab."
-                    )
-                    .padding(.bottom, 4)
+        Group {
+            statusSection
+                .task { await refreshEngineStatus() }
+                .onAppear {
+                    allowedDomainsDraft = store.browserSettings.allowedDomains
+                    executablePathDraft = store.browserSettings.executablePath
                 }
-
-                statusSection
-                defaultSection
-                approvalsSection
-                optionsSection
-                siteRulesSection
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-        }
-        .task { await refreshEngineStatus() }
-        .onAppear {
-            allowedDomainsDraft = store.browserSettings.allowedDomains
-            executablePathDraft = store.browserSettings.executablePath
+            defaultSection
+            approvalsSection
+            optionsSection
+            siteRulesSection
         }
     }
 
@@ -294,6 +280,13 @@ struct BrowserSettingsPanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        } header: {
+            SettingsSectionHeader(
+                title: "Browser",
+                description: "Agents can drive a real browser — open pages, click, fill forms, and "
+                    + "take screenshots. Sessions in a project share one browser window and "
+                    + "logins, each agent pinned to its own tab."
+            )
         }
     }
 
@@ -340,7 +333,7 @@ struct BrowserSettingsPanel: View {
     @ViewBuilder
     private var approvalsSection: some View {
         if store.browserDefaultAccess == .ask, !store.browserApprovals.isEmpty {
-            Section("Approved sessions") {
+            Section("Approved browser sessions") {
                 ForEach(store.browserApprovals, id: \.self) { sessionID in
                     LabeledContent {
                         Button("Revoke") {

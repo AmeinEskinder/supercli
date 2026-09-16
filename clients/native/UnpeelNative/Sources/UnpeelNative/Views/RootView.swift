@@ -590,7 +590,7 @@ private struct CollapsedNewSessionControl: View {
                         sourcePresetID: preset.command.isEmpty ? nil : preset.id
                     )
                 },
-                onManagePresets: { store.openSettings(tab: .agentsApps) }
+                onManagePresets: { store.openSettings(tab: .agents) }
             )
         }
     }

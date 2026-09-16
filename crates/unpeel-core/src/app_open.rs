@@ -119,7 +119,7 @@ fn resolve_launch(
     let state = crate::app_state::load().unwrap_or_default();
     if !crate::plugins::active(&state, app_id) {
         return Err(format!(
-            "App '{app_id}' is deactivated. Activate it in Agents & Apps."
+            "App '{app_id}' is deactivated. Activate it under Settings ▸ Plugins."
         ));
     }
     let app = crate::apps_mcp::installed_apps()

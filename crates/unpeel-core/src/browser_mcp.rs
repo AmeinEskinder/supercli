@@ -345,7 +345,7 @@ access. Run this from a hosted Unpeel session."
         BrowserAccess::On => None,
         BrowserAccess::Off => Some(
             "This session's Browser Access is off, so the browser tools are unavailable. The \
-user can turn it on in Settings ▸ Browser."
+user can turn it on in Settings ▸ Agent access."
                 .into(),
         ),
         BrowserAccess::Ask => {
@@ -356,12 +356,12 @@ user can turn it on in Settings ▸ Browser."
                 Ok(true) => None,
                 Ok(false) => Some(
                     "The user declined browser access for this session. Do not retry; ask \
-the user to approve it in Settings ▸ Browser if they change their mind."
+the user to approve it in Settings ▸ Agent access if they change their mind."
                         .into(),
                 ),
                 Err(error) => Some(format!(
                     "Browser access needs the user's approval, but the approval prompt could \
-not be shown ({error}). Ask the user to open Unpeel and retry, or set Settings ▸ Browser to \
+not be shown ({error}). Ask the user to open Unpeel and retry, or set Settings ▸ Agent access ▸ Browser access to \
 Allow."
                 )),
             }
@@ -1570,7 +1570,7 @@ fn exec_engine_with(
     if cdp_binding.is_none() {
         command.env("AGENT_BROWSER_DOWNLOAD_PATH", &downloads_dir);
         // A visible browser matches Unpeel's "watch your agent work" model and
-        // is the default; Settings ▸ Browser can switch to background.
+        // is the default; Settings ▸ Agent access can switch to background.
         if options.settings.headed {
             command.env("AGENT_BROWSER_HEADED", "1");
         }
@@ -2020,7 +2020,7 @@ pub(crate) fn tool_browser_context() -> Result<String, String> {
                 }
             }
             (Some(_), BrowserAccess::Off) =>
-                "off — the user can enable it in Settings ▸ Browser".to_string(),
+                "off — the user can enable it in Settings ▸ Agent access".to_string(),
         }
     )];
     match &engine {
@@ -2271,7 +2271,7 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
                 "properties": {
                     "full": { "type": "boolean", "description": "Full page instead of viewport (default false)" },
                     "annotate": { "type": "boolean", "description": "Numbered labels for interactive elements (default false)" },
-                    "gallery": { "type": "boolean", "description": "Add to the Session gallery; omit to use the Sessions use setting" },
+                    "gallery": { "type": "boolean", "description": "Add to the Session gallery; omit to use the Agent access setting" },
                 },
                 "additionalProperties": false,
             },

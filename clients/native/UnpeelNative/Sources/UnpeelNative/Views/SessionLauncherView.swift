@@ -129,9 +129,9 @@ struct SessionLauncherView: View {
 
     private var managePresetsButton: some View {
         Button {
-            store.openSettings(tab: .agentsApps)
+            store.openSettings(tab: .agents)
         } label: {
-            Text("Manage Agents & Apps…")
+            Text("Manage Agents…")
                 .font(.system(size: 11))
         }
         .buttonStyle(.plain)

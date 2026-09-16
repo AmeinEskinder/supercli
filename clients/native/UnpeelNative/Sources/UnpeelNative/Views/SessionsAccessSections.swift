@@ -1,41 +1,26 @@
 //
-//  UnpeelMCPSettingsPanel.swift
+//  SessionsAccessSections.swift
 //  UnpeelNative
 //
-//  Extracted from SettingsView.swift — Settings ▸ Sessions use panel.
+//  The Sessions half of Settings ▸ Agent access.
 //
 
 import SwiftUI
 
-/// The Sessions-domain controls inside the unified Unpeel MCP settings group.
-/// The compatibility feature gate is still `sessionsMcp`; this panel explains
-/// terminal-session access and lists remembered write/App-open approvals.
-/// Connecting agents lives in `MCPSettingsPanel`, the group's first page.
-struct UnpeelMCPSettingsPanel: View {
+/// The Sessions-domain policies of the unified unpeel MCP server, rendered
+/// as Form sections inside `AgentAccessSettingsPanel`. The compatibility
+/// feature gate is still `sessionsMcp`; nothing here drives a restart.
+struct SessionsAccessSections: View {
     @ObservedObject var store: UnpeelStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Form {
-                Section {} header: {
-                    SettingsPaneHeader(
-                        title: "Sessions use",
-                        description: "Sessions use lets an agent session read your other "
-                            + "sessions and, with your approval, type into them. Sidebar "
-                            + "groups organize sessions but do not grant access."
-                    )
-                    .padding(.bottom, 4)
-                }
-
-                accessModelSection
-                writeAccessSection
-                worktreeAccessSection
-                gallerySection
-                approvedPairsSection
-                approvedAppsSection
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
+        Group {
+            accessModelSection
+            writeAccessSection
+            worktreeAccessSection
+            gallerySection
+            approvedPairsSection
+            approvedAppsSection
         }
     }
 
@@ -52,8 +37,9 @@ struct UnpeelMCPSettingsPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
         } header: {
             SettingsSectionHeader(
-                title: "Session access",
-                description: "How sessions can see and control each other."
+                title: "Sessions",
+                description: "How agent sessions can see and control each other. Reads are open; "
+                    + "writes follow the policy below."
             )
         }
     }
@@ -271,4 +257,3 @@ struct UnpeelMCPSettingsPanel: View {
 
 }
 
-// MARK: - Notifications panel

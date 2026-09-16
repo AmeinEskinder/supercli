@@ -38,7 +38,7 @@ provider-specific is the runtime's **integration** — the `setup.rs`
 installer that registers lifecycle hooks and the Unpeel MCP shim
 (`integrations::install::write_mcp_shim`) in the provider's own global
 configuration — which the user installs explicitly
-(`unpeel integrations install <runtime>`, or Settings ▸ Unpeel MCP ▸ Connected agents) and
+(`unpeel integrations install <runtime>`, or Connect on Settings ▸ Agents) and
 the Host keeps current after upgrades.
 
 Provider-neutral enforcement remains in `unpeel-core`: PTY ownership,
@@ -90,7 +90,7 @@ Important fields:
   nested Unpeel Host must remove before opening a new terminal.
 - `updates`: optional read-only release lookup (`version_args`, `latest_url`,
   optional JSON pointer or version delimiters). Checks run lazily on the Host
-  when Agents & Apps is visible, never during bootstrap. Unknown versions and
+  when Agents or Plugins is visible, never during bootstrap. Unknown versions and
   failed lookups do not claim an update. These recipes are not generated into
   the client catalog.
 - `usage.stores`: optional bounded, home-relative session-file patterns used
@@ -111,7 +111,7 @@ Important fields:
   the Host applies while the Session has no hook latch (integration not
   installed); hooks always win once they latch, and screen verdicts never
   send completion notifications.
-- `integration`: user-facing copy for Settings ▸ Unpeel MCP ▸ Connected
+- `integration`: user-facing copy for Settings ▸ Agents ▸ Connect
   agents — `summary` says which of the provider's own files the installer
   edits; optional `manual_command` is the provider's documented way to
   register the MCP shim by hand (`{shim}` is replaced with its path).

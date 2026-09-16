@@ -1209,7 +1209,7 @@ fn run_sessions_tool(name: &str, arguments: &Value) -> Result<String, String> {
     }
 }
 
-/// Whether Settings ▸ Sessions use allows sessions to create worktrees.
+/// Whether Settings ▸ Agent access allows sessions to create worktrees.
 /// Parsed leniently from the app-state JSON (absent/malformed → false).
 fn worktree_access_enabled(state: &Value) -> bool {
     state
@@ -1229,7 +1229,7 @@ fn require_worktree_access() -> Result<(), String> {
     } else {
         Err(
             "Creating worktrees from sessions is disabled. The user can enable it in \
-Settings ▸ Sessions use (\"Let sessions create worktrees\")."
+Settings ▸ Agent access (\"Let sessions create worktrees\")."
                 .into(),
         )
     }
@@ -1578,7 +1578,7 @@ cross-session access. Run this from a hosted Unpeel session."
 
 /// Error returned when the user has set the write policy to Never allow.
 fn write_denied_message() -> String {
-    "The user set Settings ▸ Sessions use ▸ Writing to other sessions to Never allow. Every \
+    "The user set Settings ▸ Agent access ▸ Writing to other sessions to Never allow. Every \
 session can still be read, but agents cannot send text or keys to another session unless the \
 user changes that setting."
         .into()
@@ -2253,7 +2253,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
             "name": "create_worktree",
             "description": "Create (or adopt) an Unpeel-managed git worktree of a project and \
         register it as a child project in the sidebar. Session creation remains user-only. \
-        Requires the user's Settings ▸ Sessions use permission.",
+        Requires the user's Settings ▸ Agent access permission.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3785,7 +3785,7 @@ fn request_write_approval(caller_id: &str, target_id: &str) -> Result<(), String
             "Writing to session '{target_id}' requires the user's approval, but the approval \
 prompt did not complete: {error}. If the dialog is still open on the desktop, the user can \
 answer it and you can retry once; otherwise ask the user to approve the write or to change \
-Settings ▸ Sessions use ▸ Writing to other sessions."
+Settings ▸ Agent access ▸ Writing to other sessions."
         )
     })?;
     if response.get("approved").and_then(Value::as_bool) == Some(true) {
@@ -3793,7 +3793,7 @@ Settings ▸ Sessions use ▸ Writing to other sessions."
     }
     Err(
         "The user declined this write. Do not retry on your own — you can still read the \
-session; ask the user if they want to approve future writes (or change Settings ▸ Sessions use \
+session; ask the user if they want to approve future writes (or change Settings ▸ Agent access \
 ▸ Writing to other sessions)."
             .into(),
     )

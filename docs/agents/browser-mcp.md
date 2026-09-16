@@ -74,7 +74,7 @@ own** — Unpeel authors the server and owns the tool schema).
   `UNPEEL_TEST_REMOTE_CDP_URL='wss://…' scripts/verify-browser.sh`
   exercises this path end to end when a disposable provider endpoint is
   available; the ordinary smoke remains local-only when it is absent.
-- Artifacts: with the default Settings ▸ Sessions use auto-gallery toggle,
+- Artifacts: with the default Settings ▸ Agent access auto-gallery toggle,
   screenshots land in
   `~/.unpeel/app-sessions/<id>/artifacts/browser/screenshots/`; when disabled,
   ordinary captures land in the unlisted `.../browser/captures/` directory
@@ -88,16 +88,16 @@ own** — Unpeel authors the server and owns the tool schema).
   `off`/`ask`/`on` — a three-mode picker with **On
   ("Allow") as the default** (the engine uses an Unpeel-managed project
   profile with no access to the user's own browser, so it does not expose
-  personal logins; Settings ▸ Browser ▸ Off is the master disable).
+  personal logins; Settings ▸ Agent access ▸ Browser access ▸ Off is the master disable).
   Under `ask`, a session's first browser action blocks on an approval alert
   (`/mcp/approve-browser`, `MCPBrowserApproval.swift`); Allow is remembered
   in `browser_approvals`, pruned when the session is removed and carried
-  on restart. Grants are revocable in Settings ▸ Browser. `On` serializes as
+  on restart. Grants are revocable in Settings ▸ Agent access. `On` serializes as
   `"on"` for wire compat; `from_state_str` accepts `"allow"` as a synonym.
   Browser MCP is also **experimental** in the native app (Settings ▸
   Features ▸ Experimental; `AppFeature.browserMcp`, env
   `UNPEEL_DEV_BROWSER_MCP=1`), gating
-  the Settings ▸ Browser tab and native launch injection. Headless/CLI
+  the Settings ▸ Agent access page and native launch injection. Headless/CLI
   launches have no native UserDefaults feature layer, so they derive launch
   injection directly from the shared `browser_default_access` setting. There
   is still **no per-session override map** (the legacy `browser_access`
@@ -211,7 +211,7 @@ own** — Unpeel authors the server and owns the tool schema).
   browser there.
 - Bundling: none since 0.5.0 — `build-app.sh` no longer copies an engine
   or its notice into the app; the Host-installed copy is the engine, and
-  Settings ▸ Browser shows `serve.json.browserEngine` (ready / installing /
+  Settings ▸ Agent access shows `serve.json.browserEngine` (ready / installing /
   failed / disabled with the error and the `unpeel browser install` fix).
   A copy next to `unpeel-host` is still honoured as a compatibility
   resolution candidate for older bundles.

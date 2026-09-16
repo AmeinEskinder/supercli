@@ -44,7 +44,7 @@ in the serve `ActivityEngine`, `observedForegroundIdentities` in
 speak for its replacement, and an old Claude latch never crosses to a later
 Codex in the same shell. Observation never installs anything: hooks come
 from the runtime's Unpeel integration, which the user installs once per Host
-(`unpeel integrations install`, Settings ▸ Unpeel MCP ▸ Connected agents) into the
+(`unpeel integrations install`, Settings ▸ Agents ▸ Connect) into the
 provider's own global configuration, so a hand-typed agent reports through
 hooks exactly when that integration is installed — the same as a preset
 launch. The first sighting after an engine/app start is

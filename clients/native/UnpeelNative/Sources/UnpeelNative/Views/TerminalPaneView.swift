@@ -1839,8 +1839,8 @@ struct TerminalPaneContainer: View {
                 }
             }
             menu.addItem(.separator())
-            menu.addItem(controller.item("Manage Agents & Apps…") {
-                store.openSettings(tab: .agentsApps)
+            menu.addItem(controller.item("Manage Agents…") {
+                store.openSettings(tab: .agents)
             })
         }
 

@@ -181,7 +181,7 @@ curl -fsSL https://unpeel.com/install.sh | sh
   each registry entry carries the App's `version`; the installer records
   what it installed in `~/.unpeel/apps/installed.json`, the Host publishes
   `version`/`installedVersion`/`updateAvailable` on `availableApps`, and
-  Settings (Open resources, Agents & Apps) offers **Update** while `unpeel
+  Settings (Open resources, Agents, Plugins) offers **Update** while `unpeel
   apps update [--check]` does it headless. A new App version therefore
   needs the crate version AND the registry entry bumped in one commit
   (`release:app` refuses a mismatch; a Rust test pins registry = crate for

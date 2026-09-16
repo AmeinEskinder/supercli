@@ -47,24 +47,43 @@ Quick preset selection rules (`Presets.swift`):
   (`QuickPresetMenuChip` in `SidebarView.swift`).
 - A blank-terminal pseudo-preset (`command == ""`) launches a plain shell instead of an agent CLI.
 
-### Agents & Apps
+### Agents and Plugins
 
-`AgentsAppsSettingsPanel` combines installation, activation, and launch command
-editing for the selected Host, including local loopback. One searchable list
-contains compact agent and App rows under Active and Inactive. Each row aligns
-its icon, commands, and controls in columns with a 5-point gap between rows.
-The app name is available on icon hover and to accessibility. The default
-Overview shows installed agents and all Apps, including Apps available to
-install in an Apps section directly after Active. The Not Installed filter groups missing
-agents and Apps separately, and empty sections are hidden. Commands
-edit inline; the “+” shown on command hover inserts another command below.
-Each agent or App has one cursor-shaped Quick Launch toggle for all its
+`PluginSettingsPanel` is one list implementation with two scopes: Settings ▸
+**Agents** (agent CLIs and custom commands) and Settings ▸ **Plugins** (Unpeel
+Apps under their user-facing name). Both combine installation, activation, and
+launch command editing for the selected Host, including local loopback, over
+one shared `plugin_order` (reordering a page moves only its rows). Rows sit
+under Active, Inactive, and Available to install; each row aligns its icon,
+commands, and controls in columns with a 5-point gap between rows. The name
+is available on icon hover and to accessibility. The default Overview shows
+installed rows (all plugins on the Plugins page); the Not Installed filter
+shows what the Host can install, and empty sections are hidden. Commands edit
+inline; the "+" shown on command hover inserts another command below. Each
+agent or plugin has one cursor-shaped Quick Launch toggle for all its
 commands. New variants inherit that choice. Controls appear in this order:
-Install/Update, Quick Launch, activation. Apps show their installed version,
-or the available catalog version when uninstalled, beside the command column.
-Uninstalled rows show only Install at the far right. Single-command rows are 36 points
-tall; additional commands expand only the command column and row height.
-The legacy Presets settings route redirects to Agents & Apps.
+Connect (agents), Install/Update, Quick Launch, activation, and the details
+chevron (agents). Plugins show their installed version, or the available
+catalog version when uninstalled, beside the command column. Uninstalled rows
+show only Install at the far right. Single-command rows are 36 points tall;
+additional commands expand only the command column and row height. The legacy
+Presets, Agents & Apps, and MCP Settings routes redirect to Agents; the
+Sessions use and Browser use routes redirect to Agent access.
+
+The Agents page owns the per-agent **Unpeel integration** (hooks + the
+`unpeel` MCP server registered in the CLI's own configuration, once per
+Host). A row-level **Connect** runs the Host's `integrations.install` verb; a
+connected row shows a checkmark. The expanded row states the connection,
+what the installer edits (the runtime package's `integrationSummary`), what
+the agent can do connected versus not (hooks are the busy/idle authority; a
+runtime with declared screen rules reads busy/idle from the screen until
+connected; detection alone grants identity), a Reinstall action, and the
+provider's own MCP registration command for hand setup. A dismissible banner
+at the top offers to connect every installed-but-unconnected agent at once
+(the dismissal is a per-Mac UserDefaults convenience; row Connect buttons
+never hide). "Manual setup" at the bottom shows the Host's shim path and the
+CLI verb. The Plugins page links to Appearance ▸ Open resources, where file
+openers are chosen next to the editor.
 
 - **Host inventory:** bootstrap `workspaceSettings.availableAgents` reports
   installed agent binaries and the Host catalog's install commands. App metadata
@@ -105,7 +124,7 @@ The legacy Presets settings route redirects to Agents & Apps.
 Legacy UserDefaults preset migration and first-run usage seeding continue to
 fold into the shared file once; no new Controller-side preset overlay is added.
 
-Install and Update open a live Host terminal below the Agents & Apps list.
+Install and Update open a live Host terminal below the Agents or Plugins list.
 Update is shown only after a successful Host check finds a newer release.
 Opening this pane starts `settings.plugins.updates.read` on
 `GET /mobile/plugin-updates`; bootstrap never starts probes or network work.

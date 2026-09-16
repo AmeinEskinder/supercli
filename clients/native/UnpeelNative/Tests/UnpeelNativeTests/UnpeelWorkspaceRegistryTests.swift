@@ -91,6 +91,27 @@ final class UnpeelWorkspaceRegistryTests: XCTestCase {
         XCTAssertEqual(SettingsTab.compatibleRawValue("worktrees"), .worktrees)
         XCTAssertEqual(SettingsTab.worktrees.title, "Worktrees")
         XCTAssertFalse(SettingsTab.hostScopedCases.contains(.worktrees))
-        XCTAssertFalse(SettingsTab.worktrees.isBuiltInMCP)
+    }
+
+    /// Agents & Apps split into Agents and Plugins, and the Unpeel MCP group
+    /// (MCP Settings, Sessions use, Browser use) became Agents + Agent access.
+    /// Released deep links and snapshot commands keep resolving.
+    func testUnifiedSettingsTabsAbsorbTheRetiredOnes() {
+        XCTAssertEqual(SettingsTab.compatibleRawValue("agentsApps"), .agents)
+        XCTAssertEqual(SettingsTab.compatibleRawValue("presets"), .agents)
+        XCTAssertEqual(SettingsTab.compatibleRawValue("mcp"), .agents)
+        XCTAssertEqual(SettingsTab.compatibleRawValue("sessions"), .agentAccess)
+        XCTAssertEqual(SettingsTab.compatibleRawValue("browser"), .agentAccess)
+        XCTAssertEqual(SettingsTab.compatibleRawValue("plugins"), .plugins)
+        XCTAssertEqual(SettingsTab.agents.title, "Agents")
+        XCTAssertEqual(SettingsTab.plugins.title, "Plugins")
+        XCTAssertEqual(SettingsTab.agentAccess.title, "Agent access")
+        for tab in [SettingsTab.agents, .plugins, .agentAccess] {
+            XCTAssertTrue(SettingsTab.hostScopedCases.contains(tab), "\(tab) follows the scope picker")
+        }
+        XCTAssertFalse(SettingsTab.visibleCases.contains(.presets))
+        XCTAssertFalse(SettingsTab.visibleCases.contains(.computer))
+        let visible = SettingsTab.visibleCases
+        XCTAssertEqual(visible.firstIndex(of: .agents).map { $0 + 1 }, visible.firstIndex(of: .plugins))
     }
 }

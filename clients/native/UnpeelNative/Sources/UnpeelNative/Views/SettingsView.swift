@@ -23,7 +23,8 @@
 //                 no ambience presets natively yet). Persists as a native
 //                 UserDefaults overlay over the read-only app-state.json
 //                 `theme` (the native app must never write that file).
-//  - Agents & Apps → installation, activation, and Host-owned launch commands
+//  - Agents / Plugins → installation, connection, activation, Host-owned launch commands
+//  - Agent access → the unpeel MCP policies (Sessions + Browser)
 //  - Worktrees → WorktreesSettingsPanel (gated on the Git worktrees
 //                experiment: agent-worktree discovery + this workspace's list)
 //  - Advanced  → AdvancedSettingsPanel (resource diagnostics, old-session
@@ -46,17 +47,19 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     // the scope selector below). Remote keeps inbound
     // devices, Link, and legacy license.
     case workspaces
-    case agentsApps
+    /// The agent CLIs on the Host: install, connect (hooks + MCP), launch
+    /// commands, activation. Enum order is nav order.
+    case agents
+    /// Unpeel Apps under their user-facing name.
+    case plugins
+    /// What agents may do through Unpeel's tools (the Sessions and Browser
+    /// domain policies on one page).
+    case agentAccess
     case presets
     case appearance
     case mobile
     case transcripts
     case notifications
-    /// Settings ▸ Unpeel MCP ▸ MCP Settings: connected agents + manual setup.
-    /// Leads the MCP group; enum order is nav order.
-    case mcp
-    case sessions
-    case browser
     case computer
     case worktrees
     /// The Features tab (shipped feature toggles plus an Experimental
@@ -76,7 +79,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// app state, but accepting it keeps existing snapshot/dev commands valid.
     static func compatibleRawValue(_ rawValue: String) -> SettingsTab? {
         switch rawValue {
-        case "presets": return .agentsApps
+        // Agents & Apps split into Agents and Plugins (2026-09-16); the
+        // one-page MCP group (MCP Settings, Sessions use, Browser use)
+        // became Agents (connections) + Agent access (policies).
+        case "presets", "agentsApps", "mcp": return .agents
+        case "sessions", "browser": return .agentAccess
         case "profiles": return .workspaces
         case "features": return .features
         default: return SettingsTab(rawValue: rawValue)
@@ -92,11 +99,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         allCases.filter { tab in
             switch tab {
             case .mobile: return UnpeelFeatureFlags.mobileRemoteControlEnabled
-            // Sessions use is a Settings ▸ Features toggle; its panel only
-            // exists while the feature is on.
-            case .sessions: return UnpeelFeatureFlags.isEnabled(.sessionsMcp)
-            // The Browser panel follows its (still experimental) feature.
-            case .browser: return UnpeelFeatureFlags.isEnabled(.browserMcp)
+            // Sessions use and Browser use are Settings ▸ Features toggles;
+            // the access page exists while either is on.
+            case .agentAccess:
+                return UnpeelFeatureFlags.isEnabled(.sessionsMcp) || UnpeelFeatureFlags.isEnabled(.browserMcp)
             // Keep the saved enum case readable, but never show its old panel.
             case .computer, .presets:
                 return false
@@ -115,23 +121,22 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// `settings.presets.set` is the first.
     static var hostScopedCases: [SettingsTab] {
         [
-            .agentsApps, .presets, .appearance, .transcripts, .notifications, .mcp,
-            .sessions, .browser, .computer, .features, .advanced,
+            .agents, .plugins, .agentAccess, .presets, .appearance, .transcripts,
+            .notifications, .computer, .features, .advanced,
         ]
     }
 
     var title: String {
         switch self {
         case .appearance: return "Appearance"
-        case .agentsApps: return "Agents & Apps"
-        case .presets: return "Agents & Apps"
+        case .agents: return "Agents"
+        case .plugins: return "Plugins"
+        case .agentAccess: return "Agent access"
+        case .presets: return "Agents"
         case .mobile: return "Remote Control"
         case .workspaces: return "Workspaces"
         case .transcripts: return "Transcripts"
         case .notifications: return "Notifications"
-        case .mcp: return "MCP Settings"
-        case .sessions: return "Sessions use"
-        case .browser: return "Browser use"
         case .computer: return "Computer use"
         case .worktrees: return "Worktrees"
         case .features: return "Features"
@@ -144,29 +149,18 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: ChromeIcon {
         switch self {
         case .appearance: return .settingsAppearance
-        case .agentsApps: return .settingsAgentsApps
+        case .agents: return .settingsAgents
+        case .plugins: return .settingsPlugins
+        case .agentAccess: return .settingsAgentAccess
         case .presets: return .settingsPresets
         case .mobile: return .settingsRemote
         case .workspaces: return .settingsWorkspaces
         case .transcripts: return .settingsTranscripts
         case .notifications: return .settingsNotifications
-        case .mcp: return .settingsMCP
-        case .sessions: return .settingsSessions
-        case .browser: return .settingsBrowser
         case .computer: return .settingsComputer
         case .worktrees: return .settingsWorktrees
         case .features: return .settingsFeatures
         case .advanced: return .settingsAdvanced
-        }
-    }
-
-    /// The first-party MCP domain panels, grouped under an "Unpeel MCP"
-    /// header at the bottom of the sidebar nav (one unified server, one
-    /// domain per panel).
-    var isBuiltInMCP: Bool {
-        switch self {
-        case .mcp, .sessions, .browser, .computer: return true
-        default: return false
         }
     }
 }
@@ -226,10 +220,7 @@ struct SettingsSidebarPanel: View {
                         // The ACTIVE workspace's settings. Host-backed tabs
                         // stay visible for SSH/headless Hosts; capability and
                         // additive-payload checks happen in the content pane.
-                        ForEach(SettingsTab.visibleCases(computerUseControllable: store.selectedHostAdvertisesComputerUse).filter { tab in
-                            if tab.isBuiltInMCP || tab == .workspaces { return false }
-                            return true
-                        }) { tab in
+                        ForEach(SettingsTab.visibleCases(computerUseControllable: store.selectedHostAdvertisesComputerUse).filter { $0 != .workspaces }) { tab in
                             SettingsNavRow(
                                 title: tab.title,
                                 leadingIcon: tab.icon,
@@ -237,21 +228,6 @@ struct SettingsSidebarPanel: View {
                                 action: { store.settingsTab = tab }
                             )
                         }
-
-                        // Built-in MCP panels (per-workspace access policies)
-                        // grouped under their own header.
-                        SettingsNavSectionHeader(title: "Unpeel MCP")
-                            .padding(.top, 10)
-
-                        ForEach(SettingsTab.visibleCases(computerUseControllable: store.selectedHostAdvertisesComputerUse).filter(\.isBuiltInMCP)) { tab in
-                            SettingsNavRow(
-                                title: tab.title,
-                                leadingIcon: tab.icon,
-                                isActive: tab == selectedTab,
-                                action: { store.settingsTab = tab }
-                            )
-                        }
-
                     }
                 }
                 // Bottom padding keeps the last row clear of the mask's
@@ -694,8 +670,27 @@ private struct HostAccessSettingsPanel: View {
                 }
 
                 if let settings {
-                    switch tab {
-                    case .browser:
+                    if UnpeelFeatureFlags.isEnabled(.sessionsMcp) {
+                        Section {
+                            accessPicker(
+                                "Writes to other sessions",
+                                key: "write",
+                                value: settings.mcpNonchildWriteAccess,
+                                options: [("ask", "Ask"), ("allow", "Allow"), ("deny", "Deny")]
+                            ) { value in
+                                RemoteWorkspaceSettingsPatch(mcpNonchildWriteAccess: value)
+                            }
+                            Toggle(
+                                "Agents may create worktrees",
+                                isOn: boolBinding(key: "worktrees", settings.mcpWorktreeAccess) { value in
+                                    RemoteWorkspaceSettingsPatch(mcpWorktreeAccess: value)
+                                }
+                            )
+                        } header: {
+                            SettingsSectionHeader(title: "Sessions")
+                        }
+                    }
+                    if UnpeelFeatureFlags.isEnabled(.browserMcp) {
                         Section {
                             accessPicker(
                                 "Browser access",
@@ -716,26 +711,9 @@ private struct HostAccessSettingsPanel: View {
                                     )
                                 }
                             )
+                        } header: {
+                            SettingsSectionHeader(title: "Browser")
                         }
-                    case .sessions:
-                        Section {
-                            accessPicker(
-                                "Writes to other sessions",
-                                key: "write",
-                                value: settings.mcpNonchildWriteAccess,
-                                options: [("ask", "Ask"), ("allow", "Allow"), ("deny", "Deny")]
-                            ) { value in
-                                RemoteWorkspaceSettingsPatch(mcpNonchildWriteAccess: value)
-                            }
-                            Toggle(
-                                "Agents may create worktrees",
-                                isOn: boolBinding(key: "worktrees", settings.mcpWorktreeAccess) { value in
-                                    RemoteWorkspaceSettingsPatch(mcpWorktreeAccess: value)
-                                }
-                            )
-                        }
-                    default:
-                        EmptyView()
                     }
                 } else {
                     Section {
@@ -2102,12 +2080,12 @@ struct SettingsContentHost: View {
         // with Host settings verbs can actually edit it; the rest say so
         // honestly instead of silently editing this instance.
         if store.selectedHostScope != .local, selectedTab != .workspaces {
-            if selectedTab == .agentsApps {
-                AgentsAppsSettingsPanel(store: store, runtime: store.remoteHostRuntime)
+            if selectedTab == .agents || selectedTab == .presets {
+                // Inventory, integrations, and preset editing all use Host verbs.
+                PluginSettingsPanel(store: store, runtime: store.remoteHostRuntime, scope: .agents)
                     .id(store.selectedHostScope.paneScopeID)
-            } else if selectedTab == .presets {
-                // Preset editing uses the Host's preset verbs.
-                AgentsAppsSettingsPanel(store: store, runtime: store.remoteHostRuntime)
+            } else if selectedTab == .plugins {
+                PluginSettingsPanel(store: store, runtime: store.remoteHostRuntime, scope: .plugins)
                     .id(store.selectedHostScope.paneScopeID)
             } else if selectedTab == .mobile {
                 // Pairing follows the scope (one pairing = one workspace);
@@ -2130,7 +2108,7 @@ struct SettingsContentHost: View {
                 // nested payload is additive, so a Host that predates it
                 // falls through to the placeholder.
                 HostTranscriptsSettingsPanel(store: store, runtime: store.remoteHostRuntime)
-            } else if [.browser, .sessions, .computer].contains(selectedTab),
+            } else if selectedTab == .agentAccess,
                       store.remoteHostRuntime.supportsHostOperation(
                           RemoteHostRuntime.HostOperation.workspaceSettingsSet
                       ) {
@@ -2205,23 +2183,18 @@ struct SettingsContentHost: View {
         switch selectedTab {
         case .appearance:
             AppearanceSettingsPanel(store: store)
-        case .agentsApps:
-            AgentsAppsSettingsPanel(store: store, runtime: store.remoteHostRuntime)
+        case .agents, .presets:
+            PluginSettingsPanel(store: store, runtime: store.remoteHostRuntime, scope: .agents)
                 .id(store.selectedHostScope.paneScopeID)
-        case .presets:
-            AgentsAppsSettingsPanel(store: store, runtime: store.remoteHostRuntime)
-                    .id(store.selectedHostScope.paneScopeID)
+        case .plugins:
+            PluginSettingsPanel(store: store, runtime: store.remoteHostRuntime, scope: .plugins)
+                .id(store.selectedHostScope.paneScopeID)
         case .transcripts:
             TranscriptsSettingsPanel(store: store)
         case .notifications:
             NotificationsSettingsPanel(store: store)
-        case .mcp:
-            MCPSettingsPanel(store: store, runtime: store.remoteHostRuntime)
-                .id(store.selectedHostScope.paneScopeID)
-        case .sessions:
-            UnpeelMCPSettingsPanel(store: store)
-        case .browser:
-            BrowserSettingsPanel(store: store)
+        case .agentAccess:
+            AgentAccessSettingsPanel(store: store)
         case .computer:
             EmptyView() // Old saved selection falls back through visibleCases.
         case .features:
@@ -4177,23 +4150,6 @@ struct TranscriptsSettingsPanel: View {
 
 // MARK: - Browser MCP panel (Browser Access)
 
-
-/// min-height 28, padding 2px 12px, radius 9, title 13px/600;
-/// muted → fg + fg-10% bg on hover; active = active-tint bg + fg.
-/// Muted uppercase caption that labels the "Unpeel MCP" nav group,
-/// aligned with the nav rows' 12pt leading inset.
-private struct SettingsNavSectionHeader: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Theme.mutedForeground.opacity(0.6))
-            .lineLimit(1)
-            .padding(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
 
 private struct SettingsNavRow: View {
     let title: String
