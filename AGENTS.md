@@ -65,9 +65,10 @@ makes sense for coding, it does not belong here.
 - **The state bus.** Shared state lives on disk (`app-state.json`,
   `session-order.json`, per-session markers). Every read-modify-write of a
   shared file takes an exclusive flock on `<file>.lock`; every shared-state
-  write announces on the state bus (`state_bus::announce`); one-shot CLI
-  verbs call `state_bus::flush()` before exit. Never add a second
-  notification channel.
+  write announces on the state bus (`state_bus::announce`, which pings the
+  workspace home's registry and, from a scoped workspace, the machine
+  home's too); one-shot CLI verbs call `state_bus::flush()` before exit.
+  Never add a second notification channel.
 - **Cooperative MCP policy, not a sandbox.** The unified `unpeel` MCP server
   (`unpeel-host __mcp__`) has open reads and approval-controlled writes to
   other Sessions; browser use is Off/Ask/On. The `unpeel` CLI is a peer of

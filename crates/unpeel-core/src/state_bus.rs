@@ -81,11 +81,18 @@ fn registered_ports_at(path: &std::path::Path) -> Vec<u16> {
 /// failures are ignored, and the whole thing runs on a detached thread so a
 /// slow or dead peer can never stall a UI action.
 pub fn announce(change: Change, own_port: Option<u16>) {
-    announce_from(
-        &crate::app_paths::unpeel_home().join("app-ports"),
-        change,
-        own_port,
-    )
+    // A scoped workspace's frontends register in ITS home, but the Mac app
+    // that projects every local workspace registers only in the machine
+    // home (`~/.unpeel/app-ports`). Ping both registries so a write in a
+    // sibling workspace reaches the app at once instead of on its next
+    // poll — the same immediacy the default workspace already has.
+    let own_home = crate::app_paths::unpeel_home();
+    let machine_home = crate::app_paths::machine_home();
+    let mut registries = vec![own_home.join("app-ports")];
+    if machine_home != own_home {
+        registries.push(machine_home.join("app-ports"));
+    }
+    announce_from_registries(&registries, change, own_port)
 }
 
 /// In-flight announcement threads. Long-lived frontends never wait on
@@ -114,10 +121,25 @@ pub fn flush() {
 /// The thread is tracked so `flush()` can wait for it in short-lived
 /// processes.
 pub fn announce_from(registry: &std::path::Path, change: Change, own_port: Option<u16>) {
-    let ports: Vec<u16> = registered_ports_at(registry)
-        .into_iter()
-        .filter(|port| Some(*port) != own_port)
-        .collect();
+    announce_from_registries(&[registry.to_path_buf()], change, own_port)
+}
+
+/// `announce_from` over several registries: every port is pinged once even
+/// when it is listed in more than one (a frontend registered in both a
+/// workspace home and the machine home).
+pub fn announce_from_registries(
+    registries: &[std::path::PathBuf],
+    change: Change,
+    own_port: Option<u16>,
+) {
+    let mut ports: Vec<u16> = Vec::new();
+    for registry in registries {
+        for port in registered_ports_at(registry) {
+            if Some(port) != own_port && !ports.contains(&port) {
+                ports.push(port);
+            }
+        }
+    }
     if ports.is_empty() {
         return;
     }
@@ -153,6 +175,41 @@ pub fn announce_from(registry: &std::path::Path, change: Change, own_port: Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_port_listed_in_two_registries_is_pinged_once() {
+        use std::io::Read;
+        let dir = std::env::temp_dir().join(format!("upsb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        listener.set_nonblocking(true).unwrap();
+        std::fs::write(dir.join("workspace-ports"), format!("{port}\n")).unwrap();
+        std::fs::write(dir.join("machine-ports"), format!("{port}\n")).unwrap();
+        announce_from_registries(
+            &[dir.join("workspace-ports"), dir.join("machine-ports")],
+            Change::Lifecycle,
+            None,
+        );
+        flush();
+        let mut accepted = 0;
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let mut buf = Vec::new();
+                    stream.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+                    let _ = stream.read_to_end(&mut buf);
+                    assert!(String::from_utf8_lossy(&buf).contains("lifecycle"));
+                    accepted += 1;
+                }
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+        assert_eq!(accepted, 1, "one ping per port across registries");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     use std::io::Read;
     use std::net::TcpListener;
     use std::sync::mpsc;

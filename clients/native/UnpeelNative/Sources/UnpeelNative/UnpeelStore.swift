@@ -2996,6 +2996,12 @@ final class UnpeelStore: ObservableObject {
                 // read again shortly after (the wake coalesces, so a burst
                 // of pings costs one extra bootstrap read, not one each).
                 self.remoteHostRuntime.requestImmediateRefresh()
+                // Sibling workspace workers ping this registry too (the
+                // state bus fans out to the machine home), so the pooled
+                // projections of the other local workspaces refresh now
+                // as well — a create in a sibling shows up on its page
+                // and in the switcher without waiting out the poll.
+                self.workspacePool.requestImmediateRefresh()
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     self?.remoteHostRuntime.requestImmediateRefresh()
