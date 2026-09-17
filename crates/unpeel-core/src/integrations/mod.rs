@@ -310,8 +310,7 @@ pub fn mcp_registration_evidence_in(
     }
     let supports = |capability| runtime.capabilities.contains(&capability);
     McpRegistrationEvidence {
-        sessions: mcp_enabled
-            && supports(crate::runtime_catalog::RuntimeCapability::McpSessions),
+        sessions: mcp_enabled && supports(crate::runtime_catalog::RuntimeCapability::McpSessions),
         browser: browser_mcp_enabled
             && supports(crate::runtime_catalog::RuntimeCapability::McpBrowser),
     }
@@ -477,7 +476,10 @@ mod tests {
         .unwrap();
         assert_eq!(
             mcp_registration_evidence_in(&home, "claude", true, false),
-            McpRegistrationEvidence { sessions: true, browser: false }
+            McpRegistrationEvidence {
+                sessions: true,
+                browser: false
+            }
         );
         assert_eq!(
             mcp_registration_evidence_in(&home, "claude", false, false),
@@ -648,7 +650,10 @@ mod tests {
             "OPENCODE_CONFIG_DIR",
             "GROK_",
         ] {
-            assert!(!exports.contains(forbidden), "{forbidden} leaked: {exports}");
+            assert!(
+                !exports.contains(forbidden),
+                "{forbidden} leaked: {exports}"
+            );
             assert!(
                 cmd.get_env(forbidden).is_none(),
                 "{forbidden} set on the child"

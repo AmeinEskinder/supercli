@@ -33,7 +33,8 @@ pub fn run_stdio(kind: &str) -> Result<(), String> {
     // The calling Session's manifest is the authority for a shim-based
     // registration. The generic environment grants remain honored for
     // configurations older builds scoped around a launch.
-    let manifest = crate::mcp_host::self_session_id().and_then(|id| crate::session_host::load_manifest(&id));
+    let manifest =
+        crate::mcp_host::self_session_id().and_then(|id| crate::session_host::load_manifest(&id));
     let manifest_sessions = manifest
         .as_ref()
         .is_some_and(|manifest| manifest.sessions_mcp_enabled());

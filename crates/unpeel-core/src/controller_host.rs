@@ -186,9 +186,7 @@ impl ControllerHostRuntime {
             ("GET", "/mobile/plugin-updates") => (200, crate::plugin_updates::request()),
             ("POST", "/mobile/openers") => opener_response(&request.body),
             ("POST", "/mobile/apps/install") => app_install_response(&request.body),
-            ("POST", "/mobile/integrations/install") => {
-                integration_install_response(&request.body)
-            }
+            ("POST", "/mobile/integrations/install") => integration_install_response(&request.body),
             ("POST", "/mobile/apps/open") => app_open_response(&request.body, self.hook_port),
             ("POST", "/mobile/resize-desktop") => resize_desktop(request),
             // Approval queues live inside the native app or TUI. This

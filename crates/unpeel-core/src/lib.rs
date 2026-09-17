@@ -79,8 +79,6 @@ pub mod mcp_host;
 #[cfg(feature = "native-host")]
 pub mod menu_prompt;
 #[cfg(feature = "native-host")]
-pub mod screen_activity;
-#[cfg(feature = "native-host")]
 mod pane_context;
 #[cfg(feature = "native-host")]
 pub mod plugin_updates;
@@ -94,6 +92,8 @@ mod portable_gating_tests;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
+#[cfg(feature = "native-host")]
+pub mod screen_activity;
 
 pub mod relay_connection;
 #[cfg(feature = "native-host")]

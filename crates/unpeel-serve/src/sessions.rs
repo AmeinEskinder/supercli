@@ -272,7 +272,15 @@ fn derive_status(
     now: SystemTime,
     menu_attention_detection: bool,
 ) -> Status {
-    derive_status_with_source(engine, manifest, running, dir, now, menu_attention_detection).0
+    derive_status_with_source(
+        engine,
+        manifest,
+        running,
+        dir,
+        now,
+        menu_attention_detection,
+    )
+    .0
 }
 
 /// The screen fallback tier: a recognized agent whose runtime declares
@@ -2217,9 +2225,8 @@ pub fn mobile_snapshot(
         &mut create_presets,
     );
     workspace_settings["availableAgents"] = agents;
-    workspace_settings["mcpShimPath"] = serde_json::json!(
-        unpeel_core::integrations::install::mcp_shim_path().to_string_lossy()
-    );
+    workspace_settings["mcpShimPath"] =
+        serde_json::json!(unpeel_core::integrations::install::mcp_shim_path().to_string_lossy());
     let openers = unpeel_core::controller_host::wire_openers(&workspace_state);
     let app_presentations = unpeel_core::app_presentations::controller_app_presentations_wire()
         .unwrap_or_else(

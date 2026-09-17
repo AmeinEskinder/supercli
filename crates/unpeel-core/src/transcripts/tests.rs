@@ -138,12 +138,35 @@ fn blank_launch_resolves_provider_from_captured_or_observed_runtime() {
     std::fs::create_dir_all(&dir).unwrap();
     assert!(crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, None).unwrap());
     assert_eq!(crate::session_ops::provider_session_runtime_at(&dir), None);
-    assert!(crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, Some("codex")).unwrap());
-    assert_eq!(crate::session_ops::provider_session_runtime_at(&dir).as_deref(), Some("codex"));
-    assert_eq!(crate::session_ops::provider_session_marker_at(&dir).0.as_deref(), Some("conv-1"));
-    assert!(!crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, Some("codex")).unwrap());
-    assert!(crate::session_ops::set_provider_session_at(&dir, None, Some("/tmp/t.jsonl"), None).unwrap());
-    assert_eq!(crate::session_ops::provider_session_runtime_at(&dir).as_deref(), Some("codex"));
+    assert!(
+        crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, Some("codex"))
+            .unwrap()
+    );
+    assert_eq!(
+        crate::session_ops::provider_session_runtime_at(&dir).as_deref(),
+        Some("codex")
+    );
+    assert_eq!(
+        crate::session_ops::provider_session_marker_at(&dir)
+            .0
+            .as_deref(),
+        Some("conv-1")
+    );
+    assert!(!crate::session_ops::set_provider_session_at(
+        &dir,
+        Some("conv-1"),
+        None,
+        Some("codex")
+    )
+    .unwrap());
+    assert!(
+        crate::session_ops::set_provider_session_at(&dir, None, Some("/tmp/t.jsonl"), None)
+            .unwrap()
+    );
+    assert_eq!(
+        crate::session_ops::provider_session_runtime_at(&dir).as_deref(),
+        Some("codex")
+    );
     let _ = std::fs::remove_dir_all(&dir);
 
     // A non-agent launch never defers to the occupant.

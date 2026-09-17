@@ -2291,12 +2291,15 @@ fn install_remote_integration(
     handle: RemoteHandle,
     body_json: &[u8],
 ) -> Result<Vec<u8>, NativeRemoteEffectError> {
-    let wire: NativeIntegrationInstallWire = serde_json::from_slice(body_json).map_err(|error| {
-        native_not_applied_effect_error("integration install")(NativeRemoteError::invalid_input(
-            "invalid_integration_install_json",
-            format!("integration install request is malformed: {error}"),
-        ))
-    })?;
+    let wire: NativeIntegrationInstallWire =
+        serde_json::from_slice(body_json).map_err(|error| {
+            native_not_applied_effect_error("integration install")(
+                NativeRemoteError::invalid_input(
+                    "invalid_integration_install_json",
+                    format!("integration install request is malformed: {error}"),
+                ),
+            )
+        })?;
     let request_id = remote_backend(handle)
         .map_err(native_not_applied_effect_error("integration install"))?
         .install_integration(&wire.runtime_id)?;

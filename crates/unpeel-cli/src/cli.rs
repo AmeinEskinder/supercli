@@ -892,7 +892,11 @@ pub fn run(args: &[String]) -> i32 {
             let row = resolve(&reference)?;
             if crate::mcp_cli::inside_session() {
                 let text = parsed.positional[2..].join(" ");
-                return Ok(crate::mcp_cli::send_text(&row.id, &text, parsed.has("enter")));
+                return Ok(crate::mcp_cli::send_text(
+                    &row.id,
+                    &text,
+                    parsed.has("enter"),
+                ));
             }
             let mut text = parsed.positional[2..].join(" ");
             if parsed.has("enter") {

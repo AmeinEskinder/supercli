@@ -50,9 +50,7 @@ pub fn parse_args(words: &[String]) -> Result<(Map<String, Value>, Vec<String>),
             let raw = iter.next().ok_or("--json needs a JSON object")?;
             let value: Value = serde_json::from_str(raw)
                 .map_err(|error| format!("--json is not valid JSON: {error}"))?;
-            let object = value
-                .as_object()
-                .ok_or("--json must be a JSON object")?;
+            let object = value.as_object().ok_or("--json must be a JSON object")?;
             for (key, value) in object {
                 arguments.insert(key.clone(), value.clone());
             }
@@ -96,7 +94,11 @@ pub fn call(tool: &str, mut arguments: Map<String, Value>, action: Option<&str>)
 
 /// `unpeel mcp …`
 pub fn run(args: &[String]) -> i32 {
-    if args.iter().any(|arg| matches!(arg.as_str(), "--help" | "-h" | "help")) && args.len() == 1 {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "--help" | "-h" | "help"))
+        && args.len() == 1
+    {
         println!("{HELP}");
         return 0;
     }
@@ -164,14 +166,41 @@ pub fn browser(args: &[String]) -> i32 {
     };
     let action = match words.as_slice() {
         [] | ["help"] => return call("browser", Map::new(), Some("help")),
-        ["open", url] => { set("url", url); "open" }
-        ["click", target] => { set("target", target); "click" }
-        ["fill", target, text] => { set("target", target); set("text", text); "fill" }
-        ["type", target, text] => { set("target", target); set("text", text); "type" }
-        ["press", key] => { set("key", key); "press" }
-        ["get", what] => { set("what", what); "get" }
-        ["get", what, target] => { set("what", what); set("target", target); "get" }
-        ["scroll", direction] => { set("direction", direction); "scroll" }
+        ["open", url] => {
+            set("url", url);
+            "open"
+        }
+        ["click", target] => {
+            set("target", target);
+            "click"
+        }
+        ["fill", target, text] => {
+            set("target", target);
+            set("text", text);
+            "fill"
+        }
+        ["type", target, text] => {
+            set("target", target);
+            set("text", text);
+            "type"
+        }
+        ["press", key] => {
+            set("key", key);
+            "press"
+        }
+        ["get", what] => {
+            set("what", what);
+            "get"
+        }
+        ["get", what, target] => {
+            set("what", what);
+            set("target", target);
+            "get"
+        }
+        ["scroll", direction] => {
+            set("direction", direction);
+            "scroll"
+        }
         [action] => action,
         [action, rest @ ..] => {
             eprintln!("unexpected words {rest:?} after {action}; pass arguments as key=value");
@@ -195,7 +224,12 @@ pub fn artifacts(args: &[String]) -> i32 {
             return 1;
         }
     };
-    match positional.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+    match positional
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
         ["publish", path] | ["add_to_gallery", path] => {
             arguments.insert("path".into(), Value::String(path.to_string()));
             call("artifacts", arguments, Some("add_to_gallery"))
@@ -267,31 +301,50 @@ pub fn worktree(args: &[String]) -> i32 {
             arguments.insert(key.into(), Value::String(value.clone()));
         }
     }
-    match positional.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+    match positional
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
         ["create", name] => {
             arguments.insert("name".into(), Value::String(name.to_string()));
             call("workspace", arguments, Some("create_worktree"))
         }
         [action] => call("workspace", arguments, Some(action)),
         _ => {
-            println!("usage: unpeel worktree create <name> [--branch B] [--base REF] [--project ID]");
+            println!(
+                "usage: unpeel worktree create <name> [--branch B] [--base REF] [--project ID]"
+            );
             call("workspace", Map::new(), Some("help"))
         }
     }
 }
 
 pub fn agents(args: &[String]) -> i32 {
-    family("agents", args, "usage: unpeel agents <action> [key=value ...]")
+    family(
+        "agents",
+        args,
+        "usage: unpeel agents <action> [key=value ...]",
+    )
 }
 
 pub fn skills(args: &[String]) -> i32 {
-    family("skills", args, "usage: unpeel skills <action> [key=value ...]")
+    family(
+        "skills",
+        args,
+        "usage: unpeel skills <action> [key=value ...]",
+    )
 }
 
 /// `unpeel apps describe|search|context …` (list/install/update/link stay
 /// with the installer verb).
 pub fn apps(args: &[String]) -> i32 {
-    family("apps", args, "usage: unpeel apps describe|search|context [key=value ...]")
+    family(
+        "apps",
+        args,
+        "usage: unpeel apps describe|search|context [key=value ...]",
+    )
 }
 
 /// Whether this process runs inside a hosted Unpeel session, in which case
@@ -325,9 +378,17 @@ mod tests {
 
     #[test]
     fn key_values_become_json_and_positionals_stay_ordered() {
-        let words = ["open", "url=https://example.test", "interactive=false", "rows=12",
-                     "keys=[\"down\",\"enter\"]", "--json", "{\"extra\":1}", "tail"]
-            .map(String::from);
+        let words = [
+            "open",
+            "url=https://example.test",
+            "interactive=false",
+            "rows=12",
+            "keys=[\"down\",\"enter\"]",
+            "--json",
+            "{\"extra\":1}",
+            "tail",
+        ]
+        .map(String::from);
         let (arguments, positional) = parse_args(&words).unwrap();
         assert_eq!(positional, ["open", "tail"]);
         assert_eq!(arguments["url"], "https://example.test");

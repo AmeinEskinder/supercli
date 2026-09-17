@@ -318,9 +318,9 @@ pub(crate) fn strip_leading_subcommands(tokens: Vec<String>, names: &[&str]) -> 
 #[cfg(test)]
 pub(crate) fn has_any_flag(tokens: &[String], flags: &[&str]) -> bool {
     tokens.iter().skip(1).any(|token| {
-        flags.iter().any(|flag| {
-            token == flag || token.starts_with(&format!("{flag}="))
-        })
+        flags
+            .iter()
+            .any(|flag| token == flag || token.starts_with(&format!("{flag}=")))
     })
 }
 

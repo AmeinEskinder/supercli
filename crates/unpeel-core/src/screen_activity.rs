@@ -107,17 +107,27 @@ mod tests {
         // Captured from Claude Code 2.1.27x: the input prompt stays on
         // screen while the spinner line runs above it.
         let working = "✽ Levitating… (1m 52s · ↓ 5.1k tokens)\n  ⎿  Tip: Use /btw\n────\n❯\n────\n  ⏵⏵ auto mode on";
-        assert_eq!(classify(working, &claude_rules()), Some(ScreenActivity::Working));
+        assert_eq!(
+            classify(working, &claude_rules()),
+            Some(ScreenActivity::Working)
+        );
         let muse_like = "◇ Double checking (5s · esc to interrupt)\n── Voice input ──\n❯";
-        assert_eq!(classify(muse_like, &claude_rules()), Some(ScreenActivity::Working));
-        let idle = "✻ Brewed for 3s · done 10:05 AM\n   97533 tokens\n────\n❯\n────\n  ⏵⏵ auto mode on";
+        assert_eq!(
+            classify(muse_like, &claude_rules()),
+            Some(ScreenActivity::Working)
+        );
+        let idle =
+            "✻ Brewed for 3s · done 10:05 AM\n   97533 tokens\n────\n❯\n────\n  ⏵⏵ auto mode on";
         assert_eq!(classify(idle, &claude_rules()), Some(ScreenActivity::Idle));
     }
 
     #[test]
     fn unknown_screens_leave_the_previous_verdict_alone() {
         assert_eq!(classify("", &claude_rules()), None);
-        assert_eq!(classify("just some shell output\n$ ", &claude_rules()), None);
+        assert_eq!(
+            classify("just some shell output\n$ ", &claude_rules()),
+            None
+        );
         // A working marker far above the bottom window is conversation, not
         // status.
         let mut lines = vec!["old: Thinking… (9s)".to_string()];

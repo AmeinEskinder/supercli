@@ -1147,12 +1147,19 @@ pub fn generated_integration_source(descriptors: &[DiscoveredRuntimeDescriptor])
         output.push_str(&format!("pub(crate) mod {module} {{\n"));
         output.push_str("    #[allow(unused_imports)]\n    use super::Integration;\n");
         if has("setup.rs") {
-            output.push_str(&format!("    pub(crate) mod setup {{ {} }}\n", include("setup.rs")));
+            output.push_str(&format!(
+                "    pub(crate) mod setup {{ {} }}\n",
+                include("setup.rs")
+            ));
         }
         if has("resume.rs") {
             output.push_str(&format!("    mod resume {{ {} }}\n", include("resume.rs")));
         }
-        let installer = if has("setup.rs") { "Some(setup::install)" } else { "None" };
+        let installer = if has("setup.rs") {
+            "Some(setup::install)"
+        } else {
+            "None"
+        };
         output.push_str(&format!(
             "    pub(crate) const INTEGRATION: Integration = Integration::new({installer})"
         ));

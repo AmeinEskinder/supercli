@@ -199,7 +199,9 @@ mod tests {
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     let mut buf = Vec::new();
-                    stream.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_millis(200)))
+                        .unwrap();
                     let _ = stream.read_to_end(&mut buf);
                     assert!(String::from_utf8_lossy(&buf).contains("lifecycle"));
                     accepted += 1;

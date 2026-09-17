@@ -10,10 +10,9 @@ mod schema;
 
 pub use schema::{
     RuntimeCapability, RuntimeCatalogError, RuntimeDescriptor, RuntimeDetection, RuntimeDisplay,
-    RuntimeInstall, RuntimeKind, RuntimeLifecycle, RuntimeLifecycleAuthority,
-    RuntimeIntegrationInfo, RuntimeLifecycleFallback, RuntimeLifecycleSource, RuntimePlatform,
-    RuntimeScreenRules,
-    RuntimeScriptPathSignature, RuntimeSuggestedPreset, RuntimeUpdates,
+    RuntimeInstall, RuntimeIntegrationInfo, RuntimeKind, RuntimeLifecycle,
+    RuntimeLifecycleAuthority, RuntimeLifecycleFallback, RuntimeLifecycleSource, RuntimePlatform,
+    RuntimeScreenRules, RuntimeScriptPathSignature, RuntimeSuggestedPreset, RuntimeUpdates,
     RUNTIME_DESCRIPTOR_SCHEMA_VERSION,
 };
 

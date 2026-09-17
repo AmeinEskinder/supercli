@@ -554,7 +554,9 @@ pub(crate) fn ensure_project_exclude_entry(cwd: &str, entry: &str) {
 
 /// Shared reporter path used by runtime-owned setup adapters.
 pub(crate) fn notify_hook_script_path() -> PathBuf {
-    crate::app_paths::machine_home().join("hooks").join("notify-hook.sh")
+    crate::app_paths::machine_home()
+        .join("hooks")
+        .join("notify-hook.sh")
 }
 
 // Public compatibility facade. Every package's installer is `setup::install`;

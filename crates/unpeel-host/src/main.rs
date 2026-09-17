@@ -137,7 +137,6 @@ fn main() {
         return;
     }
 
-
     if args.first().map(String::as_str) == Some(browser_mcp::BROWSER_CLEANUP_ARG) {
         args.remove(0);
         if let Err(error) = browser_mcp::run_cleanup(&args) {

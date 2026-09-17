@@ -213,7 +213,10 @@ mod machine_home_tests {
         )
         .unwrap();
         assert!(is_registered_workspace_home(&real, &workspace));
-        assert!(!is_registered_workspace_home(&real, &real.join("elsewhere")));
+        assert!(!is_registered_workspace_home(
+            &real,
+            &real.join("elsewhere")
+        ));
         assert_eq!(read_workspace_registry(&real)[0].name, "Work");
         let _ = std::fs::remove_dir_all(&real);
     }

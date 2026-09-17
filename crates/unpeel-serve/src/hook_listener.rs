@@ -754,10 +754,9 @@ fn handle_connection(
     if provider_id.is_some() || transcript.is_some() {
         // Record which runtime is speaking, from the Host's foreground
         // observation: a hand-typed agent has no launch command naming it.
-        let runtime = unpeel_core::session_host::load_manifest(&session_id)
-            .and_then(|manifest| {
-                unpeel_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
-            });
+        let runtime = unpeel_core::session_host::load_manifest(&session_id).and_then(|manifest| {
+            unpeel_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
+        });
         let changed = unpeel_core::session_ops::set_provider_session_with_runtime(
             &session_id,
             provider_id.as_deref(),

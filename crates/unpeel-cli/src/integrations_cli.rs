@@ -67,7 +67,10 @@ pub fn run(args: &[String], json: bool) -> Result<i32, String> {
 fn list(json: bool) {
     let rows = install::list();
     if json {
-        println!("{}", serde_json::to_string_pretty(&rows).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rows).unwrap_or_default()
+        );
         return;
     }
     for row in rows {
@@ -147,7 +150,10 @@ fn finish(statuses: Vec<install::IntegrationStatus>, json: bool) {
     unpeel_core::state_bus::announce(unpeel_core::state_bus::Change::AppState, None);
     unpeel_core::state_bus::flush();
     if json {
-        println!("{}", serde_json::to_string_pretty(&statuses).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&statuses).unwrap_or_default()
+        );
         return;
     }
     for status in statuses {

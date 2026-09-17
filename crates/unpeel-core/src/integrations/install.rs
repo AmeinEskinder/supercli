@@ -187,16 +187,13 @@ fn status_for(
         installed,
         current,
         lifecycle_hooks: runtime.lifecycle.uses_hook_port(),
-        mcp: runtime
-            .capabilities
-            .iter()
-            .any(|capability| {
-                matches!(
-                    capability,
-                    crate::runtime_catalog::RuntimeCapability::McpSessions
-                        | crate::runtime_catalog::RuntimeCapability::McpBrowser
-                )
-            }),
+        mcp: runtime.capabilities.iter().any(|capability| {
+            matches!(
+                capability,
+                crate::runtime_catalog::RuntimeCapability::McpSessions
+                    | crate::runtime_catalog::RuntimeCapability::McpBrowser
+            )
+        }),
     }
 }
 
@@ -208,8 +205,7 @@ pub fn is_installed(tool: &str) -> bool {
 }
 
 pub fn is_installed_in(home: &Path, tool: &str) -> bool {
-    super::runtime_for_dispatch(tool)
-        .is_some_and(|runtime| status_for(home, runtime).installed)
+    super::runtime_for_dispatch(tool).is_some_and(|runtime| status_for(home, runtime).installed)
 }
 
 /// Status of one runtime's integration, or `None` for an unknown runtime.
@@ -249,8 +245,8 @@ pub fn install(tool: &str) -> Result<IntegrationStatus, String> {
 }
 
 pub fn install_in(home: &Path, tool: &str) -> Result<IntegrationStatus, String> {
-    let runtime = super::runtime_for_dispatch(tool)
-        .ok_or_else(|| format!("unknown runtime '{tool}'"))?;
+    let runtime =
+        super::runtime_for_dispatch(tool).ok_or_else(|| format!("unknown runtime '{tool}'"))?;
     if !super::has_integration_installer(&runtime.legacy_slug) {
         return Err(format!(
             "{} has no Unpeel integration to install: it is recognized by detection only",
@@ -302,13 +298,16 @@ pub fn adopt_legacy_installs() -> Vec<String> {
 
 pub fn adopt_legacy_installs_in(home: &Path) -> Vec<String> {
     let mut adopted = Vec::new();
-    for runtime in crate::runtime_catalog::builtin_runtime_catalog().current_platform_descriptors() {
+    for runtime in crate::runtime_catalog::builtin_runtime_catalog().current_platform_descriptors()
+    {
         if !super::has_integration_installer(&runtime.legacy_slug)
             || marker_path_in(home, &runtime.legacy_slug).exists()
         {
             continue;
         }
-        let Some(integration) = &runtime.integration else { continue };
+        let Some(integration) = &runtime.integration else {
+            continue;
+        };
         let evidence = integration
             .legacy_evidence
             .iter()
@@ -367,9 +366,16 @@ mod tests {
         assert_eq!(adopted, vec!["claude".to_string()]);
         let claude = status_in(&home, "claude").unwrap();
         assert!(claude.installed, "adopted install counts as installed");
-        assert!(!claude.current, "adopted install is stale so the worker refreshes it");
+        assert!(
+            !claude.current,
+            "adopted install is stale so the worker refreshes it"
+        );
         let marker = read_marker(&marker_path_in(&home, "claude")).unwrap();
-        assert!(marker.adopted_from.as_deref().unwrap_or("").contains("claude-hooks.sh"));
+        assert!(marker
+            .adopted_from
+            .as_deref()
+            .unwrap_or("")
+            .contains("claude-hooks.sh"));
         // Runtimes without evidence stay untouched, and a second pass is a no-op.
         assert!(!status_in(&home, "codex").unwrap().installed);
         assert!(adopt_legacy_installs_in(&home).is_empty());

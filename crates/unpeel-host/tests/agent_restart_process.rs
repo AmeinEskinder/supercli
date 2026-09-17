@@ -503,7 +503,10 @@ fn resume_agent_keeps_host_identity_and_relaunches_exactly_from_owned_shell() {
     assert_eq!(after["session"]["id"], session_id);
     assert_eq!(after["pid"].as_u64(), Some(before_pid));
     assert_eq!(after["state"], "running");
-    assert_eq!(after["session"]["command"], "pi 300 --session 'pi-captured'");
+    assert_eq!(
+        after["session"]["command"],
+        "pi 300 --session 'pi-captured'"
+    );
     assert_eq!(after["runtime_launch_generation"], 2);
     assert_eq!(after["mcp_client_registered"], false);
     assert_eq!(after["browser_client_registered"], false);
