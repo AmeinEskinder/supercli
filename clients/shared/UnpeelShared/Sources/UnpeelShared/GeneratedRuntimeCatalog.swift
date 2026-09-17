@@ -779,6 +779,49 @@ public enum UnpeelRuntimeCatalog {
                 ),
             ]
         ),
+        // runtimes/antigravity/runtime.toml
+        UnpeelRuntimeMetadata(
+            stableID: "com.google.antigravity-cli",
+            slug: "antigravity",
+            legacySlug: "agy",
+            legacyOrder: 14,
+            label: "Antigravity",
+            platforms: Set([.macos, .linux]),
+            supportsQuickLaunch: true,
+            kind: .agent,
+            tintColorHex: 0x4285F4,
+            spinnerTintColorHex: 0x4285F4,
+            iconKey: "agent",
+            iconSVG: nil,
+            iconIsTemplate: true,
+            iconSource: nil,
+            iconLicense: nil,
+            windowPaddingX: 8,
+            installURL: "https://antigravity.google/product/antigravity-cli",
+            installCommand: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+            commandAliases: ["agy"],
+            processAliases: ["agy"],
+            searchPathSuffixes: [],
+            lifecycleSource: "output",
+            lifecycleAuthority: "none",
+            lifecycleFallback: "none",
+            completionReliable: false,
+            attentionReliable: false,
+            anchorStartEventToOutput: true,
+            attentionClearsOnOutput: true,
+            distrustStopsWhileOutputGrows: false,
+            capabilities: [.resume, .restartAgent, .mcpSessions, .mcpBrowser],
+            usageStores: [
+            ],
+            suggestedPresets: [
+                UnpeelRuntimeSuggestedPreset(
+                    id: "agy",
+                    label: "agy --dangerously-skip-permissions",
+                    command: "agy --dangerously-skip-permissions",
+                    quickLaunch: false
+                ),
+            ]
+        ),
     ]
 
     private static let identityIndex: [String: Int] = {

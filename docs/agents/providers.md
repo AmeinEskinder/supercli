@@ -190,6 +190,28 @@ Pi:
   Resume uses Pi's own `--continue`. Older launches that recorded a managed
   `--session-dir` beneath the Unpeel home keep it across resume and cleanup.
 
+Antigravity (Google's `agy`, antigravity.google/product/antigravity-cli;
+community request orgs/unpeel-com discussions #13):
+
+- Detection + presets: the binary is `agy` (one Go binary the installer puts
+  in `~/.local/bin`; `curl -fsSL https://antigravity.google/cli/install.sh |
+  bash`). No documented lifecycle hook or notify mechanism (CLI reference,
+  2026-09-17), so busy/idle has no authority and the runtime is
+  `lifecycle.authority = "none"`; identity and tint come from detection.
+- Resume: no hooks means no captured conversation id, so restart uses the
+  documented continue-last (`agy --continue`); a captured id would become
+  `--conversation <id>`. A command already carrying `-c`, `--continue`, or
+  `--conversation` is kept exact (`runtimes/antigravity/adapter/resume.rs`).
+- MCP: the integration merges the `unpeel` stdio entry (the shim, no `env`)
+  into Antigravity's global `~/.gemini/config/mcp_config.json`
+  (`mcpServers`), which its `/mcp` overlay reads; a workspace-level
+  `.agents/mcp_config.json` is left to the user. No `[updates]`: `agy update`
+  self-updates and there is no public latest-version endpoint.
+- Not yet verified on a machine with the CLI installed: the preset flag
+  `--dangerously-skip-permissions`, the exact `--version` output, and whether
+  `agy` strips the environment of its MCP children (the shim's ancestry
+  fallback covers that case).
+
 fx (Vercel's `fx`, fx.sh):
 
 - No hook/notify mechanism (verified against vercel-labs/fx and the fx.sh
