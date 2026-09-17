@@ -2361,7 +2361,10 @@ private struct OpenResourcesSettingsRows: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 190)
+                    // Hug the chosen name so every opener menu ends at the
+                    // trailing edge like the editor picker above it; a fixed
+                    // width centered each label at a different x.
+                    .fixedSize()
 
                     if let app = selectedMissingApp(for: selector) {
                         Button {

@@ -19,7 +19,7 @@
       },
       {
         "minor": 20,
-        "release": "0.6.2",
+        "release": "0.7.0",
         "summary": "Host folder selection and file transfers for every Controller.",
         "capabilities": [
           "filesystem.directories.list",
