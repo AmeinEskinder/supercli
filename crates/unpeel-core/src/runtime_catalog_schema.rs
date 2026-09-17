@@ -239,6 +239,13 @@ pub struct RuntimeIntegrationInfo {
     pub summary: String,
     #[serde(default)]
     pub manual_command: Option<String>,
+    /// Files, relative to the machine home, that only a pre-0.7 Unpeel
+    /// wrote when it installed this runtime's hooks at launch (its hook
+    /// script, a plugin marker). Their presence lets the Host adopt that
+    /// install as an integration on upgrade instead of reporting "not
+    /// installed" for hooks that are demonstrably registered.
+    #[serde(default)]
+    pub legacy_evidence: Vec<String>,
 }
 
 /// Bottom-of-screen markers a runtime shows while working and at its idle
@@ -947,6 +954,21 @@ pub fn validate_runtime_descriptors(
             errors.push(format!(
                 "{prefix}: lifecycle authority = 'none' must use fallback = 'none'"
             ));
+        }
+        if let Some(integration) = &descriptor.integration {
+            for evidence in &integration.legacy_evidence {
+                let path = std::path::Path::new(evidence);
+                if evidence.trim().is_empty()
+                    || path.is_absolute()
+                    || path
+                        .components()
+                        .any(|part| !matches!(part, std::path::Component::Normal(_)))
+                {
+                    errors.push(format!(
+                        "{prefix}: [integration] legacy_evidence entries must be relative paths inside the Unpeel home (got {evidence:?})"
+                    ));
+                }
+            }
         }
         let screen_fallback = descriptor.lifecycle.fallback == RuntimeLifecycleFallback::Screen;
         match &descriptor.screen {

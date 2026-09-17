@@ -48,6 +48,7 @@ idle_prompt = ["Type your message", "> Type your message"]
 
 [integration]
 summary = "Registers Unpeel's lifecycle hooks in ~/.gemini/settings.json."
+legacy_evidence = ["hooks/gemini-hook.sh"]
 
 [[usage.stores]]
 root = ".gemini/tmp"

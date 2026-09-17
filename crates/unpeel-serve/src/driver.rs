@@ -1977,6 +1977,15 @@ fn spawn_integrations_refresh() -> Option<std::thread::JoinHandle<()>> {
     std::thread::Builder::new()
         .name("integrations-refresh".into())
         .spawn(|| {
+            // Upgrade from 0.6: hooks Unpeel installed at launch time become
+            // installed integrations, then the refresh below re-runs their
+            // installers so the MCP shim gets registered as well.
+            for runtime in unpeel_core::integrations::install::adopt_legacy_installs() {
+                crate::tracelog::trace(
+                    "integrations",
+                    &format!("adopted the {runtime} integration from a pre-0.7 install"),
+                );
+            }
             for (runtime, result) in unpeel_core::integrations::install::refresh_installed() {
                 match result {
                     Ok(()) => crate::tracelog::trace(

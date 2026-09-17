@@ -40,6 +40,7 @@ attention_reliable = true
 
 [integration]
 summary = "Writes ~/.kiro/hooks/unpeel.json (v3), the compatibility agent for v2, and the unpeel server in ~/.kiro/settings/mcp.json."
+legacy_evidence = ["hooks/kiro-hook.sh"]
 
 [[usage.stores]]
 root = ".kiro/sessions"

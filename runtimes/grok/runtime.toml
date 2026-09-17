@@ -44,6 +44,7 @@ attention_clears_on_output = false
 
 [integration]
 summary = "Writes Unpeel's hook file ~/.grok/hooks/unpeel.json."
+legacy_evidence = ["hooks/grok-hook.sh"]
 
 [[usage.stores]]
 root = ".grok/sessions"

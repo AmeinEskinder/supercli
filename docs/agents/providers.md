@@ -17,7 +17,14 @@ configuration. Installers are idempotent, locked, and content-guarded; the
 workspace worker re-runs the installers of already-installed integrations
 after an upgrade (`integrations::install::refresh_installed`) so hook scripts
 and the MCP shim keep pointing at the running build, and never installs one
-on its own. Every integration registers the same stable shim,
+on its own. The one exception is the upgrade from 0.6 and earlier, which
+installed hooks at launch time: on start the worker adopts a runtime whose
+descriptor-declared `integration.legacy_evidence` files (its hook script)
+exist under the machine home as an installed integration
+(`integrations::install::adopt_legacy_installs`, marker `adopted_from`),
+and the same refresh then re-runs that installer so the MCP shim is
+registered too — the old per-launch injection is replaced without a click,
+and only for configuration Unpeel already edited. Every integration registers the same stable shim,
 `~/.unpeel/bin/unpeel-mcp`, as the MCP server: it execs
 `${UNPEEL_HOST_BIN:-<install-time unpeel-host>} __mcp_gate__ unified`, and
 the gate reads the calling Session's manifest grants (or serves no tools

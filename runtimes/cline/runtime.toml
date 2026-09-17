@@ -41,6 +41,7 @@ attention_reliable = false
 
 [integration]
 summary = "Installs one managed hook per event under ~/.cline/hooks and adds the unpeel server to Cline's MCP settings."
+legacy_evidence = ["hooks/cline-hook.sh"]
 
 [[usage.stores]]
 root = ".cline/data/sessions"

@@ -124,6 +124,10 @@ struct Marker {
     host_version: String,
     #[serde(default)]
     installed_at_ms: u64,
+    /// Set when the marker was minted from a pre-0.7 launch-time install
+    /// (see `adopt_legacy_installs`) rather than by the user's verb.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    adopted_from: Option<String>,
 }
 
 fn markers_dir_in(home: &Path) -> PathBuf {
@@ -258,20 +262,70 @@ pub fn install_in(home: &Path, tool: &str) -> Result<IntegrationStatus, String> 
         schema: MARKER_SCHEMA,
         host_build_id: installing_host_build_id(),
         host_version: env!("CARGO_PKG_VERSION").to_string(),
-        installed_at_ms: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_millis() as u64)
-            .unwrap_or_default(),
+        installed_at_ms: now_ms(),
+        adopted_from: None,
     };
-    let path = marker_path_in(home, &runtime.legacy_slug);
+    write_marker(home, &runtime.legacy_slug, &marker)?;
+    Ok(status_for(home, runtime))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or_default()
+}
+
+fn write_marker(home: &Path, legacy_slug: &str, marker: &Marker) -> Result<(), String> {
+    let path = marker_path_in(home, legacy_slug);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
     }
-    let serialized = serde_json::to_string_pretty(&marker)
+    let serialized = serde_json::to_string_pretty(marker)
         .map_err(|error| format!("Failed to serialize integration marker: {error}"))?;
-    crate::hook_assets::write_file_atomic(&path, &format!("{serialized}\n"), "integration marker")?;
-    Ok(status_for(home, runtime))
+    crate::hook_assets::write_file_atomic(&path, &format!("{serialized}\n"), "integration marker")
+}
+
+/// Upgrade path from the launch-time installs of 0.6 and earlier: a runtime
+/// whose hooks Unpeel demonstrably installed on this machine (its
+/// descriptor's `integration.legacy_evidence` files exist under the machine
+/// home) but which has no marker yet is adopted as an installed integration.
+/// The marker carries no build id, so `refresh_installed` re-runs that
+/// runtime's installer next — which is what registers the MCP shim the old
+/// per-launch injection used to supply. Only ever touches provider
+/// configuration Unpeel already edited; a runtime with no evidence stays
+/// "not installed" until the user asks. Returns the adopted runtimes.
+pub fn adopt_legacy_installs() -> Vec<String> {
+    adopt_legacy_installs_in(&machine_home())
+}
+
+pub fn adopt_legacy_installs_in(home: &Path) -> Vec<String> {
+    let mut adopted = Vec::new();
+    for runtime in crate::runtime_catalog::builtin_runtime_catalog().current_platform_descriptors() {
+        if !super::has_integration_installer(&runtime.legacy_slug)
+            || marker_path_in(home, &runtime.legacy_slug).exists()
+        {
+            continue;
+        }
+        let Some(integration) = &runtime.integration else { continue };
+        let evidence = integration
+            .legacy_evidence
+            .iter()
+            .find(|relative| home.join(relative).exists());
+        let Some(evidence) = evidence else { continue };
+        let marker = Marker {
+            schema: MARKER_SCHEMA,
+            host_build_id: None,
+            host_version: String::new(),
+            installed_at_ms: now_ms(),
+            adopted_from: Some(format!("pre-0.7 launch-time install ({evidence})")),
+        };
+        if write_marker(home, &runtime.legacy_slug, &marker).is_ok() {
+            adopted.push(runtime.legacy_slug.clone());
+        }
+    }
+    adopted
 }
 
 /// Re-run the installer of every integration the user installed with a
@@ -302,6 +356,44 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_pre_0_7_hook_install_is_adopted_and_marked_for_refresh() {
+        let home = temp_home("adopt");
+        fs::create_dir_all(home.join("hooks")).unwrap();
+        fs::write(home.join("hooks").join("claude-hooks.sh"), "#!/bin/sh\n").unwrap();
+        let adopted = adopt_legacy_installs_in(&home);
+        assert_eq!(adopted, vec!["claude".to_string()]);
+        let claude = status_in(&home, "claude").unwrap();
+        assert!(claude.installed, "adopted install counts as installed");
+        assert!(!claude.current, "adopted install is stale so the worker refreshes it");
+        let marker = read_marker(&marker_path_in(&home, "claude")).unwrap();
+        assert!(marker.adopted_from.as_deref().unwrap_or("").contains("claude-hooks.sh"));
+        // Runtimes without evidence stay untouched, and a second pass is a no-op.
+        assert!(!status_in(&home, "codex").unwrap().installed);
+        assert!(adopt_legacy_installs_in(&home).is_empty());
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn adoption_never_overwrites_an_existing_marker() {
+        let home = temp_home("adopt-keep");
+        fs::create_dir_all(home.join("hooks")).unwrap();
+        fs::write(home.join("hooks").join("gemini-hook.sh"), "#!/bin/sh\n").unwrap();
+        let existing = Marker {
+            schema: MARKER_SCHEMA,
+            host_build_id: Some("build-x".into()),
+            host_version: "0.7.0".into(),
+            installed_at_ms: 42,
+            adopted_from: None,
+        };
+        write_marker(&home, "gemini", &existing).unwrap();
+        assert!(adopt_legacy_installs_in(&home).is_empty());
+        let marker = read_marker(&marker_path_in(&home, "gemini")).unwrap();
+        assert_eq!(marker.host_build_id.as_deref(), Some("build-x"));
+        assert_eq!(marker.installed_at_ms, 42);
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -342,6 +434,7 @@ mod tests {
                 host_build_id: Some("older-build".into()),
                 host_version: "0.0.1".into(),
                 installed_at_ms: 1,
+                adopted_from: None,
             })
             .unwrap(),
         )

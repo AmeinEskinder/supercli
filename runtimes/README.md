@@ -114,7 +114,10 @@ Important fields:
 - `integration`: user-facing copy for Settings ▸ Agents ▸ Install integration
   agents — `summary` says which of the provider's own files the installer
   edits; optional `manual_command` is the provider's documented way to
-  register the MCP shim by hand (`{shim}` is replaced with its path).
+  register the MCP shim by hand (`{shim}` is replaced with its path);
+  optional `legacy_evidence` lists files under the Unpeel home (the hook
+  script, a plugin marker) that only a pre-0.7 launch-time install wrote, so
+  the Host can adopt that install as an integration on upgrade.
 - `capabilities`: only behavior actually implemented by the adapter.
 
 Current capabilities are `lifecycle_hooks`, `resume`, `restart_agent`,

@@ -51,6 +51,7 @@ idle_prompt = ["›"]
 
 [integration]
 summary = "Registers native hooks in ~/.codex/hooks.json, the notify reporter and [mcp_servers.unpeel] in ~/.codex/config.toml."
+legacy_evidence = ["hooks/codex-notify-hook.sh"]
 
 [[usage.stores]]
 root = ".codex/sessions"
