@@ -15,7 +15,11 @@ struct PluginSettingsListTests {
         #expect(groups.map(\.id) == ["unpeel.app.markdown", "claude"])
         #expect(groups[0].presets.map(\.id) == ["markdown", "notes"])
         #expect(groups[0].displayName == "Markdown")
-        #expect(collectQuickPresetGroups(presets, apps: []).map(\.id) == ["claude"])
+        // Without the App in the Host inventory the starred command is still
+        // a chip — a custom one, identified by its leader preset.
+        let withoutApp = collectQuickPresetGroups(presets, apps: [])
+        #expect(withoutApp.map(\.id) == ["markdown", "claude"])
+        #expect(withoutApp[0].cli == nil && withoutApp[0].app == nil)
     }
 
     @Test func mixedRowsKeepVariantsTogetherAndIgnoreLegacyProjectOverrides() throws {

@@ -171,6 +171,24 @@ final class PresetsTests: XCTestCase {
         XCTAssertEqual(groups[0].leader.id, "claude-plan")
     }
 
+    func testCustomCommandsGetTheirOwnQuickLaunchChip() {
+        let presets = [
+            Preset(id: "dev", label: "Dev server", command: "./scripts/dev.sh", enabled: true, quickLaunch: true),
+            Preset(id: "claude", label: "claude", command: "claude", enabled: true, quickLaunch: true),
+            Preset(id: "logs", label: "Logs", command: "tail -f app.log", enabled: true, quickLaunch: false),
+            Preset(id: "blank", label: "Terminal", command: "", enabled: true, quickLaunch: true),
+        ]
+        // sanitized(): any non-empty command keeps its star; the blank
+        // terminal never does.
+        XCTAssertTrue(presets[0].sanitized().quickLaunch)
+        XCTAssertFalse(presets[3].sanitized().quickLaunch)
+        let groups = collectQuickPresetGroups(presets.map { $0.sanitized() })
+        XCTAssertEqual(groups.map(\.id), ["dev", "claude"])
+        XCTAssertNil(groups[0].cli)
+        XCTAssertNil(groups[0].app)
+        XCTAssertEqual(groups[0].displayName, "Dev server")
+    }
+
     // MARK: - Usage-ranked setup scan
 
     private func usage(_ total: Int, recent: Int, lastUsed: Date? = nil) -> ToolUsageStats {

@@ -337,7 +337,7 @@ struct PluginSettingsPanel: View {
                 installationControl(item).frame(width: 64, height: 24, alignment: .trailing)
                 if item.installed {
                     Group {
-                        if !item.commands.isEmpty && !item.isCustom { quickButton(item) }
+                        if !item.commands.isEmpty { quickButton(item) }
                         else { Color.clear }
                     }.frame(width: 22, height: 24)
                     Toggle("Activate \(item.name)", isOn: Binding(get: { isActive(item) }, set: { value in

@@ -316,6 +316,7 @@ private struct HostAppearanceSettingsPanel: View {
     @State private var surfaceTone = TransparencyModel.designSurfaceTone
     @State private var fontFamily: String?
     @State private var fontSize = TerminalFontModel.defaultSize
+    @State private var fontLineHeight = TerminalFontModel.defaultLineHeight
     @State private var loaded = false
     /// Slider drags fire per tick — coalesce the target-instance ping.
     @State private var pingWorkItem: DispatchWorkItem?
@@ -405,6 +406,7 @@ private struct HostAppearanceSettingsPanel: View {
                 TerminalFontSection(
                     family: $fontFamily,
                     size: $fontSize,
+                    lineHeight: $fontLineHeight,
                     description: "Family and size for \(name)'s terminals — a "
                         + "running instance updates live. ⌘+ / ⌘− / ⌘0 in "
                         + "\(name)'s own windows edit the same value."
@@ -435,6 +437,7 @@ private struct HostAppearanceSettingsPanel: View {
         .onChange(of: surfaceOpacity) { _ in transparencyChanged() }
         .onChange(of: fontFamily) { _ in fontChanged() }
         .onChange(of: fontSize) { _ in fontChanged() }
+        .onChange(of: fontLineHeight) { _ in fontChanged() }
     }
 
     private var defaultWorkspaceLabel: String {
@@ -473,6 +476,7 @@ private struct HostAppearanceSettingsPanel: View {
         let font = TerminalFontModel.savedValues(in: suite)
         fontFamily = font.family
         fontSize = font.size
+        fontLineHeight = font.lineHeight
         // Arm the writers only after the initial values settle, so loading
         // never writes the target suite.
         DispatchQueue.main.async { loaded = true }
@@ -480,7 +484,7 @@ private struct HostAppearanceSettingsPanel: View {
 
     private func fontChanged() {
         guard loaded else { return }
-        TerminalFontModel.write(family: fontFamily, size: fontSize, to: suite)
+        TerminalFontModel.write(family: fontFamily, size: fontSize, lineHeight: fontLineHeight, to: suite)
         notifyTarget()
     }
 
@@ -1438,6 +1442,7 @@ private struct RemoteAppearanceSettingsPanel: View {
                     TerminalFontSection(
                         family: $terminalFont.family,
                         size: $terminalFont.size,
+                        lineHeight: $terminalFont.lineHeight,
                         description: "Fonts render on this Mac, so this is this "
                             + "Controller's own setting: it applies to \(scopeName)'s "
                             + "terminals and every other workspace alike. ⌘+ and ⌘− "
@@ -2636,6 +2641,7 @@ struct AppearanceSettingsPanel: View {
                 TerminalFontSection(
                     family: $terminalFont.family,
                     size: $terminalFont.size,
+                    lineHeight: $terminalFont.lineHeight,
                     description: TerminalFontSection.localDescription
                 )
 
@@ -2726,6 +2732,8 @@ struct TerminalFontSection: View {
     /// nil = the shipped stack.
     @Binding var family: String?
     @Binding var size: Double
+    /// Percent adjustment of the cell height (Ghostty `adjust-cell-height`).
+    @Binding var lineHeight: Double
     let description: String
 
     @State private var families: [String] = []
@@ -2741,6 +2749,13 @@ struct TerminalFontSection: View {
 
     private var isDefault: Bool {
         family == nil && abs(size - TerminalFontModel.defaultSize) < 0.001
+            && abs(lineHeight - TerminalFontModel.defaultLineHeight) < 0.001
+    }
+
+    private var lineHeightLabel: String {
+        let value = Int(lineHeight.rounded())
+        if value == 0 { return "Default" }
+        return value > 0 ? "+\(value) %" : "\(value) %"
     }
 
     var body: some View {
@@ -2780,11 +2795,37 @@ struct TerminalFontSection: View {
                     .foregroundStyle(Theme.foreground)
             }
 
+            LabeledContent {
+                HStack(spacing: 8) {
+                    Text(lineHeightLabel)
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundStyle(Theme.mutedForeground)
+                    Stepper(
+                        "",
+                        value: $lineHeight,
+                        in: TerminalFontModel.lineHeightRange,
+                        step: TerminalFontModel.lineHeightStep
+                    )
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Line height")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.foreground)
+                    Text("Extra space between rows, as a percentage of the font's own cell height.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.mutedForeground)
+                }
+            }
+
             HStack {
                 Spacer()
                 Button("Revert to default") {
                     family = nil
                     size = TerminalFontModel.defaultSize
+                    lineHeight = TerminalFontModel.defaultLineHeight
                 }
                 .controlSize(.small)
                 .disabled(isDefault)

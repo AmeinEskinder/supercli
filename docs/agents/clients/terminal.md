@@ -66,6 +66,7 @@ The native terminal is a **libghostty** surface (GhosttyKit), Metal-rendered, no
   for local panes, the SwiftUI style re-resolve for remote panes. The user's
   `~/.config/ghostty/config` is still not read: Unpeel generates its own
   config so its theme, keybind clearing, and padding stay in control.
+- **Line height (2026-09-17).** The same section has a Line height stepper (−20 % … +100 % in 5 % steps, default 0) stored as `terminal_line_height` beside the font keys and emitted as Ghostty's `adjust-cell-height` into the base and overlay configs, so a change re-lays every live pane (community #14).
 - Agent TUIs that repaint the screen in place can still appear to "crop" or "overwrite" detail while streaming — normal terminal behavior; intermediate full-screen redraw states are not guaranteed to survive as scrollback.
 
 ### Terminal links

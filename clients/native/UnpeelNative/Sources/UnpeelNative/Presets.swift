@@ -74,13 +74,15 @@ extension Preset {
     /// Tool the command maps to (nil for plain shell commands).
     var tool: QuickPresetTool? { QuickPresetTool.detect(in: command) }
 
-    /// sanitize_preset_quick_launch (state.rs:228): quick_launch is only
-    /// honored for supported tool commands.
+    /// Mirrors the Host's `sanitize_preset_quick_launch`: any non-empty
+    /// command can be starred — agents, Apps, and plain custom commands alike
+    /// (community #13). A custom command becomes its own chip with the
+    /// terminal glyph; only the blank-terminal pseudo-preset is excluded,
+    /// because the strip appends that chip itself.
     func sanitized() -> Preset {
         var copy = self
-        // Any known CLI can be quick-launched (favorited), not just the six
-        // QuickPresetTool tools — so gate on SetupTool, not `tool`.
-        copy.quickLaunch = quickLaunch && SetupTool.detect(in: command) != nil
+        copy.quickLaunch = quickLaunch
+            && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return copy
     }
 }
@@ -345,6 +347,11 @@ struct QuickPresetGroup: Identifiable, Equatable {
     init(app: RemoteAppSummary, presets: [Preset]) {
         self.cli = nil; self.app = app; self.presets = presets
     }
+    /// A plain custom command: no catalog identity, one chip per preset,
+    /// named after the preset's label and drawn with the terminal glyph.
+    init(customPresets: [Preset]) {
+        self.cli = nil; self.app = nil; self.presets = customPresets
+    }
     var id: String { cli?.rawValue ?? app?.id ?? leader.id }
     var displayName: String { cli?.displayName ?? app?.name ?? leader.label }
     var leader: Preset { presets[0] }
@@ -361,7 +368,9 @@ func collectQuickPresetGroups(_ items: [Preset], apps: [RemoteAppSummary] = []) 
         let executable = preset.command.split(separator: " ").first.map(String.init) ?? ""
         let head = URL(fileURLWithPath: executable.trimmingCharacters(in: CharacterSet(charactersIn: "'\""))).lastPathComponent
         let app = apps.first { $0.command == head }
-        guard let id = cli?.rawValue ?? app?.id else { continue }
+        // A command that is neither a catalog agent nor an installed App is
+        // a custom command: its own chip, keyed by the preset.
+        let id = cli?.rawValue ?? app?.id ?? "custom:\(preset.id)"
         if groups[id] == nil { order.append(id); identities[id] = (cli, app) }
         groups[id, default: []].append(preset)
     }
@@ -369,7 +378,7 @@ func collectQuickPresetGroups(_ items: [Preset], apps: [RemoteAppSummary] = []) 
         guard let identity = identities[id], let presets = groups[id], presets.contains(where: \.quickLaunch) else { return nil }
         if let cli = identity.0 { return QuickPresetGroup(cli: cli, presets: presets) }
         if let app = identity.1 { return QuickPresetGroup(app: app, presets: presets) }
-        return nil
+        return QuickPresetGroup(customPresets: presets)
     }
 }
 

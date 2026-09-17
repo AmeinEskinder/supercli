@@ -39,7 +39,7 @@ Where presets are stored (since the overlay migration, 2026-08-08):
 
 Quick preset selection rules (`Presets.swift`):
 
-- Only supported tool commands can be marked `quick_launch` (`sanitized()`).
+- Any non-empty command can be marked `quick_launch` (`sanitized()` mirrors the Host's `sanitize_preset_quick_launch`): catalog agents follow their descriptor flag, Apps and plain custom commands get their own chip (custom ones keyed `custom:<preset id>`, drawn with the terminal glyph and named after the label). Only the blank-terminal pseudo-preset is excluded.
 - Quick access is selected once per agent or App. The
   sidebar strip shows **one chip per agent or App** (`collectQuickPresetGroups` →
   `QuickPresetGroup`): one command launches directly; multiple commands

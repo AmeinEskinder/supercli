@@ -76,19 +76,24 @@ final class TerminalFontModelTests: XCTestCase {
         style.fontSize = 15
         style.fontFamily = "Menlo"
 
+        style.lineHeightPercent = 25
+
         let expected = TerminalConfiguration { builder in
             builder.withBackgroundOpacity(0.8)
             builder.withFontSize(15)
             builder.withFontFamily("")
             builder.withFontFamily("Menlo")
+            builder.withCustom("adjust-cell-height", "25%")
         }
         XCTAssertEqual(GhosttyTerminalPane.surfaceOverlayConfiguration(for: style), expected)
 
         style.fontFamily = nil
+        style.lineHeightPercent = 0
         let cleared = TerminalConfiguration { builder in
             builder.withBackgroundOpacity(0.8)
             builder.withFontSize(15)
             builder.withFontFamily("")
+            builder.withCustom("adjust-cell-height", "0%")
         }
         XCTAssertEqual(GhosttyTerminalPane.surfaceOverlayConfiguration(for: style), cleared)
     }

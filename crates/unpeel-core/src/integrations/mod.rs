@@ -120,10 +120,17 @@ pub fn builtin_presets() -> &'static [BuiltinPresetDefinition] {
     BUILTIN_PRESETS
 }
 
+/// Whether a preset with this command may be starred for Quick Launch. A
+/// catalog runtime answers with its descriptor flag (fx opts out); any other
+/// non-empty command — an App or a plain custom command — may be starred
+/// and becomes its own quick-launch chip (community #13). The empty
+/// blank-terminal pseudo-preset never is; the sidebar strip draws that chip
+/// itself.
 pub fn preset_supports_quick_launch(command: &str) -> bool {
-    runtime_for_command(command)
-        .map(|runtime| runtime.supports_quick_launch)
-        .unwrap_or(false)
+    match runtime_for_command(command) {
+        Some(runtime) => runtime.supports_quick_launch,
+        None => !command.trim().is_empty(),
+    }
 }
 
 pub fn uses_hook_port(tool: &str) -> bool {
@@ -319,6 +326,15 @@ pub fn mcp_registration_evidence_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_commands_can_be_quick_launched_but_a_blank_terminal_cannot() {
+        assert!(preset_supports_quick_launch("my-tool --serve"));
+        assert!(preset_supports_quick_launch("./scripts/dev.sh"));
+        assert!(!preset_supports_quick_launch(""));
+        assert!(!preset_supports_quick_launch("   "));
+        assert!(preset_supports_quick_launch("claude"));
+    }
 
     #[test]
     fn runtime_catalog_generated_registry_preserves_legacy_order_and_metadata() {

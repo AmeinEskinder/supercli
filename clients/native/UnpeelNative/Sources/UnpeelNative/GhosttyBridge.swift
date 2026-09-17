@@ -346,6 +346,7 @@ final class GhosttyTerminalPane: NSView {
             if let family = style.fontFamily {
                 builder.withFontFamily(family)
             }
+            builder.withCustom("adjust-cell-height", "\(style.lineHeightPercent)%")
             // Settings ▸ Appearance transparency. Text stays fully opaque;
             // only the canvas (and extended padding) picks up the alpha.
             builder.withBackgroundOpacity(style.backgroundOpacity)
@@ -460,7 +461,7 @@ final class GhosttyTerminalPane: NSView {
 
     /// The per-pane config overlay pushed to a LIVE surface
     /// (`ghostty_surface_update_config`) whenever one of its values moves:
-    /// canvas opacity plus the terminal font. `font-family` is a repeatable
+    /// canvas opacity plus the terminal font and line height. `font-family` is a repeatable
     /// Ghostty key and the base config already named a family at
     /// construction, so the overlay clears the list first (an empty value
     /// resets it) and then names the current family — or leaves it cleared
@@ -477,6 +478,7 @@ final class GhosttyTerminalPane: NSView {
             if let family = style.fontFamily {
                 builder.withFontFamily(family)
             }
+            builder.withCustom("adjust-cell-height", "\(style.lineHeightPercent)%")
         }
     }
 
@@ -2061,6 +2063,7 @@ final class RemoteGhosttyTerminalPane: NSView {
             if let family = style.fontFamily {
                 builder.withFontFamily(family)
             }
+            builder.withCustom("adjust-cell-height", "\(style.lineHeightPercent)%")
             builder.withBackgroundOpacity(style.backgroundOpacity)
         }
 

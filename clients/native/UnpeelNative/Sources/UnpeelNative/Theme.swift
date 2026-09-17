@@ -574,9 +574,15 @@ final class TerminalFontModel: ObservableObject {
     nonisolated static let defaultSize: Double = 13
     nonisolated static let sizeRange: ClosedRange<Double> = 8 ... 32
     nonisolated static let sizeStep: Double = 1
+    /// Line height as a percentage adjustment of the font's natural cell
+    /// height (Ghostty `adjust-cell-height`); 0 is the face's own metrics.
+    nonisolated static let defaultLineHeight: Double = 0
+    nonisolated static let lineHeightRange: ClosedRange<Double> = -20 ... 100
+    nonisolated static let lineHeightStep: Double = 5
 
     private static let familyKey = "terminal_font_family"
     private static let sizeKey = "terminal_font_size"
+    private static let lineHeightKey = "terminal_line_height"
 
     /// nil = the shipped stack (`shippedFamily()`): JetBrains Mono when
     /// installed, else SF Mono, else Ghostty's own bundled JetBrains Mono.
@@ -602,8 +608,21 @@ final class TerminalFontModel: ObservableObject {
         }
     }
 
-    var isDefault: Bool { family == nil && isDefaultSize }
+    /// Settings ▸ Appearance ▸ Terminal font ▸ Line height (community #14).
+    @Published var lineHeight: Double {
+        didSet {
+            let clamped = Self.clampLineHeight(lineHeight)
+            if clamped != lineHeight {
+                lineHeight = clamped
+            }
+            Theme.terminalLineHeight = lineHeight
+            valueChanged()
+        }
+    }
+
+    var isDefault: Bool { family == nil && isDefaultSize && isDefaultLineHeight }
     var isDefaultSize: Bool { abs(size - Self.defaultSize) < 0.001 }
+    var isDefaultLineHeight: Bool { abs(lineHeight - Self.defaultLineHeight) < 0.001 }
     var canIncreaseSize: Bool { size + Self.sizeStep <= Self.sizeRange.upperBound + 0.001 }
     var canDecreaseSize: Bool { size - Self.sizeStep >= Self.sizeRange.lowerBound - 0.001 }
 
@@ -630,6 +649,7 @@ final class TerminalFontModel: ObservableObject {
     func resetToDefaults() {
         family = nil
         size = Self.defaultSize
+        lineHeight = Self.defaultLineHeight
     }
 
     private var announceWorkItem: DispatchWorkItem?
@@ -639,8 +659,10 @@ final class TerminalFontModel: ObservableObject {
         let values = Self.savedValues(in: AppDefaults.shared)
         family = values.family
         size = values.size
+        lineHeight = values.lineHeight
         Theme.terminalFontFamily = values.family
         Theme.terminalFontSize = values.size
+        Theme.terminalLineHeight = values.lineHeight
     }
 
     /// The face `TerminalPaneStyle.resolved()` uses when no family is chosen:
@@ -717,35 +739,44 @@ final class TerminalFontModel: ObservableObject {
     /// `.standard` value → the shipped default. The family is stored as ""
     /// for an explicit "default" so a workspace can override an inherited
     /// custom family back to the shipped stack.
-    static func savedValues(in defaults: UserDefaults) -> (family: String?, size: Double) {
+    static func savedValues(
+        in defaults: UserDefaults
+    ) -> (family: String?, size: Double, lineHeight: Double) {
         func stored<T>(_ key: String, as _: T.Type) -> T? {
             if let value = defaults.object(forKey: key) as? T { return value }
             return UserDefaults.standard.object(forKey: key) as? T
         }
         let family = normalize(stored(familyKey, as: String.self))
         let size = stored(sizeKey, as: Double.self).map(clamp) ?? defaultSize
-        return (family, size)
+        let lineHeight = stored(lineHeightKey, as: Double.self).map(clampLineHeight) ?? defaultLineHeight
+        return (family, size, lineHeight)
     }
 
     /// Whether the suite records ANY font value of its own (the revert
     /// button's enablement).
     static func hasSavedValues(in defaults: UserDefaults) -> Bool {
-        [familyKey, sizeKey].contains { defaults.object(forKey: $0) != nil }
+        [familyKey, sizeKey, lineHeightKey].contains { defaults.object(forKey: $0) != nil }
     }
 
     /// Decision 4's revert: drop a workspace's own font so it inherits the
     /// default workspace's again.
     static func clearSavedValues(in defaults: UserDefaults) {
-        for key in [familyKey, sizeKey] {
+        for key in [familyKey, sizeKey, lineHeightKey] {
             defaults.removeObject(forKey: key)
         }
     }
 
     /// Write a workspace's font into ITS suite; a running instance applies
     /// it on its `/reload-appearance` ping.
-    static func write(family: String?, size: Double, to defaults: UserDefaults) {
+    static func write(
+        family: String?,
+        size: Double,
+        lineHeight: Double = defaultLineHeight,
+        to defaults: UserDefaults
+    ) {
         defaults.set(normalize(family) ?? "", forKey: familyKey)
         defaults.set(clamp(size), forKey: sizeKey)
+        defaults.set(clampLineHeight(lineHeight), forKey: lineHeightKey)
     }
 
     /// Re-read OWN suite after a peer wrote it (the scoped Appearance editor
@@ -759,6 +790,9 @@ final class TerminalFontModel: ObservableObject {
         }
         if abs(values.size - size) > 0.001 {
             size = values.size
+        }
+        if abs(values.lineHeight - lineHeight) > 0.001 {
+            lineHeight = values.lineHeight
         }
         suppressPersistence = false
         announceWorkItem?.cancel()
@@ -776,11 +810,16 @@ final class TerminalFontModel: ObservableObject {
         return min(max(stepped, sizeRange.lowerBound), sizeRange.upperBound)
     }
 
+    nonisolated static func clampLineHeight(_ value: Double) -> Double {
+        let stepped = (value / lineHeightStep).rounded() * lineHeightStep
+        return min(max(stepped, lineHeightRange.lowerBound), lineHeightRange.upperBound)
+    }
+
     /// Persist immediately; announce on a short trailing debounce so a held
     /// ⌘+ or a stepper run rebuilds every pane's font grid once, not per tick.
     private func valueChanged() {
         guard !suppressPersistence else { return }
-        Self.write(family: family, size: size, to: AppDefaults.shared)
+        Self.write(family: family, size: size, lineHeight: lineHeight, to: AppDefaults.shared)
 
         announceWorkItem?.cancel()
         let work = DispatchWorkItem {
@@ -1034,6 +1073,7 @@ enum Theme {
     /// nil family = the shipped stack. Written only by TerminalFontModel on
     /// the main thread.
     nonisolated(unsafe) static var terminalFontFamily: String?
+    nonisolated(unsafe) static var terminalLineHeight: Double = TerminalFontModel.defaultLineHeight
     nonisolated(unsafe) static var terminalFontSize: Double = TerminalFontModel.defaultSize
 
     /// The shared neutral used by the tone sliders: one hue/saturation for
@@ -1638,6 +1678,9 @@ struct TerminalPaneStyle {
     /// Settings ▸ Appearance ▸ Terminal font (mirrored in
     /// `Theme.terminalFontSize`); 13 is the shipped default.
     var fontSize: Float = Float(TerminalFontModel.defaultSize)
+    /// Settings ▸ Appearance ▸ Terminal font ▸ Line height, as Ghostty's
+    /// `adjust-cell-height` percentage (0 = the face's own metrics).
+    var lineHeightPercent: Int = Int(TerminalFontModel.defaultLineHeight)
     /// Runtime descriptors opt into horizontal padding. The neutral terminal
     /// style is edge-to-edge so full-bleed TUIs can own their whole canvas.
     var windowPaddingX: Int = 0
@@ -1709,6 +1752,7 @@ struct TerminalPaneStyle {
             Theme.appTintedHexString(style.light.selectionBackground)
         style.fontSize = Float(Theme.terminalFontSize)
         style.fontFamily = Theme.terminalFontFamily ?? TerminalFontModel.shippedFamily()
+        style.lineHeightPercent = Int(Theme.terminalLineHeight.rounded())
         return style
     }
 }
