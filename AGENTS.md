@@ -33,7 +33,7 @@ makes sense for coding, it does not belong here.
 | `crates/unpeel-cli` | The `unpeel` CLI and its PTY test matrix (`crates/unpeel-cli/tests`) |
 | `crates/unpeel-attach` | Terminal attach client (standalone crate, ships next to `unpeel-host`) |
 | `crates/unpeel-native-bridge` | Panic-contained C ABI over `unpeel-core` that the Mac app links (workspace member, path deps) |
-| `crates/apps/` | The first-party Unpeel Apps (`markdown`, `filetree`, `diffs`, `usage`) and `app-kit`, their Ratatui App Kit — a separate Cargo workspace, released per App by `release:app`, run in dev mode with `bun run apps:link` |
+| `crates/apps/` | The first-party Unpeel Apps — shown as **Plugins** in the app since 0.7; the `apps` MCP capability and `unpeel apps` keep the name — (`markdown`, `filetree`, `diffs`, `usage`) and `app-kit`, their Ratatui App Kit — a separate Cargo workspace, released per App by `release:app`, run in dev mode with `bun run apps:link` |
 | `clients/native` | The macOS app (Swift + SwiftUI + libghostty) and its build/release scripts |
 | `clients/ios` | The iPhone/iPad Controller (xcodegen project `UnpeelIOS/`) |
 | `clients/shared/UnpeelShared` | Swift package shared by both apps: pairing, Host protocol client, Relay E2E, icon art, the runtime catalog copy |
