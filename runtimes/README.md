@@ -158,41 +158,44 @@ instead of emulating a stronger integration. Research the provider before
 writing code: executable signatures, official install path, lifecycle
 events, conversation identity, exact resume semantics, MCP configuration,
 transcript roots and format, and version-dependent behavior.
-4. Put provider-owned scripts, plugins, and optional `icon.svg` in `assets/`.
-   Load setup assets with `include_str!`; the catalog generator embeds the
-   declared icon for shared clients. Record an upstream URL or explicit
-   `internal:` generation/migration marker and its license/brand status.
-   Installers must merge user configuration idempotently, preserve unrelated
-   entries, and remove only Unpeel-owned entries.
-5. Every owned lifecycle reporter must send and durably seed numeric
-   `unpeel_runtime_generation`. It must no-op outside an Unpeel Session,
-   report to the direct hook port and current port registry, and forward only
-   the provider conversation ID/path fields the Host knows how to validate.
-   The reporter reads its Session from the generic hosted environment (or,
-   for launchers that scrub it, from its parent process); it never depends on
-   a launch-time wrapper or provider variable.
-   Finish bounded delivery before returning; provider-level asynchronous
-   hooks can reorder opening and closing events even when the script waits
-   for its own HTTP requests. An adapter may opt into
-   `Integration::with_escape_cancellation()` only when Escape is a verified
-   turn interrupt. The Host owns input parsing, durable cancellation fences,
-   and rearming on the next submitted opening hook; see
-   [Session activity](../docs/agents/clients/session-activity.md#escape-cancellation-and-hook-delivery).
-6. MCP registration is part of the installer, uses the provider's persistent
-   additive mechanism, and always points at the MCP shim; the shim's gate
-   fail-closes outside a granted hosted Session. Registration evidence on a
-   Session means "the integration is installed and the launch granted the
-   domain" — a grant alone is not proof of a configured client.
-7. Resume/restart code must preserve the original semantic command, support
-   only verified identity modes (hook-captured exact ID, documented
-   continue-last, or picker), and never turn passive process observation
-   into a launch recipe. Nothing mints an id or pins storage at launch.
-8. Transcript code returns normalized records and provider path claims. Core
-   still canonicalizes roots, rejects traversal/symlink escape, and applies
-   read/search limits.
-9. Regenerate client metadata with `bun run generate:runtimes`, then run
-   `bun run validate:runtimes` to validate the schema/generated registry and
-   prove there is no client-catalog drift.
+
+### Package rules
+
+- Put provider-owned scripts, plugins, and optional `icon.svg` in `assets/`.
+  Load setup assets with `include_str!`; the catalog generator embeds the
+  declared icon for shared clients. Record an upstream URL or explicit
+  `internal:` generation/migration marker and its license/brand status.
+  Installers must merge user configuration idempotently, preserve unrelated
+  entries, and remove only Unpeel-owned entries.
+- Every owned lifecycle reporter must send and durably seed numeric
+  `unpeel_runtime_generation`. It must no-op outside an Unpeel Session,
+  report to the direct hook port and current port registry, and forward only
+  the provider conversation ID/path fields the Host knows how to validate.
+  The reporter reads its Session from the generic hosted environment (or,
+  for launchers that scrub it, from its parent process); it never depends on
+  a launch-time wrapper or provider variable.
+  Finish bounded delivery before returning; provider-level asynchronous
+  hooks can reorder opening and closing events even when the script waits
+  for its own HTTP requests. An adapter may opt into
+  `Integration::with_escape_cancellation()` only when Escape is a verified
+  turn interrupt. The Host owns input parsing, durable cancellation fences,
+  and rearming on the next submitted opening hook; see
+  [Session activity](../docs/agents/clients/session-activity.md#escape-cancellation-and-hook-delivery).
+- MCP registration is part of the installer, uses the provider's persistent
+  additive mechanism, and always points at the MCP shim; the shim's gate
+  fail-closes outside a granted hosted Session. Registration evidence on a
+  Session means "the integration is installed and the launch granted the
+  domain" — a grant alone is not proof of a configured client.
+- Resume/restart code must preserve the original semantic command, support
+  only verified identity modes (hook-captured exact ID, documented
+  continue-last, or picker), and never turn passive process observation
+  into a launch recipe. Nothing mints an id or pins storage at launch.
+- Transcript code returns normalized records and provider path claims. Core
+  still canonicalizes roots, rejects traversal/symlink escape, and applies
+  read/search limits.
+- Regenerate client metadata with `bun run generate:runtimes`, then run
+  `bun run validate:runtimes` to validate the schema/generated registry and
+  prove there is no client-catalog drift.
 
 ## Integration levels
 
