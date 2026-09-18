@@ -476,6 +476,13 @@ impl ProcessGeneration {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .remove(&request.id);
+            // A gateway that refused to start (strict Local transport with no
+            // worker) writes its reason to stderr and exits; the first write
+            // can hit the closed pipe before that reason is drained. Give
+            // stderr the same bounded moment the read path does, so the
+            // caller sees "local Host service is unavailable", not EPIPE.
+            self.await_stderr_settled(Duration::from_secs(1));
+            let message = self.diagnostic_message(&message);
             self.fail(message.clone());
             if let Ok(Err(failure)) = receiver.try_recv() {
                 return match failure {
