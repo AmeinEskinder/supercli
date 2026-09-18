@@ -595,7 +595,8 @@ private struct CollapsedNewSessionControl: View {
                         sourcePresetID: preset.command.isEmpty ? nil : preset.id
                     )
                 },
-                onManagePresets: { store.openSettings(tab: .agents) }
+                onManagePresets: { store.openSettings(tab: .agents) },
+                onManagePlugins: { store.openSettings(tab: .plugins) }
             )
         }
     }
@@ -645,6 +646,7 @@ struct TitlebarNewSessionMenu: View {
     let menuPresets: [Preset]
     let onLaunch: (Preset) -> Void
     let onManagePresets: () -> Void
+    var onManagePlugins: (() -> Void)? = nil
 
     @State private var hovering = false
 
@@ -653,7 +655,8 @@ struct TitlebarNewSessionMenu: View {
             newSessionMenuContent(
                 menuPresets: menuPresets,
                 onLaunch: onLaunch,
-                onManagePresets: onManagePresets
+                onManagePresets: onManagePresets,
+                onManagePlugins: onManagePlugins
             )
         } label: {
             // Thin plusIcon, not the heavier plusBold (matches the project-item

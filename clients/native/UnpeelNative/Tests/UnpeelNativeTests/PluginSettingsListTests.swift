@@ -22,6 +22,22 @@ struct PluginSettingsListTests {
         #expect(withoutApp[0].cli == nil && withoutApp[0].app == nil)
     }
 
+    @Test func newSessionMenuListsAgentsFirstAndPluginsInTheirOwnSection() {
+        UnpeelAppIconCatalog.update([
+            RemoteAppSummary(id: "unpeel.app.markdown", name: "Markdown", command: "unpeel-markdown", installed: true),
+        ])
+        defer { UnpeelAppIconCatalog.update([]) }
+        let presets = [
+            Preset(id: "markdown", label: "Markdown", command: "unpeel-markdown", enabled: true, quickLaunch: true),
+            Preset(id: "codex", label: "codex --yolo", command: "codex --yolo", enabled: true, quickLaunch: true),
+            Preset(id: "dev", label: "Dev server", command: "./scripts/dev.sh", enabled: true, quickLaunch: false),
+            Preset(id: "notes", label: "Notes", command: "/opt/bin/unpeel-markdown notes.md", enabled: true, quickLaunch: false),
+        ]
+        let split = splitPresetsForNewSessionMenu(presets)
+        #expect(split.agents.map(\.id) == ["codex", "dev"])
+        #expect(split.plugins.map(\.id) == ["markdown", "notes"])
+    }
+
     @Test func mixedRowsKeepVariantsTogetherAndIgnoreLegacyProjectOverrides() throws {
         let settings = try JSONDecoder().decode(RemoteWorkspaceSettings.self, from: Data(#"{"pluginOrder":["unpeel.app.markdown","claude"],"availableAgents":[{"id":"claude","name":"Claude","command":"claude","installed":true}],"autoStopArchiveMinutes":120,"sidebarStoppedLimit":5,"browserDefaultAccess":"on","mcpNonchildWriteAccess":"ask","computerAccess":"ask","mcpWorktreeAccess":false,"mcpAutoAddBrowserScreenshots":true}"#.utf8))
         let snapshot = RemoteBootstrapSnapshot(

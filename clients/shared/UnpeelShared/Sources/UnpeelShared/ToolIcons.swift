@@ -136,6 +136,13 @@ public enum UnpeelAppIconCatalog {
         return byAppID[appID.lowercased()]
     }
 
+    /// Whether the command's leading word is an installed Plugin (Unpeel
+    /// App) on the current Host — the split the new-session menus use to
+    /// list agents and plugins apart.
+    public static func isPluginCommand(_ command: String) -> Bool {
+        icon(command: command) != nil
+    }
+
     /// Match the command's leading word by binary name, so both the bare
     /// launch-list command and a Host launch by absolute path resolve.
     public static func icon(command: String) -> UnpeelToolIcon? {

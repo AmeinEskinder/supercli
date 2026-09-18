@@ -1413,6 +1413,7 @@ struct ProjectNodeView: View {
                 store.setSessionDateSorted(dateSorted, for: node.id)
             },
             onManagePresets: { store.openSettings(tab: .agents) },
+            onManagePlugins: { store.openSettings(tab: .plugins) },
             workspaceMoveTargets: node.project.parentProjectID == nil
                 && isLocalMachine
                 ? workspaceMoveTargets
@@ -1583,6 +1584,7 @@ struct ProjectNodeView: View {
                         )
                     },
                     onManagePresets: { store.openSettings(tab: .agents) },
+                    onManagePlugins: { store.openSettings(tab: .plugins) },
                     showsManagePresets: store.selectedHostScope == .local,
                     archivedCount: archivedSessionCount,
                     onOpenArchived: { store.openArchivedSessions(projectID: node.id) }
@@ -1821,6 +1823,7 @@ struct EmptySessionsPlaceholderRow: View {
     let menuPresets: [Preset]
     let onLaunch: (Preset) -> Void
     var onManagePresets: () -> Void = {}
+    var onManagePlugins: (() -> Void)? = nil
     var showsManagePresets = true
     var archivedCount = 0
     var onOpenArchived: (() -> Void)?
@@ -1834,6 +1837,7 @@ struct EmptySessionsPlaceholderRow: View {
                     menuPresets: menuPresets,
                     onLaunch: onLaunch,
                     onManagePresets: onManagePresets,
+                    onManagePlugins: onManagePlugins,
                     showsManagePresets: showsManagePresets,
                     archivedCount: archivedCount,
                     onOpenArchived: onOpenArchived
@@ -1990,6 +1994,8 @@ struct ProjectRowView: View {
     /// Opens settings on the Presets tab, from the bottom of the
     /// new-session preset menus.
     var onManagePresets: () -> Void = {}
+    /// Opens Settings ▸ Plugins, beside Manage Agents… in the same menus.
+    var onManagePlugins: () -> Void = {}
     /// Other local workspaces; empty hides the project "Move to" menu.
     var workspaceMoveTargets: [WorkspaceMoveTarget] = []
     var onMoveToWorkspace: (WorkspaceMoveTarget) -> Void = { _ in }
@@ -2178,6 +2184,7 @@ struct ProjectRowView: View {
                     forceExpanded: debugHover,
                     onLaunch: onLaunchPreset,
                     onManagePresets: onManagePresets,
+                    onManagePlugins: onManagePlugins,
                     showsManagePresets: true,
                     archivedCount: archivedSessionCount,
                     onOpenArchived: onOpenArchived
@@ -2227,16 +2234,26 @@ struct ProjectRowView: View {
                 Divider()
             }
             Menu("New session") {
+                let split = splitPresetsForNewSessionMenu(menuPresets)
                 Button("Terminal") { onLaunchPreset(.newTerminal) }
-                if !menuPresets.isEmpty {
+                if !split.agents.isEmpty {
                     Divider()
-                    ForEach(menuPresets) { preset in
+                    ForEach(split.agents) { preset in
                         Button(preset.label) { onLaunchPreset(preset) }
+                    }
+                }
+                if !split.plugins.isEmpty {
+                    Divider()
+                    Section("Plugins") {
+                        ForEach(split.plugins) { preset in
+                            Button(preset.label) { onLaunchPreset(preset) }
+                        }
                     }
                 }
                 if showsLocalProjectVerbs {
                     Divider()
                     Button("Manage Agents…") { onManagePresets() }
+                    Button("Manage Plugins…") { onManagePlugins() }
                 }
             }
             // Folder color is a MAIN-project verb: groups and worktrees stay
@@ -2496,6 +2513,7 @@ struct QuickPresetStrip: View {
     var forceExpanded = false
     let onLaunch: (Preset) -> Void
     var onManagePresets: () -> Void = {}
+    var onManagePlugins: (() -> Void)? = nil
     var showsManagePresets = true
     var archivedCount = 0
     var onOpenArchived: (() -> Void)?
@@ -2549,6 +2567,7 @@ struct QuickPresetStrip: View {
                 menuPresets: menuPresets,
                 onLaunch: onLaunch,
                 onManagePresets: onManagePresets,
+                onManagePlugins: onManagePlugins,
                 showsManagePresets: showsManagePresets,
                 archivedCount: archivedCount,
                 onOpenArchived: onOpenArchived
@@ -2638,18 +2657,30 @@ func newSessionMenuContent(
     menuPresets: [Preset],
     onLaunch: @escaping (Preset) -> Void,
     onManagePresets: @escaping () -> Void,
+    onManagePlugins: (() -> Void)? = nil,
     showsManagePresets: Bool = true,
     archivedCount: Int = 0,
     onOpenArchived: (() -> Void)? = nil
 ) -> some View {
+    let split = splitPresetsForNewSessionMenu(menuPresets)
     PresetMenuButton(preset: .newTerminal) {
         onLaunch(.newTerminal)
     }
-    if !menuPresets.isEmpty {
+    if !split.agents.isEmpty {
         Divider()
-        ForEach(menuPresets) { preset in
+        ForEach(split.agents) { preset in
             PresetMenuButton(preset: preset) {
                 onLaunch(preset)
+            }
+        }
+    }
+    if !split.plugins.isEmpty {
+        Divider()
+        Section("Plugins") {
+            ForEach(split.plugins) { preset in
+                PresetMenuButton(preset: preset) {
+                    onLaunch(preset)
+                }
             }
         }
     }
@@ -2670,6 +2701,13 @@ func newSessionMenuContent(
             onManagePresets()
         } label: {
             Text("Manage Agents…")
+        }
+        if let onManagePlugins {
+            Button {
+                onManagePlugins()
+            } label: {
+                Text("Manage Plugins…")
+            }
         }
     }
 }

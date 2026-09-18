@@ -87,6 +87,22 @@ extension Preset {
     }
 }
 
+/// The new-session menus list agents (and custom commands) first and the
+/// installed Plugins in their own section at the bottom. Plugin identity is
+/// the Host's App catalog by command, the same source the icons use.
+func splitPresetsForNewSessionMenu(_ presets: [Preset]) -> (agents: [Preset], plugins: [Preset]) {
+    var agents: [Preset] = []
+    var plugins: [Preset] = []
+    for preset in presets {
+        if UnpeelAppIconCatalog.isPluginCommand(preset.command) {
+            plugins.append(preset)
+        } else {
+            agents.append(preset)
+        }
+    }
+    return (agents, plugins)
+}
+
 /// Catalog-backed identity used by quick-preset presentation. This used to be
 /// a closed six-case enum; keeping it open means a new `runtime.toml` becomes
 /// favorite-capable without adding a Swift case.
