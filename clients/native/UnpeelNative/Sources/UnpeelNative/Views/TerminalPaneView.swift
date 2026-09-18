@@ -1829,37 +1829,41 @@ struct TerminalPaneContainer: View {
                 action: { launch(.newTerminal, into: pane) }
             ))
             let split = splitPresetsForNewSessionMenu(store.displayAvailablePresets)
-            if !split.agents.isEmpty {
-                menu.addItem(.separator())
-                for preset in split.agents {
-                    menu.addItem(presetMenuItem(
-                        preset,
-                        controller: controller,
-                        action: { launch(preset, into: pane) }
-                    ))
-                }
-            }
-            if !split.plugins.isEmpty {
-                menu.addItem(.separator())
-                if #available(macOS 14, *) {
-                    menu.addItem(.sectionHeader(title: "Plugins"))
-                } else {
-                    let header = NSMenuItem(title: "Plugins", action: nil, keyEquivalent: "")
-                    header.isEnabled = false
-                    menu.addItem(header)
-                }
-                for preset in split.plugins {
-                    menu.addItem(presetMenuItem(
-                        preset,
-                        controller: controller,
-                        action: { launch(preset, into: pane) }
-                    ))
-                }
-            }
+            // Agents, with their manage entry at the bottom of the list.
             menu.addItem(.separator())
+            if #available(macOS 14, *) {
+                menu.addItem(.sectionHeader(title: "Agents"))
+            } else {
+                let header = NSMenuItem(title: "Agents", action: nil, keyEquivalent: "")
+                header.isEnabled = false
+                menu.addItem(header)
+            }
+            for preset in split.agents {
+                menu.addItem(presetMenuItem(
+                    preset,
+                    controller: controller,
+                    action: { launch(preset, into: pane) }
+                ))
+            }
             menu.addItem(controller.item("Manage Agents…") {
                 store.openSettings(tab: .agents)
             })
+            // Plugins, likewise.
+            menu.addItem(.separator())
+            if #available(macOS 14, *) {
+                menu.addItem(.sectionHeader(title: "Plugins"))
+            } else {
+                let header = NSMenuItem(title: "Plugins", action: nil, keyEquivalent: "")
+                header.isEnabled = false
+                menu.addItem(header)
+            }
+            for preset in split.plugins {
+                menu.addItem(presetMenuItem(
+                    preset,
+                    controller: controller,
+                    action: { launch(preset, into: pane) }
+                ))
+            }
             menu.addItem(controller.item("Manage Plugins…") {
                 store.openSettings(tab: .plugins)
             })

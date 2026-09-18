@@ -2236,24 +2236,27 @@ struct ProjectRowView: View {
             Menu("New session") {
                 let split = splitPresetsForNewSessionMenu(menuPresets)
                 Button("Terminal") { onLaunchPreset(.newTerminal) }
-                if !split.agents.isEmpty {
+                if !split.agents.isEmpty || showsLocalProjectVerbs {
                     Divider()
-                    ForEach(split.agents) { preset in
-                        Button(preset.label) { onLaunchPreset(preset) }
+                    Section("Agents") {
+                        ForEach(split.agents) { preset in
+                            Button(preset.label) { onLaunchPreset(preset) }
+                        }
+                        if showsLocalProjectVerbs {
+                            Button("Manage Agents…") { onManagePresets() }
+                        }
                     }
                 }
-                if !split.plugins.isEmpty {
+                if !split.plugins.isEmpty || showsLocalProjectVerbs {
                     Divider()
                     Section("Plugins") {
                         ForEach(split.plugins) { preset in
                             Button(preset.label) { onLaunchPreset(preset) }
                         }
+                        if showsLocalProjectVerbs {
+                            Button("Manage Plugins…") { onManagePlugins() }
+                        }
                     }
-                }
-                if showsLocalProjectVerbs {
-                    Divider()
-                    Button("Manage Agents…") { onManagePresets() }
-                    Button("Manage Plugins…") { onManagePlugins() }
                 }
             }
             // Folder color is a MAIN-project verb: groups and worktrees stay
@@ -2666,15 +2669,26 @@ func newSessionMenuContent(
     PresetMenuButton(preset: .newTerminal) {
         onLaunch(.newTerminal)
     }
-    if !split.agents.isEmpty {
+    // Agents, with their manage entry at the bottom of the same list.
+    if !split.agents.isEmpty || showsManagePresets {
         Divider()
-        ForEach(split.agents) { preset in
-            PresetMenuButton(preset: preset) {
-                onLaunch(preset)
+        Section("Agents") {
+            ForEach(split.agents) { preset in
+                PresetMenuButton(preset: preset) {
+                    onLaunch(preset)
+                }
+            }
+            if showsManagePresets {
+                Button {
+                    onManagePresets()
+                } label: {
+                    Text("Manage Agents…")
+                }
             }
         }
     }
-    if !split.plugins.isEmpty {
+    // Plugins, likewise.
+    if !split.plugins.isEmpty || (showsManagePresets && onManagePlugins != nil) {
         Divider()
         Section("Plugins") {
             ForEach(split.plugins) { preset in
@@ -2682,10 +2696,17 @@ func newSessionMenuContent(
                     onLaunch(preset)
                 }
             }
+            if showsManagePresets, let onManagePlugins {
+                Button {
+                    onManagePlugins()
+                } label: {
+                    Text("Manage Plugins…")
+                }
+            }
         }
     }
-    Divider()
     if archivedCount > 0, let onOpenArchived {
+        Divider()
         Button {
             onOpenArchived()
         } label: {
@@ -2693,20 +2714,6 @@ func newSessionMenuContent(
                 Text("Archived (\(archivedCount))")
             } icon: {
                 Image(systemName: "archivebox")
-            }
-        }
-    }
-    if showsManagePresets {
-        Button {
-            onManagePresets()
-        } label: {
-            Text("Manage Agents…")
-        }
-        if let onManagePlugins {
-            Button {
-                onManagePlugins()
-            } label: {
-                Text("Manage Plugins…")
             }
         }
     }
