@@ -319,3 +319,50 @@ top-level unknown-field preservation, preset flags/order, and that the state
 bus notification is delivered before the process exits. Changes that touch
 workspace selection must also run the full `crates/unpeel-cli/tests/run.sh`
 matrix because every command composes with `--workspace`.
+
+### Scheduled sessions
+
+`crates/unpeel-cli/src/schedule_cli.rs` owns this grammar:
+
+```text
+unpeel schedule add --id ID --session SID --interval SECS \
+    --tool TOOL [--arg KEY=VALUE ...] [--tool TOOL ...] \
+    [--max-duration SECS] [--max-steps N] [--max-output BYTES] [--max-retries N]
+unpeel schedule list [--json]
+unpeel schedule pause <id> | resume <id> | remove <id>
+unpeel schedule run-once <id> [--json]
+unpeel schedule daemon
+```
+
+The policy contract lives in `crates/unpeel-core/src/scheduled.rs`
+(`ScheduledRunner`, `Scheduler`, `AutonomousPolicy`) and is the definition
+of record; this section is the operator-facing summary:
+
+- Schedules are explicit operator opt-in. Nothing runs without a schedule;
+  there is no default-on, no discovery, no inference.
+- One named session per schedule; `add` refuses unknown sessions, and a
+  session archived later fails closed at run time with an audited record.
+- A scheduled run executes an explicit ordered list of connector tool calls
+  with no human present — never an agentic prompt loop. `Ask` tools are
+  denied immediately (`NoHumanPresent`); explicit `Deny` stays denied.
+- Defaults: 30 min, 200 steps, 4 MiB output, 0 retries. Absolute ceilings:
+  60 s minimum interval, 24 h max duration, 10 000 steps, 3 retries with
+  5 s/10 s/20 s backoff. Retries apply to transient failures and timeouts
+  only; a run killed by a resource cap or denied by policy is never retried.
+- Single-flight per schedule: an overlapping trigger is skipped and audited,
+  never queued. The slot is released by RAII on every exit path, including
+  panic unwind.
+- Every trigger — success, failure, timeout, kill, overlap skip, invalid or
+  paused spec — appends exactly one record to
+  `<session-dir>/scheduled-runs.jsonl`. The registry
+  (`<UNPEEL_HOME>/schedules.json`) is written under an exclusive flock with
+  atomic rename; a corrupt registry is an error, never an empty list.
+- `daemon` is the only supported driver: it re-reads the registry every
+  tick, fires due triggers, and notifies exactly once per trigger on
+  persistent failure (after retries) through the existing notification path
+  plus a stderr event for headless operation. Do not drive schedules from
+  system cron — single-flight is enforced in-process, so a second driver
+  would break the no-overlap guarantee.
+- `remove` deletes the schedule but keeps the audit trail in the session
+  dir. `run-once` fires one trigger through the same runner (audited
+  identically); exit code 0 only on `Completed`.
