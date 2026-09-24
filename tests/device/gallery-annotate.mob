@@ -1,0 +1,27 @@
+# Unpeel Dioxus mobile: gallery — screenshot, annotate, flatten-upload
+# Tags: smoke, gallery
+# Timeout: 180000
+# Param: bundle_id = com.unpeel.controller
+# Param: session_id
+
+app "${bundle_id}"
+wait_for @"new-session-button" timeout:30000
+tap @"session-row-${session_id}" type:cell
+wait_for @"terminal-view" timeout:15000
+
+# Open the session gallery and take a fresh screenshot artifact.
+tap @"gallery-open-button" type:button
+wait_for @"gallery-panel" timeout:20000
+assert_exists @"gallery-title"
+tap @"gallery-screenshot" type:button
+wait_for @"gallery-panel" timeout:30000
+
+# Open the first entry, draw a stroke, and save. The editor flattens the
+# annotation onto the native-resolution image and uploads a new entry.
+tap @"gallery-entry-0" type:cell
+wait_for @"gallery-annotate-draw" timeout:15000
+tap @"gallery-annotate-draw" type:button
+drag 20%,30% to 80%,70% duration:600
+tap @"annotation-done" type:button
+wait_for @"gallery-panel" timeout:30000
+assert_exists @"gallery-title"
