@@ -83,6 +83,8 @@ unpeel — run and steer CLI agent sessions
   unpeel workspaces [list | add <name> | remove <name>]
   unpeel schedule add|list|pause|resume|remove|run-once|daemon
                                   scheduled autonomous sessions (opt-in)
+  unpeel migrate [--apply] [--json]
+                                  upgrade on-disk state (dry-run by default)
   unpeel add [PATH] [--name N] [--here] [--json]
                                   add a folder (default: here) as a project
   unpeel projects [list | add <name> <path> | remove <name|path>]
@@ -1006,6 +1008,7 @@ pub fn run(args: &[String]) -> i32 {
         },
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
+        "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
         // The one unified registrar: `sync` delegates to the connector
         // sync pass (install/update from a registry + verify everything).
         "registrar" => match args.get(1).map(String::as_str) {

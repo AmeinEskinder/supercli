@@ -646,3 +646,186 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
     }
 }
+
+// Phase 9 H1 — model-based property test for the lease state machine.
+// A pure-Rust reference model tracks (owner, generation, live) per
+// schedule; a seeded RNG drives 2000 claim/renew/release/expire/fence
+// operations across three workers and two schedules, and every
+// operation's result plus the observable row must agree with the model.
+// This pins: claim/renew/expire/fence semantics, generation monotonicity
+// across takeovers AND clean-release reclaims (tombstones), and the
+// took_over payload (lapsed owner + claimed_at) for the P5-1 check.
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            self.0 = x;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+        fn below(&mut self, n: usize) -> usize {
+            (self.next() % n.max(1) as u64) as usize
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct ModelRow {
+        owner: Option<usize>,
+        generation: u64,
+        live: bool,
+    }
+
+    fn model_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("unpeel-lease-model-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn lease_state_machine_matches_reference_model() {
+        let mut rng = Rng(0xD1B5_4A35_7E97_6B21);
+        let home = model_home();
+        const N_WORKERS: usize = 3;
+        const N_SCHEDS: usize = 2;
+        let workers: Vec<Arc<Mutex<ScheduleLeases>>> = (0..N_WORKERS)
+            .map(|_| {
+                Arc::new(Mutex::new(
+                    ScheduleLeases::open(&home, DEFAULT_TENANT)
+                        .unwrap()
+                        .with_ttl(3_600_000),
+                ))
+            })
+            .collect();
+        let ids: Vec<String> = workers
+            .iter()
+            .map(|w| w.lock().unwrap().worker_id().to_string())
+            .collect();
+        let mut model: Vec<Option<ModelRow>> = vec![None; N_SCHEDS];
+        // Last generation each worker obtained per schedule (0 = never).
+        let mut last_gen = vec![vec![0u64; N_SCHEDS]; N_WORKERS];
+
+        for step in 0..2000 {
+            let w = rng.below(N_WORKERS);
+            let s = rng.below(N_SCHEDS);
+            let sid = format!("sched-{s}");
+            match rng.below(5) {
+                // Claim.
+                0 => {
+                    let before = workers[w].lock().unwrap().lease_row(&sid).unwrap();
+                    let got = workers[w].lock().unwrap().claim(&sid).unwrap();
+                    let row = &mut model[s];
+                    let expect: Option<(u64, Option<usize>)> = match row {
+                        None => {
+                            *row = Some(ModelRow {
+                                owner: Some(w),
+                                generation: 1,
+                                live: true,
+                            });
+                            Some((1, None))
+                        }
+                        Some(r) if r.owner.is_none() || !r.live => {
+                            let g = r.generation + 1;
+                            let took = r.owner; // lapsed owner, or None on tombstone
+                            *r = ModelRow {
+                                owner: Some(w),
+                                generation: g,
+                                live: true,
+                            };
+                            Some((g, took))
+                        }
+                        _ => None,
+                    };
+                    match (got, expect) {
+                        (None, None) => {}
+                        (Some(info), Some((g, took))) => {
+                            assert_eq!(info.generation, g, "step {step}: generation");
+                            assert_eq!(
+                                info.took_over.as_ref().map(|(o, _)| o),
+                                took.map(|t| &ids[t]),
+                                "step {step}: took_over owner"
+                            );
+                            if let (Some((_, prev_claimed)), Some(b)) =
+                                (info.took_over.as_ref(), before.as_ref())
+                            {
+                                // The takeover payload must name the lapsed
+                                // run's claimed_at for the P5-1 check.
+                                assert_eq!(*prev_claimed, b.claimed_at_ms);
+                                assert_eq!(b.owner, ids[took.unwrap()]);
+                            } else {
+                                assert!(
+                                    info.took_over.is_none(),
+                                    "step {step}: fresh/tombstone claim must not take over"
+                                );
+                            }
+                            last_gen[w][s] = g;
+                        }
+                        (got, expect) => {
+                            panic!("step {step}: claim({w},{s}) mismatch: got {got:?}, model {expect:?}")
+                        }
+                    }
+                }
+                // Renew.
+                1 => {
+                    let got = workers[w].lock().unwrap().renew(&sid).unwrap();
+                    let expect = matches!(&model[s], Some(r) if r.owner == Some(w) && r.live);
+                    assert_eq!(got, expect, "step {step}: renew({w},{s})");
+                }
+                // Release.
+                2 => {
+                    workers[w].lock().unwrap().release(&sid).unwrap();
+                    if let Some(r) = &mut model[s] {
+                        if r.owner == Some(w) {
+                            // Tombstone: owner cleared, generation kept.
+                            r.owner = None;
+                            r.live = false;
+                        }
+                    }
+                }
+                // Expire (test-only clock jump).
+                3 => {
+                    workers[w].lock().unwrap().force_expire(&sid).unwrap();
+                    if let Some(r) = &mut model[s] {
+                        r.live = false;
+                    }
+                }
+                // Fence check.
+                _ => {
+                    let gen = last_gen[w][s];
+                    let fence = LeaseFence::new(Arc::clone(&workers[w]), sid.clone(), gen);
+                    let got = fence.is_current();
+                    let expect = matches!(&model[s], Some(r)
+                        if r.owner == Some(w) && r.generation == gen && r.live);
+                    assert_eq!(got, expect, "step {step}: fence({w},{s},gen={gen})");
+                }
+            }
+            // After every op, the observable row must agree with the model.
+            let row = workers[w].lock().unwrap().lease_row(&sid).unwrap();
+            match (&row, &model[s]) {
+                (None, None) => {}
+                (Some(r), Some(m)) => {
+                    assert_eq!(r.generation, m.generation, "step {step}: row generation");
+                    match m.owner {
+                        Some(o) => assert_eq!(r.owner, ids[o], "step {step}: row owner"),
+                        None => assert!(
+                            r.owner.is_empty(),
+                            "step {step}: tombstone owner must be empty"
+                        ),
+                    }
+                }
+                (row, m) => {
+                    panic!("step {step}: row/model shape mismatch: row={row:?} model={m:?}")
+                }
+            }
+        }
+        eprintln!("lease_state_machine_matches_reference_model: 2000 ops, model agrees");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+}
