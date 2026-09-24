@@ -41,6 +41,23 @@ extern "C" fn request_shutdown(_: libc::c_int) {
     SHUTDOWN_REQUESTED.store(true, Ordering::Release);
 }
 
+/// Install `request_shutdown` as the handler for SIGINT/SIGTERM.
+/// `libc::sighandler_t` is `usize` on Linux; the function address goes
+/// through a raw pointer first (the direct fn-item-to-integer cast is
+/// denied by `function_casts_as_integer`).
+fn install_shutdown_handlers() {
+    unsafe {
+        libc::signal(
+            libc::SIGINT,
+            request_shutdown as *const () as libc::sighandler_t,
+        );
+        libc::signal(
+            libc::SIGTERM,
+            request_shutdown as *const () as libc::sighandler_t,
+        );
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServiceEvent {
     Started {
@@ -484,10 +501,7 @@ fn publish_status(
 /// Run the machine-wide supervisor in the foreground.
 pub fn run_service(mut report: impl FnMut(ServiceEvent)) -> Result<(), String> {
     SHUTDOWN_REQUESTED.store(false, Ordering::Release);
-    unsafe {
-        libc::signal(libc::SIGINT, request_shutdown as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, request_shutdown as libc::sighandler_t);
-    }
+    install_shutdown_handlers();
     let real_home = unpeel_core::app_paths::real_unpeel_home();
     let lease = ServiceLease::acquire(&real_home)?;
     let executable = std::env::current_exe()

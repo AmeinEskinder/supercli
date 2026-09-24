@@ -28,7 +28,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::fd::FromRawFd;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -40,6 +40,19 @@ use unpeel_core::controller_api::{
 use unpeel_core::rustls;
 
 use crate::platform_adapter::{PlatformAdapterError, PlatformAdapterHub};
+
+/// Global session-event bus (Phase 6 R4). The first slice uses a process-
+/// wide bus so the `/mobile/events` handler and the approval/turn emitters
+/// share state without re-plumbing every handler signature.
+fn event_bus() -> &'static crate::session_events::EventBus {
+    static BUS: OnceLock<crate::session_events::EventBus> = OnceLock::new();
+    BUS.get_or_init(crate::session_events::EventBus::new)
+}
+
+/// Public accessor for emitters (approvals, activity engine).
+pub fn session_event_bus() -> &'static crate::session_events::EventBus {
+    event_bus()
+}
 
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -1311,6 +1324,154 @@ fn handle_output(request: &Request) -> (u16, String) {
     (200, body.to_string())
 }
 
+/// `POST /mobile/turn-cancel` — the Host-owned cancel verb (capability
+/// `session.turn.cancel`, protocol minor 22).
+///
+/// Runs inside the authenticated `/mobile/*` path, so only a paired-device
+/// principal (or the owner transport) reaches here; everyone else gets the
+/// 401 from the mobile listener. The cancel is a best-effort interrupt —
+/// the Host never claims the turn stopped cleanly.
+///
+/// Semantics:
+/// - In-flight tool attempts (approved reviews with no recorded outcome)
+///   are durably marked `Ambiguous` via [`record_attempt_outcome`], each
+///   producing `tool.ambiguous` + `needs_review` events. They are never
+///   reclassified as failed and never auto-retried.
+/// - Idle cancel (no in-flight reviews) skips the PTY interrupt and is
+///   reported `cancelled: true, idle: true`.
+/// - A `\x03` is written to the session PTY to break the running command.
+/// - `turn.cancelled` is always emitted, with the ambiguous review ids.
+///
+/// A write failure on the outcome record fails closed: the cancel verb
+/// returns 500 and the review stays in-flight (a retry will see it again).
+fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u16, String) {
+    let body = body_json(request);
+    let Some(session_id) = body_session_id(&body).filter(|s| safe_session_id(s)) else {
+        return (400, error_body("invalid session id"));
+    };
+    let reason = body
+        .get("reason")
+        .and_then(serde_json::Value::as_str)
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or("controller requested cancel");
+
+    // Who cancels: a paired device cancels as itself; the owner transport
+    // cancels as policy:allow. The actor is never empty.
+    let actor = match principal {
+        ControllerPrincipal::PairedDevice { device_id, .. } => {
+            unpeel_core::action_reviews::Actor::Human {
+                device_id: device_id.clone(),
+            }
+        }
+        ControllerPrincipal::OwnerTransport { .. } => {
+            unpeel_core::action_reviews::Actor::PolicyAllow
+        }
+    };
+
+    let session_dir = unpeel_core::session_host::session_dir(&session_id);
+    let inflight = match unpeel_core::action_reviews::inflight_reviews(&session_dir) {
+        Ok(ids) => ids,
+        Err(e) => return (500, error_body(&format!("cannot read review log: {e}"))),
+    };
+
+    // Mark every in-flight attempt ambiguous before touching the PTY: if
+    // the interrupt lands mid-call the outcome is uncertain, and the
+    // durable record must say so. Fail closed on any write failure.
+    let mut ambiguous: Vec<String> = Vec::with_capacity(inflight.len());
+    for review_id in &inflight {
+        match unpeel_core::action_reviews::record_attempt_outcome(
+            &session_dir,
+            review_id,
+            unpeel_core::action_reviews::AttemptOutcome::Ambiguous {
+                reason: format!("turn cancelled while tool call was in flight: {reason}"),
+            },
+            actor.clone(),
+        ) {
+            Ok(_) => {
+                ambiguous.push(review_id.clone());
+                event_bus().emit_tool_ambiguous(&session_id, review_id, reason);
+                event_bus().emit_needs_review(
+                    &session_id,
+                    review_id,
+                    "cancelled mid-flight: verify the external effect before retrying",
+                );
+            }
+            Err(e) => {
+                return (
+                    500,
+                    error_body(&format!("outcome record failed for {review_id}: {e}")),
+                );
+            }
+        }
+    }
+
+    // Best-effort PTY interrupt. Idle cancels skip it: there is nothing to
+    // interrupt, and an unsolicited \x03 could disturb a shell prompt.
+    let interrupted = if inflight.is_empty() {
+        false
+    } else {
+        unpeel_core::session_host::send_command_with_timeout(
+            &session_id,
+            &unpeel_core::session_host::SessionHostCommand::Write {
+                data: "\x03".to_string(),
+                write_id: None,
+            },
+            std::time::Duration::from_secs(5),
+        )
+        .is_ok()
+    };
+
+    event_bus().emit_turn_cancelled(&session_id, reason, ambiguous.clone());
+
+    let body = serde_json::json!({
+        "cancelled": true,
+        "idle": inflight.is_empty(),
+        "interrupted": interrupted,
+        "ambiguous_attempts": ambiguous,
+    });
+    (200, body.to_string())
+}
+
+/// GET /mobile/events — typed session event stream (Phase 6 R4).
+///
+/// Query params: `session_id` (or `sessionID`), `after_seq` (default 0),
+/// `limit` (default 128, clamped to 1024). Returns `{ events, next_seq, resync }`.
+fn handle_events(request: &Request) -> (u16, String) {
+    let Some(session_id) = request
+        .query
+        .get("session_id")
+        .or_else(|| request.query.get("sessionID"))
+        .filter(|s| safe_session_id(s))
+    else {
+        return (400, error_body("invalid session id"));
+    };
+    let after_seq = request
+        .query
+        .get("after_seq")
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    let limit = request
+        .query
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(128)
+        .clamp(1, 1024);
+    // F1: tool calls execute in other processes (the scheduled daemon, the
+    // MCP server) and record terminal outcomes durably; reconcile them into
+    // `tool.executed` / `tool.ambiguous` events before polling so the
+    // stream reflects the durable log. Outcomes already announced
+    // in-process (e.g. by turn-cancel) are not re-emitted.
+    event_bus().reconcile_outcomes(session_id);
+    let (events, next_seq, resync) = event_bus().poll(session_id, after_seq, limit);
+    let event_json: Vec<serde_json::Value> = events.iter().map(|e| e.to_json()).collect();
+    let body = serde_json::json!({
+        "events": event_json,
+        "next_seq": next_seq,
+        "resync": resync,
+    });
+    (200, body.to_string())
+}
+
 fn body_json(request: &Request) -> serde_json::Value {
     serde_json::from_slice(&request.body).unwrap_or(serde_json::Value::Null)
 }
@@ -1649,6 +1810,8 @@ fn handle_with_effects(
 
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/mobile/output") => handle_output(request),
+        ("GET", "/mobile/events") => handle_events(request),
+        ("POST", "/mobile/turn-cancel") => handle_turn_cancel(request, principal),
         ("POST", "/mobile/session-organization") => {
             let body = body_json(request);
             let Some(session_id) = body_session_id(&body) else {
@@ -1949,7 +2112,7 @@ fn handle_approval_answer(
     ) else {
         return (400, error_body("request failed"));
     };
-    if approvals.answer(id, approved) {
+    if approvals.answer(id, approved, Some("paired-device".to_string())) {
         (200, r#"{"ok":true}"#.into())
     } else {
         (409, error_body("approval no longer pending"))
@@ -3264,6 +3427,228 @@ mod tests {
         assert!(head.contains("Connection: close"), "{head}");
         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(body["error"], "use https");
+    }
+
+    #[test]
+    fn events_route_rejects_unauthenticated_requests() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handler = serve_one_connection(listener, test_tls_config());
+
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (status, _, body) = http_exchange(
+            &mut client,
+            "GET /mobile/events?session_id=s1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        handler.join().unwrap();
+
+        // Same bearer gate as every other /mobile route: no credential means
+        // 401 before the event handler ever runs.
+        assert_eq!(status, 401, "{body}");
+        assert!(body.contains("unauthorized"), "{body}");
+    }
+
+    /// F1: after a tool call completes normally (durable `Executed` outcome),
+    /// a turn cancel finds nothing in flight: no ambiguous re-marking, no
+    /// `needs_review` — the completed attempt needs no takeover review.
+    /// This exercises the real `handle_turn_cancel` route, not just the
+    /// `inflight_reviews` helper.
+    #[test]
+    fn turn_cancel_after_normal_completion_needs_no_review() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir = scratch_dir("cancel-after-executed");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let session_id = "f1-cancel-after-executed";
+        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        std::fs::create_dir_all(&session_dir).unwrap();
+        // The scheduled daemon's write-ahead review + terminal outcome.
+        let review = unpeel_core::action_reviews::record_review(
+            &session_dir,
+            unpeel_core::action_reviews::Actor::PolicyAllow,
+            "shell",
+            "bash.exec",
+            "args-hash",
+            unpeel_core::action_reviews::ReviewDecision::Approved,
+            None,
+        )
+        .unwrap();
+        unpeel_core::action_reviews::record_attempt_outcome(
+            &session_dir,
+            &review.review_id,
+            unpeel_core::action_reviews::AttemptOutcome::Executed { success: true },
+            unpeel_core::action_reviews::Actor::PolicyAllow,
+        )
+        .unwrap();
+        assert!(unpeel_core::action_reviews::inflight_reviews(&session_dir)
+            .unwrap()
+            .is_empty());
+
+        let request = Request {
+            request_id: None,
+            method: "POST".to_string(),
+            path: "/mobile/turn-cancel".to_string(),
+            query: HashMap::new(),
+            headers: HashMap::new(),
+            body: format!(r#"{{"sessionID":"{session_id}","reason":"test"}}"#).into_bytes(),
+            keep_alive: false,
+        };
+        let principal = unpeel_core::controller_api::ControllerPrincipal::OwnerTransport {
+            transport: "test".to_string(),
+            subject: None,
+            principal_id: None,
+        };
+        let (status, body) = handle_turn_cancel(&request, &principal);
+        assert_eq!(status, 200, "{body}");
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["cancelled"], serde_json::json!(true));
+        assert_eq!(body["idle"], serde_json::json!(true));
+        assert!(
+            body["ambiguous_attempts"].as_array().unwrap().is_empty(),
+            "completed attempts must not be re-marked ambiguous: {body}"
+        );
+
+        // The event stream carries turn.cancelled but no needs_review for
+        // the completed review — and reconciliation of the durable outcome
+        // yields tool.executed, not another review escalation.
+        event_bus().reconcile_outcomes(session_id);
+        let (events, _, _) = event_bus().poll(session_id, 0, 128);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, crate::session_events::SessionEvent::TurnCancelled { .. })),
+            "turn.cancelled must be emitted: {events:?}"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, crate::session_events::SessionEvent::NeedsReview { .. })),
+            "no needs_review for a normally completed attempt: {events:?}"
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                crate::session_events::SessionEvent::ToolExecuted { success: true, .. }
+            )),
+            "reconciled tool.executed for the durable outcome: {events:?}"
+        );
+
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// S1 negative tests: session ids are the only path-shaped input on the
+    /// mobile routes. `body_session_id` (POST bodies) and the query filters
+    /// (GET routes) must reject traversal ids with 400 before any manifest
+    /// read, log read, or marker write can see them.
+    #[test]
+    fn session_id_funnel_rejects_path_traversal() {
+        for evil in [
+            "../evil",
+            "..\\evil",
+            "a/b",
+            "a\\b",
+            "..",
+            "...",
+            "/absolute",
+            "trailing..",
+        ] {
+            let body = serde_json::json!({"sessionID": evil});
+            assert!(
+                body_session_id(&body).is_none(),
+                "body_session_id accepted {evil:?}"
+            );
+            assert!(!safe_session_id(evil), "safe_session_id accepted {evil:?}");
+        }
+        // Sane ids still pass.
+        let body = serde_json::json!({"sessionID": "9f2c1a77-0000-4000-8000-000000000000"});
+        assert!(body_session_id(&body).is_some());
+    }
+
+    fn traversal_request(method: &str, body: &str, query: &[(&str, &str)]) -> Request {
+        Request {
+            request_id: None,
+            method: method.to_string(),
+            path: String::new(),
+            query: query
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            headers: HashMap::new(),
+            body: body.as_bytes().to_vec(),
+            keep_alive: false,
+        }
+    }
+
+    fn owner_principal() -> ControllerPrincipal {
+        ControllerPrincipal::OwnerTransport {
+            transport: "test".to_string(),
+            subject: None,
+            principal_id: None,
+        }
+    }
+
+    #[test]
+    fn turn_cancel_rejects_traversal_session_id() {
+        for evil in ["../evil", "..\\evil", "/absolute"] {
+            let request = traversal_request("POST", &format!(r#"{{"sessionID":{evil:?}}}"#), &[]);
+            let (status, body) = handle_turn_cancel(&request, &owner_principal());
+            assert_eq!(status, 400, "id {evil:?}: {body}");
+            assert!(body.contains("invalid session id"), "id {evil:?}: {body}");
+        }
+    }
+
+    #[test]
+    fn events_rejects_traversal_session_id() {
+        for (key, evil) in [("session_id", "../evil"), ("sessionID", "..\\evil")] {
+            let request = traversal_request("GET", "", &[(key, evil)]);
+            let (status, body) = handle_events(&request);
+            assert_eq!(status, 400, "id {evil:?}: {body}");
+            assert!(body.contains("invalid session id"), "id {evil:?}: {body}");
+        }
+    }
+
+    #[test]
+    fn output_rejects_traversal_session_id() {
+        let request = traversal_request("GET", "", &[("session_id", "../../evil")]);
+        let (status, body) = handle_output(&request);
+        assert_eq!(status, 400, "{body}");
+        assert!(body.contains("invalid session id"), "{body}");
+    }
+
+    /// F3: `POST /mobile/turn-cancel` without a bearer token is rejected
+    /// 401 by the mobile listener — the cancel verb never runs
+    /// unauthenticated.
+    #[test]
+    fn turn_cancel_route_rejects_unauthenticated_requests() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handler = serve_one_connection(listener, test_tls_config());
+
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let body_json = r#"{"sessionID":"s1","reason":"test"}"#;
+        let request = format!(
+            "POST /mobile/turn-cancel HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body_json.len(),
+            body_json
+        );
+        let (status, _, body) = http_exchange(&mut client, &request);
+        handler.join().unwrap();
+
+        assert_eq!(status, 401, "{body}");
+        assert!(body.contains("unauthorized"), "{body}");
     }
 
     #[test]
