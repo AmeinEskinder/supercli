@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Info.plist additions for the Unpeel Dioxus native iOS shell.
+  Merge these keys into the shell target's Info.plist (Xcode: target →
+  Info → Custom iOS Target Properties).
+
+  - UIBackgroundModes / remote-notification: lets iOS wake the app for
+    pushes so the Rust side can mark sessions read / refresh snapshots.
+  - NSSpeechRecognitionUsageDescription: required before the first
+    SFSpeechRecognizer.requestAuthorization() call; the string is shown
+    in the system prompt.
+  - NSMicrophoneUsageDescription: required before AVAudioSession record
+    permission; shown in the system prompt.
+-->
+<dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Unpeel uses speech recognition for push-to-talk dictation into the terminal.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Unpeel uses the microphone for push-to-talk dictation into the terminal.</string>
+</dict>
+</plist>

@@ -1,0 +1,19 @@
+[package]
+name = "unpeel-desktop"
+version = "0.7.1"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Unpeel desktop client (Dioxus) — Codex-like chat GUI over the Host protocol"
+
+[[bin]]
+name = "unpeel-desktop"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true, features = ["desktop", "launch"] }
+unpeel-ui = { workspace = true }
+unpeel-client = { workspace = true }
+unpeel-core = { path = "../../../crates/unpeel-core", default-features = false, features = ["native-host"] }
+serde_json = { workspace = true }
+base64 = "0.22"

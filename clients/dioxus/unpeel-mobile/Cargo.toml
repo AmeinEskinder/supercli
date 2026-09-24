@@ -1,0 +1,24 @@
+[package]
+name = "unpeel-mobile"
+version = "0.7.1"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Unpeel mobile client (Dioxus) — session list + live terminal over the Host protocol"
+
+[[bin]]
+name = "unpeel-mobile"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true, features = ["mobile", "launch"] }
+unpeel-ui = { workspace = true }
+unpeel-client = { workspace = true }
+serde_json = { workspace = true }
+base64 = "0.22"
+
+# Native rendering path (Blitz) is evaluated behind this feature.
+# The default mobile renderer today is the OS webview; see README.md.
+[features]
+default = []
+native-ui = []
