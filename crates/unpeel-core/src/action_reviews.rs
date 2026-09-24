@@ -173,24 +173,21 @@ impl fmt::Display for Actor {
 }
 
 impl Actor {
-    /// Parse back the display form; unknown forms become an explicit
-    /// human label rather than an empty actor.
+    /// Parse back the display form. This is the exact inverse of
+    /// [`fmt::Display`]: every string `Display` can produce parses back to
+    /// an actor that displays identically, which the hash-chain verifier
+    /// relies on (it re-serializes the parsed actor when re-hashing).
+    /// Strings `Display` can never produce (no `human:`/`scheduled:`
+    /// prefix and not `policy:allow`) become an explicit human label
+    /// rather than an empty actor.
     pub fn parse(s: &str) -> Self {
         if let Some(id) = s.strip_prefix("human:") {
             Actor::Human {
-                device_id: if id.is_empty() {
-                    "unidentified".to_string()
-                } else {
-                    id.to_string()
-                },
+                device_id: id.to_string(),
             }
         } else if let Some(id) = s.strip_prefix("scheduled:") {
             Actor::Scheduled {
-                trigger_id: if id.is_empty() {
-                    "unknown-trigger".to_string()
-                } else {
-                    id.to_string()
-                },
+                trigger_id: id.to_string(),
             }
         } else if s == "policy:allow" {
             Actor::PolicyAllow
@@ -260,9 +257,23 @@ impl std::error::Error for ReviewError {}
 #[derive(Debug)]
 pub enum ChainError {
     Io(String),
-    CorruptLine { line: usize, detail: String },
-    HashMismatch { line: usize },
-    BrokenLink { line: usize },
+    CorruptLine {
+        line: usize,
+        detail: String,
+    },
+    HashMismatch {
+        line: usize,
+    },
+    BrokenLink {
+        line: usize,
+    },
+    /// The line parses but is not the writer's canonical serialization
+    /// (renamed key, different escape, extra whitespace, ...). The hash
+    /// covers the parsed entry, so without this check such mutations
+    /// would be invisible.
+    NonCanonical {
+        line: usize,
+    },
 }
 
 impl fmt::Display for ChainError {
@@ -282,6 +293,12 @@ impl fmt::Display for ChainError {
                 write!(
                     f,
                     "review log line {line} does not link to the previous entry (tampered?)"
+                )
+            }
+            ChainError::NonCanonical { line } => {
+                write!(
+                    f,
+                    "review log line {line} is not the canonical serialization (tampered?)"
                 )
             }
         }
@@ -718,6 +735,14 @@ pub fn verify_review_chain(session_dir: &Path) -> Result<usize, ChainError> {
             if entry.prev_hash != prev_hash {
                 return Err(ChainError::BrokenLink { line: line_no });
             }
+            // The hash authenticates the *parsed* entry, so a mutation that
+            // leaves the parsed value unchanged (renamed JSON key,
+            // different string escape, insignificant whitespace) would
+            // otherwise go undetected. Require the raw line to byte-equal
+            // the writer's canonical serialization.
+            if outcome_entry_line(&entry) != line {
+                return Err(ChainError::NonCanonical { line: line_no });
+            }
             if sha256_hex(&canonical_outcome_bytes(&entry)) != entry.entry_hash {
                 return Err(ChainError::HashMismatch { line: line_no });
             }
@@ -757,6 +782,12 @@ pub fn verify_review_chain(session_dir: &Path) -> Result<usize, ChainError> {
         if entry.prev_hash != prev_hash {
             return Err(ChainError::BrokenLink { line: line_no });
         }
+        // See the outcome branch: the hash covers the parsed entry, so
+        // require the raw line to byte-equal the canonical serialization
+        // to catch mutations that parse to the same value.
+        if entry_line(&entry) != line {
+            return Err(ChainError::NonCanonical { line: line_no });
+        }
         if sha256_hex(&canonical_bytes(&entry)) != entry.entry_hash {
             return Err(ChainError::HashMismatch { line: line_no });
         }
@@ -764,6 +795,225 @@ pub fn verify_review_chain(session_dir: &Path) -> Result<usize, ChainError> {
         count += 1;
     }
     Ok(count)
+}
+
+/// Classification of a review log for migration purposes.
+#[derive(Debug)]
+pub enum RechainNeed {
+    /// The log verifies as-is; nothing to do.
+    Current(usize),
+    /// Every entry parses and none carries chain metadata (pre-chain
+    /// format): safe to re-chain deterministically.
+    PreChain(usize),
+    /// The log carries chain metadata but fails verification — possible
+    /// tampering. Must be inspected by the operator, never silently
+    /// rewritten.
+    Broken(ChainError),
+}
+
+/// One parsed pre-chain log line: a review or outcome entry whose
+/// `prev_hash`/`entry_hash` are absent (or null) and will be assigned by
+/// [`rechain_review_log`].
+enum ChainlessEntry {
+    Review(ReviewEntry),
+    Outcome(OutcomeEntry),
+}
+
+/// Known data keys for each entry kind. `prev_hash`/`entry_hash` are
+/// deliberately absent: any line carrying chain metadata is not pre-chain.
+const REVIEW_DATA_KEYS: &[&str] = &[
+    "review_id",
+    "ts_ms",
+    "actor",
+    "connector",
+    "tool",
+    "args_hash",
+    "decision",
+    "replaces_attempt",
+];
+const OUTCOME_DATA_KEYS: &[&str] = &[
+    "type",
+    "review_id",
+    "ts_ms",
+    "actor",
+    "outcome",
+    "success",
+    "reason",
+];
+
+/// Parse every line of the log as a chainless entry. Fails closed when any
+/// line is unparseable, has unknown keys, misses required fields, or
+/// already carries chain metadata. Never modifies the file.
+fn scan_chainless_entries(session_dir: &Path) -> Result<Vec<ChainlessEntry>, ChainError> {
+    let path = session_dir.join(REVIEWS_FILE);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(ChainError::Io(format!("read {}: {e}", path.display()))),
+    };
+    let mut entries = Vec::new();
+    for (idx, line) in raw.lines().enumerate() {
+        let line_no = idx + 1;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let corrupt = |detail: String| ChainError::CorruptLine {
+            line: line_no,
+            detail,
+        };
+        let v: Value =
+            serde_json::from_str(line).map_err(|e| corrupt(format!("invalid JSON: {e}")))?;
+        let obj = v
+            .as_object()
+            .ok_or_else(|| corrupt("line is not a JSON object".into()))?;
+        // Chain metadata already present: not a pre-chain log. Rewriting
+        // it would destroy tamper evidence.
+        for key in ["prev_hash", "entry_hash"] {
+            if !obj.get(key).unwrap_or(&Value::Null).is_null() {
+                return Err(corrupt(format!(
+                    "line already carries chain metadata ({key:?}); refusing to rewrite history"
+                )));
+            }
+        }
+        let is_outcome = obj.get("type").and_then(Value::as_str) == Some("attempt_outcome");
+        let allowed: &[&str] = if is_outcome {
+            OUTCOME_DATA_KEYS
+        } else {
+            REVIEW_DATA_KEYS
+        };
+        for key in obj.keys() {
+            if !allowed.contains(&key.as_str()) && key != "prev_hash" && key != "entry_hash" {
+                return Err(corrupt(format!("unknown key {key:?}")));
+            }
+        }
+        let get = |k: &str| {
+            obj.get(k)
+                .and_then(Value::as_str)
+                .ok_or_else(|| corrupt(format!("missing/invalid field {k:?}")))
+        };
+        let ts_ms = obj
+            .get("ts_ms")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| corrupt("missing/invalid field \"ts_ms\"".to_string()))?;
+        let actor = Actor::parse(get("actor")?);
+        let review_id = get("review_id")?.to_string();
+        if is_outcome {
+            let outcome = match get("outcome")? {
+                "executed" => AttemptOutcome::Executed {
+                    success: obj
+                        .get("success")
+                        .and_then(Value::as_bool)
+                        .ok_or_else(|| corrupt("missing/invalid field \"success\"".to_string()))?,
+                },
+                "ambiguous" => AttemptOutcome::Ambiguous {
+                    reason: get("reason")?.to_string(),
+                },
+                "never_ran" => AttemptOutcome::NeverRan {
+                    reason: get("reason")?.to_string(),
+                },
+                other => return Err(corrupt(format!("unknown outcome {other:?}"))),
+            };
+            entries.push(ChainlessEntry::Outcome(OutcomeEntry {
+                review_id,
+                ts_ms,
+                actor,
+                outcome,
+                prev_hash: String::new(),
+                entry_hash: String::new(),
+            }));
+        } else {
+            let decision = match get("decision")? {
+                "approved" => ReviewDecision::Approved,
+                "denied" => ReviewDecision::Denied,
+                other => return Err(corrupt(format!("unknown decision {other:?}"))),
+            };
+            entries.push(ChainlessEntry::Review(ReviewEntry {
+                review_id,
+                ts_ms,
+                actor,
+                connector: get("connector")?.to_string(),
+                tool: get("tool")?.to_string(),
+                args_hash: get("args_hash")?.to_string(),
+                decision,
+                replaces_attempt: obj
+                    .get("replaces_attempt")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                prev_hash: String::new(),
+                entry_hash: String::new(),
+            }));
+        }
+    }
+    Ok(entries)
+}
+
+/// Classify `<session_dir>/action-reviews.jsonl` for migration.
+/// Never modifies the file.
+pub fn classify_review_log(session_dir: &Path) -> RechainNeed {
+    match verify_review_chain(session_dir) {
+        Ok(count) => RechainNeed::Current(count),
+        Err(verify_err) => match scan_chainless_entries(session_dir) {
+            Ok(entries) => RechainNeed::PreChain(entries.len()),
+            Err(_) => RechainNeed::Broken(verify_err),
+        },
+    }
+}
+
+/// Deterministically re-chain a pre-chain review log: rewrite every entry
+/// with `prev_hash`/`entry_hash` assigned in file order (`"genesis"` for
+/// the first), preserving all other fields through the canonical writer.
+///
+/// Fails closed without touching the file when any line is not a
+/// recognizable chainless entry (unknown keys, missing fields, or chain
+/// metadata already present — rewriting those would destroy tamper
+/// evidence). Callers must back the file up first. The rewritten log is
+/// verified before returning the entry count.
+///
+/// Compatibility note: logs written by the pre-fix writer (before the
+/// `NonCanonical` byte-equality check) used the same canonical serializer,
+/// so any log that verified before the fix still verifies now — only
+/// genuinely chainless (pre-chain-format) logs reach this function.
+pub fn rechain_review_log(session_dir: &Path) -> Result<usize, ChainError> {
+    let entries = scan_chainless_entries(session_dir)?;
+    if entries.is_empty() {
+        return Ok(0);
+    }
+    // Assign the chain deterministically in file order.
+    let mut prev_hash = GENESIS_PREV_HASH.to_string();
+    let mut out = String::new();
+    for entry in entries {
+        match entry {
+            ChainlessEntry::Review(mut review) => {
+                review.prev_hash = std::mem::take(&mut prev_hash);
+                review.entry_hash = sha256_hex(&canonical_bytes(&review));
+                prev_hash = review.entry_hash.clone();
+                out.push_str(&entry_line(&review));
+            }
+            ChainlessEntry::Outcome(mut outcome) => {
+                outcome.prev_hash = std::mem::take(&mut prev_hash);
+                outcome.entry_hash = sha256_hex(&canonical_outcome_bytes(&outcome));
+                prev_hash = outcome.entry_hash.clone();
+                out.push_str(&outcome_entry_line(&outcome));
+            }
+        }
+        out.push('\n');
+    }
+    // Atomic rewrite under the log lock: temp file + fsync + rename, so a
+    // crash never leaves a half-written log.
+    let _lock =
+        LogLock::acquire(session_dir).map_err(|e| ChainError::Io(format!("lock: {e:?}")))?;
+    let path = session_dir.join(REVIEWS_FILE);
+    let tmp = session_dir.join(format!("{REVIEWS_FILE}.rechain-tmp"));
+    std::fs::write(&tmp, out.as_bytes())
+        .map_err(|e| ChainError::Io(format!("write {}: {e}", tmp.display())))?;
+    std::fs::File::open(&tmp)
+        .and_then(|f| f.sync_all())
+        .map_err(|e| ChainError::Io(format!("fsync {}: {e}", tmp.display())))?;
+    std::fs::rename(&tmp, &path)
+        .map_err(|e| ChainError::Io(format!("rename {}: {e}", tmp.display())))?;
+    drop(_lock);
+    // The rewritten log must verify before we report success.
+    verify_review_chain(session_dir)
 }
 
 #[cfg(test)]
@@ -795,12 +1045,22 @@ mod tests {
             "scheduled:nightly"
         );
         assert_eq!(Actor::PolicyAllow.to_string(), "policy:allow");
-        // Parse never yields an empty actor either.
-        assert_eq!(Actor::parse("human:").to_string(), "human:unidentified");
-        assert_eq!(
-            Actor::parse("scheduled:").to_string(),
-            "scheduled:unknown-trigger"
-        );
+        // Display is never the empty string, even for empty ids.
+        assert!(!Actor::Human {
+            device_id: "".into()
+        }
+        .to_string()
+        .is_empty());
+        assert!(!Actor::Scheduled {
+            trigger_id: "".into()
+        }
+        .to_string()
+        .is_empty());
+        // Parse is the exact inverse of Display (the hash-chain verifier
+        // re-serializes the parsed actor when re-hashing): empty ids
+        // round-trip instead of being silently substituted.
+        assert_eq!(Actor::parse("human:").to_string(), "human:");
+        assert_eq!(Actor::parse("scheduled:").to_string(), "scheduled:");
         assert_eq!(Actor::parse("bogus").to_string(), "human:unidentified");
     }
 
@@ -1273,5 +1533,171 @@ mod tests {
             sha256_hex(&bytes),
             "227f6b6f340c76cde8d040caed6a30438371d4c39bf6c53400e8b8dfccbb24d1"
         );
+    }
+
+    /// Golden vector: pins the exact stored line the writer emits for a
+    /// genesis review entry, and asserts the verifier accepts it. This is
+    /// the writer/verifier contract at the byte level: `entry_hash` is
+    /// present and sorts between `decision` and `prev_hash`, the stored
+    /// line must byte-equal the canonical serialization (the NonCanonical
+    /// check), and the hash covers the canonical bytes. See
+    /// docs/hash-chain-canonical-form.md for the specification.
+    #[test]
+    fn golden_vector_stored_line() {
+        let mut entry = ReviewEntry {
+            review_id: "golden-review-2".into(),
+            ts_ms: 1_700_000_000_001,
+            actor: Actor::PolicyAllow,
+            connector: "golden-connector".into(),
+            tool: "golden.tool".into(),
+            args_hash: "def456".into(),
+            decision: ReviewDecision::Approved,
+            replaces_attempt: None,
+            prev_hash: "genesis".into(),
+            entry_hash: String::new(),
+        };
+        entry.entry_hash = sha256_hex(&canonical_bytes(&entry));
+        let line = entry_line(&entry);
+        // Stored line: canonical serialization WITH entry_hash.
+        let expected = format!(
+            "{{\"actor\":\"policy:allow\",\"args_hash\":\"def456\",\
+             \"connector\":\"golden-connector\",\"decision\":\"approved\",\
+             \"entry_hash\":\"{}\",\"prev_hash\":\"genesis\",\
+             \"replaces_attempt\":null,\"review_id\":\"golden-review-2\",\
+             \"tool\":\"golden.tool\",\"ts_ms\":1700000000001}}",
+            entry.entry_hash
+        );
+        assert_eq!(line, expected);
+        // And the verifier accepts exactly these bytes as a one-entry chain.
+        let dir = test_dir("golden-stored-line");
+        std::fs::write(dir.join(REVIEWS_FILE), format!("{line}\n")).unwrap();
+        assert_eq!(
+            verify_review_chain(&dir).expect("golden line must verify"),
+            1
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A pre-chain log: entries with all data fields but no chain metadata.
+    fn write_pre_chain_log(dir: &std::path::Path) {
+        let review = "{\"review_id\":\"r-1\",\"ts_ms\":1700000000000,\
+            \"actor\":\"human:phone-1\",\"connector\":\"c1\",\"tool\":\"t.search\",\
+            \"args_hash\":\"aa\",\"decision\":\"approved\",\"replaces_attempt\":null}";
+        let outcome = "{\"type\":\"attempt_outcome\",\"review_id\":\"r-1\",\
+            \"ts_ms\":1700000000001,\"actor\":\"human:phone-1\",\
+            \"outcome\":\"executed\",\"success\":true,\"reason\":null}";
+        std::fs::write(dir.join(REVIEWS_FILE), format!("{review}\n{outcome}\n")).unwrap();
+    }
+
+    #[test]
+    fn rechain_repairs_pre_chain_log_and_is_idempotent() {
+        let dir = test_dir("rechain-pre-chain");
+        write_pre_chain_log(&dir);
+        // verify fails (no chain metadata), classify sees pre-chain.
+        assert!(verify_review_chain(&dir).is_err());
+        match classify_review_log(&dir) {
+            RechainNeed::PreChain(2) => {}
+            other => panic!("expected PreChain(2), got {other:?}"),
+        }
+        // Re-chain: fields preserved, chain valid.
+        assert_eq!(rechain_review_log(&dir).expect("rechain must succeed"), 2);
+        assert_eq!(
+            verify_review_chain(&dir).expect("must verify after rechain"),
+            2
+        );
+        let raw = std::fs::read_to_string(dir.join(REVIEWS_FILE)).unwrap();
+        assert!(raw.contains("\"review_id\":\"r-1\""));
+        assert!(raw.contains("\"actor\":\"human:phone-1\""));
+        assert!(raw.contains("\"prev_hash\":\"genesis\""));
+        // Idempotent: now classifies as current, so the migrator skips it;
+        // calling rechain again fails closed (chain metadata present) and
+        // leaves the file untouched.
+        match classify_review_log(&dir) {
+            RechainNeed::Current(2) => {}
+            other => panic!("expected Current(2), got {other:?}"),
+        }
+        let before = std::fs::read_to_string(dir.join(REVIEWS_FILE)).unwrap();
+        assert!(
+            rechain_review_log(&dir).is_err(),
+            "must refuse a chained log"
+        );
+        let after = std::fs::read_to_string(dir.join(REVIEWS_FILE)).unwrap();
+        assert_eq!(
+            before, after,
+            "refused rechain must leave the file untouched"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rechain_refuses_chained_but_broken_log() {
+        let dir = test_dir("rechain-broken");
+        write_pre_chain_log(&dir);
+        rechain_review_log(&dir).expect("rechain must succeed");
+        // Tamper one byte: the log now carries chain metadata but fails
+        // verification — tamper evidence that must survive migration.
+        let path = dir.join(REVIEWS_FILE);
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let tampered = raw.replacen("\"decision\":\"approved\"", "\"decision\":\"denied\"", 1);
+        assert_ne!(raw, tampered);
+        std::fs::write(&path, tampered.as_bytes()).unwrap();
+        assert!(verify_review_chain(&dir).is_err());
+        match classify_review_log(&dir) {
+            RechainNeed::Broken(_) => {}
+            other => panic!("expected Broken, got {other:?}"),
+        }
+        let before = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            rechain_review_log(&dir).is_err(),
+            "must refuse to rewrite history"
+        );
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            before, after,
+            "refused rechain must leave the file untouched"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rechain_refuses_unknown_keys() {
+        let dir = test_dir("rechain-unknown-keys");
+        std::fs::write(
+            dir.join(REVIEWS_FILE),
+            "{\"review_id\":\"r-1\",\"ts_ms\":1,\"actor\":\"human:p\",\
+             \"connector\":\"c\",\"tool\":\"t\",\"args_hash\":\"a\",\
+             \"decision\":\"approved\",\"mystery_field\":42}\n",
+        )
+        .unwrap();
+        assert!(rechain_review_log(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rechain_accepts_log_written_before_the_noncanonical_fix() {
+        // The fix only tightened verification; the writer is unchanged, so
+        // a log written by the pre-fix writer verifies under the new code
+        // and the migrator leaves it alone (Current, not PreChain).
+        let dir = test_dir("rechain-prefix-compat");
+        record_review(
+            &dir,
+            Actor::Human {
+                device_id: "".into(),
+            },
+            "c1",
+            "t.search",
+            "aa",
+            ReviewDecision::Approved,
+            None,
+        )
+        .expect("record");
+        // Empty device id: the old Actor::parse bug made this fail
+        // verification; the parse fix repaired it.
+        assert_eq!(verify_review_chain(&dir).expect("must verify"), 1);
+        match classify_review_log(&dir) {
+            RechainNeed::Current(1) => {}
+            other => panic!("expected Current(1), got {other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

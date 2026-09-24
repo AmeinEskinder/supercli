@@ -10,8 +10,29 @@ byte-identical canonical form, or hash verification will fail.
 Each entry in `action-reviews.jsonl` carries an `entry_hash`: the SHA-256 hex
 digest of the entry's canonical bytes. Each entry (except the genesis) also
 carries `prev_hash`: the `entry_hash` of the previous entry. This forms a
-hash chain; flipping any byte in any entry invalidates its hash and breaks
-the chain.
+hash chain.
+
+Two levels of verification make the chain tamper-evident (added 2026-09-25,
+fixing a hole where renamed keys / whitespace / equivalent escapes in a
+stored line were invisible to verification):
+
+1. **Byte-equality.** The verifier parses each stored line, re-serializes the
+   parsed entry with the writer's canonical serializer, and requires the
+   result to byte-equal the stored line. Any deviation — renamed key,
+   added whitespace, `\uXXXX` escape in place of a literal char, key
+   reordering — is rejected as `ChainError::NonCanonical` before any hash
+   is checked. The accepted language is therefore *exactly* the set of
+   writer-produced byte strings.
+
+2. **Hash + link check.** `entry_hash` must equal
+   `hex(sha256(canonical_bytes))` of the parsed entry, and each entry's
+   `prev_hash` must equal the previous entry's `entry_hash`.
+
+Together: flipping any byte of any accepted entry breaks verification.
+(The writer cannot hash literally the bytes it writes — `entry_hash` is part
+of the line — but by (1) the hashed canonical bytes are a pure deterministic
+function of the on-disk line, so the chain is defined over the on-disk
+bytes.)
 
 Two entry types exist:
 - **Review entries** (`ReviewEntry`): written before a tool executes (write-ahead).
@@ -50,8 +71,8 @@ The canonical bytes are the UTF-8 encoding of a JSON object with these propertie
 | `actor` | string | e.g. `"human:paired-device"`, `"policy:allow"`, `"scheduled:<id>"` |
 | `args_hash` | string | hex SHA-256 of the tool arguments |
 | `connector` | string | connector id |
-| `decision` | string | `"ask"`, `"allow"`, or `"deny"` |
-| `prev_hash` | string | hex SHA-256 of previous entry's canonical bytes; `"GENESIS"` for the first |
+| `decision` | string | `"approved"` or `"denied"` |
+| `prev_hash` | string | hex SHA-256 of previous entry's canonical bytes; `"genesis"` (lowercase) for the first |
 | `replaces_attempt` | string \| null | review id being replaced, or null |
 | `review_id` | string | UUID of this review |
 | `tool` | string | tool name |
@@ -83,8 +104,16 @@ Sorted key order: `actor`, `outcome`, `prev_hash`, `reason`, `review_id`,
 ## Golden vectors
 
 Fixed inputs and their exact canonical bytes + hashes are pinned in
-`crates/unpeel-core/src/action_reviews.rs` (`golden_vector_canonical_bytes`
-test). Any reimplementation must reproduce those bytes exactly.
+`crates/unpeel-core/src/action_reviews.rs`:
+
+- `golden_vector_canonical_bytes`: pins `canonical_bytes()` output and its
+  SHA-256 for a fixed review entry (keys alphabetical, no whitespace, no
+  `entry_hash`).
+- `golden_vector_stored_line`: pins the exact stored line the writer emits
+  for a genesis review entry (`"prev_hash": "genesis"`, with `entry_hash`
+  present and sorted between `decision` and `prev_hash`), and asserts the
+  verifier accepts it. Any reimplementation must reproduce those bytes
+  exactly.
 
 ## Rationale
 
