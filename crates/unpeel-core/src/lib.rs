@@ -9,6 +9,8 @@
 #![recursion_limit = "256"]
 
 #[cfg(feature = "native-host")]
+pub mod action_reviews;
+#[cfg(feature = "native-host")]
 pub mod activity_log;
 #[cfg(feature = "native-host")]
 pub mod app_installer;
@@ -125,7 +127,13 @@ pub mod runtime_catalog;
 #[cfg(feature = "native-host")]
 pub mod runtime_observer;
 #[cfg(feature = "native-host")]
+pub mod schedule_leases;
+#[cfg(feature = "native-host")]
+pub mod scheduled;
+#[cfg(feature = "native-host")]
 pub mod session_artifacts;
+#[cfg(feature = "native-host")]
+pub mod session_connectors;
 #[cfg(feature = "native-host")]
 pub mod session_host;
 #[cfg(feature = "native-host")]

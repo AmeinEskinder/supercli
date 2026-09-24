@@ -605,6 +605,11 @@ fn tools_call_with_domains(params: &Value, domains: McpDomainMask) -> Result<Val
     };
     let outcome = if domains.allows_tool(name) && action_mask_allows {
         run_tool(name, &arguments)
+    } else if crate::session_connectors::is_connector_tool(name) {
+        // Attached connector tools are not domain tools: the session's own
+        // connector registration grants them, and the connector dispatcher
+        // enforces each tool's effective approval policy.
+        crate::session_connectors::call_connector_tool(name, &arguments)
     } else {
         Err(format!(
             "The '{name}' tool is not enabled for this MCP registration."
@@ -1657,6 +1662,10 @@ fn tool_definitions_for_manifest(
     if advertise_skills {
         tools.push(skills_tool_definition());
     }
+    // Session-attached connector tools (`unpeel connector enable`): the
+    // session's own MCP registration, resolved from its connectors.json.
+    // Empty when this server runs outside a session.
+    tools.extend(crate::session_connectors::connector_tool_definitions());
     tools
 }
 
@@ -2468,7 +2477,7 @@ fn tool_list_agents(_args: &Value) -> Result<String, String> {
             && security.permits_manifest(caller.as_ref(), manifest)
             && session_host::active_runtime_id(manifest).is_some()
     });
-    manifests.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    manifests.sort_by_key(|m| std::cmp::Reverse(m.session.created_at));
     let agents = manifests
         .iter()
         .filter_map(|manifest| agent_context_json(manifest, &activity))
@@ -2740,7 +2749,7 @@ fn tool_list_sessions(_args: &Value) -> Result<String, String> {
         manifest.state == HostedSessionState::Running
             && security.permits_manifest(caller.as_ref(), manifest)
     });
-    manifests.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    manifests.sort_by_key(|m| std::cmp::Reverse(m.session.created_at));
     let sessions: Vec<Value> = manifests
         .iter()
         .map(|manifest| {
@@ -3482,7 +3491,7 @@ fn group_peer_manifests_for_caller(
                 && security.permits_manifest(Some(&caller), manifest)
         })
         .collect();
-    peers.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    peers.sort_by_key(|p| std::cmp::Reverse(p.session.created_at));
 
     if let Some(only_ids) = only_ids {
         let found: HashSet<String> = peers

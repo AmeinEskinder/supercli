@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const HOST_PROTOCOL_MAJOR: u16 = 1;
-pub const HOST_PROTOCOL_MINOR: u16 = 21;
+pub const HOST_PROTOCOL_MINOR: u16 = 22;
 
 pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "approval.answer",
@@ -50,6 +50,7 @@ pub const NATIVE_HOST_CAPABILITIES: &[&str] = &[
     "session.restore",
     "session.runtime.resume",
     "session.stop",
+    "session.turn.cancel",
     "session.reload",
     "session.title.set",
     "session.transcript.markdown",
@@ -101,6 +102,7 @@ pub const HEADLESS_HOST_CAPABILITIES: &[&str] = &[
     "session.restore",
     "session.runtime.resume",
     "session.stop",
+    "session.turn.cancel",
     "session.reload",
     "session.title.set",
     "session.transcript.markdown",
