@@ -1,0 +1,10 @@
+# actionlint configuration.
+#
+# `macos-26` is a real GitHub-hosted runner label (GA since 2026-02-26), but
+# it is newer than actionlint's built-in label database, so without this
+# entry actionlint reports it as unknown. Declared here so the
+# runner-label check passes while the workflow keeps the macOS 26 image
+# (Xcode 26 crashes on the macos-15 image; see clients.yml).
+self-hosted-runner:
+  labels:
+    - macos-26
