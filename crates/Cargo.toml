@@ -8,6 +8,8 @@ members = [
     "unpeel-serve",
     "unpeel-cli",
     "unpeel-native-bridge",
+    "unpeel-client",
+    "unpeel-connector",
 ]
 # The first-party Apps and the App Kit are their own workspace
 # (`crates/apps/Cargo.toml`): separate cadence, separate versions, and a

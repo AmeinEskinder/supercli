@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "unpeel-ui",
+    "unpeel-desktop",
+    "unpeel-mobile",
+    "unpeel-web",
+    "unpeel-ios-bridge",
+]
+
+# Separate workspace from crates/ on purpose (same reason as crates/apps):
+# the Dioxus dependency tree must never slow the Host's gates.
+
+# Shared dependency versions, inherited by every member crate via
+# `dep = { workspace = true, ... }`. One place to bump; per-crate
+# feature selection still happens at the use site.
+[workspace.dependencies]
+dioxus = { version = "0.7", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vt100 = "0.16.2"
+unpeel-client = { path = "../../crates/unpeel-client" }
+unpeel-ui = { path = "unpeel-ui" }
