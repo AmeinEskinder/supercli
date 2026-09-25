@@ -1,0 +1,18 @@
+[package]
+name = "supercli-web"
+version = "0.8.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Dioxus web target for the Supercli clients: the shared supercli-ui component library rendered in a browser against in-memory demo state"
+
+[[bin]]
+name = "supercli-web"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true, features = ["web", "launch", "devtools"] }
+supercli-ui = { workspace = true }
+supercli-client = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

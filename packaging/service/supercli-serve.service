@@ -1,0 +1,32 @@
+# Unpeel Host service — Linux systemd user unit.
+#
+# Usable verbatim when `supercli` is installed at /usr/local/bin/supercli
+# (the install.sh default):
+#
+#   cp supercli-serve.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now supercli-serve.service
+#
+# `supercli serve install` writes this same file with the resolved binary
+# path (it rewrites the ExecStart line; a scoped workspace unit also gets
+# `--workspace NAME` inserted and its own unit name).
+#
+# This is deliberately a --user unit, never a system unit: the service owns
+# ~/.supercli state and the per-user machine lease. For a headless box the
+# user manager must run without an open login session:
+#
+#   sudo loginctl enable-linger <user>
+#
+# Stdout goes to the user journal; durable diagnostics also land in
+# ~/.supercli/hooks/trace.log.
+
+[Unit]
+Description=Unpeel Host service
+
+[Service]
+ExecStart=/usr/local/bin/supercli serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

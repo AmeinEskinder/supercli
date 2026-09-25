@@ -1,0 +1,62 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.vite
+packages/*/node_modules
+dist
+dist-ssr
+packages/*/dist
+packages/*/.svelte-kit
+*.local
+/.env
+
+# Tauri
+src-tauri/target
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Rust (standalone attach client crate, not a crates/ workspace member)
+crates/supercli-attach/target
+scripts/tools/ht
+clients/native/tools/ht
+
+# Swift/Xcode build outputs (clients/native, clients/ios, clients/shared)
+clients/*/*/.build
+clients/*/*/.derived
+clients/*/*/.swiftpm
+clients/ios/SupercliIOS/.deriveddata
+clients/ios/SupercliIOS/build
+DerivedData
+xcuserdata/
+
+# Python bytecode
+__pycache__
+.claude/settings.local.json
+.claude/worktrees/
+
+
+# Wrangler's local miniflare cache (release publisher runs from the root)
+.wrangler/
+
+# Operator-local agent context
+CLAUDE.local.md
+
+# First-party Apps workspace (crates/apps/Cargo.toml)
+crates/apps/target
+out/

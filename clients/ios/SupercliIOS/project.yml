@@ -1,0 +1,84 @@
+name: SupercliIOS
+options:
+  minimumXcodeGenVersion: 2.42.0
+packages:
+  SupercliShared:
+    path: ../../shared/SupercliShared
+  libghostty-spm:
+    path: ../../native/vendor/libghostty-spm
+targets:
+  SupercliIOSApp:
+    type: application
+    platform: iOS
+    # iOS 17 minimum: the store uses the @Observable macro (see the package
+    # platforms in Package.swift, which already require .iOS(.v17)).
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources/SupercliIOS
+      - path: App
+    dependencies:
+      - package: SupercliShared
+      - package: libghostty-spm
+        product: GhosttyTerminal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.supercli.ios.remote
+        PRODUCT_NAME: Supercli
+        PRODUCT_MODULE_NAME: SupercliIOS
+        INFOPLIST_FILE: App/Info.plist
+        # Push Notifications (aps-environment). The App ID has the Push
+        # Notifications capability (enabled 2026-07-24 via the ASC API), so
+        # device builds sign with the entitlement and
+        # registerForRemoteNotifications can mint real APNs tokens. Managed
+        # profiles regenerate to include the capability on the next
+        # -allowProvisioningUpdates build.
+        CODE_SIGN_ENTITLEMENTS: App/SupercliIOS.entitlements
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # App icon = the desktop app's icon (App/Assets.xcassets/AppIcon),
+        # a full-bleed 1024 that iOS masks to the rounded-rect.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Simulator stays unsigned (CI / `xcodebuild` without certs still
+        # works); device builds sign automatically with the personal team so
+        # a real-iPhone run just works from Xcode.
+        CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]: "NO"
+        CODE_SIGNING_ALLOWED[sdk=iphoneos*]: "YES"
+        CODE_SIGN_STYLE: Automatic
+        # Signing team is a single override point: the paid company team
+        # (UX Themes AS). Overridable per build without editing this file:
+        # `xcodebuild ... SUPERCLI_DEVELOPMENT_TEAM=ABCDE12345` (e.g. a personal
+        # team for cert-less local dev).
+        SUPERCLI_DEVELOPMENT_TEAM: 8M4MM4C2AH
+        DEVELOPMENT_TEAM: $(SUPERCLI_DEVELOPMENT_TEAM)
+      configs:
+        Debug:
+          SUPERCLI_APNS_ENVIRONMENT: development
+        Release:
+          SUPERCLI_APNS_ENVIRONMENT: production
+  SupercliIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/SupercliIOSTests
+    dependencies:
+      - target: SupercliIOSApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.supercli.ios.remote.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Supercli.app/Supercli
+        BUNDLE_LOADER: $(TEST_HOST)
+        CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]: "NO"
+schemes:
+  SupercliIOSApp:
+    build:
+      targets:
+        SupercliIOSApp: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SupercliIOSTests

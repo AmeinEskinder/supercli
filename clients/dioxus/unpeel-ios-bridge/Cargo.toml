@@ -1,0 +1,23 @@
+[package]
+name = "supercli-ios-bridge"
+version = "0.8.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Rust-side iOS platform bridges for the Dioxus mobile launcher (Speech dictation, UserNotifications/APNs). Apple-framework code is cfg(target_vendor = \"apple\"); every other target gets inert stubs so host builds and CI stay green."
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+# objc2 framework bindings compile on any host (they are pure-Rust extern
+# declarations; linking happens only on Apple targets), so the Apple-target
+# `cargo check` in CI genuinely type-checks the real code while a Linux
+# `cargo check` only sees the stubs.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-speech = "0.3"
+objc2-av-foundation = "0.3"
+objc2-user-notifications = "0.3"
+objc2-ui-kit = "0.3"

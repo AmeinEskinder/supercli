@@ -1,0 +1,32 @@
+[package]
+name = "supercli-attach"
+version = "0.1.0"
+edition = "2021"
+description = "tmux-style attach client for Supercli hosted sessions"
+publish = false
+
+# Standalone crate: must never be absorbed into a parent cargo workspace.
+[workspace]
+
+[dependencies]
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+signal-hook = "0.3"
+
+[dev-dependencies]
+# Integration tests drive the binary on a real PTY (openpty/tcgetattr).
+libc = "0.2"
+
+[[bin]]
+name = "supercli-attach"
+path = "src/main.rs"
+
+[lib]
+name = "supercli_attach"
+path = "src/lib.rs"
+
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

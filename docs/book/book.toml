@@ -1,0 +1,8 @@
+[book]
+title = "Supercli User Guide"
+authors = ["Supercli contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"

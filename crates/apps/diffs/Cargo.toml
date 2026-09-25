@@ -1,0 +1,18 @@
+[package]
+name = "supercli-diffs"
+version = "0.1.1"
+edition = "2024"
+description = "Git sidebar with Changes and History for Supercli terminals"
+license = "MIT"
+
+[dependencies]
+crossterm = "0.29"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+serde_json = "1"
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
+two-face = { version = "0.5.2", default-features = false, features = ["syntect-fancy"] }
+unicode-width = "0.2"
+supercli-app-kit = { path = "../app-kit" }
+
+[dev-dependencies]
+tempfile = "3"

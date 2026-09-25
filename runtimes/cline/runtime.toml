@@ -1,0 +1,55 @@
+schema_version = 1
+id = "bot.cline.cli"
+slug = "cline"
+legacy_slug = "cline"
+label = "Cline"
+adapter = "builtin:cline"
+legacy_order = 2
+platforms = ["macos", "linux"]
+supports_quick_launch = true
+capabilities = ["lifecycle_hooks", "resume", "restart_agent", "mcp_sessions", "mcp_browser", "mcp_computer", "transcript", "notify_when_done"]
+
+[display]
+tint = "#F26C5A"
+spinner_tint = "#98C4FA"
+icon = "cline"
+icon_asset = "assets/icon.svg"
+icon_source = "internal:legacy-supercli-tool-icons"
+icon_license = "vendor-brand-asset"
+window_padding_x = 8
+
+[install]
+official_url = "https://cline.bot"
+command = "npm install -g cline"
+
+[updates]
+version_args = ["--version"]
+latest_url = "https://registry.npmjs.org/cline/latest"
+json_pointer = "/version"
+
+[detection]
+command_aliases = ["cline"]
+process_aliases = ["cline"]
+script_path_signatures = []
+
+[lifecycle]
+source = "hooks"
+authority = "partial"
+fallback = "none"
+completion_reliable = true
+attention_reliable = false
+
+[integration]
+summary = "Installs one managed hook per event under ~/.cline/hooks and adds the supercli server to Cline's MCP settings."
+legacy_evidence = ["hooks/cline-hook.sh"]
+
+[[usage.stores]]
+root = ".cline/data/sessions"
+extensions = ["json"]
+file_name_suffix = ".messages.json"
+
+[[suggested_presets]]
+id = "cline"
+label = "cline"
+command = "cline"
+quick_launch = false

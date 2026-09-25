@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "protocol": {
+    "major": 1,
+    "minor": 22,
+    "compatibility": {
+      "major": "must-match",
+      "minor": "additive",
+      "unknownCapabilities": "ignore"
+    },
+    "history": [
+      {
+        "minor": 22,
+        "release": "0.7.1",
+        "summary": "Host-owned turn cancel: POST /mobile/turn-cancel interrupts the running turn, marks in-flight tool attempts Ambiguous (never failed, never auto-retried), and emits turn.cancelled. Controllers use session.turn.cancel when advertised and keep the Ctrl-C fallback only when it is absent.",
+        "capabilities": [
+          "session.turn.cancel"
+        ]
+      },
+      {
+        "minor": 21,
+        "release": "0.7.0",
+        "summary": "Explicit agent integrations: a preset launches its command in the login shell as typed, and the user installs a runtime's hooks + MCP registration once per Host. Bootstrap's availableAgents rows carry integrationInstallable/integrationInstalled.",
+        "capabilities": [
+          "integrations.install"
+        ]
+      },
+      {
+        "minor": 20,
+        "release": "0.7.0",
+        "summary": "Host folder selection and file transfers for every Controller.",
+        "capabilities": [
+          "filesystem.directories.list",
+          "filesystem.directories.create",
+          "project.add",
+          "filesystem.file.read",
+          "artifact.upload.file"
+        ]
+      },
+      {
+        "minor": 19,
+        "release": "0.6.0",
+        "summary": "Lazy Host-owned agent and App update checks, cached by installation identity. Bootstrap never launches probes or release requests.",
+        "capabilities": [
+          "settings.plugins.updates.read"
+        ]
+      },
+      {
+        "minor": 18,
+        "release": "0.6.0",
+        "summary": "Ordered Agents & Apps with inline launch commands, app command variants, and stable plugin identities on presets.",
+        "capabilities": [
+          "settings.plugins.order"
+        ]
+      },
+      {
+        "minor": 17,
+        "release": "0.6.0",
+        "summary": "Host-owned plugin activation, installed-agent inventory, and automatic default launch commands. Controllers manage plugins through settings.workspace.set after checking settings.plugins.set.",
+        "capabilities": [
+          "settings.plugins.set"
+        ]
+      },
+      {
+        "minor": 16,
+        "release": "0.6.0",
+        "summary": "session.reload \u2014 replace a Session's host in place while keeping its id (Reload Terminal for a live Session, Restart App for an App pane). Additive; a Controller checks the id, never the minor.",
+        "capabilities": [
+          "session.reload"
+        ]
+      },
+      {
+        "minor": 15,
+        "release": "0.6.0",
+        "summary": "/mobile served over the pinned Host TLS certificate, and Host-owned typed resource openers (Apps): install, open, and the per-selector opener policy. One additive minor for both; a Controller still checks each id, never the minor.",
+        "capabilities": [
+          "apps.install",
+          "apps.open",
+          "host.mobile.tls",
+          "settings.openers.set"
+        ]
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "approval.answer",
+      "method": "POST",
+      "path": "/mobile/approvals/answer",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "approval.list",
+      "method": "GET",
+      "path": "/mobile/bootstrap#pendingApprovals",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.delete",
+      "method": "POST",
+      "path": "/mobile/artifact-delete",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.list",
+      "method": "GET",
+      "path": "/mobile/artifacts",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.read",
+      "method": "GET",
+      "path": "/mobile/artifact",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.request_screenshot",
+      "method": "POST",
+      "path": "/mobile/request-screenshot",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.upload",
+      "method": "POST",
+      "path": "/mobile/upload",
+      "native": true,
+      "tui": false
+    },
+    {
+      "id": "artifact.upload.resumable",
+      "method": "POST",
+      "path": "/mobile/upload-chunk",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "apps.install",
+      "method": "POST",
+      "path": "/mobile/apps/install",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "apps.open",
+      "method": "POST",
+      "path": "/mobile/apps/open",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "host.bootstrap",
+      "method": "GET",
+      "path": "/mobile/bootstrap",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "host.mobile.tls",
+      "method": "TLS",
+      "path": "/mobile",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "pairing.create",
+      "method": "POST",
+      "path": "/mobile/pair",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "pairing.invitation",
+      "method": "POST",
+      "path": "/mobile/pairing-invitation",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "project.organization.set",
+      "method": "POST",
+      "path": "/mobile/project-organization",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "project.pin.set",
+      "method": "POST",
+      "path": "/mobile/project-organization#pinned",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "push.register",
+      "method": "POST",
+      "path": "/mobile/push-token",
+      "native": true,
+      "tui": false
+    },
+    {
+      "id": "relay.credentials.recover",
+      "method": "GET",
+      "path": "/mobile/relay-credentials",
+      "native": true,
+      "tui": false
+    },
+    {
+      "id": "session.archive",
+      "method": "POST",
+      "path": "/mobile/session-organization#archived=true",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.archive.list",
+      "method": "GET",
+      "path": "/mobile/archive",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.create",
+      "method": "POST",
+      "path": "/mobile/sessions",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.input.write",
+      "method": "POST",
+      "path": "/mobile/write",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.mark_read",
+      "method": "POST",
+      "path": "/mobile/mark-read",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.metrics.read",
+      "method": "GET",
+      "path": "/mobile/metrics",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.notify_when_done.set",
+      "method": "POST",
+      "path": "/mobile/session-organization#notifyWhenDone",
+      "native": true,
+      "tui": false
+    },
+    {
+      "id": "session.order.set",
+      "method": "POST",
+      "path": "/mobile/session-order",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.output.read",
+      "method": "GET",
+      "path": "/mobile/output",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.output.subscribe",
+      "method": "WSS",
+      "path": "/api/sessions/{id}/stream",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.pin.set",
+      "method": "POST",
+      "path": "/mobile/session-organization#pinned",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.project.set",
+      "method": "POST",
+      "path": "/mobile/session-organization#projectID",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.remove",
+      "method": "POST",
+      "path": "/mobile/session-action#remove",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.resize",
+      "method": "POST",
+      "path": "/mobile/resize",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.resize_desktop",
+      "method": "POST",
+      "path": "/mobile/resize-desktop",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.restart",
+      "method": "POST",
+      "path": "/mobile/restart-session",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.restore",
+      "method": "POST",
+      "path": "/mobile/session-organization#archived=false",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.runtime.restart",
+      "method": "POST",
+      "path": "/mobile/session-action#restart_agent",
+      "native": false,
+      "tui": false
+    },
+    {
+      "id": "session.runtime.resume",
+      "method": "POST",
+      "path": "/mobile/session-action#resume_agent",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.stop",
+      "method": "POST",
+      "path": "/mobile/session-action#stop",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.turn.cancel",
+      "method": "POST",
+      "path": "/mobile/turn-cancel",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.reload",
+      "method": "POST",
+      "path": "/mobile/session-action#reload",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.title.set",
+      "method": "POST",
+      "path": "/mobile/session-organization#title",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.transcript.markdown",
+      "method": "GET",
+      "path": "/mobile/transcript-markdown",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.presets.set",
+      "method": "POST",
+      "path": "/mobile/presets",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.openers.set",
+      "method": "POST",
+      "path": "/mobile/openers",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.workspace.set",
+      "method": "POST",
+      "path": "/mobile/workspace-settings",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.plugins.set",
+      "method": "POST",
+      "path": "/mobile/workspace-settings",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.plugins.order",
+      "method": "POST",
+      "path": "/mobile/workspace-settings",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "settings.plugins.updates.read",
+      "method": "GET",
+      "path": "/mobile/plugin-updates",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.directories.list",
+      "method": "GET",
+      "path": "/mobile/directories",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.directories.create",
+      "method": "POST",
+      "path": "/mobile/directories/create",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "project.add",
+      "method": "POST",
+      "path": "/mobile/projects/add",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "filesystem.file.read",
+      "method": "GET",
+      "path": "/mobile/files/read",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "artifact.upload.file",
+      "method": "POST",
+      "path": "/mobile/file-upload-chunk",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "integrations.install",
+      "method": "POST",
+      "path": "/mobile/integrations/install",
+      "native": true,
+      "tui": true
+    }
+  ]
+}

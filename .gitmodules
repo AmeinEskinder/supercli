@@ -1,0 +1,3 @@
+[submodule "clients/gpuidart"]
+	path = clients/gpuidart
+	url = git@github.com:ameineskinder/gpuidart.git

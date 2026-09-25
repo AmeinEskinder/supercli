@@ -1,0 +1,148 @@
+# cargo-deny configuration for the `crates/` Rust workspace.
+# Run: `cargo deny --manifest-path crates/Cargo.toml check`
+# Every exception below carries a reason; nothing is allow-listed silently.
+
+[graph]
+# The full resolve, all targets: a banned crate on any target is banned.
+all-features = false
+
+[licenses]
+# Supercli itself is MIT. Dependencies must be under a permissive license the
+# project can redistribute; copyleft licenses are rejected.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-DFS-2016",
+  "Unicode-3.0",
+  "CC0-1.0",
+  "Zlib",
+  "OpenSSL",
+  # MPL-2.0 (option-ext 0.2.0, via dirs): file-level copyleft, not viral.
+  # The crate is a tiny path helper; we do not modify it, so the copyleft
+  # obligations do not propagate to Supercli.
+  "MPL-2.0",
+  # CDLA-Permissive-2.0 (webpki-roots): permissive data license covering the
+  # Mozilla CA certificate bundle. No code copyleft.
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+# Copies left in the tree fail the check instead of being silently ignored.
+unused-license-exception = "deny"
+
+# --- Exceptions (each with a reason) ---------------------------------------
+# (populated by `cargo deny check licenses`; see docs/security for review)
+
+[bans]
+# Two versions of the same crate in one resolve: deny by default, allow only
+# the duplicates below, each with a reason.
+multiple-versions = "deny"
+# No wildcard dependency requirements anywhere in the workspace.
+wildcards = "deny"
+# No git or path-only crates sneaking past crates.io review.
+highlight = "all"
+
+# --- Exceptions (each with a reason) ---------------------------------------
+# Duplicate versions below are different MAJOR versions required by
+# different dependencies; unifying them would require breaking upgrades of
+# third-party crates and is out of scope. Each is a standard ecosystem
+# split (e.g. syn 1.x vs 2.x during migration).
+
+[[bans.skip]]
+name = "base64"
+reason = "0.22 vs 0.23: different majors required by different deps; both are pure codecs with no shared state."
+
+[[bans.skip]]
+name = "bitflags"
+reason = "1.x vs 2.x: macro crate, no runtime interaction between versions."
+
+[[bans.skip]]
+name = "block-buffer"
+reason = "0.10 vs 0.11: digest ecosystem split; pulled by sha2 versions."
+
+[[bans.skip]]
+name = "cpufeatures"
+reason = "0.2 vs 0.3: digest ecosystem split."
+
+[[bans.skip]]
+name = "crypto-common"
+reason = "0.1 vs 0.2: digest ecosystem split."
+
+[[bans.skip]]
+name = "curve25519-dalek"
+reason = "4.x duplicates: ed25519-dalek ecosystem; pure crypto, no shared state."
+
+[[bans.skip]]
+name = "digest"
+reason = "0.10 vs 0.11: digest ecosystem split during migration."
+
+[[bans.skip]]
+name = "fiat-crypto"
+reason = "Duplicates via curve25519-dalek; generated code, no shared state."
+
+[[bans.skip]]
+name = "getrandom"
+reason = "0.2 vs 0.3: ecosystem split; both are thin syscall wrappers."
+
+[[bans.skip]]
+name = "hashbrown"
+reason = "0.14 vs 0.15: indexmap ecosystem split."
+
+[[bans.skip]]
+name = "r-efi"
+reason = "Duplicates via getrandom/wasip2; platform bindings, no shared state."
+
+[[bans.skip]]
+name = "rand_core"
+reason = "0.6 vs 0.9: rand ecosystem split."
+
+[[bans.skip]]
+name = "sha2"
+reason = "0.10 vs 0.11: digest ecosystem split."
+
+[[bans.skip]]
+name = "syn"
+reason = "1.x vs 2.x: proc-macro ecosystem during migration; build-time only."
+
+[[bans.skip]]
+name = "thiserror"
+reason = "1.x vs 2.x: error-derive ecosystem during migration."
+
+[[bans.skip]]
+name = "thiserror-impl"
+reason = "1.x vs 2.x: matches thiserror split."
+
+[[bans.skip]]
+name = "webpki-roots"
+reason = "0.26 vs 1.x: rustls ecosystem split; both are CA bundles."
+
+[[bans.skip]]
+name = "windows-sys"
+reason = "0.52 vs 0.59: Windows API bindings split; platform-only."
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# cargo-deny 0.20 denies vulnerabilities, unmaintained, unsound, and yanked
+# advisories by default. Only explicitly ignored advisories go here, each
+# with a reason.
+ignore = [
+  # RUSTSEC-2017-0008: `serial` 0.4.0 is unmaintained. It is a transitive
+  # dep of portable-pty (used for serial-port enumeration, which Supercli
+  # never calls). No safe upgrade exists; portable-pty 0.8.1 is the latest
+  # 0.8.x and still requires it. Risk accepted: the crate is dead code in
+  # our usage.
+  "RUSTSEC-2017-0008",
+]
+
+[sources]
+# Only crates.io (plus the workspace itself) may supply code.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = []
+
+[[bans.skip]]
+name = "core-foundation"
+reason = "0.9.4 vs 0.10.1: macOS system bindings; 0.9.4 via system-configuration (hyper-util), 0.10.1 via security-framework (native-tls). Different majors, no shared state."

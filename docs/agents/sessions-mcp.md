@@ -1,0 +1,326 @@
+<!-- Split out of the repo-root AGENTS.md (2026-08-05). The root AGENTS.md holds the map, hard rules, and invariants; this file is the full detail for its topic. -->
+
+## Built-in Supercli MCP server
+
+`supercli-host __mcp__` is one MCP server named **`supercli`**. Do not call the
+whole server “Sessions MCP” or rename it “Agents MCP”: `sessions` and `agents`
+are sibling domains with different identities. A Session is the Host-owned
+terminal container; an agent is a recognized runtime occurrence currently
+occupying one. The other domains are `workspace`, `artifacts`, `browser`,
+preview `apps`, and the root `skills` registry.
+
+**Compatibility gate:** Settings ▸ Features ▸ Sessions use
+(`AppFeature.sessionsMcp`, `SUPERCLI_DEV_SESSIONS_MCP=1`; shipped, no longer
+listed as experimental since 2026-09-08) still owns
+the saved `mcp_enabled` bit. For compatibility that one bit enables
+`sessions`, `agents`, `workspace`, and `artifacts`; do not rename the persisted
+field, environment variable, feature id, or provider config filenames. Existing
+live Sessions keep their launch-time domain set until the runtime/MCP client is
+restarted. Transcript display settings remain under Settings ▸ Transcripts.
+
+Terminal messaging may later become channel-based — terminal↔terminal is the
+default today; see the private "sessions-mcp-channels" design record. Every
+`send_text` delivery carries `[message from id:<sender>, channel: terminal]`.
+Route inter-session text through
+`deliver_text_to_terminal`; do not bake “the other end is a PTY” into future
+channel semantics.
+
+> **Unified surface (2026-07-18, renamed 2026-07-25):** `supercli-host __mcp__`
+> is now the single
+> **`supercli`** MCP server for all built-in capabilities (named `supercli-mcp`
+> until 2026-07-25; the old name lives on only as pruned legacy config
+> entries and in the pre-rename config *file names*, which are kept so
+> restart commands recorded by older sessions keep resolving): **one action-enum
+> tool per domain** — `sessions`, `agents`, `workspace`, `artifacts`,
+> `browser`, `apps`, and `skills` — instead of one server per domain
+> with a dozen tools each. Schemas are terse (~1.5k tokens for both domains,
+> enforced by a byte-ceiling test in `mcp_host.rs`); full per-action docs load
+> lazily via `{"action":"help"}`. A domain is advertised only if the caller's
+> saved domain grant (`mcp_enabled` / `browser_mcp_enabled`) is set — a session launched without a domain never
+> pays its context cost — and
+> per-call gates still apply live. Legacy per-tool names and the standalone
+> `__browser_mcp__` argv keep working for sessions launched pre-unification.
+> The separate `*_client_registered` fields are setup evidence: the user has
+> installed that runtime's Supercli integration on this Host
+> (`~/.supercli/integrations/<runtime>.json`), the runtime declares the domain,
+> and the launch granted it. They stay false for a blank shell and for a
+> runtime whose integration was never installed; a CLI configured by hand
+> with `supercli-host __mcp__` still receives only the saved grants.
+> Registration is **one persistent entry per provider**, written only by the
+> explicit integration install (never by a launch): every provider points at
+> the same shim `~/.supercli/bin/supercli-mcp` (claude user-scope `~/.claude.json`,
+> codex `[mcp_servers.supercli]` in `config.toml`, Kimi Code `~/.kimi-code/
+> mcp.json`, cursor `~/.cursor/mcp.json`, cline's user MCP settings, kiro
+> `settings/mcp.json`, fx `~/.fx/mcp.json`, muse's plugin manifest). The shim
+> runs `__mcp_gate__ unified`; the gate reads the calling Session's manifest
+> grants and serves no tools outside a hosted Session, which is what makes a
+> global registration safe. Persistent configs prune the Supercli-owned
+> pre-rename `supercli-mcp`/`supercli-sessions`/`supercli-browser` entries.
+>
+
+- Server: `crates/supercli-core/src/mcp_host.rs`, run as `supercli-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency. The `supercli` CLI is a second client of the same dispatcher (`mcp_host::call_tool`, `supercli mcp …` and the family verbs in `docs/agents/cli.md`), so an agent working from the shell gets identical identity, grants, and write approvals — including `supercli send` from inside a Session.
+- It talks directly to per-session artifacts (`manifest.json`, `output.bin`, `session.sock`) under `~/.supercli/app-sessions/`; it does not need the app running, only the session hosts.
+- Each provider/client starts its own stdio sidecar process. This is
+  intentionally not embedded in the long-lived `supercli serve` worker: MCP
+  connection lifetime follows the agent client, while Host authority follows
+  the workspace. Reusable implementation stays in `supercli-core`; workspace
+  policy, approvals, and semantic effects converge on the worker/capability
+  adapters, while terminal data operations may remain direct to Session
+  artifacts and `session.sock`.
+- Caller identity comes from `SUPERCLI_SESSION_ID` in the inherited env; when a
+  launcher strips the environment from its MCP children (cursor-agent does),
+  `self_session_id` falls back to walking the server's process ancestry against
+  the running manifests — the hosted login shell (`manifest.pid`) is an
+  ancestor of everything the session's agent spawns, and only a
+  start-time-verified `PidIdentity::Matches` ancestor grants identity (fail
+  closed on recycled pids and unverifiable legacy manifests). Writing into the
+  calling session's own terminal is refused.
+- `agents.read_transcript` uses the shared provider transcript API in
+  `crates/supercli-core/src/transcripts/mod.rs`, so adapter/parser changes affect
+  MCP and remote clients together. It refuses a transcript when the observed
+  runtime occupant is not bound to the saved launch runtime.
+
+Advertised ownership (old mixed `sessions` spellings remain decode-only):
+
+- `sessions`: `current`, `list`, `inspect`, `read_screen`, `read_output`,
+  `wait_for_text`, `send_text`, `send_keys`, `report`. This domain reports
+  terminal/container state only; `inspect` no
+  longer smuggles in provider transcript or agent identity.
+- `agents`: `list`, `get`, `read_transcript`, `wait`. Every action targets one
+  explicit recognized occurrence; the unreleased group-wide wait and summary
+  actions were removed. `list` returns an occurrence-bound `agent_ref`
+  (`session_id`, runtime id, pid/start time, runtime launch generation).
+  Follow-up operations validate it so a replacement foreground process cannot
+  be mistaken for the same agent. `session_id` remains a weaker compatibility
+  target.
+- `workspace`: `list_presets`, `create_worktree`, `list_worktrees`.
+  Worktree creation remains opt-in and never launches a Session.
+- `artifacts`: `add_to_gallery` for a caller-owned image artifact.
+
+Session creation and closing remain user-only. Stale start/delegate/close tool
+calls are refused. Legacy mixed action names and per-tool names continue to
+dispatch where safe for already-running/cached clients, but are absent from
+the new schemas. `list_group` remains an organizational compatibility query;
+`report_to_group` aliases `report` and uses the ordinary write policy. The
+unreleased group-wide wait/summary spellings are intentionally not retained.
+
+Preset/worktree effects and write-approval prompts are Host-owned: the
+worker answers `POST /mcp/*` on its own hook port and mirrors approvals to
+the app through the `approval.present` platform callback (answers return
+over the Host approval verb). The native `MCPBridge.swift` compatibility
+adapter was retired 2026-09-03; the historical route contract below is the
+worker's.
+
+- Bridge: `crates/supercli-serve` hook port, authenticated `POST /mcp/*`
+  calls. Public effects use `list-presets`,
+  `create-worktree`, `list-worktrees`, and `approve-write`
+  (`approve-app-open` is still served for MCP binaries older than
+  2026-09-06, but current App opens need no approval and never call it);
+  `start-session` remains reserved for user/controller launches. Approval routes reply asynchronously (150s bridge ceiling, ~130s
+  MCP client timeout). The MCP host tries launch-time `SUPERCLI_APP_PORT`, then
+  `~/.supercli/app-ports` newest-first. App-less `supercli serve` Hosts serve the
+  same routes and the same shared approval queue.
+- Auth: unlike hook routes, `/mcp/*` requires the `x-supercli-auth` header matching `<SUPERCLI_HOME>/mcp/auth-token` (0600; the workspace worker mints it at start and the MCP host mints it on first use via `mcp_auth::ensure_auth_token`, so a fresh workspace home never reaches its first approval prompt without one — that gap broke every agent write in a new workspace until 2026-09-16) — the endpoints can launch arbitrary commands, and localhost is reachable by browser CSRF.
+- Worktree creation maps onto the same native path as its UI verb. The MCP host defaults `project_id` to the calling session's project.
+
+> **Security scope (2026-08-14): these are cooperative controls, not
+> same-UID isolation.** Hosted commands run as the user's account and are not
+> sandboxed by Supercli. The `0700` Supercli home and `0600` MCP token protect
+> against other local users and browser-origin CSRF; they do not stop code in
+> a hosted session from reading same-user state or discovering local sockets.
+> Consequently the Ask/Deny rules below govern agents that use
+> the supported MCP surface, but must never be described as a security boundary
+> against malicious shell code. A hard boundary requires a Host-owned broker
+> plus OS-enforced session confinement.
+
+Cooperative access policy — **open reads, approval-controlled writes to every
+other session** (reworked 2026-08-31):
+
+- **Reads are open across ALL sessions.** Any enabled caller can `list_sessions`/`inspect_session`/read any session in any project (`McpSecurity::permits_manifest` = caller known and not internally `Off`). The old project/worktree reach machinery was removed from the gate; `McpScope`/`mcp_default_access` survive only as decode-tolerant legacy fields (an explicit per-session `Off` override in `mcp_orchestrators` still disables a session's tools entirely).
+- **Sidebar groups are organizational only.** Project roots, plain groups, and worktrees remain useful filing and layout context, but moving a session never grants or revokes authority.
+- **Every write to another session goes through the app-wide write policy** stored under the compatibility key `AppState.mcp_nonchild_write_access` (`ask` default / `deny` / `allow`, `McpNonChildWriteAccess` in `state.rs`), re-read per call so changes apply live. Under `ask`, `require_session(_, Write)` first checks the persisted pair map `AppState.mcp_write_approvals` (`caller id → [target ids]`, directional); on a miss it POSTs `/mcp/approve-write` to the app with a 130s read timeout (`request_write_approval`) and the user answers the approval prompt — Allow persists the pair, Deny fails the tool call with a clear "don't retry" message. Prompts are FIFO and identical pairs coalesce; the exited-target check runs before the prompt so a dead session never asks.
+- **Session lifecycle is user-owned.** Agents cannot create or close sessions. Cached `close` calls fail without performing an effect; write approval never grants termination authority.
+- **Legacy lineage is decode-only.** `parent_session_id`, `session_parents`, and the remote protocol's `parentSessionID` remain tolerated for older manifests/controllers, but current hosts never write or enforce them and current clients render sessions flat.
+- **Unified approval prompts, answerable from controllers:**
+  `/mcp/approve-write|browser|computer|app-open` share one pending queue
+  (`PendingMcpApproval` in `MCPApprovalCenter.swift`; route handlers keep fast
+  paths). Desktop and phone both show an in-pane overlay on the Session the
+  grant is about (write: the destination, otherwise the caller) plus that
+  Session's attention badge — never a floating window and never
+  `NSAlert.runModal()`, which stalls queued main-actor work including mobile
+  bootstrap. Pending prompts ride phone bootstrap and are answerable through
+  `POST /mobile/approvals/answer`; first answer wins. `mcp_app_open_approvals`
+  (caller Session → App ids) is a pre-2026-09-06 grant map: still decoded,
+  pruned/carried with caller replacement like other Session-keyed grants, but
+  no current open consults it.
+- **Approval lifecycle:** pairs live in `~/.supercli/app-state.json`; an in-place Resume Agent after the managed runtime returns to its shell keeps the same Session id and therefore needs no migration. Replacement Resume/handoff paths snapshot the map before `pruneNativeState` and re-add every pair under the new Session id (both directions), using the same read-before-prune discipline as the carried access grant.
+- **No launch injection (0.7):** a launch runs the preset command as typed; `SessionHostLaunch.mcp_enabled` only records the saved Sessions-domain grant in the manifest. The MCP server reaches an agent solely through its installed integration (the shim registered in the provider's own global config) — never through a flag, an environment gate, or a per-session config file. The manifest still records `mcp_enabled` and `mcp_client_registered` as distinct facts; the latter now means "the provider's config points at the shim".
+- **Native UI:** Settings ▸ Agent access (Sessions section) explains open reads and per-target
+  write approval, offers the app-wide write policy and gallery toggle, and lists both approved
+  Session-write pairs and approved App launches with per-entry Revoke. Changes
+  apply live; nothing here drives a restart banner.
+
+> **Removed (2026-06-22):** the per-project MCP *block* feature (`mcp_blocked_projects`, `Project.mcp_blocked`, the Settings "Block individual projects" section, host/bridge block gates) is gone. The native `AppStateFile`/`Project` decoders still tolerate the old `mcp_blocked*` keys for backward-compatible reads, but nothing writes or enforces them.
+
+Registration per provider (all through the explicitly installed integration,
+`docs/agents/providers.md` has the per-CLI file paths):
+
+- The shim (`integrations::install::write_mcp_shim`) is rewritten by every
+  integration install and by the worker's post-upgrade refresh, so it always
+  execs the current `supercli-host`; inside a hosted shell it prefers the
+  exported `SUPERCLI_HOST_BIN`.
+- Launchers that strip their MCP children's environment (codex, cursor-agent,
+  muse) get identity from `self_session_id`'s process-ancestry fallback; Kiro
+  v3 passes only a declared env block, so its entry forwards the generic
+  `SUPERCLI_*` variables; fx and Claude inherit the hosted environment.
+- Per-Session grants never appear in any config file: the gate reads
+  `sessions_mcp_enabled()`/`browser_mcp_enabled()` from the calling Session's
+  manifest per call. The older `SUPERCLI_*_MCP_ENABLED` environment grants and
+  the runtime-local aliases remain readable for configurations older builds
+  wrote around a launch.
+
+## The `apps` and root `skills` domains (2026-08-24)
+
+`apps_mcp.rs` is the first landed piece of the Supercli Apps agent contract
+(the private "supercli-apps" design record "Agent access" is authoritative). An installed
+Supercli App is an entry in `protocol/app-registry.json` whose declared
+CLI resolves through the Host's search path (including its managed App bin
+directory). This catalog plus search-path check is the entire
+current discovery contract; **no app ever runs its own MCP server**. The `apps`
+domain advertises `list`, `catalog`, `describe`, `search`, `context`, and
+`open`. `catalog` includes missing official Apps, their declared file
+extensions/resource kinds/defaults, and the exact user-facing installation
+command. Agents cannot install software through MCP.
+`context` returns agent-safe attached/project relationships plus the same
+caller-relative direct-neighbor snapshot as `sessions.current`. A neighboring
+App includes its ordinary readable companion Session id so “check Design on
+the left” resolves to an explicit target. Each neighbor entry is a one-call
+identity card (2026-08-26): kind (terminal/agent/supercli_app), label, `cwd`,
+state, activity, and for agent panes the catalog `runtime_id` plus resolved
+`runtime_name`; an App entry inlines the central catalog description. Future
+package tool summaries and skill references remain reserved for the declared
+tool-execution slice; the current catalog publishes neither. The snapshot
+comes only from this Host's durable `windows["main"]["local"]` Controller tree and exposes no
+pane ids, ratios, pixel geometry, focus, zoom, or transient visibility.
+Because some provider CLIs (Codex) never surface MCP *server* instructions to
+the model, the routing cues that map user language onto this snapshot —
+spatial words ("left", "next to me") and selection words ("the selected …",
+"what I have open", for any App: a design, document, note) — must live in the
+per-tool descriptions themselves (`sessions`/`apps`, 2026-08-26). Keep new
+routing guidance there, not only in server instructions. A pane
+currently branded as an App also carries that App's self-published **live
+context**: the App writes an `app-context.json` marker beside
+`app-title.json` in its session dir (`{"app": id, "context": {…app-defined…},
+"updated_at": ms}`, a JSON object ≤ 16 KB), and pane-context queries read it
+fresh per call and surface it verbatim as the neighbor entry's `app_context`
+(`session_host::read_app_context_marker`). It is never folded into Host
+state (selection-frequency updates cost no manifest churn or state-bus
+pings), never exposed for a pane that is not currently App-branded — a
+marker left behind by an exited App must not speak for the shell that
+remains — and always framed as app-authored data, never instructions; each
+App's public documentation defines its own `context` schema (the Markdown
+App: current file, cursor line, selection lines). `open`
+resolves only an installed catalog entry, derives caller/project/cwd Host-side,
+then — with no approval prompt: installing the App was the user's consent,
+and the App runs with the authority the agent already has (decided
+2026-09-06) — creates or reuses the project/resource App instance,
+starts its companion Session when it is missing or exited, and binds the
+caller's semantic panel. This is the one bounded exception to user-only
+Session creation (decided 2026-09-06: agents may open files in panes). MCP
+never installs an App and never removes a companion; a missing App returns
+exact guidance to ask the user to install it. A caller-scoped `request_id` deduplicates retries;
+`reveal:false` attaches without advancing the reveal revision. The root `skills` domain provides
+`list`, `search`, and `get`; future App package guidance uses namespaced ids
+there rather than adding an Apps action. Every App action rechecks the Host's
+resolved PATH, so a mid-session install is visible without a restart.
+
+`apps.open` and the Controller's user-initiated `apps.open` Host effect share
+the typed resolver, presentation model, and companion lifecycle in
+`app_open::open_app`; the agent path is the same effect with the same
+validation (App not installed, unsupported media type, relative path all fail
+before any state is written). An explicit `resource` plus `media_type`
+defaults to `resource_kind:file`; otherwise callers use a declared typed kind
+such as `folder` or `git.working-tree`. Future kinds such as
+`github.pull-request` use the same wire. The Host passes any resource as one
+shell-safe argument to the resolved App executable. Cmd-click is a direct user
+action and may additionally install a missing App first.
+
+The install boundary is enforced on the supported MCP adapter, not as an
+OS sandbox around arbitrary commands. A hosted process runs as the user's
+account and can invoke the ordinary `supercli` CLI; noninteractive
+`supercli apps install` requires an explicit `--yes`, but the cooperative-policy
+contract still depends on agents using the MCP surface for App actions.
+
+Presentation state is the versioned `app_presentations` envelope in
+`app-state.json`: App instances are project/resource identities; bindings pair
+one caller with a view/`panel` target and monotonic reveal revision. Agent MCP
+open receipts never expose the backing companion Session or claim placement;
+a later `sessions.current` or `apps.context` snapshot may identify it only
+when it is a direct neighbor in the local durable Controller tree. Native
+Controllers consume the trusted binding and project a first reveal as their
+own trailing/right split. Pane ids, ratios, focus, visibility, and durable
+membership remain in Controller-owned pane state. Each Controller persists a
+local handled/dismissed revision, so detaching stays detached until a later
+intentional `open` increments the Host revision. The validated semantic
+envelope is also published as bootstrap `appPresentations`, so scoped and
+remote Controllers use the same projection; do not infer it from Session role,
+commands, or pane files.
+
+Advertising: the `apps` and `skills` tools appear whenever any other domain is advertised
+(`McpDomainMask.apps`; the `__mcp_gate__` unified entry grants it when any
+domain grant is present) and its tool description embeds the live installed
+App/skill ids, computed at server launch. Declared RoomStore tool *execution* is intentionally
+absent until RoomFS/the Host worker exist — `describe` says so and points
+agents at the app's standalone command and root skill reference.
+
+Reference convention: an app can hand agents a token like
+`[mcp:supercli.app.markdown README.md LOC:12:32]`; the tool description and
+server instructions teach agents to resolve it by fetching that app's
+skill through `skills.get`. "Send to agent" in the shipped Apps is
+`supercli-app-kit`'s handoff: it types the reference into the neighboring
+agent through `supercli-host __mcp__` sessions `send_keys` (and therefore the
+same policy as any other inter-session write), resolving the Host through
+`SUPERCLI_HOST_BIN`. (The earlier Supercli Design App and its `.presence/`
+bridge were removed from the catalog on 2026-09-07; nothing in core refers
+to them.)
+
+## Dual-era MCP transport (Cloudflare/MCP v2 review, 2026-08-23)
+
+The local stdio server accepts both the shipped initialize-era protocol and
+the 2026-07-28 discovery protocol described in Cloudflare's MCP v2 review:
+
+- legacy `initialize`, `tools/list`, and `tools/call` response shapes remain
+  unchanged for existing CLIs;
+- modern clients start with `server/discover` and send
+  `params._meta["io.modelcontextprotocol/protocolVersion"]` plus the client
+  capabilities object on every request;
+- unsupported versions fail with `-32022`; every modern success includes
+  `resultType:"complete"` and server-info metadata;
+- discovery/tool-list caching is `ttlMs:0`, `cacheScope:"private"`, because
+  authorization, installed Apps, and skills are caller/Host-specific.
+
+Do **not** advertise `io.modelcontextprotocol/ui`: Supercli Apps are standalone
+Host Apps, not MCP Apps iframe resources. Streamable-HTTP method headers and
+OAuth are irrelevant to this local stdio transport. In-flight cancellation is
+implemented (2026-08-23) as a reader/worker split, deliberately **not** full
+concurrent dispatch: tool calls run strictly in submission order on one
+worker thread, because pipelined callers depend on that ordering and one
+caller's verbs must never race each other (the `apps.open` dedup proof
+encodes this). The reader thread stays live to answer fast protocol methods
+(`ping`, `tools/list`, discovery) and to observe `notifications/cancelled`:
+cancelling a queued call skips it, cancelling the in-flight call unwinds its
+poll loop within ~250ms (`mcp_cancel::bail_if_cancelled` in every wait
+loop), and the response is dropped per spec. A cancellation cannot interrupt
+a blocking approval-bridge read, but the approved effect is suppressed at
+the post-approval boundary — an approval answered after cancellation never
+types into the target or commits App state. EOF still drains the queue
+completely, so piped batch callers keep exact sequential behavior. Process
+proof: `crates/supercli-host/tests/mcp_cancel_process.rs`.
+MRTR/input-required should be added only for actual MCP-client elicitation,
+not as a replacement for Supercli's Host/Controller approval UI.
+
+References: `https://blog.cloudflare.com/mcp-v2/` and the official
+`https://modelcontextprotocol.io/specification/2026-07-28/server/discover` /
+`basic/versioning` / `server/utilities/caching` sections.
+
+Debugging: `mcp-host` lines in `~/.supercli/hooks/trace.log`. Test with `printf '...' | supercli-host __mcp__`.

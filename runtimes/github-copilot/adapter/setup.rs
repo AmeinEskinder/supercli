@@ -1,0 +1,47 @@
+use crate::app_paths::machine_home;
+use crate::hook_assets::{
+    ensure_project_exclude_entry, write_executable_script, write_project_file_no_symlinks,
+};
+use serde_json::json;
+use std::path::{Path, PathBuf};
+
+pub(crate) const COPILOT_HOOK_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../runtimes/github-copilot/assets/hooks/lifecycle.sh"
+));
+
+pub fn install() -> Result<(), String> {
+    let script_path = copilot_hook_script_path();
+    write_executable_script(&script_path, COPILOT_HOOK_SCRIPT, "Copilot hook script")?;
+    Ok(())
+}
+pub fn prepare_copilot_project_hooks(cwd: &str) -> Result<(), String> {
+    let hook_script_path = copilot_hook_script_path();
+    let hook_script_path =
+        crate::integrations::shared::shell_quote(&hook_script_path.to_string_lossy());
+    let hook_json = json!({
+        "version": 1,
+        "hooks": {
+            "sessionStart": [{ "type": "command", "bash": format!("{} sessionStart", hook_script_path), "timeoutSec": 5 }],
+            "sessionEnd": [{ "type": "command", "bash": format!("{} sessionEnd", hook_script_path), "timeoutSec": 5 }],
+            "agentStop": [{ "type": "command", "bash": format!("{} agentStop", hook_script_path), "timeoutSec": 5 }],
+            "permissionRequest": [{ "type": "command", "bash": format!("{} permissionRequest", hook_script_path), "timeoutSec": 5 }],
+            "userPromptSubmitted": [{ "type": "command", "bash": format!("{} userPromptSubmitted", hook_script_path), "timeoutSec": 5 }],
+            "postToolUse": [{ "type": "command", "bash": format!("{} postToolUse", hook_script_path), "timeoutSec": 5 }]
+        }
+    });
+    let serialized = serde_json::to_string_pretty(&hook_json)
+        .map_err(|e| format!("Failed to serialize Copilot hook config: {e}"))?;
+    write_project_file_no_symlinks(
+        Path::new(cwd),
+        Path::new(".github/hooks/supercli-notify.json"),
+        format!("{serialized}\n").as_bytes(),
+    )?;
+
+    ensure_project_exclude_entry(cwd, ".github/hooks/supercli-notify.json");
+
+    Ok(())
+}
+pub(crate) fn copilot_hook_script_path() -> PathBuf {
+    machine_home().join("hooks").join("copilot-hook.sh")
+}

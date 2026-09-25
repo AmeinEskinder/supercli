@@ -1,0 +1,18 @@
+# Unpeel Dioxus mobile: pair a fresh install with a Host
+# Tags: smoke, pairing
+# Timeout: 180000
+# Param: bundle_id = com.unpeel.controller
+# Param: pair_code
+
+# Fresh install so no previously-paired Host screen interferes.
+app "${bundle_id}" fresh
+wait_for @"pairing-view" timeout:30000
+assert_exists @"pairing-title"
+
+# Paste the single-use pairing code (minted on the Host via `unpeel pair`).
+type @"pairing-code-input" → "${pair_code}"
+tap @"pairing-submit" type:button
+
+# Successful pairing lands on the session list of the new Host.
+wait_for @"new-session-button" timeout:30000
+assert_exists @"new-session-button"

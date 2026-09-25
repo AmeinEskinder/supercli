@@ -1,0 +1,20 @@
+# Unpeel Dioxus mobile: type in the live terminal of an open session
+# Tags: smoke, terminal
+# Timeout: 120000
+# Param: bundle_id = com.unpeel.controller
+# Param: session_id
+# Param: typed_text = echo unpeel-smoke-test
+
+app "${bundle_id}"
+wait_for @"new-session-button" timeout:30000
+tap @"session-row-${session_id}" type:cell
+wait_for @"terminal-view" timeout:15000
+
+# The session detail is a live PTY terminal. Tap its center to focus, then
+# type a marker command into the focused field; the Host echoes it back
+# through the PTY.
+tap @"terminal-view"
+type "${typed_text}"
+press_key enter
+wait_for ~"unpeel-smoke-test" timeout:20000
+assert_exists ~"unpeel-smoke-test"
