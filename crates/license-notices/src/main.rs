@@ -75,7 +75,7 @@ struct Notice {
 }
 
 fn usage() -> &'static str {
-    "usage: unpeel-license-notices \\\n  --manifest-path <Cargo.toml> --package <name> [--package <name> ...] \\\n  [--manifest-path <Cargo.toml> --package <name> ...] \\\n  --target <rust-target> [--target <rust-target> ...] --output <file>\n\n\
+    "usage: supercli-license-notices \\\n  --manifest-path <Cargo.toml> --package <name> [--package <name> ...] \\\n  [--manifest-path <Cargo.toml> --package <name> ...] \\\n  --target <rust-target> [--target <rust-target> ...] --output <file>\n\n\
 Each --package belongs to the preceding --manifest-path. The collector runs \
 `cargo metadata --locked` once per manifest/target pair, follows the selected \
 packages' complete normal/runtime dependency graphs, and excludes workspace-\
@@ -556,7 +556,7 @@ fn collect_notices(packages: BTreeMap<String, Package>) -> Result<Vec<Notice>, S
 
 fn render(notices: &[Notice]) -> Vec<u8> {
     let mut output = String::from(
-        "UNPEEL THIRD-PARTY NOTICES — RUST\n\
+        "SUPERCLI THIRD-PARTY NOTICES — RUST\n\
          \n\
          This file is generated deterministically from cargo metadata --locked.\n\
          Identical license texts are included once and list every resolved package that uses them.\n",

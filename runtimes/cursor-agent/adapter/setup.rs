@@ -27,12 +27,12 @@ pub(crate) fn cursor_mcp_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".cursor").join("mcp.json"))
 }
 
-/// Register the Unpeel MCP shim in `~/.cursor/mcp.json`. The file is global
+/// Register the Supercli MCP shim in `~/.cursor/mcp.json`. The file is global
 /// and shared by concurrent sessions, so nothing per-session is baked in —
 /// and cursor-agent spawns MCP servers with a stripped environment, so
 /// `SUPERCLI_SESSION_ID` never arrives by inheritance either. Caller identity
 /// comes from `mcp_host::self_session_id`'s process-ancestry fallback, and
-/// the shim's gate serves no tools outside a granted Unpeel session.
+/// the shim's gate serves no tools outside a granted Supercli session.
 pub fn write_cursor_mcp_config() -> Result<(), String> {
     let shim = crate::integrations::install::write_mcp_shim()?;
     let unified = json!({
@@ -40,16 +40,16 @@ pub fn write_cursor_mcp_config() -> Result<(), String> {
         "command": shim.to_string_lossy(),
         "args": [],
     });
-    // One unified entry; the legacy names (`unpeel-mcp` before the
+    // One unified entry; the legacy names (`supercli-mcp` before the
     // 2026-07-25 rename, the per-domain pair before unification) are pruned
     // so Cursor sessions don't see the same domains twice.
     merge_cursor_mcp_servers_at(
         cursor_mcp_path().as_deref(),
         [
-            ("unpeel", Some(unified)),
-            ("unpeel-mcp", None),
-            ("unpeel-sessions", None),
-            ("unpeel-browser", None),
+            ("supercli", Some(unified)),
+            ("supercli-mcp", None),
+            ("supercli-sessions", None),
+            ("supercli-browser", None),
         ],
     )
 }

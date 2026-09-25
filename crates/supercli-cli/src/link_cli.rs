@@ -1,4 +1,4 @@
-//! `unpeel link` — scripted headless Unpeel Link enrollment and status.
+//! `supercli link` — scripted headless Supercli Link enrollment and status.
 //!
 //! This is the SSH/provisioning spelling of the interactive TUI Settings ▸
 //! Remote activation path. It deliberately reuses the exact
@@ -18,14 +18,14 @@ use supercli_core::license;
 use supercli_core::relay_uplink;
 
 pub const HELP: &str = "\
-unpeel link — Unpeel Link enrollment for this Host machine
+supercli link — Supercli Link enrollment for this Host machine
 
-  unpeel link enroll <key> [--json]   activate this machine and fetch its
+  supercli link enroll <key> [--json]   activate this machine and fetch its
                                       relay entitlement (idempotent)
-  unpeel link status [--json]         show enrollment and entitlement state
-  unpeel link deactivate              release this machine's seat and stop Link
+  supercli link status [--json]         show enrollment and entitlement state
+  supercli link deactivate              release this machine's seat and stop Link
 
-Runs on the Host machine (the box that runs `unpeel serve`). A running
+Runs on the Host machine (the box that runs `supercli serve`). A running
 Host service picks the new entitlement up on its next tick — no restart.
 Local/LAN use never requires enrollment; Link only adds off-LAN relay access.
 
@@ -35,7 +35,7 @@ and the entitlement finishes on retry or automatically once a Host service
 can reach the licensing service.";
 
 fn device_name() -> String {
-    hostname().unwrap_or_else(|| "unpeel (terminal)".into())
+    hostname().unwrap_or_else(|| "supercli (terminal)".into())
 }
 
 fn hostname() -> Option<String> {
@@ -140,7 +140,7 @@ fn print_state(state: &LinkState, json: bool) {
     }
     match &state.host_id {
         Some(host_id) => println!("host id: {host_id}"),
-        None => println!("host id: not yet minted (pair a device or run `unpeel serve`)"),
+        None => println!("host id: not yet minted (pair a device or run `supercli serve`)"),
     }
     match (state.cache_state, &state.cache) {
         (Some(cache_state), Some(record))
@@ -160,7 +160,7 @@ fn print_state(state: &LinkState, json: bool) {
     }
 }
 
-/// `unpeel link status` — exit 0 when this Host holds usable Link authority
+/// `supercli link status` — exit 0 when this Host holds usable Link authority
 /// (stored valid key, no suppression, entitlement present for this Host and
 /// not expired), 1 otherwise.
 fn status(json: bool) -> i32 {
@@ -188,7 +188,7 @@ fn status(json: bool) -> i32 {
     }
 }
 
-/// `unpeel link enroll <key>` — the scripted equivalent of pasting the key
+/// `supercli link enroll <key>` — the scripted equivalent of pasting the key
 /// in Settings ▸ Remote: seat activation, durable key commit, then the first
 /// relay entitlement. Safe to re-run; the service treats re-activation of
 /// the same machine as idempotent and a re-run simply refreshes.
@@ -243,7 +243,7 @@ fn enroll(raw_key: &str, json: bool) -> i32 {
             // retry or a running Host service finishes it once the service
             // is reachable again.
             eprintln!("relay entitlement request failed: {error}");
-            eprintln!("the key is stored; re-run `unpeel link enroll` or leave `unpeel serve` running to finish");
+            eprintln!("the key is stored; re-run `supercli link enroll` or leave `supercli serve` running to finish");
             return 2;
         }
     };
@@ -258,12 +258,12 @@ fn enroll(raw_key: &str, json: bool) -> i32 {
         Err(error) => eprintln!("enrolled, but state could not be re-read: {error}"),
     }
     if !json {
-        println!("enrolled — a running `unpeel serve` starts Link on its next tick");
+        println!("enrolled — a running `supercli serve` starts Link on its next tick");
     }
     0
 }
 
-/// `unpeel link deactivate` — local revocation first (durable user-disable
+/// `supercli link deactivate` — local revocation first (durable user-disable
 /// marker, cache and key removal), then the best-effort seat release.
 fn deactivate() -> i32 {
     let key = match license::deactivate_local() {
@@ -273,11 +273,11 @@ fn deactivate() -> i32 {
             return 1;
         }
     };
-    println!("Unpeel Link deactivated on this machine");
+    println!("Supercli Link deactivated on this machine");
     if let Some(key) = key {
         if let Err(error) = license::request_deactivation_for_key(&key) {
             eprintln!("seat release did not reach the service: {error}");
-            eprintln!("this machine is already disabled locally; free the seat later from unpeel.com/account");
+            eprintln!("this machine is already disabled locally; free the seat later from supercli.com/account");
             return 2;
         }
         println!("seat released");
@@ -285,13 +285,13 @@ fn deactivate() -> i32 {
     0
 }
 
-/// Dispatch `unpeel link …`. `args` excludes the leading `link`.
+/// Dispatch `supercli link …`. `args` excludes the leading `link`.
 pub fn run(args: &[String], json: bool) -> i32 {
     match args.first().map(String::as_str) {
         Some("enroll") => match args.get(1) {
             Some(key) if !key.trim().is_empty() => enroll(key, json),
             _ => {
-                eprintln!("usage: unpeel link enroll <key>");
+                eprintln!("usage: supercli link enroll <key>");
                 1
             }
         },

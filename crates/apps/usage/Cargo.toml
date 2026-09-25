@@ -1,8 +1,8 @@
 [package]
-name = "unpeel-usage"
+name = "supercli-usage"
 version = "0.1.1"
 edition = "2021"
-description = "Local AI usage & credits at a glance — a standalone terminal dashboard that lights up as an Unpeel App"
+description = "Local AI usage & credits at a glance — a standalone terminal dashboard that lights up as an Supercli App"
 license = "MIT"
 
 [dependencies]
@@ -12,5 +12,5 @@ serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
 toml = "0.8"
-unpeel-app-kit = { path = "../app-kit" }
+supercli-app-kit = { path = "../app-kit" }
 ureq = "3"

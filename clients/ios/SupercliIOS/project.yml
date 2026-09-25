@@ -23,7 +23,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.supercli.ios.remote
-        PRODUCT_NAME: Unpeel
+        PRODUCT_NAME: Supercli
         PRODUCT_MODULE_NAME: SupercliIOS
         INFOPLIST_FILE: App/Info.plist
         # Push Notifications (aps-environment). The App ID has the Push
@@ -46,15 +46,15 @@ targets:
         CODE_SIGN_STYLE: Automatic
         # Signing team is a single override point: the paid company team
         # (UX Themes AS). Overridable per build without editing this file:
-        # `xcodebuild ... UNPEEL_DEVELOPMENT_TEAM=ABCDE12345` (e.g. a personal
+        # `xcodebuild ... SUPERCLI_DEVELOPMENT_TEAM=ABCDE12345` (e.g. a personal
         # team for cert-less local dev).
-        UNPEEL_DEVELOPMENT_TEAM: 8M4MM4C2AH
-        DEVELOPMENT_TEAM: $(UNPEEL_DEVELOPMENT_TEAM)
+        SUPERCLI_DEVELOPMENT_TEAM: 8M4MM4C2AH
+        DEVELOPMENT_TEAM: $(SUPERCLI_DEVELOPMENT_TEAM)
       configs:
         Debug:
-          UNPEEL_APNS_ENVIRONMENT: development
+          SUPERCLI_APNS_ENVIRONMENT: development
         Release:
-          UNPEEL_APNS_ENVIRONMENT: production
+          SUPERCLI_APNS_ENVIRONMENT: production
   SupercliIOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -68,7 +68,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.supercli.ios.remote.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Unpeel.app/Unpeel
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Supercli.app/Supercli
         BUNDLE_LOADER: $(TEST_HOST)
         CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]: "NO"
 schemes:

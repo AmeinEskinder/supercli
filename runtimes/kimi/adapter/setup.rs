@@ -10,7 +10,7 @@ pub(crate) const KIMI_HOOK_SCRIPT: &str = include_str!(concat!(
 ));
 
 /// Install the Kimi integration: the lifecycle hook block in Kimi's config
-/// (both generations) and the Unpeel MCP shim as a persistent entry in Kimi
+/// (both generations) and the Supercli MCP shim as a persistent entry in Kimi
 /// Code's `mcp.json`. Legacy Kimi, which only took per-launch MCP flags,
 /// keeps hooks and detection but no MCP.
 pub fn install() -> Result<(), String> {
@@ -57,11 +57,11 @@ pub(crate) fn kimi_code_mcp_config_path() -> Option<PathBuf> {
 pub fn kimi_global_mcp_config_path() -> Option<PathBuf> {
     Some(kimi_share_dir()?.join("mcp.json"))
 }
-pub(crate) const KIMI_MANAGED_HOOKS_START: &str = "# BEGIN UNPEEL MANAGED KIMI HOOKS";
-pub(crate) const KIMI_MANAGED_HOOKS_END: &str = "# END UNPEEL MANAGED KIMI HOOKS";
+pub(crate) const KIMI_MANAGED_HOOKS_START: &str = "# BEGIN SUPERCLI MANAGED KIMI HOOKS";
+pub(crate) const KIMI_MANAGED_HOOKS_END: &str = "# END SUPERCLI MANAGED KIMI HOOKS";
 
 pub(crate) fn kimi_hook_command(event: &str) -> String {
-    format!("\"${{SUPERCLI_HOME:-$HOME/.unpeel}}/hooks/kimi-hook.sh\" {event}")
+    format!("\"${{SUPERCLI_HOME:-$HOME/.supercli}}/hooks/kimi-hook.sh\" {event}")
 }
 
 pub(crate) fn toml_basic_string(value: &str) -> String {
@@ -189,7 +189,7 @@ pub(crate) fn ensure_kimi_config_hooks_at(
         String::new()
     };
     let Ok(updated) = reconcile_kimi_config(&raw, kimi_code) else {
-        // Never replace a malformed user config with an Unpeel-only file.
+        // Never replace a malformed user config with an Supercli-only file.
         return Ok(());
     };
     if updated != raw {
@@ -223,7 +223,7 @@ pub(crate) fn kimi_code_managed_mcp_entry(shim: &Path) -> Value {
     })
 }
 
-/// An entry is Unpeel-owned when it starts the shim, or (older builds) the
+/// An entry is Supercli-owned when it starts the shim, or (older builds) the
 /// Host binary through the gate with this `kind`.
 pub(crate) fn kimi_code_entry_is_managed(value: &Value, kind: &str) -> bool {
     let shim = value
@@ -245,7 +245,7 @@ pub(crate) fn upsert_kimi_code_managed_mcp(
     kind: &str,
     entry: Value,
 ) {
-    let fallback_name = format!("{preferred_name}-unpeel");
+    let fallback_name = format!("{preferred_name}-supercli");
     let name = match servers.get(preferred_name) {
         None => preferred_name,
         Some(existing) if kimi_code_entry_is_managed(existing, kind) => preferred_name,
@@ -259,9 +259,9 @@ pub(crate) fn upsert_kimi_code_managed_mcp(
     }
 }
 
-/// Kimi Code only reads persistent MCP configuration. Install one `unpeel`
+/// Kimi Code only reads persistent MCP configuration. Install one `supercli`
 /// entry that starts the shim; its gate exposes the real tools only inside a
-/// granted hosted Session. Outside Unpeel (and in ungranted sessions) the
+/// granted hosted Session. Outside Supercli (and in ungranted sessions) the
 /// server stays connected with an empty tool list.
 pub(crate) fn write_kimi_code_mcp_config() -> Result<(), String> {
     let Some(path) = kimi_code_mcp_config_path() else {
@@ -295,19 +295,19 @@ pub(crate) fn write_kimi_code_mcp_config() -> Result<(), String> {
     let shim = crate::integrations::install::write_mcp_shim()?;
     upsert_kimi_code_managed_mcp(
         servers,
-        "unpeel",
+        "supercli",
         crate::mcp_gate::UNIFIED_KIND,
         kimi_code_managed_mcp_entry(&shim),
     );
-    // The `unpeel` entry supersedes the older names: `unpeel-mcp` (pre-rename
+    // The `supercli` entry supersedes the older names: `supercli-mcp` (pre-rename
     // unified entry) and the per-domain gate entries. Remove ours (identified
     // by the gate argv) and leave user-authored entries alone.
     for (name, kind) in [
-        ("unpeel-mcp", crate::mcp_gate::UNIFIED_KIND),
-        ("unpeel-sessions", crate::mcp_gate::SESSIONS_KIND),
-        ("unpeel-browser", crate::mcp_gate::BROWSER_KIND),
+        ("supercli-mcp", crate::mcp_gate::UNIFIED_KIND),
+        ("supercli-sessions", crate::mcp_gate::SESSIONS_KIND),
+        ("supercli-browser", crate::mcp_gate::BROWSER_KIND),
     ] {
-        for candidate in [name.to_string(), format!("{name}-unpeel")] {
+        for candidate in [name.to_string(), format!("{name}-supercli")] {
             if servers
                 .get(&candidate)
                 .is_some_and(|entry| kimi_code_entry_is_managed(entry, kind))

@@ -1,23 +1,23 @@
 //! Presentational components shared by the desktop and mobile clients.
 //!
-//! Convention: components are pure renderers over `unpeel_client` DTOs.
-//! All Host I/O happens in the app shell (`unpeel-desktop` /
-//! `unpeel-mobile`), which passes snapshots down and receives intents up
+//! Convention: components are pure renderers over `supercli_client` DTOs.
+//! All Host I/O happens in the app shell (`supercli-desktop` /
+//! `supercli-mobile`), which passes snapshots down and receives intents up
 //! via `EventHandler`s. This keeps the components testable and the I/O
 //! policy in one place.
 
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
-use unpeel_client::dto::{
+use supercli_client::dto::{
     ActivityState, PendingApproval, SessionSummary, TranscriptEntry, TranscriptRole,
 };
 
 use super::i18n::t;
 use super::presence::{ViewerAvatars, ViewerInfo};
 
-use unpeel_client::AnswerUiState;
-use unpeel_client::TransportKind;
+use supercli_client::AnswerUiState;
+use supercli_client::TransportKind;
 
 /// Top bar: Host identity + connection state + transport + refresh.
 ///
@@ -309,7 +309,7 @@ pub fn ApprovalCard(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unpeel_client::dto::{ActivityState, SessionCapabilities, SessionStatus};
+    use supercli_client::dto::{ActivityState, SessionCapabilities, SessionStatus};
 
     fn session(id: &str, archived: bool) -> SessionSummary {
         SessionSummary {

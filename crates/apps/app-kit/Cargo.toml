@@ -1,15 +1,15 @@
 [package]
-name = "unpeel-app-kit"
+name = "supercli-app-kit"
 version = "0.1.0"
 edition = "2024"
-description = "Opinionated Ratatui components for standalone and Unpeel-hosted terminal Apps"
+description = "Opinionated Ratatui components for standalone and Supercli-hosted terminal Apps"
 license = "MIT"
 
 [features]
 default = ["ui-bridge"]
 markdown-text-area = ["dep:tui-textarea", "dep:unicode-segmentation"]
 media = ["dep:image", "dep:ratatui-image", "dep:sha2"]
-surface-embed = ["dep:unpeel-surface"]
+surface-embed = ["dep:supercli-surface"]
 ui-bridge = ["dep:hmac", "dep:libc", "dep:sha2"]
 
 [dependencies]
@@ -26,7 +26,7 @@ sha2 = { version = "0.10", optional = true }
 tui-textarea = { package = "tui-textarea-2", version = "0.12", default-features = false, features = ["ratatui"], optional = true }
 unicode-segmentation = { version = "1", optional = true }
 unicode-width = "0.2"
-unpeel-surface = { version = "=0.1.0-alpha.6", default-features = false, features = ["ratatui"], optional = true }
+supercli-surface = { version = "=0.1.0-alpha.6", default-features = false, features = ["ratatui"], optional = true }
 
 [dev-dependencies]
 crossterm = "0.29"

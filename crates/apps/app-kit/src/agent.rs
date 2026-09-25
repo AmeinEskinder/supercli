@@ -1,4 +1,4 @@
-//! Shared Unpeel App-to-agent handoff primitives.
+//! Shared Supercli App-to-agent handoff primitives.
 //!
 //! The Host's unified MCP remains the authority for peer discovery and
 //! same-group write policy. Apps only ask it for the best nearby agent and
@@ -37,17 +37,17 @@ impl fmt::Display for AgentError {
 
 impl std::error::Error for AgentError {}
 
-/// Whether this process is running inside a hosted Unpeel session.
+/// Whether this process is running inside a hosted Supercli session.
 #[must_use]
 pub fn is_hosted() -> bool {
-    std::env::var("UNPEEL_SESSION_ID").is_ok_and(|session_id| !session_id.trim().is_empty())
+    std::env::var("SUPERCLI_SESSION_ID").is_ok_and(|session_id| !session_id.trim().is_empty())
 }
 
 /// A control-safe, absolute path token suitable for an agent input.
 ///
 /// JSON string escaping keeps newlines and other unusual filename bytes from
 /// becoming terminal control input. Non-UTF-8 bytes are represented lossily;
-/// Unpeel's supported macOS filesystems normally provide UTF-8 names.
+/// Supercli's supported macOS filesystems normally provide UTF-8 names.
 #[must_use]
 pub fn path_reference(path: impl AsRef<Path>) -> String {
     let path = path.as_ref();
@@ -81,7 +81,7 @@ pub fn clipboard_sequence(text: &str) -> String {
 /// the user in control of the final prompt.
 pub fn send_to_agent(text: &str) -> Result<String, AgentError> {
     if !is_hosted() {
-        return Err(AgentError::new("not inside an Unpeel session"));
+        return Err(AgentError::new("not inside an Supercli session"));
     }
     let mut client = McpClient::spawn()?;
     let (target_id, label) = resolve_agent(&mut client)?;
@@ -105,7 +105,7 @@ pub fn send_to_agent(text: &str) -> Result<String, AgentError> {
 /// The reference is not submitted.
 pub fn send_reference_to_agent(reference: &str) -> Result<String, AgentError> {
     if !is_hosted() {
-        return Err(AgentError::new("not inside an Unpeel session"));
+        return Err(AgentError::new("not inside an Supercli session"));
     }
     let batches = literal_key_batches(reference)?;
     let mut client = McpClient::spawn()?;
@@ -235,7 +235,7 @@ impl AgentBridge {
         let Some(context) = self.project_context() else {
             return false;
         };
-        let Some(session_dir) = std::env::var_os("UNPEEL_SESSION_DIR").map(PathBuf::from) else {
+        let Some(session_dir) = std::env::var_os("SUPERCLI_SESSION_DIR").map(PathBuf::from) else {
             return false;
         };
         let Some(sessions_root) = session_dir.parent() else {
@@ -259,7 +259,7 @@ impl AgentBridge {
         !first
     }
 
-    /// Refresh the cached label off the UI thread, if hosted by Unpeel.
+    /// Refresh the cached label off the UI thread, if hosted by Supercli.
     pub fn refresh(&self) {
         if !is_hosted() || self.probing.swap(true, Ordering::SeqCst) {
             return;
@@ -467,8 +467,8 @@ fn resolve_agent(client: &mut McpClient) -> Result<(String, String), AgentError>
     provider_target(&sessions).ok_or_else(|| AgentError::new("no agent pane nearby"))
 }
 
-/// Installed Unpeel Apps are recognized runtimes too, stamped with
-/// reverse-DNS app ids ("unpeel.app.diffs"); conversational agent slugs
+/// Installed Supercli Apps are recognized runtimes too, stamped with
+/// reverse-DNS app ids ("supercli.app.diffs"); conversational agent slugs
 /// ("claude", "codex") never contain a dot.
 fn is_conversational_runtime(runtime_id: &str) -> bool {
     !runtime_id.is_empty() && !runtime_id.contains('.')
@@ -602,22 +602,22 @@ fn label_or(value: &Value, key: &str, fallback: &str) -> String {
 /// The Controller's durable pane layout for the home this Session lives in
 /// (`<home>/pane-layouts.json`), derived from the Host's session directory.
 fn layout_file_path() -> Option<PathBuf> {
-    let session_dir = PathBuf::from(std::env::var_os("UNPEEL_SESSION_DIR")?);
+    let session_dir = PathBuf::from(std::env::var_os("SUPERCLI_SESSION_DIR")?);
     // <home>/app-sessions/<id> → <home>
     let home = session_dir.parent()?.parent()?;
     Some(home.join("pane-layouts.json"))
 }
 
-/// The `unpeel-host` that hosts this App. The Host exports its own binary
-/// path to every hosted child (`UNPEEL_HOST_BIN`; the older `UNPEEL_MCP_BIN`
+/// The `supercli-host` that hosts this App. The Host exports its own binary
+/// path to every hosted child (`SUPERCLI_HOST_BIN`; the older `SUPERCLI_MCP_BIN`
 /// on Codex launches) — prefer it over PATH, where a stale CLI install would
 /// answer with an older protocol and hide the App's neighbors.
 fn host_binary() -> std::ffi::OsString {
-    ["UNPEEL_HOST_BIN", "UNPEEL_MCP_BIN"]
+    ["SUPERCLI_HOST_BIN", "SUPERCLI_MCP_BIN"]
         .into_iter()
         .filter_map(std::env::var_os)
         .find(|value| !value.is_empty())
-        .unwrap_or_else(|| "unpeel-host".into())
+        .unwrap_or_else(|| "supercli-host".into())
 }
 
 struct McpClient {
@@ -634,7 +634,7 @@ impl McpClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|error| AgentError::new(format!("unpeel-host not available: {error}")))?;
+            .map_err(|error| AgentError::new(format!("supercli-host not available: {error}")))?;
         let stdout = child
             .stdout
             .take()
@@ -847,7 +847,7 @@ mod tests {
         });
         let agents = json!({ "agents": [
             { "self": true, "runtime_id": "claude", "project_id": "native-root", "state": "running", "activity_status": "idle", "agent_ref": { "session_id": "me" } },
-            { "runtime_id": "unpeel.app.usage", "project_id": "native-root", "state": "running", "activity_status": "idle", "label": "Usage", "agent_ref": { "session_id": "usage-app" } },
+            { "runtime_id": "supercli.app.usage", "project_id": "native-root", "state": "running", "activity_status": "idle", "label": "Usage", "agent_ref": { "session_id": "usage-app" } },
             { "runtime_id": "claude", "project_id": "other-project", "state": "running", "activity_status": "idle", "agent_ref": { "session_id": "elsewhere" } },
             { "runtime_id": "claude", "project_id": "native-root", "state": "running", "activity_status": "working", "label": "Busy Claude", "agent_ref": { "session_id": "busy" } },
             { "runtime_id": "codex", "project_id": "native-root", "state": "running", "activity_status": "idle", "agent_ref": { "session_id": "settled" } }
@@ -872,7 +872,7 @@ mod tests {
     #[test]
     fn recognized_agents_exclude_installed_apps() {
         let agents = json!({ "agents": [
-            { "runtime_id": "unpeel.app.files", "activity_status": "idle", "label": "Files", "agent_ref": { "session_id": "app" } },
+            { "runtime_id": "supercli.app.files", "activity_status": "idle", "label": "Files", "agent_ref": { "session_id": "app" } },
             { "runtime_id": "claude", "activity_status": "busy", "agent_ref": { "session_id": "agent" } }
         ]});
         let group = HashSet::from(["app".to_owned(), "agent".to_owned()]);

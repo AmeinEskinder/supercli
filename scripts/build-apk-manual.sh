@@ -230,7 +230,7 @@ cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
     android:versionName="1.0">
     <uses-sdk android:minSdkVersion="$MIN_SDK" android:targetSdkVersion="$TARGET_SDK"/>
     <uses-permission android:name="android.permission.INTERNET"/>
-    <application android:label="Unpeel Mobile" android:theme="@android:style/Theme.Material.Light">
+    <application android:label="Supercli Mobile" android:theme="@android:style/Theme.Material.Light">
         <activity android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden">
@@ -246,7 +246,7 @@ EOF
 cat > "$WORK_DIR/res/values/strings.xml" <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Unpeel Mobile</string>
+    <string name="app_name">Supercli Mobile</string>
 </resources>
 EOF
 

@@ -1,6 +1,6 @@
 //! Host-minted, route-bound credentials for App Kit UI participants.
 //!
-//! `UNPEEL_UI_TOKEN` is a per-App-session signing key shared only by the Host
+//! `SUPERCLI_UI_TOKEN` is a per-App-session signing key shared only by the Host
 //! and authoritative App process. Renderers and neighboring agent sessions
 //! receive derived credentials whose signed claims bind their identity,
 //! grants, and exact attachment route.

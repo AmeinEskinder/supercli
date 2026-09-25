@@ -54,7 +54,7 @@ pub(crate) fn agents_wire_in_dirs(dirs: &[std::path::PathBuf]) -> Value {
                     "installed": installed,
                     "installCommand": install_command,
                     "websiteURL": runtime.install.as_ref().map(|install| &install.official_url),
-                    // The runtime's Unpeel integration (hooks + MCP registration)
+                    // The runtime's Supercli integration (hooks + MCP registration)
                     // on this Host: whether one exists, and whether the user
                     // installed it. Controllers offer `integrations.install`.
                     "integrationInstallable": integration.as_ref().is_some_and(|status| status.installable),

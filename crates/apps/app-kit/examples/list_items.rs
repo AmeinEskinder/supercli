@@ -11,7 +11,7 @@
 
 use std::io;
 
-use unpeel_app_kit::{
+use supercli_app_kit::{
     App, AppAction, AppMetadata, Badge, Checkmark, FooterAction, Gauge, List, ListItem,
     ListItemBand, ListItemEmphasis, ListItemMedia, ListItemSlot, ListItemTone, ListRowLayout, Page,
     Reduce, Sparkline, Spinner, Toggle, run_app,
@@ -178,7 +178,7 @@ fn main() -> io::Result<()> {
     run_app(
         app,
         AppMetadata::new(
-            "dev.unpeel.app-kit.list-items",
+            "dev.supercli.app-kit.list-items",
             "Rich rows",
             env!("CARGO_PKG_VERSION"),
         ),

@@ -65,10 +65,10 @@ fn write_caller_launch(home: &Path, session_id: &str) -> PathBuf {
 }
 
 fn spawn_caller(home: &Path, launch: &Path) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__session_host__")
         .arg(launch)
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_HOME", home)
         .env("HOME", home)
         .env("SHELL", "/bin/bash")
         .stdin(Stdio::null())
@@ -108,12 +108,12 @@ fn stop_and_reap(home: &Path, session_id: &str, child: &mut Child) {
 fn install_fixture_app(home: &Path) -> &'static str {
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    let executable = bin.join("unpeel-filetree");
+    let executable = bin.join("supercli-filetree");
     fs::write(&executable, "#!/bin/bash\nexec /bin/sleep 300\n").unwrap();
     let mut permissions = fs::metadata(&executable).unwrap().permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&executable, permissions).unwrap();
-    "unpeel-filetree"
+    "supercli-filetree"
 }
 
 fn manifest_state(home: &Path, session_id: &str) -> Option<String> {
@@ -144,15 +144,15 @@ fn apps_open_creates_the_companion_session_without_approval() {
     let caller_socket = home.join("app-sessions/caller/session.sock");
     assert!(wait_until(Duration::from_secs(10), || caller_socket.exists()));
 
-    let mut mcp = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let mut mcp = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__mcp__")
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("HOME", &home)
         .env("SHELL", "/bin/bash")
-        .env("UNPEEL_SESSION_ID", caller_id)
+        .env("SUPERCLI_SESSION_ID", caller_id)
         // Keep the companion a plain per-process host: this home has no
         // workspace worker to adopt a PTY core.
-        .env("UNPEEL_PTY_CORE", "0")
+        .env("SUPERCLI_PTY_CORE", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -204,7 +204,7 @@ fn apps_open_creates_the_companion_session_without_approval() {
             serde_json::from_str::<Value>(text).unwrap()
         })
         .collect::<Vec<_>>();
-    assert_eq!(receipts[0]["app"]["id"], "unpeel.app.filetree");
+    assert_eq!(receipts[0]["app"]["id"], "supercli.app.filetree");
     assert!(matches!(
         receipts[0]["process_state"].as_str(),
         Some("running" | "starting")

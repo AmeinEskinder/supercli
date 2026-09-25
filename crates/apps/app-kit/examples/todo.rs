@@ -2,13 +2,13 @@
 //!
 //! `cargo run --example todo` in any terminal. With the default `ui-bridge`
 //! feature the same binary also serves SwiftUI and web renderers when an
-//! Unpeel Host injects an endpoint. See `docs/writing-an-app.md`.
+//! Supercli Host injects an endpoint. See `docs/writing-an-app.md`.
 
 use std::path::PathBuf;
 use std::{fs, io};
 
 use serde::{Deserialize, Serialize};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     App, AppAction, AppMetadata, Input, List, ListItem, ListItemSlot, Page, Reduce, Toggle, run_app,
 };
 
@@ -135,9 +135,9 @@ impl App for TodoApp {
 }
 
 fn main() -> io::Result<()> {
-    let path = std::env::var_os("UNPEEL_TODO_PATH")
-        .map_or_else(|| PathBuf::from(".unpeel-todo.json"), PathBuf::from);
-    let metadata = AppMetadata::new("dev.unpeel.app-kit.todo", "Todo", env!("CARGO_PKG_VERSION"))
+    let path = std::env::var_os("SUPERCLI_TODO_PATH")
+        .map_or_else(|| PathBuf::from(".supercli-todo.json"), PathBuf::from);
+    let metadata = AppMetadata::new("dev.supercli.app-kit.todo", "Todo", env!("CARGO_PKG_VERSION"))
         .description("Canonical standalone and hosted App Kit example");
     run_app(TodoApp::load(path)?, metadata)
 }
@@ -147,7 +147,7 @@ mod tests {
     use crossterm::event::{
         KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
-    use unpeel_app_kit::{KitTheme, Session};
+    use supercli_app_kit::{KitTheme, Session};
 
     use super::*;
 
@@ -219,17 +219,17 @@ mod tests {
     fn shared_page_fixture_is_generated_from_the_canonical_todo_model() {
         let dir = tempfile::tempdir().unwrap();
         let app = TodoApp::load(dir.path().join("todo.json")).unwrap();
-        let fixture = include_str!("../protocol/unpeel-ui-v1.ndjson")
+        let fixture = include_str!("../protocol/supercli-ui-v1.ndjson")
             .lines()
             .nth(13)
             .unwrap();
-        let unpeel_app_kit::UiMessage::Snapshot(snapshot) = serde_json::from_str(fixture).unwrap()
+        let supercli_app_kit::UiMessage::Snapshot(snapshot) = serde_json::from_str(fixture).unwrap()
         else {
             panic!("Todo fixture must be a snapshot");
         };
         assert_eq!(
             snapshot.root,
-            unpeel_app_kit::UiNode::page("todo-page", app.page())
+            supercli_app_kit::UiNode::page("todo-page", app.page())
         );
     }
 }

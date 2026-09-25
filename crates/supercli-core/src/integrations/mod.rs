@@ -5,7 +5,7 @@ pub mod shared;
 
 use crate::session_host::SessionHostLaunch;
 
-/// Absolute path of the `unpeel-host` that hosts a session, exported to every
+/// Absolute path of the `supercli-host` that hosts a session, exported to every
 /// hosted child so Apps and scripts talk to the Host they run under.
 pub const HOST_BIN_ENV: &str = "SUPERCLI_HOST_BIN";
 const APP_ACCENT_ENV: &str = "SUPERCLI_APP_ACCENT";
@@ -21,7 +21,7 @@ pub struct BuiltinPresetDefinition {
 /// A built-in runtime's compiled adapter.
 ///
 /// Launching is provider-neutral: a preset runs its command in the user's
-/// own login shell exactly as typed, with only Unpeel's generic session
+/// own login shell exactly as typed, with only Supercli's generic session
 /// environment exported (see [`configure_host_command`]). Nothing here
 /// rewrites the command, wraps the executable, or edits provider
 /// configuration at launch. Provider-specific behavior is limited to the
@@ -33,11 +33,11 @@ pub struct Integration {
     /// from a documented provider contract; generic terminal input has no
     /// lifecycle authority.
     pub escape_cancels_turn: bool,
-    /// Install this runtime's Unpeel integration — lifecycle hooks and the
-    /// persistent registration of the unified `unpeel` MCP server — into the
+    /// Install this runtime's Supercli integration — lifecycle hooks and the
+    /// persistent registration of the unified `supercli` MCP server — into the
     /// provider's own global configuration. Idempotent, locked, and
     /// content-guarded. It runs only when the user asks
-    /// (`unpeel integrations install`, the `integrations.install` Host verb)
+    /// (`supercli integrations install`, the `integrations.install` Host verb)
     /// or when the Host refreshes an integration the user already installed
     /// after an upgrade; never as a side effect of launching or observing
     /// an agent.
@@ -140,7 +140,7 @@ pub fn uses_hook_port(tool: &str) -> bool {
 }
 
 /// Whether `tool` (a legacy slug, catalog id, or command) names a runtime
-/// with an installable Unpeel integration.
+/// with an installable Supercli integration.
 pub fn has_integration_installer(tool: &str) -> bool {
     integration_for_dispatch(tool).is_some_and(|integration| integration.install.is_some())
 }
@@ -151,11 +151,11 @@ pub fn has_integration_installer(tool: &str) -> bool {
 pub(crate) fn run_integration_installer(tool: &str) -> Result<(), String> {
     match integration_for_dispatch(tool).and_then(|integration| integration.install) {
         Some(installer) => installer(),
-        None => Err(format!("{tool} has no Unpeel integration to install")),
+        None => Err(format!("{tool} has no Supercli integration to install")),
     }
 }
 
-/// Export Unpeel's generic session environment into a hosted PTY. This is
+/// Export Supercli's generic session environment into a hosted PTY. This is
 /// the whole of what a launch adds on top of the user's login shell: the
 /// session identity hook scripts and the MCP server read, the Host binary,
 /// the installed-Apps bin, the workspace accent, and the hook port.
@@ -189,7 +189,7 @@ pub fn configure_host_command(
         shared::shell_quote(&trace_value),
     ));
 
-    // Installed Unpeel Apps live in the Host's own `apps/bin`, which no
+    // Installed Supercli Apps live in the Host's own `apps/bin`, which no
     // shell startup file knows about. Put it first in PATH — on the child
     // process for blank terminals (rc files may reorder it but keep it) and
     // through the prelude for command launches (which run after rc files) —
@@ -217,8 +217,8 @@ pub fn configure_host_command(
     ));
 
     // Every hosted child must reach THIS Host's own binary — never whatever
-    // `unpeel-host` happens to sit on the user's PATH (a stale CLI install
-    // there answers with an older protocol). Unpeel Apps use it to spawn the
+    // `supercli-host` happens to sit on the user's PATH (a stale CLI install
+    // there answers with an older protocol). Supercli Apps use it to spawn the
     // unified MCP server for peer discovery and agent handoff, and the
     // installed MCP shim (`integrations::install::mcp_shim_path`) prefers it
     // over the path recorded at install time.
@@ -257,7 +257,7 @@ pub fn configure_host_command(
             shared::shell_quote(&port_value),
         ));
     } else {
-        // `unpeel create` can itself run inside another hosted Session. Never
+        // `supercli create` can itself run inside another hosted Session. Never
         // let the nested child inherit its parent's hook endpoint.
         cmd.env_remove("SUPERCLI_APP_PORT");
         shell_prelude.push("unset SUPERCLI_APP_PORT".to_string());
@@ -276,8 +276,8 @@ fn normalize_app_accent(value: &str) -> Option<String> {
 }
 
 /// Evidence that the agent this Session launches can actually reach the
-/// unified `unpeel` MCP server: the runtime declares the domain, the user has
-/// installed its Unpeel integration on this Host, and the launch grants the
+/// unified `supercli` MCP server: the runtime declares the domain, the user has
+/// installed its Supercli integration on this Host, and the launch grants the
 /// domain. Domain authorization is recorded independently on the Session
 /// manifest; this is only setup evidence, so clients never mistake a launch
 /// grant for a configured provider.

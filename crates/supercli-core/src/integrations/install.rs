@@ -1,14 +1,14 @@
-//! Explicit, user-initiated installation of a runtime's Unpeel integration.
+//! Explicit, user-initiated installation of a runtime's Supercli integration.
 //!
-//! An integration is everything provider-specific Unpeel needs in the
+//! An integration is everything provider-specific Supercli needs in the
 //! provider's own global configuration: the lifecycle hook registration that
 //! makes busy/idle/attention reliable, and the persistent registration of the
-//! unified `unpeel` MCP server. It is installed once, by the user, per Host
-//! (`unpeel integrations install <runtime>`, or the `integrations.install`
+//! unified `supercli` MCP server. It is installed once, by the user, per Host
+//! (`supercli integrations install <runtime>`, or the `integrations.install`
 //! Host verb behind Install integration on Settings ▸ Agents). Launching a preset or
 //! observing a hand-typed agent never installs anything.
 //!
-//! What Unpeel keeps doing on its own is keeping an installed integration
+//! What Supercli keeps doing on its own is keeping an installed integration
 //! current: a marker under `<machine home>/integrations/` records which Host
 //! build installed it, and the workspace worker re-runs the (idempotent,
 //! content-guarded) installer after an upgrade so hook scripts and the MCP
@@ -33,11 +33,11 @@ use std::path::{Path, PathBuf};
 /// `SUPERCLI_HOST_BIN` the hosted shell exports and falls back to the binary
 /// recorded at install time for launchers that strip the environment from
 /// their MCP children.
-pub const MCP_SHIM_NAME: &str = "unpeel-mcp";
+pub const MCP_SHIM_NAME: &str = "supercli-mcp";
 
 const MARKER_SCHEMA: u8 = 1;
 
-/// `<machine home>/bin/unpeel-mcp`.
+/// `<machine home>/bin/supercli-mcp`.
 pub fn mcp_shim_path() -> PathBuf {
     mcp_shim_path_in(&machine_home())
 }
@@ -50,8 +50,8 @@ pub fn mcp_shim_path_in(home: &Path) -> PathBuf {
 pub fn mcp_shim_script(host_bin: &str) -> String {
     format!(
         "#!/bin/sh\n\
-         # Managed by Unpeel. Starts the unified `unpeel` MCP server for the agent\n\
-         # running inside an Unpeel session; outside one it serves no tools.\n\
+         # Managed by Supercli. Starts the unified `supercli` MCP server for the agent\n\
+         # running inside an Supercli session; outside one it serves no tools.\n\
          exec \"${{SUPERCLI_HOST_BIN:-{host_bin}}}\" {gate} {kind}\n",
         host_bin = shell_double_quote_safe(host_bin),
         gate = crate::mcp_gate::MCP_GATE_ARG,
@@ -59,7 +59,7 @@ pub fn mcp_shim_script(host_bin: &str) -> String {
     )
 }
 
-/// Whether a provider config's `command` is the Unpeel MCP shim (any home).
+/// Whether a provider config's `command` is the Supercli MCP shim (any home).
 pub fn is_mcp_shim_command(command: &str) -> bool {
     std::path::Path::new(command.trim())
         .file_name()
@@ -75,15 +75,15 @@ fn shell_double_quote_safe(value: &str) -> String {
         .replace('`', "\\`")
 }
 
-/// The Host binary an installer records: `unpeel-host` itself when the
+/// The Host binary an installer records: `supercli-host` itself when the
 /// installer runs inside it (the worker's post-upgrade refresh), otherwise
-/// the `unpeel-host` shipped next to the running `unpeel` CLI.
+/// the `supercli-host` shipped next to the running `supercli` CLI.
 fn installing_host_binary() -> Result<PathBuf, String> {
     let path = crate::session_ops::resolve_host_binary()?;
     if path.is_absolute() {
         return Ok(path);
     }
-    // Only a bare `unpeel-host` name means nothing was found beside this
+    // Only a bare `supercli-host` name means nothing was found beside this
     // executable; keep the running binary rather than a PATH lookup that
     // may resolve to a stale install.
     crate::session_host::resolve_current_executable()
@@ -109,7 +109,7 @@ pub fn write_mcp_shim() -> Result<PathBuf, String> {
     crate::hook_assets::write_executable_script(
         &path,
         &mcp_shim_script(&host.to_string_lossy()),
-        "Unpeel MCP shim",
+        "Supercli MCP shim",
     )?;
     Ok(path)
 }
@@ -143,7 +143,7 @@ fn read_marker(path: &Path) -> Option<Marker> {
     serde_json::from_str::<Marker>(&raw).ok()
 }
 
-/// One row of `unpeel integrations list` and of bootstrap's
+/// One row of `supercli integrations list` and of bootstrap's
 /// `availableAgents[].integration*` fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IntegrationStatus {
@@ -249,7 +249,7 @@ pub fn install_in(home: &Path, tool: &str) -> Result<IntegrationStatus, String> 
         super::runtime_for_dispatch(tool).ok_or_else(|| format!("unknown runtime '{tool}'"))?;
     if !super::has_integration_installer(&runtime.legacy_slug) {
         return Err(format!(
-            "{} has no Unpeel integration to install: it is recognized by detection only",
+            "{} has no Supercli integration to install: it is recognized by detection only",
             runtime.label
         ));
     }
@@ -284,13 +284,13 @@ fn write_marker(home: &Path, legacy_slug: &str, marker: &Marker) -> Result<(), S
 }
 
 /// Upgrade path from the launch-time installs of 0.6 and earlier: a runtime
-/// whose hooks Unpeel demonstrably installed on this machine (its
+/// whose hooks Supercli demonstrably installed on this machine (its
 /// descriptor's `integration.legacy_evidence` files exist under the machine
 /// home) but which has no marker yet is adopted as an installed integration.
 /// The marker carries no build id, so `refresh_installed` re-runs that
 /// runtime's installer next — which is what registers the MCP shim the old
 /// per-launch injection used to supply. Only ever touches provider
-/// configuration Unpeel already edited; a runtime with no evidence stays
+/// configuration Supercli already edited; a runtime with no evidence stays
 /// "not installed" until the user asks. Returns the adopted runtimes.
 pub fn adopt_legacy_installs() -> Vec<String> {
     adopt_legacy_installs_in(&machine_home())
@@ -455,20 +455,20 @@ mod tests {
 
     #[test]
     fn shim_commands_are_recognized_by_basename() {
-        assert!(is_mcp_shim_command("/home/me/.supercli/bin/unpeel-mcp"));
-        assert!(is_mcp_shim_command("/tmp/other-home/bin/unpeel-mcp"));
-        assert!(!is_mcp_shim_command("/usr/local/bin/unpeel-host"));
-        assert!(!is_mcp_shim_command("unpeel-mcp-other"));
+        assert!(is_mcp_shim_command("/home/me/.supercli/bin/supercli-mcp"));
+        assert!(is_mcp_shim_command("/tmp/other-home/bin/supercli-mcp"));
+        assert!(!is_mcp_shim_command("/usr/local/bin/supercli-host"));
+        assert!(!is_mcp_shim_command("supercli-mcp-other"));
     }
 
     #[test]
     fn shim_prefers_the_hosted_binary_and_falls_back_to_the_installer() {
-        let script = mcp_shim_script("/Applications/Unpeel.app/Contents/MacOS/unpeel-host");
+        let script = mcp_shim_script("/Applications/Supercli.app/Contents/MacOS/supercli-host");
         assert!(script.starts_with("#!/bin/sh\n"));
         assert!(script.contains(
-            "exec \"${SUPERCLI_HOST_BIN:-/Applications/Unpeel.app/Contents/MacOS/unpeel-host}\" __mcp_gate__ unified"
+            "exec \"${SUPERCLI_HOST_BIN:-/Applications/Supercli.app/Contents/MacOS/supercli-host}\" __mcp_gate__ unified"
         ));
-        let quoted = mcp_shim_script("/tmp/odd \"dir\"/unpeel-host");
-        assert!(quoted.contains("/tmp/odd \\\"dir\\\"/unpeel-host"));
+        let quoted = mcp_shim_script("/tmp/odd \"dir\"/supercli-host");
+        assert!(quoted.contains("/tmp/odd \\\"dir\\\"/supercli-host"));
     }
 }

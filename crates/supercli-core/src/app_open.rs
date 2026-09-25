@@ -1,6 +1,6 @@
 //! Host-owned App resolution and presentation shared by Controllers and MCP.
 //!
-//! Callers decide how the App was selected (a user verb, `unpeel open`, or
+//! Callers decide how the App was selected (a user verb, `supercli open`, or
 //! an agent's `apps.open`). This module resolves the installed App and
 //! derives the caller's effective project/cwd for every path. Both paths create or reuse the
 //! project/resource companion Session: installing the App was the user's

@@ -1,7 +1,7 @@
 //! Read-only production-SSH probe for the Controller ↔ Host protocol.
 //!
 //! Run with:
-//! `cargo run -p unpeel-core --example ssh_host_probe -- ssh://studio`
+//! `cargo run -p supercli-core --example ssh_host_probe -- ssh://studio`
 
 use std::fmt::Write as _;
 use std::io::{self, Write as _};
@@ -9,10 +9,10 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use unpeel_core::remote_session_backend::{
+use supercli_core::remote_session_backend::{
     RemoteActivityState, RemoteBootstrapSnapshot, RemoteSessionBackend, RemoteSessionStatus,
 };
-use unpeel_core::ssh_connection::{SshHostConnection, SshTarget};
+use supercli_core::ssh_connection::{SshHostConnection, SshTarget};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 const OUTPUT_HEADROOM: Duration = Duration::from_secs(5);

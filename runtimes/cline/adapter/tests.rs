@@ -51,7 +51,7 @@ fn cline_hook_installer_never_overwrites_a_user_hook_slot() {
     crate::hook_assets::write_cline_event_hook(
         &hooks_dir,
         "TaskStart",
-        "#!/bin/bash\n# Managed by Unpeel.\necho managed\n",
+        "#!/bin/bash\n# Managed by Supercli.\necho managed\n",
     )
     .expect("install managed hook");
     assert_eq!(
@@ -60,5 +60,5 @@ fn cline_hook_installer_never_overwrites_a_user_hook_slot() {
     );
     assert!(fs::read_to_string(hooks_dir.join("TaskStart.zsh"))
         .expect("read managed hook")
-        .contains("# Managed by Unpeel."));
+        .contains("# Managed by Supercli."));
 }

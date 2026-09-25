@@ -1,6 +1,6 @@
 //! Provider theme read: one-off request to the Host for the agent provider's
 //! brand palette, plus the mascot decision record. Ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/ProviderThemeReadRequest.swift`
+//! `clients/native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift`
 //! (one-off request with a 2s read cap; the panel owns the presentation).
 //!
 //! Mascot note (Swift audits `MacAssetTests.swift`): the mascot asset is

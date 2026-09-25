@@ -189,7 +189,7 @@ fn probe_shell_path_dirs() -> Vec<PathBuf> {
     // runs `zsh -i`, which enables job control whenever it has a controlling
     // tty — and an interactive shell with job control will `tcsetpgrp` itself
     // into the foreground. When this probe is reached from a process that
-    // inherited an agent's PTY (e.g. the `unpeel-host __mcp__` server a running
+    // inherited an agent's PTY (e.g. the `supercli-host __mcp__` server a running
     // Codex spawns as a stdio child), that foreground grab steals the terminal
     // from the agent, whose next read then takes SIGTTIN and is "suspended
     // (tty input)". The probe never needs the terminal: give it no stdin and a
@@ -456,7 +456,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let root = std::env::temp_dir().join(format!(
-            "unpeel-setup-test-{}-{}",
+            "supercli-setup-test-{}-{}",
             std::process::id(),
             crate::state::current_timestamp_ms()
         ));

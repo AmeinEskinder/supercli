@@ -6,7 +6,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
 
-/// Session-local presentation marker consumed by Unpeel's native terminal.
+/// Session-local presentation marker consumed by Supercli's native terminal.
 pub const DRAG_MAP_FILENAME: &str = "terminal-drag-map.json";
 
 const DRAG_MAP_VERSION: u8 = 1;
@@ -40,9 +40,9 @@ struct DragRow {
 }
 
 /// Collects draggable Ratatui regions and publishes them for the current
-/// Unpeel hosted session.
+/// Supercli hosted session.
 ///
-/// Outside an Unpeel session this type is deliberately inert, so the same TUI
+/// Outside an Supercli session this type is deliberately inert, so the same TUI
 /// binary remains usable in an ordinary terminal.
 #[derive(Debug)]
 pub struct DragSurface {
@@ -52,12 +52,12 @@ pub struct DragSurface {
 }
 
 impl DragSurface {
-    /// Detects the current hosted session from Unpeel's process environment.
+    /// Detects the current hosted session from Supercli's process environment.
     #[must_use]
     pub fn detect() -> Self {
-        let session_directory = std::env::var_os("UNPEEL_SESSION_ID")
+        let session_directory = std::env::var_os("SUPERCLI_SESSION_ID")
             .filter(|id| !id.is_empty())
-            .and_then(|_| std::env::var_os("UNPEEL_SESSION_DIR"))
+            .and_then(|_| std::env::var_os("SUPERCLI_SESSION_DIR"))
             .map(PathBuf::from)
             .filter(|path| path.is_dir());
         Self::with_optional_session_directory(session_directory)
@@ -87,13 +87,13 @@ impl DragSurface {
         }
     }
 
-    /// Whether this process can publish drag regions to an Unpeel session.
+    /// Whether this process can publish drag regions to an Supercli session.
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.session_directory.is_some()
     }
 
-    /// The detected session directory, when running under Unpeel.
+    /// The detected session directory, when running under Supercli.
     #[must_use]
     pub fn session_directory(&self) -> Option<&Path> {
         self.session_directory.as_deref()
@@ -131,7 +131,7 @@ impl DragSurface {
 
     /// Atomically publishes all regions collected for the current frame.
     ///
-    /// This is a no-op outside Unpeel. Call after `Terminal::draw` succeeds so
+    /// This is a no-op outside Supercli. Call after `Terminal::draw` succeeds so
     /// the semantic map always describes the terminal cells now on screen.
     pub fn commit(&mut self) -> io::Result<()> {
         self.write_map()
@@ -139,7 +139,7 @@ impl DragSurface {
 
     /// Refreshes a committed map without repainting the terminal.
     ///
-    /// Unpeel rejects stale maps. Call this from an idle event-loop tick; disk
+    /// Supercli rejects stale maps. Call this from an idle event-loop tick; disk
     /// writes are internally limited to one every two seconds.
     pub fn heartbeat(&mut self) -> io::Result<bool> {
         let should_write = self

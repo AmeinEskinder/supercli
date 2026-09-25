@@ -586,7 +586,7 @@ pub fn app_install_response(body: &Value) -> (u16, Value) {
     if crate::app_installer::release_target().is_none() {
         return (
             422,
-            json!({ "error": format!("Unpeel Apps publish no build for {}-{}", std::env::consts::OS, std::env::consts::ARCH) }),
+            json!({ "error": format!("Supercli Apps publish no build for {}-{}", std::env::consts::OS, std::env::consts::ARCH) }),
         );
     }
     match crate::app_installer::install(&crate::app_paths::supercli_home(), app_id) {
@@ -596,7 +596,7 @@ pub fn app_install_response(body: &Value) -> (u16, Value) {
 }
 
 /// Shared Host semantics for `integrations.install`: install one runtime's
-/// Unpeel integration (hooks + MCP registration) into that CLI's global
+/// Supercli integration (hooks + MCP registration) into that CLI's global
 /// configuration on this Host. The runtime is resolved through the embedded
 /// catalog only; no caller-provided path is accepted.
 pub fn integration_install_response(body: &Value) -> (u16, Value) {
@@ -617,7 +617,7 @@ pub fn integration_install_response(body: &Value) -> (u16, Value) {
     if !status.installable {
         return (
             422,
-            json!({ "error": format!("{} has no Unpeel integration to install.", status.label) }),
+            json!({ "error": format!("{} has no Supercli integration to install.", status.label) }),
         );
     }
     match crate::integrations::install::install(runtime) {
@@ -919,7 +919,7 @@ pub fn project_organization_response(
 }
 
 /// Canonical option lists for the workspace behavior knobs. The TUI's
-/// `AUTO_STOP_ARCHIVE_MINUTE_OPTIONS` and unpeel-serve's
+/// `AUTO_STOP_ARCHIVE_MINUTE_OPTIONS` and supercli-serve's
 /// `SIDEBAR_STOPPED_LIMIT_OPTIONS` mirror these (they cannot depend on this
 /// crate's callers) — keep all three in sync.
 const WORKSPACE_AUTO_STOP_MINUTE_OPTIONS: [i64; 7] = [0, 30, 60, 120, 240, 480, 1440];
@@ -2457,7 +2457,7 @@ fn wait_for_manifest_in(
 }
 
 /// `session.project.set` target guard shared by every Host kind (native
-/// compatibility routes, `unpeel serve`, and the SSH disk gateway) so a
+/// compatibility routes, `supercli serve`, and the SSH disk gateway) so a
 /// phone or stale Controller can never do what the desktop drag refuses.
 ///
 /// A Session's shell runs in exactly one checkout. Its HOME is the nearest
@@ -2845,7 +2845,7 @@ mod tests {
         let mut manifest = manifest_with_runtime(HostedSessionState::Running, "");
         manifest.active_app = Some(session_host::ObservedAppIdentity {
             id: "supercli.app.design".into(),
-            name: "Unpeel Design".into(),
+            name: "Supercli Design".into(),
             tint: Some("#8B5CF6".into()),
             spinner_tint: None,
         });
@@ -2860,7 +2860,7 @@ mod tests {
             None,
         );
         assert_eq!(summary["activeAppID"], "supercli.app.design");
-        assert_eq!(summary["activeAppName"], "Unpeel Design");
+        assert_eq!(summary["activeAppName"], "Supercli Design");
         assert_eq!(summary["activeAppTintHex"], 0x8B5CF6);
         // The launch cwd travels additively so a Controller pane can resolve
         // cmd-clicked relative paths against it.
@@ -3629,7 +3629,7 @@ mod tests {
         assert!(ok("gone", "group"));
         assert!(!ok("gone", "missing"));
 
-        // Wire spelling (`unpeel serve` validates against its bootstrap).
+        // Wire spelling (`supercli serve` validates against its bootstrap).
         let wire = vec![
             json!({ "id": "root", "name": "Repo", "path": "/repo" }),
             json!({ "id": "group", "name": "Ideas", "path": "/repo",

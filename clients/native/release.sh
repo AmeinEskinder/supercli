@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# release.sh — one command to cut a public Unpeel release from a Mac.
+# release.sh — one command to cut a public Supercli release from a Mac.
 #
 # Chains the existing release steps into a single pipeline:
-#   1. build-app.sh      build + Developer ID sign Unpeel.app (hardened runtime)
+#   1. build-app.sh      build + Developer ID sign Supercli.app (hardened runtime)
 #   2. notarize app      submit a ZIP of the app, staple the ticket onto the .app
 #   3. make-dmg.sh       package + sign the install DMG (from the stapled app)
 #   4. notarize-dmg.sh   notarize + staple the DMG
@@ -20,11 +20,11 @@
 #
 # Usage:
 #   CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" \
-#   NOTARY_KEYCHAIN_PROFILE=unpeel-notary \
+#   NOTARY_KEYCHAIN_PROFILE=supercli-notary \
 #   clients/native/release.sh --channel beta --build 6
 #
 # The version comes from the crates workspace (crates/Cargo.toml) — the app
-# and the `unpeel` CLI are versioned in lockstep. --version is optional and
+# and the `supercli` CLI are versioned in lockstep. --version is optional and
 # must MATCH the workspace version when given; to release a new version, bump
 # crates/Cargo.toml (then `cargo update --workspace`) so both release
 # pipelines move together.
@@ -58,9 +58,9 @@ NATIVE_DIR="$REPO_ROOT/clients/native"
 SWIFT_DIR="$NATIVE_DIR/SupercliNative"
 DIST="$NATIVE_DIR/dist"
 
-CHANNEL="${UNPEEL_CHANNEL:-beta}"
-VERSION="${UNPEEL_VERSION:-}"
-BUILD="${UNPEEL_BUILD:-}"
+CHANNEL="${SUPERCLI_CHANNEL:-beta}"
+VERSION="${SUPERCLI_VERSION:-}"
+BUILD="${SUPERCLI_BUILD:-}"
 NOTES=""
 DRY_RUN=0
 SKIP_NOTARIZE=0
@@ -97,9 +97,9 @@ esac
 # (this script and scripts/release-cli.mjs) can never drift.
 WORKSPACE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$REPO_ROOT/crates/Cargo.toml" | head -n1)"
 [ -n "$WORKSPACE_VERSION" ] || fail "could not read the workspace version from crates/Cargo.toml"
-# The bundled server binaries (unpeel-host, unpeel, unpeel-attach) and the
+# The bundled server binaries (supercli-host, supercli, supercli-attach) and the
 # bridge are built by build-app.sh from THIS tree at the same commit as the
-# app, so a release can never skew from its server. UNPEEL_SERVER_ARCHIVE
+# app, so a release can never skew from its server. SUPERCLI_SERVER_ARCHIVE
 # instead bundles a published CLI archive of the same version (a
 # reproducibility check or an upgrade rehearsal); build-app.sh verifies its
 # sha256 sidecar and BUILD_PROVENANCE.json against the workspace version.
@@ -131,7 +131,7 @@ fi
 # Every published release must have a website changelog entry (a `## <version>`
 # heading in the website's changelog.md) — the site's /changelog page renders
 # it. The changelog lives with the website: scripts/release-changelog.mjs
-# resolves UNPEEL_CHANGELOG, then the ../unpeel-cloud sibling checkout
+# resolves SUPERCLI_CHANGELOG, then the ../supercli-cloud sibling checkout
 # (apps/website/app/changelog.md), then apps/website/app/changelog.md (monorepo), and fails
 # naming the sibling checkout when none exists. Dry runs are exempt from the
 # entry check (local iteration) but still need the file to exist. After
@@ -153,11 +153,11 @@ fi
 # Feed URL the app checks for this channel — must match where we publish the
 # appcast so a build of channel X actually sees channel X's updates.
 case "$CHANNEL" in
-  stable) FEED_URL="https://unpeel.com/appcast.xml" ;;
-  beta)   FEED_URL="https://unpeel.com/appcast-beta.xml" ;;
-  alpha)  FEED_URL="https://unpeel.com/appcast-alpha.xml" ;;
+  stable) FEED_URL="https://supercli.com/appcast.xml" ;;
+  beta)   FEED_URL="https://supercli.com/appcast-beta.xml" ;;
+  alpha)  FEED_URL="https://supercli.com/appcast-alpha.xml" ;;
 esac
-BASE_URL="${UNPEEL_RELEASE_BASE_URL:-https://unpeel.com}"
+BASE_URL="${SUPERCLI_RELEASE_BASE_URL:-https://supercli.com}"
 DOWNLOAD_PREFIX="$BASE_URL/releases/$CHANNEL/"
 
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
@@ -233,9 +233,9 @@ echo "Publish:   $([ "$DRY_RUN" -eq 1 ] && echo "dry-run (no upload)" || echo "R
 
 # --- 1. Build + sign the app ------------------------------------------------
 
-step "[1/7] building + signing Unpeel.app"
-UNPEEL_VERSION="$VERSION" UNPEEL_BUILD="$BUILD" \
-  UNPEEL_DEV_BUILD=0 \
+step "[1/7] building + signing Supercli.app"
+SUPERCLI_VERSION="$VERSION" SUPERCLI_BUILD="$BUILD" \
+  SUPERCLI_DEV_BUILD=0 \
   CODESIGN_IDENTITY="$CODESIGN_IDENTITY" SPARKLE_FEED_URL="$FEED_URL" \
   "$NATIVE_DIR/build-app.sh"
 
@@ -245,10 +245,10 @@ UNPEEL_VERSION="$VERSION" UNPEEL_BUILD="$BUILD" \
 # cannot hold a staple, so submit a throwaway ZIP and staple the .app itself.
 
 if [ "$NOTARIZE" -eq 1 ]; then
-  step "[2/7] notarizing + stapling Unpeel.app"
-  NOTARY_ZIP="$(mktemp -d)/Unpeel-notary.zip"
-  ditto -c -k --keepParent "$DIST/Unpeel.app" "$NOTARY_ZIP"
-  "$NATIVE_DIR/notarize-dmg.sh" "$NOTARY_ZIP" --staple "$DIST/Unpeel.app"
+  step "[2/7] notarizing + stapling Supercli.app"
+  NOTARY_ZIP="$(mktemp -d)/Supercli-notary.zip"
+  ditto -c -k --keepParent "$DIST/Supercli.app" "$NOTARY_ZIP"
+  "$NATIVE_DIR/notarize-dmg.sh" "$NOTARY_ZIP" --staple "$DIST/Supercli.app"
   rm -f "$NOTARY_ZIP"
 else
   step "[2/7] skipping app notarization (dry-run/--skip-notarize) — app will NOT be stapled"
@@ -258,8 +258,8 @@ fi
 
 step "[3/7] packaging install DMG"
 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" "$NATIVE_DIR/make-dmg.sh"
-DMG="$DIST/Unpeel-$VERSION.dmg"
-cp "$DIST/Unpeel.dmg" "$DMG"
+DMG="$DIST/Supercli-$VERSION.dmg"
+cp "$DIST/Supercli.dmg" "$DMG"
 
 # --- 4. Notarize + staple the DMG --------------------------------------------
 
@@ -287,8 +287,8 @@ fi
 # never published (deltas are not uploaded at all). One ZIP in, one item out.
 rm -rf "$SPARKLE_DIR"
 mkdir -p "$SPARKLE_DIR"
-ZIP="$SPARKLE_DIR/Unpeel-$VERSION.zip"
-ditto -c -k --keepParent "$DIST/Unpeel.app" "$ZIP"
+ZIP="$SPARKLE_DIR/Supercli-$VERSION.zip"
+ditto -c -k --keepParent "$DIST/Supercli.app" "$ZIP"
 # generate_appcast embeds a same-named .html next to the ZIP as the
 # <description> (release notes) for that version. Always stage one: every
 # update ends in a relaunch prompt, and sessions are hosted PTYs that
@@ -297,7 +297,7 @@ ditto -c -k --keepParent "$DIST/Unpeel.app" "$ZIP"
 # is derived from this version's website changelog section — preflight
 # already guarantees the `## $VERSION` heading exists, so the dialog always
 # shows what changed instead of the footer alone.
-NOTES_HTML="$SPARKLE_DIR/Unpeel-$VERSION.html"
+NOTES_HTML="$SPARKLE_DIR/Supercli-$VERSION.html"
 if [ -n "$NOTES" ]; then
   cp "$NOTES" "$NOTES_HTML"
 else
@@ -313,7 +313,7 @@ else
     > "$NOTES_HTML"
 fi
 cat >> "$NOTES_HTML" <<'EOF'
-<p><i>No need to wrap anything up — your terminals keep running during the update, and sessions reconnect automatically after Unpeel relaunches.</i></p>
+<p><i>No need to wrap anything up — your terminals keep running during the update, and sessions reconnect automatically after Supercli relaunches.</i></p>
 EOF
 
 # --- 6. EdDSA-sign + appcast ------------------------------------------------

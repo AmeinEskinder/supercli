@@ -1,7 +1,7 @@
 //! Auto-stop-and-archive: the Host-owned sweep that gives a continuously idle
 //! Session the same treatment as the Stop verb once it has sat idle for the
 //! workspace's `auto_stop_archive_minutes`. This used to run only inside the
-//! Mac app and the interactive terminal UI; a headless `unpeel serve` box
+//! Mac app and the interactive terminal UI; a headless `supercli serve` box
 //! now runs it too, against the same setting and the same
 //! `session_ops::archive_session` locking path.
 //!
@@ -175,7 +175,7 @@ impl Sweeper {
         self.issued.insert(id.clone());
         let outcomes = self.outcomes_tx.clone();
         std::thread::Builder::new()
-            .name("unpeel-auto-archive".into())
+            .name("supercli-auto-archive".into())
             .spawn(move || {
                 let error = supercli_core::session_ops::archive_session(&id).err();
                 let _ = outcomes.send(Outcome {

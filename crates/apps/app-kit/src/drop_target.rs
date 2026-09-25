@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// Session-local map of terminal cells that accept semantic file drops.
 pub const DROP_TARGET_MAP_FILENAME: &str = "terminal-drop-target-map.json";
-/// Session-local event written by Unpeel's native terminal destination.
+/// Session-local event written by Supercli's native terminal destination.
 pub const DROP_TARGET_EVENT_FILENAME: &str = "terminal-drop-target-event.json";
 
 const DROP_TARGET_VERSION: u8 = 1;
@@ -71,7 +71,7 @@ struct WireEvent {
 }
 
 /// Publishes drop destinations for a Ratatui frame and polls native hover/drop
-/// events from the current Unpeel Session.
+/// events from the current Supercli Session.
 ///
 /// The filesystem contract is deliberately Session-local and inert in an
 /// ordinary terminal. Apps register semantic rectangles after rendering,
@@ -85,12 +85,12 @@ pub struct DropTargetSurface {
 }
 
 impl DropTargetSurface {
-    /// Detects the current hosted Session from Unpeel's process environment.
+    /// Detects the current hosted Session from Supercli's process environment.
     #[must_use]
     pub fn detect() -> Self {
-        let session_directory = std::env::var_os("UNPEEL_SESSION_ID")
+        let session_directory = std::env::var_os("SUPERCLI_SESSION_ID")
             .filter(|id| !id.is_empty())
-            .and_then(|_| std::env::var_os("UNPEEL_SESSION_DIR"))
+            .and_then(|_| std::env::var_os("SUPERCLI_SESSION_DIR"))
             .map(PathBuf::from)
             .filter(|path| path.is_dir());
         Self::with_optional_session_directory(session_directory)

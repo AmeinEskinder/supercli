@@ -62,7 +62,7 @@ impl ProbeDirection {
 }
 
 /// Contract derivation: HKDF-SHA256(salt = client_salt‖host_salt, ikm = the
-/// connection's X25519 shared secret, info = "unpeel-direct-v1:probe:" ‖
+/// connection's X25519 shared secret, info = "supercli-direct-v1:probe:" ‖
 /// pathSession hex). Both peers already hold every input.
 pub fn probe_key(
     shared_secret: &[u8],
@@ -76,7 +76,7 @@ pub fn probe_key(
     crate::relay_crypto::derive_key(
         shared_secret,
         &salt,
-        &format!("unpeel-direct-v1:probe:{path_session_hex}"),
+        &format!("supercli-direct-v1:probe:{path_session_hex}"),
     )
 }
 
@@ -492,7 +492,7 @@ impl PunchSession {
 }
 
 // ---------------------------------------------------------------------------
-// Dev harness: `unpeel-host __punch__` — a manual two-terminal punch proof
+// Dev harness: `supercli-host __punch__` — a manual two-terminal punch proof
 // between real machines/NATs, ahead of the relay-integrated signaling. The
 // shared secret stands in for the live connection's ECDH secret; the real
 // integration derives the probe key from the session handshake instead.
@@ -541,7 +541,7 @@ pub fn run_cli(args: &[String]) -> Result<(), String> {
             "--stun" => use_stun = true,
             other => {
                 return Err(format!(
-                    "unknown argument: {other}\nusage: unpeel-host __punch__ keygen | \
+                    "unknown argument: {other}\nusage: supercli-host __punch__ keygen | \
                      --role controller|host --session <hex32> --secret <hex64> \
                      [--stun] [--offer-file P] [--peer-file P]"
                 ))

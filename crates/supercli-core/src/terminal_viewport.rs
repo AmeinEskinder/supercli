@@ -30,7 +30,7 @@ const MAX_VIEWPORT_REPLAY_MAX_BYTES: usize = 4 * 1024 * 1024;
 ///
 /// This grid is the Host-side *screen* (menu detection, `read_screen`,
 /// remote previews), not the durable history: `output.bin` is the journal
-/// and `unpeel logs` reads that. The budget was 4 MiB until 2026-09-02,
+/// and `supercli logs` reads that. The budget was 4 MiB until 2026-09-02,
 /// which cost ~6 MiB of resident memory per filled session; every consumer
 /// clamps `scroll_offset_rows` to the rows actually retained
 /// (`snapshot_terminal`), so a smaller budget only shortens what
@@ -934,7 +934,7 @@ pub fn release_memory_to_os() {
     // while it keeps snapshotting the same terminal; give it back first so
     // the allocator release below can hand its pages to the OS too.
     release_render_scratch();
-    // With the mimalloc global allocator (unpeel-host `--features mimalloc`)
+    // With the mimalloc global allocator (supercli-host `--features mimalloc`)
     // the libmalloc pressure-relief call below only sees the zones mimalloc
     // does not own; `mi_collect(true)` is the equivalent that frees
     // mimalloc's retired segments and purges its free pages to the OS.
@@ -1736,11 +1736,11 @@ fn replay_snapshot_from_disk(
 pub fn run_cli(args: &[String]) -> Result<(), String> {
     let mode = args.first().map(String::as_str).unwrap_or("snapshot");
     let session_id = args.get(1).ok_or(
-        "usage: unpeel-host __viewport__ snapshot <session-id> --cols N --rows N [--max-bytes N] [--scroll-offset-rows N] [--viewport-rows N]",
+        "usage: supercli-host __viewport__ snapshot <session-id> --cols N --rows N [--max-bytes N] [--scroll-offset-rows N] [--viewport-rows N]",
     )?;
     if mode != "snapshot" {
         return Err(
-            "usage: unpeel-host __viewport__ snapshot <session-id> --cols N --rows N [--max-bytes N] [--scroll-offset-rows N] [--viewport-rows N]"
+            "usage: supercli-host __viewport__ snapshot <session-id> --cols N --rows N [--max-bytes N] [--scroll-offset-rows N] [--viewport-rows N]"
                 .to_string(),
         );
     }
@@ -2509,7 +2509,7 @@ mod tests {
     /// scrollback budgets, with the journal attached (no raw-output copy)
     /// and without. Ignored in the normal suite; run it in release:
     ///
-    ///   cargo test --release -p unpeel-core --lib vt_footprint -- --ignored --nocapture
+    ///   cargo test --release -p supercli-core --lib vt_footprint -- --ignored --nocapture
     #[test]
     #[ignore]
     fn vt_footprint_per_terminal() {

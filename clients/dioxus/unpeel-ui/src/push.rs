@@ -224,31 +224,31 @@ impl PushManager {
 ///
 /// - The shell installs nothing itself; the launcher evaluates
 ///   [`PUSH_BRIDGE_JS`] once at startup, which defines
-///   `window.__unpeelPush(msg)`.
+///   `window.__supercliPush(msg)`.
 /// - On `didRegisterForRemoteNotificationsWithDeviceToken` the shell calls
-///   `webView.evaluateJavaScript("window.__unpeelPush('token:' + hex)")`.
+///   `webView.evaluateJavaScript("window.__supercliPush('token:' + hex)")`.
 /// - On `didFailToRegisterForRemoteNotificationsWithError` it calls
-///   `window.__unpeelPush('error:' + message)`.
-/// - On a notification tap it calls `window.__unpeelPush('open:' +
+///   `window.__supercliPush('error:' + message)`.
+/// - On a notification tap it calls `window.__supercliPush('open:' +
 ///   sessionId)` (the payload's `sessionId`).
-/// - The bridge stashes the latest token at `window.__unpeelPushToken` so a
+/// - The bridge stashes the latest token at `window.__supercliPushToken` so a
 ///   token that arrives before the launcher's message pump is installed is
 ///   still picked up by the one-time [`PUSH_TOKEN_PROBE_JS`] read.
 ///
 /// Messages the launcher pump handles are parsed by
 /// [`parse_push_bridge_message`].
 pub const PUSH_BRIDGE_JS: &str = r#"(function() {
-  if (window.__unpeelPush) return;
-  window.__unpeelPushToken = window.__unpeelPushToken || "";
-  window.__unpeelPush = function(msg) {
-    if (msg.indexOf("token:") === 0) window.__unpeelPushToken = msg.slice(6);
+  if (window.__supercliPush) return;
+  window.__supercliPushToken = window.__supercliPushToken || "";
+  window.__supercliPush = function(msg) {
+    if (msg.indexOf("token:") === 0) window.__supercliPushToken = msg.slice(6);
     dioxus.send("push:" + msg);
   };
 })()"#;
 
 /// One-time read of the stashed token for the pre-pump race. Evaluates to
 /// the hex string, or `""` when no token has arrived yet.
-pub const PUSH_TOKEN_PROBE_JS: &str = r#"window.__unpeelPushToken || """#;
+pub const PUSH_TOKEN_PROBE_JS: &str = r#"window.__supercliPushToken || """#;
 
 /// A decoded `push:` bridge message from the native shell.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -468,11 +468,11 @@ mod tests {
     #[test]
     fn push_bridge_installer_defines_entry_point_and_stash() {
         // Static contract checks: the installer must be idempotent, define
-        // window.__unpeelPush, stash the token for the pre-pump race, and
+        // window.__supercliPush, stash the token for the pre-pump race, and
         // forward through dioxus.send with the push: prefix.
-        assert!(PUSH_BRIDGE_JS.contains("window.__unpeelPushToken"));
-        assert!(PUSH_BRIDGE_JS.contains("window.__unpeelPush = function(msg)"));
+        assert!(PUSH_BRIDGE_JS.contains("window.__supercliPushToken"));
+        assert!(PUSH_BRIDGE_JS.contains("window.__supercliPush = function(msg)"));
         assert!(PUSH_BRIDGE_JS.contains("dioxus.send(\"push:\" + msg)"));
-        assert!(PUSH_TOKEN_PROBE_JS.contains("__unpeelPushToken"));
+        assert!(PUSH_TOKEN_PROBE_JS.contains("__supercliPushToken"));
     }
 }

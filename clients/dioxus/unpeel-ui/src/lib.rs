@@ -1,8 +1,8 @@
-//! Shared Dioxus UI components for the Unpeel cross-platform clients.
+//! Shared Dioxus UI components for the Supercli cross-platform clients.
 //!
-//! `unpeel-desktop` and `unpeel-mobile` are thin launchers over these
+//! `supercli-desktop` and `supercli-mobile` are thin launchers over these
 //! components: one component tree, every screen. Components talk to a Host
-//! only through `unpeel_client::HostClient` — they never touch sockets,
+//! only through `supercli_client::HostClient` — they never touch sockets,
 //! the relay, or platform APIs directly.
 
 mod activity;
@@ -143,7 +143,7 @@ pub use terminal::{
     SCROLLBACK,
 };
 pub use toast::{Toast, ToastCenter, ToastOverlay, TOAST_DEFAULT_SECONDS};
-pub use unpeel_client as client;
+pub use supercli_client as client;
 pub use viewport::{fit_grid, should_resize_remote};
 pub use workspaces::{
     can_create_worktree, component::WorkspaceOpenMenu, open_in_target, workspace_picker_rows,

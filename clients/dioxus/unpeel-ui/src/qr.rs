@@ -58,10 +58,10 @@ impl QrDedup {
 
 /// JS bridge contract (implemented by the launcher):
 ///
-/// - The launcher installs `window.__unpeelQrStart()` (async: resolves
+/// - The launcher installs `window.__supercliQrStart()` (async: resolves
 ///   when the camera is live and codes stream to Rust via
 ///   `dioxus.send(code)`; throws with a human-readable reason on
-///   denial/failure) and `window.__unpeelQrStop()` (stops the camera and
+///   denial/failure) and `window.__supercliQrStop()` (stops the camera and
 ///   releases it; pausing stops the camera, not just the decode gate, so
 ///   it doesn't stay hot for the whole pairing exchange).
 ///
@@ -71,11 +71,11 @@ impl QrDedup {
 /// `ctl:resumed`, or a scanned code. Messages starting with `ctl:` are
 /// reserved — pairing codes never do.
 ///
-/// The launcher resolves camera permission inside `__unpeelQrStart`; a
+/// The launcher resolves camera permission inside `__supercliQrStart`; a
 /// denial surfaces as `QrScanState::PermissionDenied` via `on_state`.
 pub const QR_CTL_JS: &str = r#"
 (async () => {
-  if (typeof window.__unpeelQrStart !== 'function') {
+  if (typeof window.__supercliQrStart !== 'function') {
     dioxus.send('ctl:denied:QR scanning is not installed in this launcher');
     return;
   }
@@ -83,11 +83,11 @@ pub const QR_CTL_JS: &str = r#"
   for (;;) {
     const cmd = await dioxus.recv();
     if (cmd === 'pause') {
-      window.__unpeelQrStop();
+      window.__supercliQrStop();
       dioxus.send('ctl:paused');
     } else if (cmd === 'resume') {
       try {
-        await window.__unpeelQrStart();
+        await window.__supercliQrStart();
         dioxus.send('ctl:resumed');
       } catch (e) {
         dioxus.send('ctl:denied:' + (e && e.message ? e.message : 'camera unavailable'));
@@ -101,7 +101,7 @@ pub const QR_CTL_JS: &str = r#"
 pub const QR_START_JS: &str = QR_CTL_JS;
 
 pub const QR_STOP_JS: &str = r#"
-if (typeof window.__unpeelQrStop === 'function') { window.__unpeelQrStop(); }
+if (typeof window.__supercliQrStop === 'function') { window.__supercliQrStop(); }
 "#;
 
 /// QR scanner view: camera preview (rendered by the launcher's JS into

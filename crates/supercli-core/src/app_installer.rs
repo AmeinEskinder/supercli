@@ -1,4 +1,4 @@
-//! Host-owned installation and bootstrap projection for official Unpeel Apps.
+//! Host-owned installation and bootstrap projection for official Supercli Apps.
 //!
 //! Apps execute beside the file and Session they operate on, so installation
 //! belongs to the Host (including Linux and SSH Hosts), never the Controller.
@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 use crate::apps_mcp::{self, CatalogApp};
 
-const DEFAULT_BASE_URL: &str = "https://unpeel.com";
+const DEFAULT_BASE_URL: &str = "https://supercli.com";
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_SIDECAR_BYTES: usize = 4 * 1024;
 
@@ -282,7 +282,7 @@ pub fn install(home: &Path, app_id: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("unknown or unsupported App id {app_id:?}"))?;
     let target = release_target().ok_or_else(|| {
         format!(
-            "Unpeel Apps publish no build for {}-{}",
+            "Supercli Apps publish no build for {}-{}",
             std::env::consts::OS,
             std::env::consts::ARCH
         )

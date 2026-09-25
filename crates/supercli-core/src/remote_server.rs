@@ -2,7 +2,7 @@
 //! artifacts so a phone/tablet/another machine can list sessions, stream
 //! terminal output, send input, and kill sessions.
 //!
-//! Runs as `unpeel-host __remote__` — like the Sessions MCP it talks directly
+//! Runs as `supercli-host __remote__` — like the Sessions MCP it talks directly
 //! to `~/.supercli/app-sessions/<id>/{manifest.json,output.bin,session.sock}`
 //! and does not need the app window to be open.
 //!
@@ -898,7 +898,7 @@ pub fn run(config: &RemoteServerConfig) -> Result<(), String> {
         "{}",
         json!({ "url": url, "port": port, "fingerprint": fingerprint, "token": token })
     );
-    eprintln!("unpeel remote control listening on {url} (TLS fingerprint sha256:{fingerprint})");
+    eprintln!("supercli remote control listening on {url} (TLS fingerprint sha256:{fingerprint})");
 
     for incoming in listener.incoming() {
         let Ok(tcp) = incoming else { continue };
@@ -1131,7 +1131,7 @@ enum WsAuthorizationLease {
 }
 
 /// The same header/token forms the app's mobile server accepts: `Bearer x` or
-/// a bare token, in `authorization` or `x-unpeel-mobile-auth`, plus the
+/// a bare token, in `authorization` or `x-supercli-mobile-auth`, plus the
 /// `?token=` query parameter for WebSocket upgrades.
 fn provided_token(request: &Request) -> Option<&str> {
     fn from_header(value: &str) -> Option<&str> {
@@ -1152,7 +1152,7 @@ fn provided_token(request: &Request) -> Option<&str> {
         .or_else(|| {
             request
                 .headers
-                .get("x-unpeel-mobile-auth")
+                .get("x-supercli-mobile-auth")
                 .and_then(|value| from_header(value))
         })
         .or_else(|| request.query.get("token").map(String::as_str))
@@ -1833,9 +1833,9 @@ fn api_clients<W: Write>(stream: &mut W, ctx: &Arc<ServerCtx>) {
 
 const WEB_CLIENT_PLACEHOLDER: &str = "<!doctype html>\n<html><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-<title>Unpeel Remote</title></head>\
+<title>Supercli Remote</title></head>\
 <body style=\"font-family: -apple-system, sans-serif; padding: 2rem;\">\
-<h1>Unpeel Remote Control</h1>\
+<h1>Supercli Remote Control</h1>\
 <p>The server is running. The built-in web client ships in phase 2; \
 use the REST/WebSocket API with your bearer token for now.</p>\
 </body></html>\n";
@@ -2038,7 +2038,7 @@ pub(crate) fn plan_ws_replay(
 /// sequences that established mouse tracking, alt screen, bracketed paste,
 /// and friends usually precede the retained tail, so a phone connecting
 /// after a Host/service restart would otherwise believe mouse tracking is
-/// off and never forward wheel scrolling. Same bytes `unpeel-attach` emits
+/// off and never forward wheel scrolling. Same bytes `supercli-attach` emits
 /// (`mode_restore_preamble`). Empty at the origin, or when the host
 /// publishes no non-default modes. Never counted as journal bytes.
 pub(crate) fn replay_mode_preamble(
@@ -2829,7 +2829,7 @@ mod tests {
         // The app's mobile header, bare-token form.
         request
             .headers
-            .insert("x-unpeel-mobile-auth".into(), "tok".into());
+            .insert("x-supercli-mobile-auth".into(), "tok".into());
         assert_eq!(authorized(&request, "tok"), Some(AuthIdentity::ServerToken));
     }
 
@@ -3053,7 +3053,7 @@ mod tests {
         let server = spawn_test_server();
         let response = http_roundtrip(server.port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
         assert!(response.starts_with("HTTP/1.1 200"), "got: {response}");
-        assert!(response.contains("Unpeel Remote Control"));
+        assert!(response.contains("Supercli Remote Control"));
     }
 
     #[test]

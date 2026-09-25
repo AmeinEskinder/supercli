@@ -5,13 +5,13 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::PathBuf;
 
-use unpeel_app_kit::{AppContext, Explorer};
+use supercli_app_kit::{AppContext, Explorer};
 
 const HELP: &str = "\
-unpeel-filetree — borderless project file explorer
+supercli-filetree — borderless project file explorer
 
 Usage:
-  unpeel-filetree [OPTIONS] [PATH]
+  supercli-filetree [OPTIONS] [PATH]
 
 Options:
   -e, --ext EXT       Show EXT files and folders containing them; repeatable
@@ -20,8 +20,8 @@ Options:
   -h, --help          Print this help
 
 Examples:
-  unpeel-filetree --ext md .
-  unpeel-filetree ~/Notes --ext md --ext mdx
+  supercli-filetree --ext md .
+  supercli-filetree ~/Notes --ext md --ext mdx
 ";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -39,7 +39,7 @@ enum ParsedArgs {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match std::env::args_os().nth(1).as_deref() {
         Some(argument) if argument == OsStr::new("--version") => {
-            println!("unpeel-filetree {}", env!("CARGO_PKG_VERSION"));
+            println!("supercli-filetree {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         _ => {}

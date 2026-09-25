@@ -1,4 +1,4 @@
-//! Persistent bare-launch state shared in shape with `unpeel-design`.
+//! Persistent bare-launch state shared in shape with `supercli-design`.
 //!
 //! A command-line path is always explicit and bypasses this state. A bare
 //! launch remembers only the user-chosen notes folder; notes themselves stay
@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     Input, InputField, InputFieldTheme, List, ListState, Page, PageTheme, UiBridge, UiBridgeEvent,
     UiComponent, UiEventKind, UiEventOutcome, UiEventValue, UiNode, page_delta_operations,
 };
@@ -26,7 +26,7 @@ const UI_SUBMIT: &str = "choose-workspace-folder";
 const UI_CANCEL: &str = "cancel-workspace-folder";
 
 fn config_root() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("UNPEEL_APP_CONFIG_HOME") {
+    if let Some(path) = std::env::var_os("SUPERCLI_APP_CONFIG_HOME") {
         let path = PathBuf::from(path);
         if !path.as_os_str().is_empty() {
             return Some(path);
@@ -35,12 +35,12 @@ fn config_root() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("XDG_CONFIG_HOME") {
         let path = PathBuf::from(path);
         if !path.as_os_str().is_empty() {
-            return Some(path.join("unpeel-apps"));
+            return Some(path.join("supercli-apps"));
         }
     }
     std::env::var_os("HOME")
         .map(PathBuf::from)
-        .map(|home| home.join(".config").join("unpeel-apps"))
+        .map(|home| home.join(".config").join("supercli-apps"))
 }
 
 fn state_path(app_id: &str) -> Option<PathBuf> {
@@ -395,7 +395,7 @@ fn sanitized_folder_input(value: &str) -> String {
         .collect()
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error.to_string())
 }
 
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn first_run_folder_chooser_is_a_semantic_page_with_native_input_actions() {
         let node = workspace_node("~/Notes", Some("enter a folder path"), "hint");
-        let unpeel_app_kit::UiComponent::Page(page) = node.element else {
+        let supercli_app_kit::UiComponent::Page(page) = node.element else {
             panic!("first-run chooser must publish Page");
         };
         page.validate().unwrap();

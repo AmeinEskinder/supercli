@@ -1,4 +1,4 @@
-//! `unpeel migrate` — one-shot upgrade of on-disk state to the current schema.
+//! `supercli migrate` — one-shot upgrade of on-disk state to the current schema.
 //!
 //! Dry-run by default: every store is scanned, a report is printed, and
 //! nothing is changed. `--apply` backs each touched file up first
@@ -41,9 +41,9 @@ use supercli_core::scheduled::schedules_path;
 use supercli_core::{app_paths, app_state};
 
 pub const HELP: &str = "\
-unpeel migrate — upgrade on-disk state to the current schema
+supercli migrate — upgrade on-disk state to the current schema
 
-  unpeel migrate [--apply] [--json]
+  supercli migrate [--apply] [--json]
 
 Dry-run by default: scans connector grants, review logs, and schedule
 state, prints what would change, and changes nothing. With --apply, every
@@ -635,9 +635,9 @@ fn step_schedules(home: &Path, apply: bool) -> StepOutcome {
 
 fn print_human(apply: bool, steps: &[StepOutcome]) {
     if apply {
-        println!("unpeel migrate --apply");
+        println!("supercli migrate --apply");
     } else {
-        println!("unpeel migrate (dry-run; pass --apply to change anything)\n");
+        println!("supercli migrate (dry-run; pass --apply to change anything)\n");
     }
     for step in steps {
         println!("[{}]", step.title);

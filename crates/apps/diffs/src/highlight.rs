@@ -5,7 +5,7 @@
 use std::sync::OnceLock;
 use syntect::easy::ScopeRegionIterator;
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
-use unpeel_app_kit::{ContentRun, ContentTone};
+use supercli_app_kit::{ContentRun, ContentTone};
 
 use crate::git::DiffDocument;
 
@@ -161,7 +161,7 @@ impl LineParser {
 #[cfg(test)]
 use ratatui::style::Color;
 #[cfg(test)]
-use unpeel_app_kit::{ColorScheme, KitTheme};
+use supercli_app_kit::{ColorScheme, KitTheme};
 #[cfg(test)]
 pub type DocumentColors = Vec<Option<Vec<(Color, String)>>>;
 #[cfg(test)]

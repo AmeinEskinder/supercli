@@ -1,7 +1,7 @@
 //! Preset drawer: the {t("presets.new_session")} bottom sheet.
 //!
 //! Port of Swift's `PresetDrawerOverlay` / `PresetDrawerRow`
-//! (`UnpeelIOSRootView.swift`). The Host sends presets in the same order the
+//! (`SupercliIOSRootView.swift`). The Host sends presets in the same order the
 //! desktop "+" menu shows them; the drawer keeps that order and filters to
 //! enabled presets only. Launching sends `{projectID, presetID}` — the
 //! `RemoteCreateSessionRequest` shape — and the launching row shows a
@@ -9,7 +9,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use unpeel_client::dto::PresetSummary;
+use supercli_client::dto::PresetSummary;
 
 /// Row title: the CLI type as the title (so the command isn't repeated on
 /// both lines). A custom preset with its own label keeps that label

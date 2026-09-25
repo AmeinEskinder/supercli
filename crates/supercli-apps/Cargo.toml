@@ -1,6 +1,6 @@
 [package]
 name = "supercli-apps"
-description = "The Unpeel Apps API: agent-pane integration and host MCP access for terminal apps"
+description = "The Supercli Apps API: agent-pane integration and host MCP access for terminal apps"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

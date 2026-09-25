@@ -1,5 +1,5 @@
 //! Phase 9 H1 — fuzz + property tests for the connector manifest parser
-//! (`unpeel_connector::manifest::parse_manifest`).
+//! (`supercli_connector::manifest::parse_manifest`).
 //!
 //! Same deterministic in-tree harness as the other H1 fuzz targets:
 //! cargo-fuzz/libFuzzer could not be installed offline, so a seeded
@@ -15,7 +15,7 @@
 
 use std::panic;
 use std::time::Instant;
-use unpeel_connector::manifest::{parse_manifest, ApprovalPolicy};
+use supercli_connector::manifest::{parse_manifest, ApprovalPolicy};
 
 // ------------------------------------------------------------------ rng ---
 
@@ -93,7 +93,7 @@ fn mutate(rng: &mut Rng, data: &[u8], seeds: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn iters() -> usize {
-    std::env::var("UNPEEL_FUZZ_ITERS")
+    std::env::var("SUPERCLI_FUZZ_ITERS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20_000)

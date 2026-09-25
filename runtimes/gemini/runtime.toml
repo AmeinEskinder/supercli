@@ -14,7 +14,7 @@ tint = "#6EA8FF"
 spinner_tint = "#6EA8FF"
 icon = "gemini"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -47,7 +47,7 @@ working = ["esc to cancel"]
 idle_prompt = ["Type your message", "> Type your message"]
 
 [integration]
-summary = "Registers Unpeel's lifecycle hooks in ~/.gemini/settings.json."
+summary = "Registers Supercli's lifecycle hooks in ~/.gemini/settings.json."
 legacy_evidence = ["hooks/gemini-hook.sh"]
 
 [[usage.stores]]

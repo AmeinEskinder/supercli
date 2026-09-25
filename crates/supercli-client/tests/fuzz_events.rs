@@ -1,7 +1,7 @@
 //! Phase 9 H1 — fuzz + property tests for the session-event wire decoder
-//! (`unpeel_client::events`).
+//! (`supercli_client::events`).
 //!
-//! Same deterministic in-tree harness as `unpeel-core/tests/fuzz_review_log.rs`:
+//! Same deterministic in-tree harness as `supercli-core/tests/fuzz_review_log.rs`:
 //! cargo-fuzz/libFuzzer could not be installed offline, so a seeded
 //! xorshift RNG, valid-JSON corpus seeds, and structural mutations drive
 //! `serde_json::from_slice::<EventsResponse>` / `<SessionEventWire>` for a
@@ -9,7 +9,7 @@
 
 use std::panic;
 use std::time::Instant;
-use unpeel_client::events::{EventsResponse, SessionEventWire};
+use supercli_client::events::{EventsResponse, SessionEventWire};
 
 // ------------------------------------------------------------------ rng ---
 
@@ -87,7 +87,7 @@ fn mutate(rng: &mut Rng, data: &[u8], seeds: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn iters() -> usize {
-    std::env::var("UNPEEL_FUZZ_ITERS")
+    std::env::var("SUPERCLI_FUZZ_ITERS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20_000)

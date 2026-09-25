@@ -1,9 +1,9 @@
-//! The `unpeel` CLI as a full peer of the unified `unpeel` MCP server.
+//! The `supercli` CLI as a full peer of the unified `supercli` MCP server.
 //!
 //! Every verb here runs the same in-process tool dispatcher the MCP server
 //! uses (`supercli_core::mcp_host::call_tool`): the same caller identity from
 //! the hosted environment, the same per-call grants, and the same
-//! cooperative write policy with its approval prompt. `unpeel mcp <tool>
+//! cooperative write policy with its approval prompt. `supercli mcp <tool>
 //! <action> key=value…` reaches every action of every domain; the family
 //! verbs (`browser`, `artifacts`, `current`, `report`, `worktree`, `agents`,
 //! `skills`) are positional sugar over it.
@@ -11,32 +11,32 @@
 use serde_json::{json, Map, Value};
 
 pub const HELP: &str = "\
-unpeel mcp — every Unpeel MCP action from the shell
+supercli mcp — every Supercli MCP action from the shell
 
-  unpeel mcp                          list the tools
-  unpeel mcp <tool>                   the tool's help (same text the MCP serves)
-  unpeel mcp <tool> <action> [key=value ...] [--json '{...}']
+  supercli mcp                          list the tools
+  supercli mcp <tool>                   the tool's help (same text the MCP serves)
+  supercli mcp <tool> <action> [key=value ...] [--json '{...}']
 
 Arguments are key=value pairs; a value that parses as JSON (true, 42,
 [\"down\",\"enter\"], {\"a\":1}) is passed as JSON, anything else as a string.
 --json merges a whole JSON object. The call runs as the session you are in
 (SUPERCLI_SESSION_ID or process ancestry), with the same grants and approval
-prompts an agent's MCP call gets. Outside an Unpeel session most actions
+prompts an agent's MCP call gets. Outside an Supercli session most actions
 refuse, exactly like the MCP server.
 
 Family verbs over the same dispatcher:
-  unpeel browser open <url> | snapshot | click <target> | fill <target> <text>
+  supercli browser open <url> | snapshot | click <target> | fill <target> <text>
                  | type <target> <text> | press <key> | get <what> [target]
                  | screenshot [--full] [--annotate] | scroll <direction>
                  | wait [selector=… | load=… | ms=…] | <action> [key=value ...]
-  unpeel artifacts publish <image-path>
-  unpeel current                      you and your pane neighbors (App context)
-  unpeel report <summary> [--status update|done|blocked] [--details TEXT]
-  unpeel worktree create <name> [--branch B] [--base REF] [--project ID]
-  unpeel agents <action> [key=value ...]
-  unpeel skills <action> [key=value ...]
-  unpeel apps describe|search|context [key=value ...]
-  unpeel send / unpeel keys           inside a session: sessions send_text /
+  supercli artifacts publish <image-path>
+  supercli current                      you and your pane neighbors (App context)
+  supercli report <summary> [--status update|done|blocked] [--details TEXT]
+  supercli worktree create <name> [--branch B] [--base REF] [--project ID]
+  supercli agents <action> [key=value ...]
+  supercli skills <action> [key=value ...]
+  supercli apps describe|search|context [key=value ...]
+  supercli send / supercli keys           inside a session: sessions send_text /
                                       send_keys with the approval policy";
 
 /// Split `words` into a JSON argument object (from `key=value` pairs and
@@ -92,7 +92,7 @@ pub fn call(tool: &str, mut arguments: Map<String, Value>, action: Option<&str>)
     }
 }
 
-/// `unpeel mcp …`
+/// `supercli mcp …`
 pub fn run(args: &[String]) -> i32 {
     if args
         .iter()
@@ -150,7 +150,7 @@ fn family(tool: &str, args: &[String], usage: &str) -> i32 {
     }
 }
 
-/// `unpeel browser …` (everything except `install`, which stays with the
+/// `supercli browser …` (everything except `install`, which stays with the
 /// engine verb).
 pub fn browser(args: &[String]) -> i32 {
     let (mut arguments, positional) = match parse_args(args) {
@@ -215,7 +215,7 @@ pub fn browser(args: &[String]) -> i32 {
     call("browser", arguments, Some(action))
 }
 
-/// `unpeel artifacts publish <path>`
+/// `supercli artifacts publish <path>`
 pub fn artifacts(args: &[String]) -> i32 {
     let (mut arguments, positional) = match parse_args(args) {
         Ok(parsed) => parsed,
@@ -239,13 +239,13 @@ pub fn artifacts(args: &[String]) -> i32 {
     }
 }
 
-/// `unpeel current`
+/// `supercli current`
 pub fn current(args: &[String]) -> i32 {
     let (arguments, _) = parse_args(args).unwrap_or_default();
     call("sessions", arguments, Some("current"))
 }
 
-/// `unpeel report <summary> [--status S] [--details D] [--no-submit]`
+/// `supercli report <summary> [--status S] [--details D] [--no-submit]`
 pub fn report(args: &[String]) -> i32 {
     let mut arguments = Map::new();
     let mut summary: Vec<String> = Vec::new();
@@ -273,7 +273,7 @@ pub fn report(args: &[String]) -> i32 {
         }
     }
     if summary.is_empty() && !arguments.contains_key("summary") {
-        eprintln!("usage: unpeel report <summary> [--status update|done|blocked] [--details TEXT]");
+        eprintln!("usage: supercli report <summary> [--status update|done|blocked] [--details TEXT]");
         return 1;
     }
     if !summary.is_empty() {
@@ -282,7 +282,7 @@ pub fn report(args: &[String]) -> i32 {
     call("sessions", arguments, Some("report"))
 }
 
-/// `unpeel worktree create <name> [--branch B] [--base REF] [--project ID]`
+/// `supercli worktree create <name> [--branch B] [--base REF] [--project ID]`
 pub fn worktree(args: &[String]) -> i32 {
     let mut arguments = Map::new();
     let mut positional = Vec::new();
@@ -314,7 +314,7 @@ pub fn worktree(args: &[String]) -> i32 {
         [action] => call("workspace", arguments, Some(action)),
         _ => {
             println!(
-                "usage: unpeel worktree create <name> [--branch B] [--base REF] [--project ID]"
+                "usage: supercli worktree create <name> [--branch B] [--base REF] [--project ID]"
             );
             call("workspace", Map::new(), Some("help"))
         }
@@ -325,7 +325,7 @@ pub fn agents(args: &[String]) -> i32 {
     family(
         "agents",
         args,
-        "usage: unpeel agents <action> [key=value ...]",
+        "usage: supercli agents <action> [key=value ...]",
     )
 }
 
@@ -333,27 +333,27 @@ pub fn skills(args: &[String]) -> i32 {
     family(
         "skills",
         args,
-        "usage: unpeel skills <action> [key=value ...]",
+        "usage: supercli skills <action> [key=value ...]",
     )
 }
 
-/// `unpeel apps describe|search|context …` (list/install/update/link stay
+/// `supercli apps describe|search|context …` (list/install/update/link stay
 /// with the installer verb).
 pub fn apps(args: &[String]) -> i32 {
     family(
         "apps",
         args,
-        "usage: unpeel apps describe|search|context [key=value ...]",
+        "usage: supercli apps describe|search|context [key=value ...]",
     )
 }
 
-/// Whether this process runs inside a hosted Unpeel session, in which case
+/// Whether this process runs inside a hosted Supercli session, in which case
 /// writes to other sessions must go through the cooperative policy.
 pub fn inside_session() -> bool {
     supercli_core::mcp_host::self_session_id().is_some()
 }
 
-/// `unpeel send <id> <text…> [--enter]` from inside a session: the MCP
+/// `supercli send <id> <text…> [--enter]` from inside a session: the MCP
 /// `send_text` action, with its approval prompt and remembered pairs.
 pub fn send_text(session_id: &str, text: &str, submit: bool) -> i32 {
     let mut arguments = Map::new();
@@ -363,7 +363,7 @@ pub fn send_text(session_id: &str, text: &str, submit: bool) -> i32 {
     call("sessions", arguments, Some("send_text"))
 }
 
-/// `unpeel keys <id> <key…>` from inside a session: the MCP `send_keys`
+/// `supercli keys <id> <key…>` from inside a session: the MCP `send_keys`
 /// action. Keys are names (`down`, `enter`, `ctrl+c`), one per word.
 pub fn send_keys(session_id: &str, keys: &[String]) -> i32 {
     let mut arguments = Map::new();

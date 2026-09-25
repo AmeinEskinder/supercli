@@ -14,7 +14,7 @@ tint = "#A78BFA"
 spinner_tint = "#A78BFA"
 icon = "kiro"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -39,7 +39,7 @@ completion_reliable = true
 attention_reliable = true
 
 [integration]
-summary = "Writes ~/.kiro/hooks/unpeel.json (v3), the compatibility agent for v2, and the unpeel server in ~/.kiro/settings/mcp.json."
+summary = "Writes ~/.kiro/hooks/supercli.json (v3), the compatibility agent for v2, and the supercli server in ~/.kiro/settings/mcp.json."
 legacy_evidence = ["hooks/kiro-hook.sh"]
 
 [[usage.stores]]

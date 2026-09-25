@@ -1,19 +1,19 @@
 [package]
-name = "unpeel-mobile"
+name = "supercli-mobile"
 version = "0.8.0"
 edition = "2021"
 rust-version = "1.88.0"
 license = "MIT"
-description = "Unpeel mobile client (Dioxus) — session list + live terminal over the Host protocol"
+description = "Supercli mobile client (Dioxus) — session list + live terminal over the Host protocol"
 
 [[bin]]
-name = "unpeel-mobile"
+name = "supercli-mobile"
 path = "src/main.rs"
 
 [dependencies]
 dioxus = { workspace = true, features = ["mobile", "launch"] }
-unpeel-ui = { workspace = true }
-unpeel-client = { workspace = true }
+supercli-ui = { workspace = true }
+supercli-client = { workspace = true }
 serde_json = { workspace = true }
 base64 = "0.22"
 

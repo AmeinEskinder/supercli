@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 pub const HOOK_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
-/// Compatibility window for hooks installed by an older Unpeel build, before
+/// Compatibility window for hooks installed by an older Supercli build, before
 /// lifecycle payloads carried `supercli_runtime_generation`. Immediately after
 /// an in-place generation edge, an untagged Stop is ambiguous: it may be a
 /// background reporter from the process we just terminated. Suppress it until
@@ -637,7 +637,7 @@ impl ActivityEngine {
             .map(str::to_owned);
         let seed_generation = value
             .get("supercli_runtime_generation")
-            .or_else(|| value.get("unpeelRuntimeGeneration"))
+            .or_else(|| value.get("supercliRuntimeGeneration"))
             .and_then(serde_json::Value::as_u64);
 
         let canonical = normalize_event_name(name);
@@ -1051,7 +1051,7 @@ mod tests {
 
     #[test]
     fn durable_stop_recovers_a_missed_post_after_live_hooks_have_latched() {
-        let dir = std::env::temp_dir().join(format!("unpeel-hook-recovery-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-hook-recovery-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let seed = dir.join("last-hook-event.json");
         fs::write(
@@ -1280,7 +1280,7 @@ mod tests {
 
     #[test]
     fn seed_from_disk_latches_recorded_stop() {
-        let dir = std::env::temp_dir().join(format!("unpeel-tui-seed-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-tui-seed-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("last-hook-event.json"),
@@ -1297,7 +1297,7 @@ mod tests {
     #[test]
     fn runtime_generation_resets_old_latch_and_rejects_older_seed() {
         let dir =
-            std::env::temp_dir().join(format!("unpeel-tui-generation-seed-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-tui-generation-seed-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("last-hook-event.json"),

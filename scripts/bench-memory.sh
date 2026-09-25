@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reproduce the four memory comparison-chart numbers (macOS phys_footprint)
-# for Unpeel's session Host, plus a teardown leak check, on a blank,
+# for Supercli's session Host, plus a teardown leak check, on a blank,
 # short-path SUPERCLI_HOME using release binaries.
 #
 #   (a) serve + first session        serve tree + one `sh` session host
@@ -506,7 +506,7 @@ fi
 VERSION=$("$SUPERCLI" --version 2>/dev/null | head -1)
 cat <<EOF
 
-### Unpeel memory benchmark — $VERSION ($(date +%Y-%m-%d))
+### Supercli memory benchmark — $VERSION ($(date +%Y-%m-%d))
 
 $METRIC_NAME, blank home, release binaries from \`$BIN_DIR\`, PTY core $( [[ "${SUPERCLI_PTY_CORE:-0}" == "1" ]] && echo on || echo off ) (profile \`$PROFILE\`).
 

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Rust client for the Unpeel Host protocol — the portable foundation the Dioxus cross-platform clients are built on"
+description = "Rust client for the Supercli Host protocol — the portable foundation the Dioxus cross-platform clients are built on"
 
 [dependencies]
 # Web-safe subset: the only deps the wasm32 web target compiles.

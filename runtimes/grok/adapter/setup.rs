@@ -10,12 +10,12 @@ pub(crate) const GROK_HOOK_SCRIPT: &str = include_str!(concat!(
 ));
 
 pub fn install() -> Result<(), String> {
-    // Grok-native hooks map argv[1] -> Unpeel lifecycle events and POST to the
+    // Grok-native hooks map argv[1] -> Supercli lifecycle events and POST to the
     // hook port. SessionStart only latches provider metadata; UserPromptSubmit
     // is the turn-opening busy event. Grok also scans Claude/Cursor hook files;
-    // those Unpeel scripts no-op when GROK_SESSION_ID is set so a Claude-shaped
+    // those Supercli scripts no-op when GROK_SESSION_ID is set so a Claude-shaped
     // session_start cannot latch busy. Real attention comes from
-    // Notification/PreToolUse in unpeel.json.
+    // Notification/PreToolUse in supercli.json.
     let script_path = grok_hook_script_path();
     write_executable_script(&script_path, GROK_HOOK_SCRIPT, "Grok hook script")?;
     ensure_grok_hooks(&script_path)?;
@@ -28,8 +28,8 @@ pub(crate) fn grok_hook_script_path() -> PathBuf {
 
 pub(crate) fn grok_hooks_path() -> Option<PathBuf> {
     // Grok merges every `*.json` under ~/.grok/hooks/ (global hooks are always
-    // trusted). We own `unpeel.json`, so it can be rewritten wholesale.
-    dirs::home_dir().map(|home| home.join(".grok").join("hooks").join("unpeel.json"))
+    // trusted). We own `supercli.json`, so it can be rewritten wholesale.
+    dirs::home_dir().map(|home| home.join(".grok").join("hooks").join("supercli.json"))
 }
 pub(crate) fn ensure_grok_hooks(script_path: &Path) -> Result<(), String> {
     let Some(hooks_path) = grok_hooks_path() else {

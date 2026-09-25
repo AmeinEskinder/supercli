@@ -86,7 +86,7 @@ fn manifest(session_id: &str) -> Result<HostedSessionManifest, String> {
 
 /// Runtime-managed storage is Host-authored, but revalidate the persisted
 /// path before destructive cleanup so a damaged or hand-edited manifest can
-/// never point removal outside the active Unpeel home. Older manifests fall
+/// never point removal outside the active Supercli home. Older manifests fall
 /// back to the runtime adapter's command parser.
 fn managed_storage_for_manifest(manifest: &HostedSessionManifest) -> Option<PathBuf> {
     let home = app_paths::supercli_home();
@@ -253,7 +253,7 @@ fn has_real_provider_lifecycle(session_id: &str) -> bool {
 
 /// A provider-owned transcript is the strongest proof that a launch crossed
 /// from a command we intended to run into a real provider Session. The path
-/// may be known before the first lifecycle hook reaches Unpeel, so checking
+/// may be known before the first lifecycle hook reaches Supercli, so checking
 /// the actual non-empty file avoids a transient false "Remove" affordance
 /// without treating a bare provider id as resumable.
 fn provider_transcript_has_resume_data(path: Option<&str>) -> bool {
@@ -2098,7 +2098,7 @@ pub fn spawn_session(
         session.id = uuid::Uuid::new_v4().to_string().to_lowercase();
     }
     // Provider launch preparation belongs to `session_host::run_host`, after
-    // the final Session id and Unpeel home are known and before the first
+    // the final Session id and Supercli home are known and before the first
     // manifest is published. Keeping the command original here guarantees
     // every frontend crosses that runtime-owned boundary exactly once.
     let (sessions_mcp_enabled, browser_mcp_enabled, computer_mcp_enabled) =
@@ -2122,7 +2122,7 @@ pub fn spawn_session(
     };
     let launch_file = write_launch_file(&launch)?;
     let host = resolve_host_binary()?;
-    // Launcher argv mode: `unpeel-host <launch-file>` re-execs itself as
+    // Launcher argv mode: `supercli-host <launch-file>` re-execs itself as
     // `__session_host__` fully detached (setsid) and returns immediately.
     let status = std::process::Command::new(&host)
         .arg(&launch_file)
@@ -2190,7 +2190,7 @@ pub fn deliver_initial_text(
         .to_owned())
 }
 
-/// Locate the `unpeel-host` binary for clients that are NOT the host
+/// Locate the `supercli-host` binary for clients that are NOT the host
 /// themselves (the TUI): env override, then a sibling of the current
 /// executable (dev target dir, app bundle), then PATH.
 pub fn resolve_host_binary() -> Result<PathBuf, String> {
@@ -2201,15 +2201,15 @@ pub fn resolve_host_binary() -> Result<PathBuf, String> {
         }
     }
     if let Ok(exe) = std::env::current_exe() {
-        if exe.file_name().is_some_and(|n| n == "unpeel-host") {
+        if exe.file_name().is_some_and(|n| n == "supercli-host") {
             return Ok(exe);
         }
-        let sibling = exe.with_file_name("unpeel-host");
+        let sibling = exe.with_file_name("supercli-host");
         if sibling.exists() {
             return Ok(sibling);
         }
     }
-    Ok(PathBuf::from("unpeel-host"))
+    Ok(PathBuf::from("supercli-host"))
 }
 
 /// Restart with resume: the app-independent mirror of `restartSession`.
@@ -2492,7 +2492,7 @@ mod phone_fit_marker_tests {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let dir =
-            std::env::temp_dir().join(format!("unpeel-phone-fit-{}-{nonce}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-phone-fit-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -2549,7 +2549,7 @@ mod tests {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-folder-color-{}-{nonce}",
+            "supercli-folder-color-{}-{nonce}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();

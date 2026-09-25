@@ -31,8 +31,8 @@ fn kiro_hook_maps_v3_and_v2_lifecycle_events() {
 
 #[test]
 fn kiro_mcp_config_explicitly_maps_session_identity() {
-    let server = kiro_mcp_server_value(std::path::Path::new("/tmp/home/.unpeel/bin/unpeel-mcp"));
-    assert_eq!(server["command"], "/tmp/home/.unpeel/bin/unpeel-mcp");
+    let server = kiro_mcp_server_value(std::path::Path::new("/tmp/home/.supercli/bin/supercli-mcp"));
+    assert_eq!(server["command"], "/tmp/home/.supercli/bin/supercli-mcp");
     assert_eq!(server["args"], json!([]));
     // Kiro v3 passes only the declared block to MCP children; the generic
     // hosted-shell variables carry identity, and grants come from the

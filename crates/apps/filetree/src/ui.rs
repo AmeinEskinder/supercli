@@ -12,7 +12,7 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::{Frame, Terminal};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AgentBridge, AppContext, AppMetadata, AppReporter, DoubleClickTracker, DragSurface,
     EditorBridge, Explorer, ExplorerEvent, ExplorerInput, ExplorerTheme, FooterAction,
     KeyboardEnhancementGuard, KitTheme, MenuTheme, OpenOutcome, PopupMenu, SemanticMenu,
@@ -60,7 +60,7 @@ pub fn run(
     let mut bridge = UiBridge::detect(
         AppMetadata::new(
             crate::install::APP_ID,
-            "Unpeel File Tree",
+            "Supercli File Tree",
             env!("CARGO_PKG_VERSION"),
         )
         .description("One Explorer Tree interpreted by Ratatui, native, and web renderers"),
@@ -526,7 +526,7 @@ fn apply_footer_ui_action(
 fn semantic_context_action(
     explorer: &mut Explorer,
     can_send: bool,
-    action: &unpeel_app_kit::UiAction,
+    action: &supercli_app_kit::UiAction,
 ) -> Result<ContextAction, String> {
     if action.kind != UiEventKind::Activate {
         return Err("File Tree menu actions must activate".to_owned());
@@ -550,7 +550,7 @@ fn semantic_context_action(
     Ok(build(path))
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error)
 }
 
@@ -613,7 +613,7 @@ fn context_menu(
     path: PathBuf,
     spec: &SemanticMenu,
     anchor: Position,
-    scheme: unpeel_app_kit::ColorScheme,
+    scheme: supercli_app_kit::ColorScheme,
 ) -> ContextMenu {
     ContextMenu {
         popup: spec.popup(anchor, MenuTheme::for_color_scheme(scheme)),
@@ -859,8 +859,8 @@ fn render_component_frame(
 }
 
 /// Sidebar title for a browsed folder: the project folder and the path
-/// under it, each ending in `/` so the row reads as a folder — `unpeel/` at
-/// the root, `unpeel/docs/agents/` below it. Outside any root (or with no
+/// under it, each ending in `/` so the row reads as a folder — `supercli/` at
+/// the root, `supercli/docs/agents/` below it. Outside any root (or with no
 /// root) it is the folder's own name, or the whole path for a filesystem
 /// root.
 fn folder_title(cwd: &std::path::Path, root: Option<&std::path::Path>) -> String {
@@ -889,11 +889,11 @@ mod tests {
     #[test]
     fn folder_title_is_the_project_folder_and_a_slash_terminated_path_below_it() {
         use std::path::Path;
-        let root = Path::new("/Users/me/Dev/unpeel");
-        assert_eq!(super::folder_title(root, Some(root)), "unpeel/");
+        let root = Path::new("/Users/me/Dev/supercli");
+        assert_eq!(super::folder_title(root, Some(root)), "supercli/");
         assert_eq!(
-            super::folder_title(Path::new("/Users/me/Dev/unpeel/docs/agents"), Some(root)),
-            "unpeel/docs/agents/"
+            super::folder_title(Path::new("/Users/me/Dev/supercli/docs/agents"), Some(root)),
+            "supercli/docs/agents/"
         );
         // Outside the root, or without one, the folder name stands alone.
         assert_eq!(
@@ -1054,7 +1054,7 @@ mod tests {
         let mut explorer = Explorer::scoped(directory.path()).unwrap();
 
         let node = semantic_node(&mut explorer, false, None);
-        let unpeel_app_kit::UiComponent::Tree(tree) = node.element else {
+        let supercli_app_kit::UiComponent::Tree(tree) = node.element else {
             panic!("File Tree must publish the Tree component");
         };
         assert_eq!(tree.label, "Files");
@@ -1082,7 +1082,7 @@ mod tests {
 
         let status = Status::error("Could not open entry");
         let node = semantic_node(&mut explorer, false, Some(&status));
-        let unpeel_app_kit::UiComponent::Tree(tree) = node.element else {
+        let supercli_app_kit::UiComponent::Tree(tree) = node.element else {
             panic!("File Tree must publish the Tree component");
         };
         let root_name = std::fs::canonicalize(directory.path())
@@ -1102,11 +1102,11 @@ mod tests {
         std::fs::write(&path, "hello").unwrap();
         let mut explorer = Explorer::scoped(directory.path()).unwrap();
         let node = semantic_node(&mut explorer, true, None);
-        let unpeel_app_kit::UiComponent::Tree(tree) = node.element else {
+        let supercli_app_kit::UiComponent::Tree(tree) = node.element else {
             panic!("File Tree must publish the Tree component");
         };
         let target = tree.items[0].id.clone();
-        let action = unpeel_app_kit::UiAction::new(
+        let action = supercli_app_kit::UiAction::new(
             "open-in-editor",
             OPEN_IN_EDITOR_ACTION,
             UiEventKind::Activate,

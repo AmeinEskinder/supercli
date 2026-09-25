@@ -8,7 +8,7 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! use unpeel_ui::i18n::t;
+//! use supercli_ui::i18n::t;
 //!
 //! rsx! {
 //!     button { "{t(\"approve\")}" }
@@ -97,8 +97,8 @@ fn english_catalog() -> &'static HashMap<&'static str, &'static str> {
         m.insert("app_lock.optic_id", "Optic ID");
         m.insert("app_lock.passcode", "Passcode");
         m.insert("app_lock.touch_id", "Touch ID");
-        m.insert("app_lock.unlock_unpeel", "Unlock Unpeel");
-        m.insert("app_lock.unpeel_is_locked", "Unpeel is locked");
+        m.insert("app_lock.unlock_supercli", "Unlock Supercli");
+        m.insert("app_lock.supercli_is_locked", "Supercli is locked");
         m.insert("clickable_path.home", "HOME");
         m.insert("command_palette.command", "Command");
         m.insert("command_palette.launch", "Launch");
@@ -158,7 +158,7 @@ fn english_catalog() -> &'static HashMap<&'static str, &'static str> {
             "discovery.searching_the_local_network",
             "Searching the local network…",
         );
-        m.insert("discovery.unpeel_host", "Unpeel Host");
+        m.insert("discovery.supercli_host", "Supercli Host");
         m.insert("find.close_find", "Close find");
         m.insert("find.find", "Find");
         m.insert("find.find_in_terminal", "Find in terminal");
@@ -238,8 +238,8 @@ fn english_catalog() -> &'static HashMap<&'static str, &'static str> {
         m.insert("pairing.forget", "Forget");
         m.insert("pairing.pair", "Pair");
         m.insert(
-            "pairing.pair_with_an_unpeel_host",
-            "Pair with an Unpeel Host",
+            "pairing.pair_with_an_supercli_host",
+            "Pair with an Supercli Host",
         );
         m.insert(
             "pairing.pairing_code_from_the_host",
@@ -390,7 +390,7 @@ fn pseudo_transform(msg: &str) -> String {
 fn current_locale() -> Locale {
     // In a real app this would read the OS locale. For now, English is
     // the only shipped locale; Pseudo is selected via env var in tests.
-    if std::env::var("UNPEEL_PSEUDO_LOCALE").is_ok() {
+    if std::env::var("SUPERCLI_PSEUDO_LOCALE").is_ok() {
         Locale::Pseudo
     } else {
         Locale::English

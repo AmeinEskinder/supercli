@@ -740,7 +740,7 @@ fn build_request_head(
     request_namespace: uuid::Uuid,
 ) -> String {
     let mut head = format!(
-        "{} {target} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: unpeel/{}\r\nAccept: application/json\r\nAuthorization: Bearer {auth_token}\r\nX-Unpeel-Request-ID: {}\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: {}\r\n",
+        "{} {target} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: supercli/{}\r\nAccept: application/json\r\nAuthorization: Bearer {auth_token}\r\nX-Supercli-Request-ID: {}\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: {}\r\n",
         request.method,
         env!("CARGO_PKG_VERSION"),
         format_args!("{request_namespace}:{}", request.id),
@@ -839,7 +839,7 @@ fn tls_failure(error: io::Error) -> HttpFailure {
         | Some(rustls::Error::PeerIncompatible(_))
         | Some(rustls::Error::PeerMisbehaved(_))
         | Some(rustls::Error::AlertReceived(_)) => HttpFailure::HostNotTls(format!(
-            "Host did not answer with pinned TLS; it needs Unpeel 0.5.3 or newer: {error}"
+            "Host did not answer with pinned TLS; it needs Supercli 0.5.3 or newer: {error}"
         )),
         _ => HttpFailure::Io {
             delivery: DeliveryState::NotSent,
@@ -1556,7 +1556,7 @@ mod tests {
 
     fn wire_request_id(head: &str) -> String {
         head.lines()
-            .find_map(|line| line.strip_prefix("X-Unpeel-Request-ID: "))
+            .find_map(|line| line.strip_prefix("X-Supercli-Request-ID: "))
             .expect("request id header")
             .trim()
             .to_string()

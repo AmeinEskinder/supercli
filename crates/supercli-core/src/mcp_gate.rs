@@ -57,8 +57,8 @@ pub fn run_stdio(kind: &str) -> Result<(), String> {
     };
     let (granted, server_name) = match kind {
         UNIFIED_KIND => (sessions_granted || browser_granted, "supercli"),
-        SESSIONS_KIND => (sessions_granted, "unpeel-sessions"),
-        BROWSER_KIND => (browser_granted, "unpeel-browser"),
+        SESSIONS_KIND => (sessions_granted, "supercli-sessions"),
+        BROWSER_KIND => (browser_granted, "supercli-browser"),
         _ => return Err(format!("Unknown gated MCP kind: {kind}")),
     };
 
@@ -146,7 +146,7 @@ fn empty_response(server_name: &str, message: &Value) -> Option<Value> {
         "server/discover" => json!({
             "supportedVersions": [crate::mcp_host::MODERN_PROTOCOL_VERSION],
             "capabilities": { "tools": {} },
-            "instructions": "This Unpeel MCP registration is disabled for the current process.",
+            "instructions": "This Supercli MCP registration is disabled for the current process.",
             "ttlMs": 0,
             "cacheScope": "private",
         }),
@@ -164,7 +164,7 @@ fn empty_response(server_name: &str, message: &Value) -> Option<Value> {
                 "id": id,
                 "error": {
                     "code": -32601,
-                    "message": "This Unpeel MCP server is not enabled for the current session.",
+                    "message": "This Supercli MCP server is not enabled for the current session.",
                 },
             }));
         }
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn disabled_gate_advertises_no_tools() {
         let response = empty_response(
-            "unpeel-sessions",
+            "supercli-sessions",
             &json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
         )
         .expect("response");
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn initialize_echoes_the_requested_protocol() {
         let response = empty_response(
-            "unpeel-browser",
+            "supercli-browser",
             &json!({
                 "jsonrpc":"2.0",
                 "id":"init",
@@ -217,6 +217,6 @@ mod tests {
         )
         .expect("response");
         assert_eq!(response["result"]["protocolVersion"], "2026-01-01");
-        assert_eq!(response["result"]["serverInfo"]["name"], "unpeel-browser");
+        assert_eq!(response["result"]["serverInfo"]["name"], "supercli-browser");
     }
 }

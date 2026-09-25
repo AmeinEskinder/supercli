@@ -1,6 +1,6 @@
 //! Workspace open targets, workspace/worktree models, and the workspaces +
 //! worktrees settings data. Ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/WorkspaceOpenTarget.swift`,
+//! `clients/native/SupercliNative/Sources/SupercliNative/WorkspaceOpenTarget.swift`,
 //! `Views/WorkspacesSettingsPanel.swift`, `Views/WorktreesSettingsPanel.swift`,
 //! `Views/RemoteFolderPicker.swift`, `Views/SidebarWorkspaceDots.swift`, and
 //! `Views/SidebarWorkspaceSelector.swift`.
@@ -208,7 +208,7 @@ fn path_on_path(binary: &str) -> Option<std::path::PathBuf> {
     })
 }
 
-/// A local workspace: a fully isolated Unpeel home (own sessions, projects,
+/// A local workspace: a fully isolated Supercli home (own sessions, projects,
 /// settings, phone-pairing identity). Mirrors the workspaces settings model.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

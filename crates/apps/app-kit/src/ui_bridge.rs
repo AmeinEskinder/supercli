@@ -131,7 +131,7 @@ impl UiBridge {
         };
         let token = token.map_err(|_| UiBridgeError::MissingToken)?;
         let path = PathBuf::from(path);
-        let app_session_id = std::env::var("UNPEEL_SESSION_ID")
+        let app_session_id = std::env::var("SUPERCLI_SESSION_ID")
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| session_id_from_socket_path(&path));
@@ -1499,7 +1499,7 @@ impl fmt::Display for UiBridgeError {
             }
             Self::State(error) => write!(formatter, "App Kit persistence error: {error}"),
             Self::MissingToken => formatter
-                .write_str("hosted App Kit UI requires a strong UNPEEL_UI_TOKEN signing key"),
+                .write_str("hosted App Kit UI requires a strong SUPERCLI_UI_TOKEN signing key"),
             Self::RelativeSocketPath(path) => write!(
                 formatter,
                 "App Kit UI socket path must be absolute: {}",
@@ -2042,7 +2042,7 @@ mod tests {
             directory.path().join("app-ui.sock"),
             TEST_SIGNING_KEY,
             TEST_SESSION_ID,
-            AppMetadata::new("com.unpeel.markdown", "Markdown", "0.1.0"),
+            AppMetadata::new("com.supercli.markdown", "Markdown", "0.1.0"),
         )
         .unwrap();
         (directory, bridge)

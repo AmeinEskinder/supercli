@@ -3,11 +3,11 @@ umask 077
 INPUT=$(cat)
 
 # Muse runs plugin hooks with a scrubbed environment (verified 0.1.0: only
-# MUSE_PLUGIN_*/PLUGIN_* survive), so the Unpeel identity exported into the
+# MUSE_PLUGIN_*/PLUGIN_* survive), so the Supercli identity exported into the
 # session PTY never reaches this process directly. The parent of this hook IS
 # the muse process, which does carry that environment — recover it from there
 # (`ps eww` shows a same-user process's env). Values are UUID/port/path
-# shaped; the path patterns stop at whitespace, which every Unpeel-managed
+# shaped; the path patterns stop at whitespace, which every Supercli-managed
 # home satisfies.
 recover_parent_env() {
   ps eww $PPID 2>/dev/null | grep -oE "$1=$2" | head -1 | cut -d= -f2-
@@ -25,9 +25,9 @@ recover_parent_env() {
 [ -n "${SUPERCLI_RUNTIME_GENERATION:-}" ] \
   || SUPERCLI_RUNTIME_GENERATION="$(recover_parent_env SUPERCLI_RUNTIME_GENERATION '[0-9]+')"
 
-# Global provider hooks must be inert outside a hosted Unpeel Session.
+# Global provider hooks must be inert outside a hosted Supercli Session.
 [ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
 if [ -f "$TRACE_FILE" ]; then
   _supercli_trace_size=$(wc -c < "$TRACE_FILE" 2>/dev/null | tr -d ' ')
@@ -38,7 +38,7 @@ fi
 # The payload contains the user's prompt text; trace_muse_hook logs only the
 # event/tool/post metadata unless SUPERCLI_HOOK_TRACE_VERBOSE=1 explicitly opts
 # into full-payload logging.
-SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/app-ports}"
 
 # POST one hook payload synchronously and record the outcome in
 # _hook_post_results ("<port>=<http-code>,..."). Loopback posts finish in
@@ -123,7 +123,7 @@ record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
   [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
-  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_name_json="$(json_escape_string "$_record_event_name")"
   _record_generation="$(runtime_generation_json_field)"
@@ -221,7 +221,7 @@ esac
 
 _hook_post_results=""
 if [ -n "${SUPERCLI_SESSION_ID:-}" ]; then
-  # Several Unpeel instances can run at once (e.g. a dev build next to the
+  # Several Supercli instances can run at once (e.g. a dev build next to the
   # installed app) and they share the port registry. Post to every known
   # port, not just the first that answers, so the instance that owns this
   # session always receives the event. Posts go out synchronously and in

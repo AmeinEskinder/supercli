@@ -464,17 +464,17 @@ impl RegisteredRemoteTransport {
             Self::Ssh { target_uri } => target_uri,
             Self::LocalGateway { supercli_home } => supercli_home,
             Self::Direct { endpoint_uri } => endpoint_uri,
-            Self::Link => "Unpeel Link",
+            Self::Link => "Supercli Link",
         }
     }
 
     fn recovery_hint(&self) -> &'static str {
         match self {
             Self::Ssh { .. } => {
-                "Verify non-interactive SSH access and that `unpeel-host` is installed on the Host"
+                "Verify non-interactive SSH access and that `supercli-host` is installed on the Host"
             }
             Self::LocalGateway { .. } => {
-                "Verify this workspace's Unpeel data folder is accessible on this Mac"
+                "Verify this workspace's Supercli data folder is accessible on this Mac"
             }
             Self::Direct { .. } => {
                 "Verify the Host is running and this Controller is still on its trusted LAN or VPN"
@@ -880,7 +880,7 @@ fn next_platform_adapter_handle() -> Result<PlatformAdapterHandle, NativeRemoteE
         .map_err(|_| {
             NativeRemoteError::remote(
                 "platform_adapter_handle_space_exhausted",
-                "Platform adapter handle space is exhausted; restart Unpeel",
+                "Platform adapter handle space is exhausted; restart Supercli",
             )
         })
 }
@@ -901,7 +901,7 @@ fn platform_adapter_control_call(
     let request = supercli_core::relay_wire::TunnelRequest {
         id: request_id,
         method: "POST".into(),
-        path: "/_unpeel/platform-adapter".into(),
+        path: "/_supercli/platform-adapter".into(),
         query: Vec::new(),
         auth: None,
         content_type: Some("application/json".into()),
@@ -1011,7 +1011,7 @@ fn start_platform_adapter_client(
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
         let worker = std::thread::Builder::new()
-            .name("unpeel-native-platform-adapter".into())
+            .name("supercli-native-platform-adapter".into())
             .spawn(move || run_platform_adapter_client(config, thread_stop))
             .map_err(|error| {
                 NativeRemoteError::remote(
@@ -1054,7 +1054,7 @@ fn register_remote_backend(
             .map_err(|_| {
                 NativeRemoteError::remote(
                     "remote_handle_space_exhausted",
-                    "Remote Host handle space is exhausted; restart Unpeel",
+                    "Remote Host handle space is exhausted; restart Supercli",
                 )
             })?;
         if handle == 0 {
@@ -1109,7 +1109,7 @@ fn next_output_page_handle() -> Result<RemoteOutputPageHandle, NativeRemoteError
         .map_err(|_| {
             NativeRemoteError::remote(
                 "remote_output_page_handle_space_exhausted",
-                "Remote output page handle space is exhausted; reopen Unpeel",
+                "Remote output page handle space is exhausted; reopen Supercli",
             )
         })
 }
@@ -1523,7 +1523,7 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
         let request = supercli_core::relay_wire::TunnelRequest {
             id: 1,
             method: "POST".into(),
-            path: "/_unpeel/pairing".into(),
+            path: "/_supercli/pairing".into(),
             query: Vec::new(),
             auth: None,
             content_type: Some("application/json".into()),
@@ -1581,7 +1581,7 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
 
 /// Loopback workspace gateway (workspaces-unification phase 2): the same
 /// `RemoteSessionBackend` as SSH over a directly spawned
-/// `unpeel-host __remote_stdio__` child scoped to one workspace home. The
+/// `supercli-host __remote_stdio__` child scoped to one workspace home. The
 /// Controller supplies both absolute paths; nothing is guessed here.
 fn open_local_gateway_remote(config: &[u8]) -> Result<RemoteHandle, NativeRemoteError> {
     let config: NativeLocalGatewayOpenConfig = serde_json::from_slice(config).map_err(|error| {
@@ -2634,7 +2634,7 @@ fn remote_bootstrap_error(
         | RemoteSessionBackendError::MissingCapability(_) => (
             "incompatible_host_protocol",
             format!(
-                "{target} is not compatible with this Unpeel Controller: {error}. Update Unpeel on the Host and Controller"
+                "{target} is not compatible with this Supercli Controller: {error}. Update Supercli on the Host and Controller"
             ),
         ),
         RemoteSessionBackendError::HostIdentityChanged { .. } => (
@@ -2650,7 +2650,7 @@ fn remote_bootstrap_error(
         RemoteSessionBackendError::InvalidResponse { .. } => (
             "invalid_host_bootstrap",
             format!(
-                "{target} returned an invalid bootstrap: {error}. Update Unpeel on the Host and Controller"
+                "{target} returned an invalid bootstrap: {error}. Update Supercli on the Host and Controller"
             ),
         ),
         RemoteSessionBackendError::BootstrapChanged => (
@@ -2958,8 +2958,8 @@ pub unsafe extern "C" fn supercli_native_bridge_route(
     code
 }
 
-/// Open an SSH-backed remote Host scope without starting local Unpeel
-/// services or reading local Unpeel state.
+/// Open an SSH-backed remote Host scope without starting local Supercli
+/// services or reading local Supercli state.
 ///
 /// Success returns `1`, writes a non-zero registry handle, and leaves the
 /// output buffer empty. A negative result leaves the handle at zero and may
@@ -3055,7 +3055,7 @@ pub unsafe extern "C" fn supercli_native_bridge_remote_ssh_config_open(
     }
 }
 
-/// Install Unpeel on an SSH destination using a fixed, product-owned command.
+/// Install Supercli on an SSH destination using a fixed, product-owned command.
 /// The JSON configuration is identical to `remote_ssh_config_open`; no shell
 /// command crosses the ABI. Success returns owned `{\"mode\": ...}` JSON.
 ///
@@ -3100,7 +3100,7 @@ pub unsafe extern "C" fn supercli_native_bridge_remote_ssh_install(
 }
 
 /// Open the loopback workspace gateway from UTF-8 JSON containing the
-/// absolute `unpeel-host` program path and the workspace's `SUPERCLI_HOME`.
+/// absolute `supercli-host` program path and the workspace's `SUPERCLI_HOME`.
 /// Opening validates only the configuration; the child is spawned by the
 /// first [`supercli_native_bridge_remote_bootstrap`].
 ///
@@ -3148,7 +3148,7 @@ pub unsafe extern "C" fn supercli_native_bridge_remote_local_gateway_open(
 
 /// Start a reconnecting, connection-scoped platform adapter registration for
 /// one local workspace worker. Opening does not require `host.sock` to exist
-/// yet; the background client registers as soon as `unpeel serve` is ready.
+/// yet; the background client registers as soon as `supercli serve` is ready.
 ///
 /// # Safety
 ///
@@ -4510,7 +4510,7 @@ pub unsafe extern "C" fn supercli_native_bridge_remote_opener_set(
     finish_remote_effect_ffi(outcome, "resource opener", out_pointer, out_length)
 }
 
-/// Install one runtime's Unpeel integration on the remote Host
+/// Install one runtime's Supercli integration on the remote Host
 /// (`integrations.install`).
 ///
 /// # Safety
@@ -5092,7 +5092,7 @@ mod tests {
     #[test]
     fn platform_adapter_config_accepts_the_swift_id_spelling_and_stops_cleanly() {
         let config = serde_json::to_vec(&json!({
-            "unpeelHome": "/tmp/unpeel-platform-adapter-no-worker",
+            "supercliHome": "/tmp/supercli-platform-adapter-no-worker",
             "instanceID": "native-test",
             "callbackPort": 41001,
             "callbackToken": "0123456789abcdef0123456789abcdef",
@@ -5187,7 +5187,7 @@ mod tests {
                 .expect("platform adapter registration frame");
             assert_eq!(frame.kind, supercli_core::remote_stdio::FRAME_KIND_REQUEST);
             let request = supercli_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
-            assert_eq!(request.path, "/_unpeel/platform-adapter");
+            assert_eq!(request.path, "/_supercli/platform-adapter");
             let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
             assert_eq!(body["action"], "register");
             let registration: PlatformAdapterRegistration =
@@ -5211,7 +5211,7 @@ mod tests {
         }
 
         let home = std::env::temp_dir().join(format!(
-            "unpeel-native-adapter-restart-{}-{}",
+            "supercli-native-adapter-restart-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -5259,7 +5259,7 @@ mod tests {
         });
 
         let config = serde_json::to_vec(&json!({
-            "unpeelHome": home,
+            "supercliHome": home,
             "instanceID": "native-worker-restart-proof",
             "callbackPort": callback_port,
             "callbackToken": expected_token,
@@ -5274,7 +5274,7 @@ mod tests {
         assert!(home
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("unpeel-native-adapter-restart-")));
+            .is_some_and(|name| name.starts_with("supercli-native-adapter-restart-")));
         std::fs::remove_dir_all(home).unwrap();
     }
 
@@ -5282,7 +5282,7 @@ mod tests {
     #[test]
     fn local_host_control_uses_the_persistent_worker_socket() {
         let home = std::env::temp_dir().join(format!(
-            "unpeel-native-control-{}-{}",
+            "supercli-native-control-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -5299,7 +5299,7 @@ mod tests {
                 .unwrap();
             assert_eq!(frame.kind, supercli_core::remote_stdio::FRAME_KIND_REQUEST);
             let request = supercli_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
-            assert_eq!(request.path, "/_unpeel/pairing");
+            assert_eq!(request.path, "/_supercli/pairing");
             assert_eq!(request.body, br#"{"action":"devices"}"#);
             supercli_core::remote_stdio::write_frame(
                 &mut stream,
@@ -5313,7 +5313,7 @@ mod tests {
             .unwrap();
         });
         let config = serde_json::to_vec(&json!({
-            "unpeelHome": home,
+            "supercliHome": home,
             "request": { "action": "devices" }
         }))
         .unwrap();
@@ -6464,7 +6464,7 @@ mod tests {
         let config = br#"{
             "target":"ssh://managed",
             "mode":"interactiveShell",
-            "askpassProgram":"/absolute/unpeel-host",
+            "askpassProgram":"/absolute/supercli-host",
             "secret":"provider-api-key"
         }"#;
         let mut handle = 0;
@@ -6489,8 +6489,8 @@ mod tests {
     #[test]
     fn remote_local_gateway_open_validates_paths_and_registers_lazily() {
         let config = br#"{
-            "hostProgram":"/bundle/Contents/MacOS/unpeel-host",
-            "unpeelHome":"/homes/.supercli/profiles/writing"
+            "hostProgram":"/bundle/Contents/MacOS/supercli-host",
+            "supercliHome":"/homes/.supercli/profiles/writing"
         }"#;
         let mut handle = 0;
         let mut pointer = ptr::null_mut();
@@ -6513,8 +6513,8 @@ mod tests {
         assert!(remote_backend(handle).is_err());
 
         let required = br#"{
-            "hostProgram":"/bundle/Contents/MacOS/unpeel-host",
-            "unpeelHome":"/homes/.supercli/profiles/writing",
+            "hostProgram":"/bundle/Contents/MacOS/supercli-host",
+            "supercliHome":"/homes/.supercli/profiles/writing",
             "requireHostService":true
         }"#;
         let mut required_handle = 0;
@@ -6536,9 +6536,9 @@ mod tests {
         assert_eq!(unsafe { close_ffi(required_handle) }.0, RESULT_OK);
 
         for config in [
-            br#"{"hostProgram":"unpeel-host","unpeelHome":"/homes/w"}"#.as_slice(),
-            br#"{"hostProgram":"/bundle/unpeel-host","unpeelHome":"profiles/w"}"#.as_slice(),
-            br#"{"hostProgram":"/bundle/unpeel-host"}"#.as_slice(),
+            br#"{"hostProgram":"supercli-host","supercliHome":"/homes/w"}"#.as_slice(),
+            br#"{"hostProgram":"/bundle/supercli-host","supercliHome":"profiles/w"}"#.as_slice(),
+            br#"{"hostProgram":"/bundle/supercli-host"}"#.as_slice(),
         ] {
             let mut handle = u64::MAX;
             let mut pointer = ptr::null_mut();
@@ -6785,7 +6785,7 @@ mod tests {
         assert_eq!(error.code, "host_connection_launch_failed");
         assert!(error.message.contains("ssh://studio"));
         assert!(error.message.contains("non-interactive SSH"));
-        assert!(error.message.contains("`unpeel-host`"));
+        assert!(error.message.contains("`supercli-host`"));
     }
 
     #[test]

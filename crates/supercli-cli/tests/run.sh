@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# End-to-end tests for the `unpeel` CLI and the `unpeel serve` Host service.
+# End-to-end tests for the `supercli` CLI and the `supercli serve` Host service.
 #
 #   ./run.sh                 # every case
 #   ./run.sh archive unread  # only cases whose name contains one of these
 #   ./run.sh -v archive      # stream the case's own output too
 #
-# Each case gets a freshly built UNPEEL_HOME and runs in its own process, so
+# Each case gets a freshly built SUPERCLI_HOME and runs in its own process, so
 # one case can never leave state that changes another's result. Cases are
 # sequential on purpose: they bind ports, spawn hosted processes, and drive a
 # PTY, none of which parallelises safely.
@@ -23,12 +23,12 @@ for arg in "$@"; do
   esac
 done
 
-binary="${UNPEEL_TUI_BINARY:-$crates/target/debug/unpeel}"
-if [[ -z "${UNPEEL_TUI_SKIP_BUILD:-}" ]]; then
-  echo "building unpeel + unpeel-host…"
+binary="${SUPERCLI_TUI_BINARY:-$crates/target/debug/supercli}"
+if [[ -z "${SUPERCLI_TUI_SKIP_BUILD:-}" ]]; then
+  echo "building supercli + supercli-host…"
   # Real lifecycle cases launch the sibling host binary. Rebuilding only the
   # CLI can silently test fresh client code against a stale Host executable.
-  if ! (cd "$crates" && cargo build -p unpeel-cli -p unpeel-host 2>&1 | tail -3); then
+  if ! (cd "$crates" && cargo build -p supercli-cli -p supercli-host 2>&1 | tail -3); then
     echo "build failed" >&2
     exit 1
   fi
@@ -37,14 +37,14 @@ if [[ ! -x "$binary" ]]; then
   echo "no binary at $binary" >&2
   exit 1
 fi
-export UNPEEL_TUI_BINARY="$binary"
+export SUPERCLI_TUI_BINARY="$binary"
 
 # A UNIX socket path is capped near 104 bytes (sockaddr_un) and hosted
 # sessions bind <home>/app-sessions/<uuid>/session.sock — about 55 bytes of
 # suffix. macOS TMPDIR alone is ~49, which blows the limit and makes hosts
 # fail to bind with no visible error: sessions simply never start. Use /tmp
 # unless the caller names something short themselves.
-base="${UNPEEL_TUI_TEST_BASE:-/tmp/ut}"
+base="${SUPERCLI_TUI_TEST_BASE:-/tmp/ut}"
 
 # PTY cores holding a pty-core.lock anywhere under a directory, as
 # "<pid> <lock path>" lines. lsof reports macOS temp paths through the
@@ -83,7 +83,7 @@ for case_file in "$here"/cases/*.py; do
   rm -rf "$home"
   printf '%-22s ' "$name"
   start=$(date +%s)
-  output="$(UNPEEL_TUI_TEST_HOME="$home" python3 "$case_file" 2>&1)"
+  output="$(SUPERCLI_TUI_TEST_HOME="$home" python3 "$case_file" 2>&1)"
   status=$?
   elapsed=$(( $(date +%s) - start ))
 

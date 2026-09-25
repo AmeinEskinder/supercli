@@ -2235,7 +2235,7 @@ mod tests {
     fn temp_root(label: &str) -> PathBuf {
         std::fs::canonicalize(std::env::temp_dir())
             .unwrap_or_else(|_| std::env::temp_dir())
-            .join(format!("unpeel-artifacts-{label}-{}", uuid::Uuid::new_v4()))
+            .join(format!("supercli-artifacts-{label}-{}", uuid::Uuid::new_v4()))
     }
 
     #[cfg(unix)]
@@ -2256,7 +2256,7 @@ mod tests {
     #[cfg(unix)]
     fn png_bytes() -> Vec<u8> {
         let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-        bytes.extend_from_slice(b"unpeel resumable image payload");
+        bytes.extend_from_slice(b"supercli resumable image payload");
         bytes
     }
 

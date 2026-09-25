@@ -14,7 +14,7 @@ use std::thread;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ServerConfig, ServerConnection};
 use sha2::{Digest, Sha256};
-use unpeel_client::{HostClient, HostClientError};
+use supercli_client::{HostClient, HostClientError};
 
 /// Generate a self-signed test certificate for 127.0.0.1 at runtime.
 /// Returns (cert_der, key_der, fingerprint_hex).

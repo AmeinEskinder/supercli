@@ -29,11 +29,11 @@ pub(crate) fn kiro_hook_script_path() -> PathBuf {
 }
 
 pub(crate) fn kiro_v3_hooks_path() -> Option<PathBuf> {
-    Some(kiro_home_dir()?.join("hooks").join("unpeel.json"))
+    Some(kiro_home_dir()?.join("hooks").join("supercli.json"))
 }
 
 pub(crate) fn kiro_v2_agent_path() -> Option<PathBuf> {
-    Some(kiro_home_dir()?.join("agents").join("unpeel-runtime.json"))
+    Some(kiro_home_dir()?.join("agents").join("supercli-runtime.json"))
 }
 
 pub(crate) fn kiro_mcp_path() -> Option<PathBuf> {
@@ -65,7 +65,7 @@ pub(crate) fn write_kiro_v3_hooks(script_path: &Path) -> Result<(), String> {
         .into_iter()
         .map(|(name, trigger, matcher)| {
             let mut hook = json!({
-                "name": format!("unpeel-{name}"),
+                "name": format!("supercli-{name}"),
                 "trigger": trigger,
                 "action": {
                     "type": "command",
@@ -101,8 +101,8 @@ pub(crate) fn write_kiro_v2_agent(script_path: &Path) -> Result<(), String> {
         })
     };
     let config = json!({
-        "name": "unpeel-runtime",
-        "description": "Unpeel lifecycle integration for Kiro CLI v1/v2.",
+        "name": "supercli-runtime",
+        "description": "Supercli lifecycle integration for Kiro CLI v1/v2.",
         "prompt": Value::Null,
         "mcpServers": {},
         "tools": ["*"],
@@ -136,21 +136,21 @@ pub(crate) fn write_kiro_mcp_config() -> Result<(), String> {
     };
     let root = config.as_object_mut().unwrap();
     let servers = root.entry("mcpServers").or_insert_with(|| json!({}));
-    // Never replace a non-object user value with an Unpeel-only map.
+    // Never replace a non-object user value with an Supercli-only map.
     if !servers.is_object() {
         return Ok(());
     }
     let shim = crate::integrations::install::write_mcp_shim()?;
     let servers = servers.as_object_mut().unwrap();
-    servers.insert("unpeel".into(), kiro_mcp_server_value(&shim));
-    // Prune the pre-rename `unpeel-mcp` entry only when its argv matches an
-    // Unpeel-owned Kiro server. Keep the legacy argv recognizable across the
+    servers.insert("supercli".into(), kiro_mcp_server_value(&shim));
+    // Prune the pre-rename `supercli-mcp` entry only when its argv matches an
+    // Supercli-owned Kiro server. Keep the legacy argv recognizable across the
     // migration to the provider-neutral MCP gate.
     if servers
-        .get("unpeel-mcp")
+        .get("supercli-mcp")
         .is_some_and(is_owned_kiro_mcp_entry)
     {
-        servers.remove("unpeel-mcp");
+        servers.remove("supercli-mcp");
     }
     let serialized = serde_json::to_string_pretty(&config)
         .map_err(|error| format!("Failed to serialize Kiro mcp.json: {error}"))?;
@@ -163,7 +163,7 @@ pub(crate) fn kiro_mcp_server_value(shim: &Path) -> Value {
         "args": [],
         // Kiro v3 intentionally gives MCP subprocesses only the variables
         // declared in this block. Every hosted shell exports these generic
-        // Unpeel variables, so concurrent Kiro sessions each resolve their
+        // Supercli variables, so concurrent Kiro sessions each resolve their
         // own identity and home without rewriting the shared settings file;
         // the shim's gate reads the Session's grants from its manifest.
         "env": {
@@ -216,7 +216,7 @@ mod tests {
             &json!({ "args": ["custom-server"] })
         ));
         assert!(is_owned_kiro_mcp_entry(
-            &json!({ "command": "/home/me/.unpeel/bin/unpeel-mcp", "args": [] })
+            &json!({ "command": "/home/me/.supercli/bin/supercli-mcp", "args": [] })
         ));
         assert!(!is_owned_kiro_mcp_entry(
             &json!({ "command": "/usr/local/bin/other-mcp", "args": [] })

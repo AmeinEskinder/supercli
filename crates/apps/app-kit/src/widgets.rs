@@ -8,7 +8,7 @@ use ratatui::widgets::Widget;
 use crate::DragSurface;
 
 /// A one-line Ratatui path component whose visible label initiates a native
-/// file or directory drag in Unpeel.
+/// file or directory drag in Supercli.
 ///
 /// The hit region follows the rendered content width and honors left, center,
 /// and right alignment. Styling belongs on the supplied [`Line`].

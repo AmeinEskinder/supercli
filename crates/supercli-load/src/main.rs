@@ -1,7 +1,7 @@
-//! Unpeel load client: pooled TLS, open-loop, configurable concurrency/rate.
+//! Supercli load client: pooled TLS, open-loop, configurable concurrency/rate.
 //!
 //! Usage:
-//!   unpeel-load --hook-port 8080 --phone-port 8081 --token TOKEN \
+//!   supercli-load --hook-port 8080 --phone-port 8081 --token TOKEN \
 //!     --concurrency 8 --rate 100 --duration 60
 //!
 //! Open-loop: requests are scheduled at a fixed rate (Poisson or constant),
@@ -19,8 +19,8 @@ use tokio::sync::Semaphore;
 use tokio::time::{interval, sleep};
 
 #[derive(Parser, Debug)]
-#[command(name = "unpeel-load")]
-#[command(about = "Unpeel Host load tester (open-loop, pooled TLS)")]
+#[command(name = "supercli-load")]
+#[command(about = "Supercli Host load tester (open-loop, pooled TLS)")]
 struct Args {
     /// Hook listener port (for /mcp/approve-write)
     #[arg(long)]
@@ -431,7 +431,7 @@ async fn do_approve_cycle(
     let caller = format!("load-{}", id);
 
     // Spawn MCP request (blocks until answered)
-    // Note: MCP endpoint is HTTP (not HTTPS) with x-unpeel-auth header
+    // Note: MCP endpoint is HTTP (not HTTPS) with x-supercli-auth header
     let mcp_client = client.clone();
     let mcp_hook = hook_base.replace("https://", "http://");
     let mcp_tok = mcp_token.to_string();
@@ -439,7 +439,7 @@ async fn do_approve_cycle(
     let mcp_handle = tokio::spawn(async move {
         let resp = mcp_client
             .post(format!("{}/mcp/approve-write", mcp_hook))
-            .header("x-unpeel-auth", mcp_tok)
+            .header("x-supercli-auth", mcp_tok)
             .json(&ApproveRequest {
                 caller_session_id: mcp_caller.clone(),
                 target_session_id: format!("{}-t", mcp_caller),

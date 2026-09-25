@@ -1,5 +1,5 @@
 //! Terminal file-drop targets and path drag maps, ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/TerminalDropTargetMap.swift`
+//! `clients/native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift`
 //! and `TerminalPathDragMap.swift`.
 //!
 //! Hosted Ratatui Apps publish short-lived terminal-cell rectangles that
@@ -195,8 +195,8 @@ fn lexically_normalize(path: &Path) -> String {
 /// hover/drop event flow.
 pub const TERMINAL_DND_JS: &str = r#"
 (function () {
-  if (window.__unpeelDndInstalled) return;
-  window.__unpeelDndInstalled = true;
+  if (window.__supercliDndInstalled) return;
+  window.__supercliDndInstalled = true;
   const surface = document.querySelector('.terminal-wrap');
   if (!surface) return;
   let dragDepth = 0;
@@ -204,11 +204,11 @@ pub const TERMINAL_DND_JS: &str = r#"
     e.preventDefault();
     dragDepth++;
     const r = surface.getBoundingClientRect();
-    window.__unpeelDndHover && window.__unpeelDndHover(e.clientX - r.left, e.clientY - r.top);
+    window.__supercliDndHover && window.__supercliDndHover(e.clientX - r.left, e.clientY - r.top);
   });
   surface.addEventListener('dragleave', () => {
     dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0 && window.__unpeelDndLeave) window.__unpeelDndLeave();
+    if (dragDepth === 0 && window.__supercliDndLeave) window.__supercliDndLeave();
   });
   surface.addEventListener('dragover', (e) => { e.preventDefault(); });
   surface.addEventListener('drop', (e) => {
@@ -216,7 +216,7 @@ pub const TERMINAL_DND_JS: &str = r#"
     dragDepth = 0;
     const files = Array.from(e.dataTransfer.files || []).map((f) => f.name);
     const r = surface.getBoundingClientRect();
-    window.__unpeelDndDrop && window.__unpeelDndDrop(e.clientX - r.left, e.clientY - r.top, files);
+    window.__supercliDndDrop && window.__supercliDndDrop(e.clientX - r.left, e.clientY - r.top, files);
   });
 })();
 "#;

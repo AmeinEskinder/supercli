@@ -1,4 +1,4 @@
-//! Shared stylesheet for the `unpeel-ui` components.
+//! Shared stylesheet for the `supercli-ui` components.
 //!
 //! The Dioxus launchers have no CSS pipeline; each launcher's root
 //! includes `style { "{APP_CSS}" }` once. Component class names are owned

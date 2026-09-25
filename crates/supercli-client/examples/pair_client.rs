@@ -1,7 +1,7 @@
 //! Minimal sealed-pairing client for end-to-end tests.
 //!
-//! Reads a pairing QR/paste code (`UNPEEL:1:...`) from argv[1], runs the
-//! real sealed `/mobile/pair` exchange via `unpeel_client::pair`, and prints
+//! Reads a pairing QR/paste code (`SUPERCLI:1:...`) from argv[1], runs the
+//! real sealed `/mobile/pair` exchange via `supercli_client::pair`, and prints
 //! the resulting credentials as JSON to stdout:
 //!
 //! ```json
@@ -13,11 +13,11 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use unpeel_client::{decode_pairing_code, pair, RemoteDeviceIdentity};
+use supercli_client::{decode_pairing_code, pair, RemoteDeviceIdentity};
 
 fn main() {
     let code = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("usage: pair_client '<UNPEEL:1:... code>'");
+        eprintln!("usage: pair_client '<SUPERCLI:1:... code>'");
         std::process::exit(2);
     });
     let payload = decode_pairing_code(&code).unwrap_or_else(|| {

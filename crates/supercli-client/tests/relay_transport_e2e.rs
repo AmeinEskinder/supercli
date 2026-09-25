@@ -15,13 +15,13 @@ use base64::Engine;
 use tungstenite::http::{Request, Response};
 use tungstenite::Message;
 
-use unpeel_client::crypto::handshake::transcript_mac;
-use unpeel_client::crypto::RelayCryptoSession;
-use unpeel_client::relay::{
+use supercli_client::crypto::handshake::transcript_mac;
+use supercli_client::crypto::RelayCryptoSession;
+use supercli_client::relay::{
     EphemeralKeyPair, RelayClientHello, RelayCredentials, RelayHostHello, RelayTunnelRequest,
     RelayTunnelResponse, RELAY_PROTOCOL_VERSION,
 };
-use unpeel_client::{HostClient, RelayConnection, TransportKind};
+use supercli_client::{HostClient, RelayConnection, TransportKind};
 
 mod common;
 
@@ -229,7 +229,7 @@ fn relay_client_reports_transport_kind() {
 /// secrets, and refuses when the relay URL is missing or not `wss://`.
 #[test]
 fn relay_credentials_rebuilt_from_stored_secrets() {
-    use unpeel_client::{relay_credentials_for_host, HostSecrets, PairedHostRecord};
+    use supercli_client::{relay_credentials_for_host, HostSecrets, PairedHostRecord};
 
     let record = PairedHostRecord {
         host_id: "mac-9".to_string(),

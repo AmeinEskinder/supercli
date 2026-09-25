@@ -1,6 +1,6 @@
 //! Standalone-first showcase for App Kit's deliberately closed chart family.
 //!
-//! Run `cargo run --example charts` in any terminal. When an Unpeel-compatible
+//! Run `cargo run --example charts` in any terminal. When an Supercli-compatible
 //! Host injects the optional UI bridge, the same process publishes each chart
 //! as a native Page body for SwiftUI and web renderers.
 
@@ -20,13 +20,13 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use unpeel_app_kit::{
+use supercli_app_kit::{
     BarChart, BarChartBar, BarChartEmphasis, Gauge, InputField, KitTheme, LineChart, LineChartAxis,
     LineChartPoint, LineChartSeries, ListState, Page, PagePointerDecision, PageTheme, Sparkline,
 };
 
 #[cfg(feature = "ui-bridge")]
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AppMetadata, UiBridge, UiBridgeEvent, UiDeltaOperation, UiEventKind, UiEventOutcome,
     UiEventValue, UiNode,
 };
@@ -204,7 +204,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut bridge = {
         let mut bridge = UiBridge::detect(
             AppMetadata::new(
-                "dev.unpeel.app-kit.charts",
+                "dev.supercli.app-kit.charts",
                 "Charts",
                 env!("CARGO_PKG_VERSION"),
             )

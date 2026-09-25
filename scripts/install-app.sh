@@ -5,8 +5,8 @@
 #
 #   curl -fsSL https://supercli.com/install/__APP__/install.sh | sh
 #
-# Installs `__BIN__`, an Unpeel App (a standalone terminal tool that lights
-# up inside Unpeel). Tarballs live in the same R2 release bucket as the Mac
+# Installs `__BIN__`, an Supercli App (a standalone terminal tool that lights
+# up inside Supercli). Tarballs live in the same R2 release bucket as the Mac
 # app, under /releases/<channel>/__APP__/, published by
 # scripts/release-app.mjs.
 #
@@ -102,7 +102,7 @@ install -m 755 "$tmp/__BIN__" "$dir"
 
 echo ""
 echo "__BIN__ installed to $dir/__BIN__"
-echo "Unpeel detects it automatically while that directory is on PATH."
+echo "Supercli detects it automatically while that directory is on PATH."
 __TRY_LINES__
 case ":$PATH:" in
   *:"$dir":*) ;;

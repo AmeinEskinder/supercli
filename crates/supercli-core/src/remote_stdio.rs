@@ -1,6 +1,6 @@
 //! SSH-friendly stdio transport for the shared Controller → Host contract.
 //!
-//! The remote command is `unpeel-host __remote_stdio__`. SSH authenticates the
+//! The remote command is `supercli-host __remote_stdio__`. SSH authenticates the
 //! Unix account, so this layer injects an owner principal and carries the same
 //! request/response envelope as Relay without AEAD. Stdout is frames only;
 //! diagnostics and audit metadata never enter the protocol stream.
@@ -20,7 +20,7 @@ use crate::controller_host::ControllerHostRuntime;
 use crate::relay_wire::{self, TunnelRequest};
 
 pub const REMOTE_STDIO_ARG: &str = "__remote_stdio__";
-/// Per-workspace local Host endpoint owned by `unpeel serve`. The native
+/// Per-workspace local Host endpoint owned by `supercli serve`. The native
 /// bridge's compatibility gateway proxies this same framed contract when the
 /// socket is live, and falls back to the historical one-process gateway when
 /// no service is installed yet.
@@ -50,7 +50,7 @@ pub fn local_host_socket_path(home: &Path) -> PathBuf {
     for byte in &digest[..12] {
         let _ = write!(key, "{byte:02x}");
     }
-    PathBuf::from("/tmp").join(format!("unpeel-host-{}-{key}.sock", unsafe {
+    PathBuf::from("/tmp").join(format!("supercli-host-{}-{key}.sock", unsafe {
         libc::geteuid()
     }))
 }
@@ -120,7 +120,7 @@ fn wait_until_idle(activity: &Arc<(Mutex<u64>, Condvar)>, timeout: Duration) -> 
 
 fn spawn_idle_watchdog(activity: Arc<(Mutex<u64>, Condvar)>) -> Result<(), String> {
     std::thread::Builder::new()
-        .name("unpeel-ssh-idle-watchdog".to_string())
+        .name("supercli-ssh-idle-watchdog".to_string())
         .spawn(move || loop {
             let before = *activity
                 .0
@@ -387,7 +387,7 @@ fn audit_fields() -> serde_json::Value {
 
 pub fn run_stdio() -> Result<(), String> {
     crate::app_paths::ensure_supercli_home()
-        .map_err(|error| format!("prepare Unpeel home: {error}"))?;
+        .map_err(|error| format!("prepare Supercli home: {error}"))?;
     if std::env::var("SUPERCLI_LOCAL_GATEWAY").as_deref() == Ok("1") {
         if proxy_local_host_service()? {
             return Ok(());
@@ -462,7 +462,7 @@ fn proxy_local_host_service() -> Result<bool, String> {
         .map_err(|error| format!("clone local Host socket: {error}"))?;
     let mut downstream = stream;
     std::thread::Builder::new()
-        .name("unpeel-local-host-proxy-input".into())
+        .name("supercli-local-host-proxy-input".into())
         .spawn(move || {
             let stdin = std::io::stdin();
             let _ = std::io::copy(&mut stdin.lock(), &mut upstream);
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn local_host_socket_uses_a_stable_short_fallback_for_deep_homes() {
-        let short = Path::new("/tmp/unpeel-short-home");
+        let short = Path::new("/tmp/supercli-short-home");
         assert_eq!(
             local_host_socket_path(short),
             short.join(LOCAL_HOST_SOCKET_FILE)
@@ -620,7 +620,7 @@ mod tests {
         assert!(first
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("unpeel-host-") && name.ends_with(".sock")));
+            .is_some_and(|name| name.starts_with("supercli-host-") && name.ends_with(".sock")));
         assert!(first.as_os_str().as_bytes().len() <= 103);
     }
 

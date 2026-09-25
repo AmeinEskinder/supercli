@@ -1,5 +1,5 @@
 //! Phase 9 H1 — fuzz + property tests for the sealed pairing envelope
-//! (`unpeel_serve::pairing::open_envelope` / `seal_envelope`).
+//! (`supercli_serve::pairing::open_envelope` / `seal_envelope`).
 //!
 //! Same deterministic in-tree harness as the other H1 fuzz targets:
 //! cargo-fuzz/libFuzzer could not be installed offline, so a seeded
@@ -19,7 +19,7 @@
 
 use std::panic;
 use std::time::Instant;
-use unpeel_serve::pairing::{open_envelope, seal_envelope};
+use supercli_serve::pairing::{open_envelope, seal_envelope};
 
 // ------------------------------------------------------------------ rng ---
 
@@ -97,7 +97,7 @@ fn mutate(rng: &mut Rng, data: &[u8], seeds: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn iters() -> usize {
-    std::env::var("UNPEEL_FUZZ_ITERS")
+    std::env::var("SUPERCLI_FUZZ_ITERS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20_000)
@@ -125,7 +125,7 @@ fn phone_seal(
     }
     let hk = hkdf::Hkdf::<sha2::Sha256>::new(Some(&salt), token.as_bytes());
     let mut key = [0u8; 32];
-    hk.expand(b"unpeel-pairing-v1:phone-to-mac", &mut key)
+    hk.expand(b"supercli-pairing-v1:phone-to-mac", &mut key)
         .expect("32 bytes is a valid HKDF length");
     let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
     let mut nonce_bytes = [0u8; 12];
@@ -133,7 +133,7 @@ fn phone_seal(
         *b = rng.byte();
     }
     let mut aad = Vec::new();
-    aad.extend_from_slice(b"unpeel-pairing-v1");
+    aad.extend_from_slice(b"supercli-pairing-v1");
     aad.push(0);
     aad.extend_from_slice(b"phone-to-mac");
     aad.push(0);

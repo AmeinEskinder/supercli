@@ -1,4 +1,4 @@
-//! Unpeel Browser MCP: `unpeel-host __browser_mcp__` speaks MCP (JSON-RPC 2.0
+//! Supercli Browser MCP: `supercli-host __browser_mcp__` speaks MCP (JSON-RPC 2.0
 //! over stdio) and gives an agent session a real browser through the bundled
 //! `agent-browser` engine.
 //!
@@ -14,8 +14,8 @@
 //! no Playwright, no Chromium download). A Host provisioner may instead write
 //! an owner-only `~/.supercli/browser/remote-cdp.json`; the same agent-browser
 //! daemon then attaches to that provider-owned browser over authenticated WSS
-//! CDP or a bare loopback port. Each Unpeel session still gets an isolated
-//! engine daemon/socket (`unpeel-<session-id>`) under
+//! CDP or a bare loopback port. Each Supercli session still gets an isolated
+//! engine daemon/socket (`supercli-<session-id>`) under
 //! `~/.supercli/browser/sockets`.
 
 use crate::mcp_host::{self_session_id, strip_ansi};
@@ -37,7 +37,7 @@ pub const BROWSER_MCP_ARG: &str = "__browser_mcp__";
 pub const BROWSER_CLEANUP_ARG: &str = "__browser_cleanup__";
 
 const PROTOCOL_VERSION_FALLBACK: &str = "2025-06-18";
-const SERVER_NAME: &str = "unpeel-browser";
+const SERVER_NAME: &str = "supercli-browser";
 /// Engine calls launch Chrome on first use; give them room. `wait` calls get
 /// the engine's own 25s default timeout well inside this.
 const ENGINE_TIMEOUT_MS: u64 = 60_000;
@@ -85,7 +85,7 @@ pub fn run_stdio() -> Result<(), String> {
     Ok(())
 }
 
-/// `unpeel-host __browser_cleanup__ <session-id>`: close the session's engine
+/// `supercli-host __browser_cleanup__ <session-id>`: close the session's engine
 /// daemon (and its browser) and remove its socket/pid files. Called by the
 /// native app when a session is closed or pruned, because the engine daemon
 /// deliberately outlives both the MCP server and the provider CLI.
@@ -95,7 +95,7 @@ pub fn run_cleanup(args: &[String]) -> Result<(), String> {
         .first()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .ok_or("Usage: unpeel-host __browser_cleanup__ <session-id>")?;
+        .ok_or("Usage: supercli-host __browser_cleanup__ <session-id>")?;
 
     match resolve_engine_binary() {
         Ok(binary) => {
@@ -171,7 +171,7 @@ same project tree share that window, profile, cookies, and logins; other project
             "name": SERVER_NAME,
             "version": env!("CARGO_PKG_VERSION"),
         },
-        "instructions": format!("Operate a real browser for this Unpeel session. {isolation} \
+        "instructions": format!("Operate a real browser for this Supercli session. {isolation} \
     Core loop: \
     browser_open a URL, browser_snapshot to get element refs like @e1, act by ref \
     (browser_click/browser_fill), then re-snapshot after navigation or DOM changes — refs go \
@@ -328,15 +328,15 @@ impl BrowserSecurity {
 pub(crate) fn caller_refusal_reason() -> Option<String> {
     let Some(session_id) = self_session_id() else {
         return Some(
-            "The calling session is unknown, so Unpeel MCP can't authorize browser access. \
-Run this from a hosted Unpeel session."
+            "The calling session is unknown, so Supercli MCP can't authorize browser access. \
+Run this from a hosted Supercli session."
                 .into(),
         );
     };
     if session_host::load_manifest(&session_id).is_none() {
         return Some(
-            "The calling session has no Unpeel manifest, so Unpeel MCP can't authorize browser \
-access. Run this from a hosted Unpeel session."
+            "The calling session has no Supercli manifest, so Supercli MCP can't authorize browser \
+access. Run this from a hosted Supercli session."
                 .into(),
         );
     }
@@ -361,7 +361,7 @@ the user to approve it in Settings ▸ Agent access if they change their mind."
                 ),
                 Err(error) => Some(format!(
                     "Browser access needs the user's approval, but the approval prompt could \
-not be shown ({error}). Ask the user to open Unpeel and retry, or set Settings ▸ Agent access ▸ Browser access to \
+not be shown ({error}). Ask the user to open Supercli and retry, or set Settings ▸ Agent access ▸ Browser access to \
 Allow."
                 )),
             }
@@ -463,8 +463,8 @@ impl BrowserOptions {
             key: key.clone(),
             profile_dir: browser_root.join("profiles").join(&safe),
             state_dir: browser_root.join("projects").join(&key),
-            owner_session_key: format!("unpeel-project-{key}"),
-            state_name: format!("unpeel-proj-{safe}"),
+            owner_session_key: format!("supercli-project-{key}"),
+            state_name: format!("supercli-proj-{safe}"),
         })
     }
 }
@@ -510,15 +510,15 @@ impl ProjectBrowserScope {
 /// Locate the `agent-browser` engine binary — the shared order in
 /// `browser_engine::resolve`: `SUPERCLI_AGENT_BROWSER_BIN` (or the older
 /// `SUPERCLI_BROWSER_BIN`) → the Host-installed, hash-verified
-/// `~/.supercli/browser/bin/agent-browser` → next to `unpeel-host` (the app
+/// `~/.supercli/browser/bin/agent-browser` → next to `supercli-host` (the app
 /// bundle, a compatibility candidate until the repo split) → PATH. A missing
-/// engine names the `unpeel browser install` fix.
+/// engine names the `supercli browser install` fix.
 fn resolve_engine_binary() -> Result<PathBuf, String> {
     crate::browser_engine::resolve(&crate::app_paths::supercli_home())
 }
 
 fn engine_session_key(session_id: &str) -> String {
-    format!("unpeel-{session_id}")
+    format!("supercli-{session_id}")
 }
 
 fn engine_socket_dir() -> PathBuf {
@@ -773,7 +773,7 @@ fn apply_cdp_binding(command: &mut Command, binding: Option<&CdpBinding>) {
     if let Some(binding) = binding {
         command
             .env(REMOTE_CDP_ENGINE_ENV, binding.endpoint())
-            // Every Unpeel session attached to a shared Chrome owns one
+            // Every Supercli session attached to a shared Chrome owns one
             // strict tab. The sticky engine setting plus the per-call env
             // survives daemon restarts and prevents cross-session fallback.
             .env("AGENT_BROWSER_PIN_TAB", "1");
@@ -904,8 +904,8 @@ fn read_project_browser_scope(key: &str) -> Option<(ProjectBrowserScope, String)
             key: key.to_string(),
             profile_dir: browser_root.join("profiles").join(&safe_root),
             state_dir,
-            owner_session_key: format!("unpeel-project-{key}"),
-            state_name: format!("unpeel-proj-{safe_root}"),
+            owner_session_key: format!("supercli-project-{key}"),
+            state_name: format!("supercli-proj-{safe_root}"),
         },
         endpoint,
     ))
@@ -1447,7 +1447,7 @@ running. Call browser_close once, then retry."
         }
         if !pid_command_line(daemon).is_some_and(|command| command.contains("agent-browser")) {
             return Err(
-                "The browser connection mode changed, but Unpeel could not verify the existing \
+                "The browser connection mode changed, but Supercli could not verify the existing \
 browser daemon's identity. Close the session before retrying."
                     .to_string(),
             );
@@ -1569,7 +1569,7 @@ fn exec_engine_with(
     // profile; agent-browser only attaches to the configured CDP endpoint.
     if cdp_binding.is_none() {
         command.env("AGENT_BROWSER_DOWNLOAD_PATH", &downloads_dir);
-        // A visible browser matches Unpeel's "watch your agent work" model and
+        // A visible browser matches Supercli's "watch your agent work" model and
         // is the default; Settings ▸ Agent access can switch to background.
         if options.settings.headed {
             command.env("AGENT_BROWSER_HEADED", "1");
@@ -1586,7 +1586,7 @@ fn exec_engine_with(
     if cdp_binding.is_none() && !executable.is_empty() {
         command.env("AGENT_BROWSER_EXECUTABLE_PATH", executable);
     }
-    // Follow Unpeel's appearance so pages render in the mode the user works
+    // Follow Supercli's appearance so pages render in the mode the user works
     // in; "system" leaves the engine default.
     if let Some(theme) = &options.theme {
         command.env("AGENT_BROWSER_COLOR_SCHEME", theme);
@@ -2126,7 +2126,7 @@ publishes the file; downloads save under artifact_dir/downloads."
         );
         match (&remote_cdp, &project_scope) {
             (Ok(Some(binding)), _) => lines.push(format!(
-                "browsing data: owned by the {} remote browser service; this Unpeel session \
+                "browsing data: owned by the {} remote browser service; this Supercli session \
 has its own pinned tab and agent-browser control daemon, while the provider defines browser \
 profile and project isolation.",
                 binding.provider
@@ -2135,7 +2135,7 @@ profile and project isolation.",
                 "browsing data: unavailable until the remote CDP configuration is repaired.".into(),
             ),
             (Ok(None), Some(scope)) => lines.push(format!(
-                "browsing data: one Unpeel-managed window and profile per project tree at {}. \
+                "browsing data: one Supercli-managed window and profile per project tree at {}. \
 Every session gets its own pinned tab; cookies and logins are shared across the project, never \
 with the user's personal browser or another project.",
                 scope.profile_dir.display()
@@ -2510,7 +2510,7 @@ mod tests {
 
     #[test]
     fn engine_session_key_is_prefixed() {
-        assert_eq!(engine_session_key("abc-123"), "unpeel-abc-123");
+        assert_eq!(engine_session_key("abc-123"), "supercli-abc-123");
     }
 
     #[test]
@@ -2682,8 +2682,8 @@ mod tests {
             key: "0123456789abcdef".into(),
             profile_dir: PathBuf::from("/tmp/profile"),
             state_dir: PathBuf::from("/tmp/state"),
-            owner_session_key: "unpeel-project-0123456789abcdef".into(),
-            state_name: "unpeel-proj-project-one".into(),
+            owner_session_key: "supercli-project-0123456789abcdef".into(),
+            state_name: "supercli-proj-project-one".into(),
         };
         let binding = CdpBinding::Project(ProjectCdpBinding {
             endpoint: "ws://127.0.0.1:9222/devtools/browser/private-id".into(),
@@ -2729,7 +2729,7 @@ mod tests {
 
     #[test]
     fn singleton_lock_pid_parses_chrome_lock_symlink() {
-        let dir = std::env::temp_dir().join(format!("unpeel-lock-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-lock-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(singleton_lock_pid(&dir), None);

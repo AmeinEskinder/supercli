@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # rehearse-upgrade.sh — prove that upgrading the Mac app "just works" with
-# zero user actions, against an ISOLATED Unpeel home (never ~/.unpeel).
+# zero user actions, against an ISOLATED Supercli home (never ~/.supercli).
 #
 # What it does, in order:
 #   1. Fetches the currently released app + CLI for OLD_VERSION from
-#      unpeel.com (cached under $CACHE) unless OLD_APP / OLD_CLI are given.
+#      supercli.com (cached under $CACHE) unless OLD_APP / OLD_CLI are given.
 #   2. Seeds a fresh isolated home: project + starred custom preset via the
 #      OLD CLI, then launches the OLD released app and creates two shell
 #      sessions THROUGH it (its /mcp/start-session bridge), archives one,
 #      soaks $SOAK seconds and quits it (hosted sessions keep running —
 #      that is the survival model).
 #   4. Fingerprints the home, launches the NEW app (default: the
-#      release-flavored dist/Unpeel.app left by `bun run release -- --dry-run`)
+#      release-flavored dist/Supercli.app left by `bun run release -- --dry-run`)
 #      against the SAME home for $SOAK seconds, and quits it.
 #   5. Asserts: hosted sessions survived (same pid + pid_started_at), the new
 #      app registered its hook port and attached the live session, the
@@ -23,20 +23,20 @@
 # 104 bytes (the PTY harness has the same rule).
 #
 # Usage:
-#   clients/native/rehearse-upgrade.sh                 # 0.3.1 → dist/Unpeel.app
-#   OLD_VERSION=0.3.1 NEW_APP=/path/Unpeel.app clients/native/rehearse-upgrade.sh
+#   clients/native/rehearse-upgrade.sh                 # 0.3.1 → dist/Supercli.app
+#   OLD_VERSION=0.3.1 NEW_APP=/path/Supercli.app clients/native/rehearse-upgrade.sh
 #   SOAK=40 clients/native/rehearse-upgrade.sh          # longer app soak
 #
-# Never touches ~/.unpeel, /Applications/Unpeel.app, or a running Unpeel.
+# Never touches ~/.supercli, /Applications/Supercli.app, or a running Supercli.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OLD_VERSION="${OLD_VERSION:-0.3.1}"
 CHANNEL="${CHANNEL:-beta}"
-NEW_APP="${NEW_APP:-$HERE/dist/Unpeel.app}"
+NEW_APP="${NEW_APP:-$HERE/dist/Supercli.app}"
 SOAK="${SOAK:-25}"
-HOME_ISO="${REHEARSAL_HOME:-/tmp/unpeel-upg-$(date +%H%M%S)}"
-CACHE="${REHEARSAL_CACHE:-$HOME/Library/Caches/unpeel-upgrade-rehearsal}"
+HOME_ISO="${REHEARSAL_HOME:-/tmp/supercli-upg-$(date +%H%M%S)}"
+CACHE="${REHEARSAL_CACHE:-$HOME/Library/Caches/supercli-upgrade-rehearsal}"
 REPORT="$HOME_ISO.report"
 
 pass=0; fail=0; notes=()
@@ -45,41 +45,41 @@ bad()  { fail=$((fail+1)); printf '  \033[31mFAIL\033[0m %s\n' "$1"; }
 note() { notes+=("$1"); printf '  \033[33mNOTE\033[0m %s\n' "$1"; }
 step() { printf '\n==> %s\n' "$1"; }
 
-case "$HOME_ISO" in "$HOME/.unpeel"|"$HOME/.unpeel/"*) echo "refusing to use the real home" >&2; exit 1;; esac
+case "$HOME_ISO" in "$HOME/.supercli"|"$HOME/.supercli/"*) echo "refusing to use the real home" >&2; exit 1;; esac
 rm -rf "$HOME_ISO" "$REPORT"; mkdir -p "$HOME_ISO" "$REPORT" "$CACHE"
 
 # --- 1. old artifacts -------------------------------------------------------
 step "old artifacts ($OLD_VERSION, channel $CHANNEL)"
 if [ -z "${OLD_APP:-}" ]; then
-  dmg="$CACHE/Unpeel-$OLD_VERSION.dmg"
-  [ -f "$dmg" ] || curl -fsSL -o "$dmg" "https://unpeel.com/releases/$CHANNEL/Unpeel-$OLD_VERSION.dmg"
-  OLD_APP="$CACHE/Unpeel-$OLD_VERSION.app"
+  dmg="$CACHE/Supercli-$OLD_VERSION.dmg"
+  [ -f "$dmg" ] || curl -fsSL -o "$dmg" "https://supercli.com/releases/$CHANNEL/Supercli-$OLD_VERSION.dmg"
+  OLD_APP="$CACHE/Supercli-$OLD_VERSION.app"
   if [ ! -d "$OLD_APP" ]; then
     mnt="$(hdiutil attach -nobrowse -readonly "$dmg" | tail -1 | awk '{print $NF}')"
-    ditto "$mnt/Unpeel.app" "$OLD_APP"; hdiutil detach "$mnt" -quiet
+    ditto "$mnt/Supercli.app" "$OLD_APP"; hdiutil detach "$mnt" -quiet
   fi
 fi
 if [ -z "${OLD_CLI:-}" ]; then
-  tgz="$CACHE/unpeel-$OLD_VERSION-macos-universal.tar.gz"
-  [ -f "$tgz" ] || curl -fsSL -o "$tgz" "https://unpeel.com/releases/$CHANNEL/cli/unpeel-$OLD_VERSION-macos-universal.tar.gz"
+  tgz="$CACHE/supercli-$OLD_VERSION-macos-universal.tar.gz"
+  [ -f "$tgz" ] || curl -fsSL -o "$tgz" "https://supercli.com/releases/$CHANNEL/cli/supercli-$OLD_VERSION-macos-universal.tar.gz"
   mkdir -p "$CACHE/cli-$OLD_VERSION"; tar -xzf "$tgz" -C "$CACHE/cli-$OLD_VERSION"
-  OLD_CLI="$CACHE/cli-$OLD_VERSION/unpeel"
+  OLD_CLI="$CACHE/cli-$OLD_VERSION/supercli"
 fi
 old_ver="$(plutil -extract CFBundleShortVersionString raw "$OLD_APP/Contents/Info.plist")"
 old_build="$(plutil -extract CFBundleVersion raw "$OLD_APP/Contents/Info.plist")"
 new_ver="$(plutil -extract CFBundleShortVersionString raw "$NEW_APP/Contents/Info.plist")"
 new_build="$(plutil -extract CFBundleVersion raw "$NEW_APP/Contents/Info.plist")"
-new_dev="$(plutil -extract UnpeelDevelopmentBuild raw "$NEW_APP/Contents/Info.plist" 2>/dev/null || echo "absent")"
+new_dev="$(plutil -extract SupercliDevelopmentBuild raw "$NEW_APP/Contents/Info.plist" 2>/dev/null || echo "absent")"
 echo "  old app $old_ver ($old_build)  old cli $("$OLD_CLI" --version 2>/dev/null | head -1)"
-echo "  new app $new_ver ($new_build)  UnpeelDevelopmentBuild=$new_dev"
-[ "$new_dev" = "absent" ] || [ "$new_dev" = "false" ] && ok "new app is release-flavored (no UnpeelDevelopmentBuild key)" || bad "new app is a DEV build — rehearse with the release dry-run bundle"
+echo "  new app $new_ver ($new_build)  SupercliDevelopmentBuild=$new_dev"
+[ "$new_dev" = "absent" ] || [ "$new_dev" = "false" ] && ok "new app is release-flavored (no SupercliDevelopmentBuild key)" || bad "new app is a DEV build — rehearse with the release dry-run bundle"
 
-export UNPEEL_HOME="$HOME_ISO"
+export SUPERCLI_HOME="$HOME_ISO"
 
 # --- 2+3. run the released app and seed THROUGH it ---------------------------
 # Sessions are created by the released app itself (its /mcp/start-session
 # bridge, the same path the UI's launch verbs use), so the hosted PTYs are
-# the old app's bundled unpeel-host and the rows carry the app's own project
+# the old app's bundled supercli-host and the rows carry the app's own project
 # binding. The old CLI only adds the project and the custom preset (shared
 # app-state.json writes the app picks up live).
 launch_app() { # $1 app, $2 tag
@@ -89,7 +89,7 @@ launch_app() { # $1 app, $2 tag
 }
 quit_app() { kill -TERM "$1" 2>/dev/null; for _ in $(seq 1 40); do kill -0 "$1" 2>/dev/null || return 0; sleep 0.25; done; kill -KILL "$1" 2>/dev/null; note "app $1 needed SIGKILL"; }
 bridge() { # $1 port, $2 route, $3 json body
-  curl -s -m 20 -X POST "http://127.0.0.1:$1$2" -H "x-unpeel-auth: $(cat "$HOME_ISO/mcp/auth-token")" -d "$3"
+  curl -s -m 20 -X POST "http://127.0.0.1:$1$2" -H "x-supercli-auth: $(cat "$HOME_ISO/mcp/auth-token")" -d "$3"
 }
 wait_for_app() { # $1 pid → prints the hook port once the app registered it
   for _ in $(seq 1 80); do
@@ -155,7 +155,7 @@ proj_id="$(python3 -c "import json;d=json.load(open('$HOME_ISO/app-state.json'))
 # 0.4.0 the released app is a client of a separate Host-service worker: it
 # writes app-ports + auth-token the instant it launches, but a bridge call
 # fired then hits the worker before it is ready (EAGAIN) and the app
-# relaunches the service at +5s, so nothing gets seeded. `unpeel new` creates
+# relaunches the service at +5s, so nothing gets seeded. `supercli new` creates
 # a hosted session standalone (its own host, no app/worker), which is the
 # released headless write path. Pre-0.4.0 apps host through their own bridge,
 # so those still seed the historical way after the app is up.
@@ -224,9 +224,9 @@ t_new="$(date '+%Y-%m-%d %H:%M:%S')"
 new_pid="$(launch_app "$NEW_APP" new-app)"; sleep "$SOAK"
 kill -0 "$new_pid" 2>/dev/null && ok "new app stayed up for ${SOAK}s" || bad "new app exited early (see $REPORT/new-app.stdout)"
 grep -q . "$HOME_ISO/app-ports" 2>/dev/null && ok "new app registered its hook port in app-ports" || bad "no hook port registered"
-pgrep -fl "unpeel-attach" > "$REPORT/new-app.attach-processes" 2>/dev/null
-pgrep -f "unpeel-attach.*$s1" >/dev/null && ok "new app attached the live session ($s1) with unpeel-attach" || note "no unpeel-attach for $s1 during the soak (attach happens only for the selected pane; see $REPORT/new-app.attach-processes)"
-pgrep -f "unpeel-attach $s2" >/dev/null && bad "new app attached the ARCHIVED session" || ok "archived session stays unattached"
+pgrep -fl "supercli-attach" > "$REPORT/new-app.attach-processes" 2>/dev/null
+pgrep -f "supercli-attach.*$s1" >/dev/null && ok "new app attached the live session ($s1) with supercli-attach" || note "no supercli-attach for $s1 during the soak (attach happens only for the selected pane; see $REPORT/new-app.attach-processes)"
+pgrep -f "supercli-attach $s2" >/dev/null && bad "new app attached the ARCHIVED session" || ok "archived session stays unattached"
 # Which Host owner did this launch pick? (0.4.0+ logs it to hooks/trace.log.)
 if grep -q "native-app Local scope: Host service client" "$HOME_ISO/hooks/trace.log" 2>/dev/null; then
   launch_mode=client
@@ -255,8 +255,8 @@ elif [ -n "$port" ] && [ -n "$tok" ]; then
   # Still wait for its worker/host to be ready so these queries don't race a
   # not-yet-listening bridge, exactly as the seed path does.
   wait_worker_ready >/dev/null 2>&1 || true
-  curl -s -m 10 -X POST "http://127.0.0.1:$port/mcp/sidebar" -H "x-unpeel-auth: $tok" -d '{}' > "$REPORT/new-app.sidebar.json"
-  curl -s -m 10 -X POST "http://127.0.0.1:$port/mcp/list-presets" -H "x-unpeel-auth: $tok" -d '{}' > "$REPORT/new-app.presets.json"
+  curl -s -m 10 -X POST "http://127.0.0.1:$port/mcp/sidebar" -H "x-supercli-auth: $tok" -d '{}' > "$REPORT/new-app.sidebar.json"
+  curl -s -m 10 -X POST "http://127.0.0.1:$port/mcp/list-presets" -H "x-supercli-auth: $tok" -d '{}' > "$REPORT/new-app.presets.json"
   python3 - "$REPORT/new-app.sidebar.json" "$s1" "$s2" <<'EOF' && ok "new app's sidebar lists the live session (not archived) and counts the archived one" || bad "new app's sidebar does not match the seeded state (see $REPORT/new-app.sidebar.json)"
 import json,sys
 d=json.load(open(sys.argv[1])); s1,s2=sys.argv[2],sys.argv[3]

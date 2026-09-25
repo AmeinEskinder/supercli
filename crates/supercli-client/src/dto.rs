@@ -36,7 +36,7 @@ pub enum SessionStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ActivitySource {
-    /// Exact: the runtime's Unpeel integration (hook latch).
+    /// Exact: the runtime's Supercli integration (hook latch).
     Hooks,
     /// The Host's screen fallback — lower confidence, never a completion
     /// notification.

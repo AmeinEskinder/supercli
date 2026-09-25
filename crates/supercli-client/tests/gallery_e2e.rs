@@ -7,7 +7,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use unpeel_client::{HostClient, HostClientError};
+use supercli_client::{HostClient, HostClientError};
 
 struct RecordedRequest {
     method: String,
@@ -410,7 +410,7 @@ fn upload_chunk_surfaces_host_error() {
     });
     let client = HostClient::new(&base, "t").expect("http client");
     let err = client
-        .upload_artifact_chunk(&unpeel_client::UploadChunkParams {
+        .upload_artifact_chunk(&supercli_client::UploadChunkParams {
             session_id: "s-1",
             upload_id: "not-a-uuid",
             offset: 0,

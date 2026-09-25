@@ -1,11 +1,11 @@
 //! Headless host serving stack.
 //!
-//! This is the UI-free half of what used to live inside `unpeel-cli`: the
+//! This is the UI-free half of what used to live inside `supercli-cli`: the
 //! app-less `/mobile/*` server, the relay uplink runtime, pairing, hook-event
 //! ingestion, approvals, and the sidebar/session data model that feeds the
 //! phone-facing snapshot. None of it depends on ratatui — the interactive TUI
 //! is now one frontend on top of these modules. [`driver::HostRuntime`] is the
-//! canonical per-workspace server core; the foreground `unpeel serve` command
+//! canonical per-workspace server core; the foreground `supercli serve` command
 //! is one runner, and the native app will migrate onto the same runtime with
 //! platform capability adapters.
 //!

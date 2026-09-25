@@ -1,4 +1,4 @@
-//! Scoped terminal keyboard enhancements shared by Unpeel Apps.
+//! Scoped terminal keyboard enhancements shared by Supercli Apps.
 
 use std::io::{self, Write};
 

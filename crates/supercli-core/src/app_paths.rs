@@ -4,7 +4,7 @@ fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// The real per-user Unpeel root, deliberately ignoring `SUPERCLI_HOME`.
+/// The real per-user Supercli root, deliberately ignoring `SUPERCLI_HOME`.
 ///
 /// Machine-wide coordination (the workspace registry and Host-service
 /// supervisor) lives here. A scoped workspace process must still be able to
@@ -14,14 +14,14 @@ pub fn real_supercli_home() -> PathBuf {
     home_dir().join(".supercli")
 }
 
-/// The Unpeel state dir: `~/.supercli`, or the directory named by `SUPERCLI_HOME`
+/// The Supercli state dir: `~/.supercli`, or the directory named by `SUPERCLI_HOME`
 /// when that env var is set and non-empty. The native app sets it for blank
 /// dev instances and spawns hosts with the env inherited, so app + host agree
 /// on one isolated state dir.
 /// The machine-wide workspace registry: one file at the REAL `~/.supercli`,
 /// legacy wire name `profiles.json` with a top-level `profiles` array whose
 /// records carry `id`, `name`, and the workspace's absolute `home`. Written
-/// by the app and `unpeel workspaces`; read here only.
+/// by the app and `supercli workspaces`; read here only.
 pub fn workspace_registry_path(real_home: &Path) -> PathBuf {
     real_home.join("profiles.json")
 }

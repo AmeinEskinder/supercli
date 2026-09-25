@@ -1,9 +1,9 @@
 #!/bin/bash
 umask 077
 INPUT=$(cat)
-# Global provider hooks must be inert outside a hosted Unpeel Session.
+# Global provider hooks must be inert outside a hosted Supercli Session.
 [ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
 # Cap trace growth so the log can never grow without bound.
 if [ -f "$TRACE_FILE" ]; then
@@ -15,7 +15,7 @@ fi
 # The payload contains the user's prompt text; the trace line at the end of
 # this script logs only the event/tool/post metadata unless
 # SUPERCLI_HOOK_TRACE_VERBOSE=1 explicitly opts into full-payload logging.
-SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/app-ports}"
 
 # POST one hook payload synchronously and record the outcome in
 # _hook_post_results ("<port>=<http-code>,..."). Loopback posts finish in
@@ -100,7 +100,7 @@ record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
   [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
-  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_name_json="$(json_escape_string "$_record_event_name")"
   _record_generation="$(runtime_generation_json_field)"
@@ -144,7 +144,7 @@ trace_claude_hook() {
 }
 
 # Grok scans ~/.claude/settings.json for compatibility and injects
-# GROK_SESSION_ID on every hook. Unpeel's grok-hook.sh already maps
+# GROK_SESSION_ID on every hook. Supercli's grok-hook.sh already maps
 # Grok-native events. Forwarding Grok's camelCase session_start here
 # is normalized to a busy Start and spins the sidebar from launch;
 # Grok's idle TUI then re-arms that busy state forever.
@@ -169,7 +169,7 @@ fi
 # carrying the (new) session_id + transcript_path. Forward it as HookSeen so
 # it only latches provider metadata — posted verbatim the server would
 # treat a Claude-shaped SessionStart as busy. This is what re-links an
-# Unpeel session to the conversation the user resumed inside claude,
+# Supercli session to the conversation the user resumed inside claude,
 # before any prompt is typed. Also accept Grok/Cursor camelCase names.
 case "$LAST_EVENT_NAME" in
   SessionStart|session_start|sessionStart)
@@ -195,7 +195,7 @@ record_subagent_activity() {
   esac
   _child_id=$(printf '%s' "$INPUT" | grep -oE '"agent_id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]+"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
   [ -n "$_child_id" ] && [ "${#_child_id}" -le 160 ] || return 0
-  _child_session_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
+  _child_session_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_child_session_dir" ] || return 0
   _child_dir="$_child_session_dir/background-hooks/$SUPERCLI_RUNTIME_GENERATION"
   _child_file="$_child_dir/$_child_id.json"
@@ -224,7 +224,7 @@ esac
 
 _hook_post_results=""
 if [ -n "$SUPERCLI_SESSION_ID" ]; then
-  # Several Unpeel instances can run at once (e.g. a dev build next to the
+  # Several Supercli instances can run at once (e.g. a dev build next to the
   # installed app) and they share the port registry. Post to every known
   # port, not just the first that answers, so the instance that owns this
   # session always receives the event. Posts go out synchronously and in

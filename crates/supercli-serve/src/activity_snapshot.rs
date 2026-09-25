@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn canonical_snapshot_is_stable_and_preserves_unread_handoff() {
         let directory = std::env::temp_dir().join(format!(
-            "unpeel-activity-state-test-{}",
+            "supercli-activity-state-test-{}",
             uuid::Uuid::new_v4()
         ));
         fs::create_dir_all(&directory).unwrap();

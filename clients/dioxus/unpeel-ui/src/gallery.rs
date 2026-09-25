@@ -1,9 +1,9 @@
 //! Browser gallery UI: the session artifact panel ported from the Swift
-//! `BrowserGalleryPanel` (`clients/ios/UnpeelIOS/Sources/UnpeelIOS/`).
+//! `BrowserGalleryPanel` (`clients/ios/SupercliIOS/Sources/SupercliIOS/`).
 //!
 //! Convention (same as `components.rs`): these are pure renderers over
-//! `unpeel_client` DTOs. The app shell does Host I/O — listing via
-//! [`unpeel_client::HostClient::browser_artifacts`], chunk reads via
+//! `supercli_client` DTOs. The app shell does Host I/O — listing via
+//! [`supercli_client::HostClient::browser_artifacts`], chunk reads via
 //! `artifact_bytes`, deletion via `delete_artifact`, uploads via
 //! `upload_artifact` — and hands snapshots down; intents travel up through
 //! `EventHandler`s.
@@ -14,7 +14,7 @@
 //! bytes) happens in the launcher, which owns the canvas export path.
 
 use dioxus::prelude::*;
-use unpeel_client::ArtifactMeta;
+use supercli_client::ArtifactMeta;
 
 use crate::annotation::{Arrow, ArrowMarkupView, CropRect, CropView, FreehandView, Stroke};
 use crate::i18n::t;

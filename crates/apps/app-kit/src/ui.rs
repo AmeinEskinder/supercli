@@ -31,7 +31,7 @@ use crate::surface::{CanvasPage, SurfaceReference, SurfaceSpec};
 use crate::tree::{Tree, TreeChildState, TreeItem};
 
 /// Stable protocol name carried by every independently replayable frame.
-pub const UI_PROTOCOL_NAME: &str = "unpeel.ui";
+pub const UI_PROTOCOL_NAME: &str = "supercli.ui";
 /// Oldest App Kit component protocol version implemented by this build.
 pub const UI_PROTOCOL_MIN_VERSION: u32 = 1;
 /// Newest App Kit component protocol version implemented by this build.
@@ -47,10 +47,10 @@ pub const UI_PROTOCOL_VERSION: u32 = UI_PROTOCOL_MAX_VERSION;
 /// The terminal App binds this path. The existing native or headless Host
 /// connects to it, so its lifetime follows the terminal App rather
 /// than a replaceable renderer.
-pub const UI_SOCKET_ENV: &str = "UNPEEL_UI_SOCKET";
+pub const UI_SOCKET_ENV: &str = "SUPERCLI_UI_SOCKET";
 /// Per-App-session participant-token signing key retained by the Host and App.
 /// Renderers receive only route-bound credentials derived from this key.
-pub const UI_TOKEN_ENV: &str = "UNPEEL_UI_TOKEN";
+pub const UI_TOKEN_ENV: &str = "SUPERCLI_UI_TOKEN";
 /// Renderer capability required before the App sends revision deltas.
 pub const UI_DELTA_CAPABILITY: &str = "serverDelta";
 /// Renderer capability for the v1 Markdown editor component.
@@ -4337,7 +4337,7 @@ mod tests {
 
     #[test]
     fn framing_rejects_other_versions_and_oversized_safe_integers() {
-        let unsupported = br#"{"type":"error","protocol":"unpeel.ui","protocolVersion":2,"code":"test","message":"test"}"#;
+        let unsupported = br#"{"type":"error","protocol":"supercli.ui","protocolVersion":2,"code":"test","message":"test"}"#;
         assert!(matches!(
             decode_ui_frame(unsupported),
             Err(UiProtocolError::UnsupportedVersion { received: 2, .. })

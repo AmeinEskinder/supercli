@@ -14,7 +14,7 @@ tint = "#0082FB"
 spinner_tint = "#0082FB"
 icon = "muse"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -36,7 +36,7 @@ attention_reliable = true
 escape_cancels_turn = true
 
 [integration]
-summary = "Stages and registers the unpeel plugin with `muse plugins install`; the plugin carries the hooks and the MCP server."
+summary = "Stages and registers the supercli plugin with `muse plugins install`; the plugin carries the hooks and the MCP server."
 legacy_evidence = ["hooks/muse-plugin.installed"]
 
 [[usage.stores]]

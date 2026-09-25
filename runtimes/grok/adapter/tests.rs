@@ -29,7 +29,7 @@ fn grok_hook_script_carries_provider_session_and_tool_for_attention_events() {
         .arg("Attention")
         .env("HOME", hook_env_home("grok-attention"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
         .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file("grok-attention"))
         .stdin(Stdio::piped())
@@ -102,7 +102,7 @@ fn grok_hook_script_posts_through_port_registry_without_app_port() {
         .arg("UserPromptSubmit")
         .env("HOME", hook_env_home("grok-registry-only"))
         .env_remove("SUPERCLI_APP_PORT")
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("SUPERCLI_APP_PORT_REGISTRY_FILE", &registry)
         .env(
             "SUPERCLI_HOOK_TRACE_FILE",

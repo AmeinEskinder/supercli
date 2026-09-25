@@ -1,4 +1,4 @@
-//! Headless `unpeel` command surface — the scriptable half of the product.
+//! Headless `supercli` command surface — the scriptable half of the product.
 //! Every verb here runs against the shared on-disk contract and
 //! `supercli_core::session_ops`, so agents, CI, and cron drive sessions without
 //! any UI (and without the desktop app). `--json` everywhere that returns
@@ -14,100 +14,100 @@ use supercli_serve::sessions::{scan_sidebar, ScanCache, SessionRow, SidebarItem,
 
 const SESSION_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const PAIR_STANDALONE_NOTICE: &str =
-    "serve isn't running; starting the Unpeel Host in the background so this box stays reachable";
-const PAIR_USAGE: &str = "usage: unpeel pair [--advertise-host H] [--advertise-port P]
-       unpeel pair list [--json]
-       unpeel pair remove <device-id|name>
-       unpeel pair relay <device-id|name> on|off
+    "serve isn't running; starting the Supercli Host in the background so this box stays reachable";
+const PAIR_USAGE: &str = "usage: supercli pair [--advertise-host H] [--advertise-port P]
+       supercli pair list [--json]
+       supercli pair remove <device-id|name>
+       supercli pair relay <device-id|name> on|off
 
-Pairing always goes through the Host service: a live `unpeel serve` owns the
+Pairing always goes through the Host service: a live `supercli serve` owns the
 window, otherwise one is started in the background first. `--serve` is
 accepted for older scripts and changes nothing.";
 
 pub const REGISTRAR_HELP: &str = "\
-unpeel registrar — the one unified registrar for skills/runtimes/MCP/hooks
+supercli registrar — the one unified registrar for skills/runtimes/MCP/hooks
 
-  unpeel registrar sync [--registry DIR] [--json]
+  supercli registrar sync [--registry DIR] [--json]
       Install or update every connector from the registry (signature
       verified, digest checked), then verify everything installed:
       transport present, token present when auth requires one.
 
       With no --registry, only the verify pass runs over the local
-      connectors. This is the same pass as `unpeel connector sync`.";
+      connectors. This is the same pass as `supercli connector sync`.";
 
 pub const USAGE: &str = "\
-unpeel — run and steer CLI agent sessions
+supercli — run and steer CLI agent sessions
 
-  unpeel serve                    run the UI-free Host service for all workspaces
-  unpeel serve install|uninstall|status
+  supercli serve                    run the UI-free Host service for all workspaces
+  supercli serve install|uninstall|status
                                   manage the per-user boot service unit
-  unpeel pair [--advertise-host H] [--advertise-port P]
+  supercli pair [--advertise-host H] [--advertise-port P]
                                   pair a Controller (phone, Mac app) with this Host
-  unpeel pair list|remove <device>|relay <device> on|off
-  unpeel --workspace NAME [...]   run any command in an isolated workspace
-  unpeel ls [--json]              list sessions (status, project, command)
-  unpeel new [--preset L | --command C] [--cwd D] [--json]
-  unpeel send <id> <text...> [--enter]  in a session: MCP send_text + approval policy
-  unpeel keys <id> <sequence>     send raw bytes (\\r, \\t, \\e escapes)
-  unpeel screen <id> [--cols N] [--rows N]
-  unpeel logs <id> [--lines N] [--follow]
-  unpeel wait <id> [--idle] [--text S] [--timeout SECONDS]
-  unpeel resume <id>               returned agent: resume in place; stopped: resume terminal
-  unpeel stop|archive|restore|rm <id>
-  unpeel transcript <id> [--entries N] [--markdown]
-  unpeel open <path|resource> [--with APP] [--kind KIND] [--json]
-  unpeel settings list|get <key>|set <key> <value> [--json]
-  unpeel apps list|install <app-id> [--check] [--json]
+  supercli pair list|remove <device>|relay <device> on|off
+  supercli --workspace NAME [...]   run any command in an isolated workspace
+  supercli ls [--json]              list sessions (status, project, command)
+  supercli new [--preset L | --command C] [--cwd D] [--json]
+  supercli send <id> <text...> [--enter]  in a session: MCP send_text + approval policy
+  supercli keys <id> <sequence>     send raw bytes (\\r, \\t, \\e escapes)
+  supercli screen <id> [--cols N] [--rows N]
+  supercli logs <id> [--lines N] [--follow]
+  supercli wait <id> [--idle] [--text S] [--timeout SECONDS]
+  supercli resume <id>               returned agent: resume in place; stopped: resume terminal
+  supercli stop|archive|restore|rm <id>
+  supercli transcript <id> [--entries N] [--markdown]
+  supercli open <path|resource> [--with APP] [--kind KIND] [--json]
+  supercli settings list|get <key>|set <key> <value> [--json]
+  supercli apps list|install <app-id> [--check] [--json]
                                   MCP gates apply to Sessions launched afterward
-  unpeel connector discover|install|connect|disconnect|doctor|run [--json]
+  supercli connector discover|install|connect|disconnect|doctor|run [--json]
                                   Host-side connectors (plugins)
-  unpeel registrar sync [--registry DIR] [--json]
+  supercli registrar sync [--registry DIR] [--json]
                                   the one unified registrar: install/update +
                                   verify every connector from a registry
-  unpeel integrations [list]      Unpeel's hooks + MCP integration per agent CLI
-  unpeel integrations install <runtime|--all> [--project DIR]
-  unpeel mcp [<tool> [<action> key=value ...]]
-                                  every Unpeel MCP action from the shell
-  unpeel browser open <url>|snapshot|click <t>|fill <t> <text>|screenshot|...
-  unpeel artifacts publish <image>   unpeel current   unpeel report <summary>
-  unpeel worktree create <name>      unpeel agents|skills <action> [key=value ...]
-  unpeel presets [list | add <label> <command> | remove <label>]
-  unpeel presets star|unstar|enable|disable <label|id>
-  unpeel presets edit <label|id> [--label L] [--command C]
-  unpeel presets reorder <label|id> <position>
-  unpeel link enroll <key>        activate Unpeel Link on this Host machine
-  unpeel link status [--json]     show Link enrollment and entitlement state
-  unpeel link deactivate          stop Link on this Host machine
-  unpeel browser install [--check] [--json]
+  supercli integrations [list]      Supercli's hooks + MCP integration per agent CLI
+  supercli integrations install <runtime|--all> [--project DIR]
+  supercli mcp [<tool> [<action> key=value ...]]
+                                  every Supercli MCP action from the shell
+  supercli browser open <url>|snapshot|click <t>|fill <t> <text>|screenshot|...
+  supercli artifacts publish <image>   supercli current   supercli report <summary>
+  supercli worktree create <name>      supercli agents|skills <action> [key=value ...]
+  supercli presets [list | add <label> <command> | remove <label>]
+  supercli presets star|unstar|enable|disable <label|id>
+  supercli presets edit <label|id> [--label L] [--command C]
+  supercli presets reorder <label|id> <position>
+  supercli link enroll <key>        activate Supercli Link on this Host machine
+  supercli link status [--json]     show Link enrollment and entitlement state
+  supercli link deactivate          stop Link on this Host machine
+  supercli browser install [--check] [--json]
                                   install the Host-owned browser engine
-  unpeel workspaces [list | add <name> | remove <name>]
-  unpeel schedule add|list|pause|resume|remove|run-once|daemon
+  supercli workspaces [list | add <name> | remove <name>]
+  supercli schedule add|list|pause|resume|remove|run-once|daemon
                                   scheduled autonomous sessions (opt-in)
-  unpeel migrate [--apply] [--json]
+  supercli migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
-  unpeel self-update --check [--manifest PATH] [--json]
+  supercli self-update --check [--manifest PATH] [--json]
                                   check for updates (local manifest only;
                                   exit 3 when an update is available)
-  unpeel backup [--to <path>] [--json]
+  supercli backup [--to <path>] [--json]
                                   snapshot this home into a verifiable archive
-  unpeel restore --from <path> [--force] [--json]
+  supercli restore --from <path> [--force] [--json]
                                   verify and reinstall a backup archive
-                                  (bare `unpeel restore <session>` still
+                                  (bare `supercli restore <session>` still
                                   restores an archived session)
-  unpeel config check [--json]    validate workspace settings
+  supercli config check [--json]    validate workspace settings
                                   (exit 2 when a value is invalid)
-  unpeel init [--json]            first-run setup: private home, defaults,
+  supercli init [--json]            first-run setup: private home, defaults,
                                   pairing code/QR, then doctor
-  unpeel add [PATH] [--name N] [--here] [--json]
+  supercli add [PATH] [--name N] [--here] [--json]
                                   add a folder (default: here) as a project
-  unpeel projects [list | add <name> <path> | remove <name|path>]
-  unpeel hosts prune [--json]    reap leftover hosts of filed sessions
-  unpeel help
-  unpeel --version
+  supercli projects [list | add <name> <path> | remove <name|path>]
+  supercli hosts prune [--json]    reap leftover hosts of filed sessions
+  supercli help
+  supercli --version
 ";
 
 pub const BARE_HINT: &str =
-    "Run `unpeel serve` on a host, or open the Unpeel app — this binary has no terminal UI.";
+    "Run `supercli serve` on a host, or open the Supercli app — this binary has no terminal UI.";
 
 struct Args {
     positional: Vec<String>,
@@ -267,14 +267,14 @@ fn print_sessions(args: &Args) {
     }
 }
 
-const NEW_USAGE: &str = "usage: unpeel new [--command C | --preset LABEL] [--cwd DIR] [--project ID] [--cols N] [--rows N] [--json]
+const NEW_USAGE: &str = "usage: supercli new [--command C | --preset LABEL] [--cwd DIR] [--project ID] [--cols N] [--rows N] [--json]
 
 Create a new Session in this workspace. With no --command or --preset, opens a
 plain terminal. Prints the new session id (or {\"id\":...} with --json).";
 
 fn new_session(args: &Args) -> Result<(), String> {
     // `--help`/`-h`/`help` must print usage and create nothing. Without this
-    // guard `unpeel new --help` fell through to "plain terminal" and spawned a
+    // guard `supercli new --help` fell through to "plain terminal" and spawned a
     // stray Session (the 0.4-era hazard; regressed on old CLIs probed by the
     // upgrade harness).
     if args.has("help")
@@ -349,7 +349,7 @@ fn wait(args: &Args) -> Result<bool, String> {
     let reference = args
         .positional
         .get(1)
-        .ok_or("usage: unpeel wait <id> [--idle] [--text S]")?;
+        .ok_or("usage: supercli wait <id> [--idle] [--text S]")?;
     let row = resolve(reference)?;
     let timeout = Duration::from_secs(args.number("timeout").unwrap_or(300));
     let needle = args.value("text");
@@ -393,7 +393,7 @@ fn wait(args: &Args) -> Result<bool, String> {
 }
 
 fn logs(args: &Args) -> Result<(), String> {
-    let reference = args.positional.get(1).ok_or("usage: unpeel logs <id>")?;
+    let reference = args.positional.get(1).ok_or("usage: supercli logs <id>")?;
     let row = resolve(reference)?;
     let path = row.dir().join("output.bin");
     let lines = args.number("lines").unwrap_or(200) as usize;
@@ -466,7 +466,7 @@ fn projects(args: &[String]) -> Result<(), String> {
         }
         Some("add") => {
             let (Some(name), Some(path)) = (args.get(1), args.get(2)) else {
-                return Err("usage: unpeel projects add <name> <path>".into());
+                return Err("usage: supercli projects add <name> <path>".into());
             };
             match crate::state_cli::add_project_to_app_state(name, path)? {
                 crate::state_cli::AddProject::Added => {}
@@ -479,7 +479,7 @@ fn projects(args: &[String]) -> Result<(), String> {
         }
         Some("remove") => {
             let Some(needle) = args.get(1) else {
-                return Err("usage: unpeel projects remove <name|path>".into());
+                return Err("usage: supercli projects remove <name|path>".into());
             };
             remove_project(needle)
         }
@@ -487,7 +487,7 @@ fn projects(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// `unpeel add [path]` — the one-liner: make the folder you're standing in
+/// `supercli add [path]` — the one-liner: make the folder you're standing in
 /// a project, so its sessions group in the sidebar (and on the phone). The
 /// name comes from the directory, or the repo root when you're deeper
 /// inside a checkout.
@@ -567,7 +567,7 @@ fn transcript(args: &Args) -> Result<(), String> {
     let reference = args
         .positional
         .get(1)
-        .ok_or("usage: unpeel transcript <id>")?;
+        .ok_or("usage: supercli transcript <id>")?;
     let row = resolve(reference)?;
     let mode = if args.has("markdown") {
         "markdown"
@@ -598,7 +598,7 @@ fn pair_through_running_host(
         println!("{line}");
     }
     println!("\n{code}\n");
-    println!("paste or scan in an Unpeel Controller — expires in 5 minutes");
+    println!("paste or scan in an Supercli Controller — expires in 5 minutes");
     loop {
         match supercli_serve::local_gateway::pairing_status(&home)? {
             supercli_serve::local_gateway::PairingStatus::Active => {
@@ -631,7 +631,7 @@ pub(crate) fn ensure_host_running() -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    Err("the Unpeel Host did not start in time; run `unpeel serve` and retry".into())
+    Err("the Supercli Host did not start in time; run `supercli serve` and retry".into())
 }
 
 fn paired_device_list() -> Result<Vec<serde_json::Value>, String> {
@@ -662,7 +662,7 @@ fn resolve_paired_device(selector: &str) -> Result<String, String> {
     match named.as_slice() {
         [device] => Ok(device_field(device, "id").to_owned()),
         [] => Err(format!(
-            "no paired device {selector:?} (see `unpeel pair list`)"
+            "no paired device {selector:?} (see `supercli pair list`)"
         )),
         _ => Err(format!(
             "several paired devices are named {selector:?}; use the device id"
@@ -678,7 +678,7 @@ fn pair_list(json: bool) -> Result<(), String> {
         return Ok(());
     }
     if devices.is_empty() {
-        println!("no paired devices -- pair one: unpeel pair");
+        println!("no paired devices -- pair one: supercli pair");
         return Ok(());
     }
     for device in &devices {
@@ -743,7 +743,7 @@ fn serve() -> Result<(), String> {
     })
 }
 
-const HOSTS_USAGE: &str = "usage: unpeel hosts prune [--json]
+const HOSTS_USAGE: &str = "usage: supercli hosts prune [--json]
 
 Terminate leftover per-process session hosts in this workspace whose session
 is already filed (exited or archived) but whose host process never exited.
@@ -751,7 +751,7 @@ Runs the same reap the Host service performs at startup and on a slow timer.
 Only a provably-identical recorded host process (pid + start time) is signaled,
 never the shared PTY core, never by name match. Prints what it reaped.";
 
-/// `unpeel hosts prune` — user-only on-demand reap of orphaned session hosts.
+/// `supercli hosts prune` — user-only on-demand reap of orphaned session hosts.
 fn hosts_prune(json: bool) -> Result<(), String> {
     let reaped = supercli_core::session_host::reap_orphan_session_hosts();
     if json {
@@ -788,7 +788,7 @@ fn hosts_prune(json: bool) -> Result<(), String> {
     Ok(())
 }
 
-const SERVE_USAGE: &str = "usage: unpeel serve [install [--graphical] | uninstall | status]
+const SERVE_USAGE: &str = "usage: supercli serve [install [--graphical] | uninstall | status]
 
 Run the UI-free Host service for the default and registered workspaces until
 SIGINT or SIGTERM. With `--workspace NAME`, serve only that workspace.
@@ -812,7 +812,7 @@ or image use: packaging/service/ (macOS needs auto-login on a headless Mac;
 Linux needs `loginctl enable-linger`).";
 
 /// Machine scope with no `SUPERCLI_HOME`; a registered workspace otherwise —
-/// the same rule `unpeel serve` itself uses to pick what it runs.
+/// the same rule `supercli serve` itself uses to pick what it runs.
 fn serve_unit_scope() -> Result<supercli_serve::service_install::ServiceScope, String> {
     Ok(match crate::workspaces::current_scope()? {
         None => supercli_serve::service_install::ServiceScope::Machine,
@@ -828,14 +828,14 @@ fn serve_service(action: &str, graphical: bool) -> Result<i32, String> {
     match action {
         "install" => {
             let binary = std::env::current_exe()
-                .map_err(|error| format!("could not resolve the unpeel binary: {error}"))?;
+                .map_err(|error| format!("could not resolve the supercli binary: {error}"))?;
             let path = install::install(manager, &scope, &binary, graphical)?;
             println!("installed {}", path.display());
             if graphical {
-                println!("the Unpeel Host service now runs inside this user's desktop session (graphical-session.target)");
+                println!("the Supercli Host service now runs inside this user's desktop session (graphical-session.target)");
                 println!("desktop session note: the session must import DISPLAY (`systemctl --user import-environment DISPLAY XAUTHORITY`) and pull in graphical-session.target — GNOME/KDE/sway do; an Xvfb or streamed-Xorg script starts packaging/service/supercli-desktop-session.target instead (graphical-session.target refuses manual start)");
             } else {
-                println!("the Unpeel Host service now starts on boot for this user");
+                println!("the Supercli Host service now starts on boot for this user");
             }
             if matches!(manager, install::ServiceManager::Launchd) {
                 println!("headless Mac note: enable automatic login so the service starts after a reboot");
@@ -896,7 +896,7 @@ fn serve_service(action: &str, graphical: bool) -> Result<i32, String> {
 /// Returns None when the arguments aren't a headless command (→ run the UI).
 pub fn run(args: &[String]) -> i32 {
     let Some(command) = args.first().map(String::as_str) else {
-        // Bare `unpeel` is never a blank screen: usage plus the one line
+        // Bare `supercli` is never a blank screen: usage plus the one line
         // that says where the product actually runs.
         println!("{USAGE}");
         println!("{BARE_HINT}");
@@ -908,7 +908,7 @@ pub fn run(args: &[String]) -> i32 {
             .positional
             .get(1)
             .cloned()
-            .ok_or_else(|| format!("usage: unpeel {command} <id>"))
+            .ok_or_else(|| format!("usage: supercli {command} <id>"))
     };
     let result: Result<i32, String> = match command {
         "ls" | "list" | "--list" => {
@@ -920,7 +920,7 @@ pub fn run(args: &[String]) -> i32 {
         // Inside a hosted Session a write to another Session is an agent-class
         // effect: it takes the MCP `send_text`/`send_keys` path with the user's
         // cooperative write policy (approval prompt, remembered pairs). From a
-        // terminal outside Unpeel the user is the operator and writes directly.
+        // terminal outside Supercli the user is the operator and writes directly.
         "send" => reference_arg().and_then(|reference| {
             let row = resolve(&reference)?;
             if crate::mcp_cli::inside_session() {
@@ -1030,7 +1030,7 @@ pub fn run(args: &[String]) -> i32 {
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "migrate" => {
-            if args[1..].iter().any(|a| a == "--from-unpeel") {
+            if args[1..].iter().any(|a| a == "--from-supercli") {
                 Ok(crate::import_unpeel_cli::run_from_unpeel(&args[1..]))
             } else {
                 Ok(crate::migrate_cli::run(&args[1..]))
@@ -1088,7 +1088,7 @@ pub fn run(args: &[String]) -> i32 {
         "workspaces" => {
             crate::workspaces::cli(&parsed.positional[1..], parsed.has("json")).map(|_| 0)
         }
-        "profiles" | "profile" => Err("`profiles` was renamed; use `unpeel workspaces`".into()),
+        "profiles" | "profile" => Err("`profiles` was renamed; use `supercli workspaces`".into()),
         "hosts" => match args.get(1).map(String::as_str) {
             Some("prune")
                 if parsed.positional.len() == 2
@@ -1164,11 +1164,11 @@ pub fn run(args: &[String]) -> i32 {
             Ok(0)
         }
         "version" | "--version" | "-V" => {
-            println!("unpeel {}", env!("CARGO_PKG_VERSION"));
+            println!("supercli {}", env!("CARGO_PKG_VERSION"));
             Ok(0)
         }
         other => {
-            eprintln!("unpeel: unknown command {other:?}\n");
+            eprintln!("supercli: unknown command {other:?}\n");
             eprintln!("{USAGE}");
             return 2;
         }

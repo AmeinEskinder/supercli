@@ -14,7 +14,7 @@ pub(crate) fn antigravity_mcp_config_path() -> Option<PathBuf> {
     })
 }
 
-/// The managed `unpeel` stdio entry. No `env` block: the shim resolves the
+/// The managed `supercli` stdio entry. No `env` block: the shim resolves the
 /// calling Session from the inherited environment, or from process ancestry
 /// when the launcher strips it, and serves no tools outside a hosted Session.
 pub(crate) fn antigravity_mcp_server_value(shim: &str) -> Value {
@@ -45,10 +45,10 @@ pub fn install() -> Result<(), String> {
     let shim = crate::integrations::install::write_mcp_shim()?;
     let desired = antigravity_mcp_server_value(&shim.to_string_lossy());
     let servers = servers.as_object_mut().unwrap();
-    if servers.get("unpeel") == Some(&desired) {
+    if servers.get("supercli") == Some(&desired) {
         return Ok(());
     }
-    servers.insert("unpeel".into(), desired);
+    servers.insert("supercli".into(), desired);
     let serialized = serde_json::to_string_pretty(&config)
         .map_err(|error| format!("Failed to serialize Antigravity mcp_config.json: {error}"))?;
     write_file_atomic(
@@ -64,8 +64,8 @@ mod tests {
 
     #[test]
     fn managed_entry_is_a_plain_stdio_server_with_inherited_environment() {
-        let entry = antigravity_mcp_server_value("/home/me/.unpeel/bin/unpeel-mcp");
-        assert_eq!(entry["command"], "/home/me/.unpeel/bin/unpeel-mcp");
+        let entry = antigravity_mcp_server_value("/home/me/.supercli/bin/supercli-mcp");
+        assert_eq!(entry["command"], "/home/me/.supercli/bin/supercli-mcp");
         assert_eq!(entry["args"], json!([]));
         assert!(entry.get("env").is_none());
     }

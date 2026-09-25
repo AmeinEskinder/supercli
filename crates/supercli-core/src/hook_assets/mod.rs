@@ -65,7 +65,7 @@ pub(crate) fn read_mergeable_json_object(
 
 /// Write `contents` to `path` atomically: write a unique temp file in the
 /// same directory, then rename over the target. Prevents a concurrent reader
-/// (or a concurrent Unpeel host spawning another session) from observing a torn
+/// (or a concurrent Supercli host spawning another session) from observing a torn
 /// half-written settings file.
 pub(crate) fn write_file_atomic(path: &Path, contents: &str, label: &str) -> Result<(), String> {
     write_file_atomic_with_mode(path, contents, label, 0o600)
@@ -82,7 +82,7 @@ fn write_file_atomic_with_mode(
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("unpeel-settings");
+        .unwrap_or("supercli-settings");
     let (tmp, mut file) = loop {
         let tmp = path.with_file_name(format!(
             ".{file_name}.supercli-tmp.{}.{}",

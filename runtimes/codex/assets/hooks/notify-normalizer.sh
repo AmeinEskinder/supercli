@@ -7,7 +7,7 @@ fi
 
 # Codex's notify callback reports its own `type` vocabulary. Normalize that
 # provider contract here, inside the Codex runtime package, before handing the
-# payload to Unpeel's provider-neutral hook transport.
+# payload to Supercli's provider-neutral hook transport.
 EVENT_TYPE=$(printf '%s' "$INPUT" | grep -oE '"hook_event_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -oE '"[^"]*"$' | tr -d '"')
 if [ -z "$EVENT_TYPE" ]; then
   CODEX_TYPE=$(printf '%s' "$INPUT" | grep -oE '"type"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -oE '"[^"]*"$' | tr -d '"')

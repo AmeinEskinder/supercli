@@ -1,4 +1,4 @@
-//! The shared PTY core: `unpeel-host __pty_core__` hosts N Sessions in ONE
+//! The shared PTY core: `supercli-host __pty_core__` hosts N Sessions in ONE
 //! process by running `session_host::run_host` once per Session on its own
 //! thread. Everything a Session publishes — `manifest.json`, `session.sock`,
 //! `output.bin`, the attach protocol, hook env — is byte-for-byte what a
@@ -13,7 +13,7 @@
 //! - `pty-core.sock` (mode 0600) speaks one newline-delimited JSON request
 //!   per connection: `ping`, `launch`, `shutdown`;
 //! - `launch` replies only after the Session's preliminary manifest is on
-//!   disk, so an `unpeel-attach` started in parallel still finds it inside
+//!   disk, so an `supercli-attach` started in parallel still finds it inside
 //!   its short manifest wait;
 //! - `shutdown` succeeds only with zero hosted Sessions. Nothing may ever
 //!   stop a core that hosts live Sessions.
@@ -155,7 +155,7 @@ impl std::fmt::Display for CoreLaunchError {
 }
 
 /// `true` when the published core record carries a `host_build_id` that
-/// differs from the `unpeel-host` binary this process would launch. Records
+/// differs from the `supercli-host` binary this process would launch. Records
 /// without a build id, or an unresolvable binary, are treated as matching.
 pub fn core_runs_other_build() -> bool {
     let Some(record) = load_record() else {
@@ -437,7 +437,7 @@ impl CoreState {
     }
 }
 
-/// Entry point for `unpeel-host __pty_core__`. Returns `Ok` when this
+/// Entry point for `supercli-host __pty_core__`. Returns `Ok` when this
 /// process was not needed (another core holds the lock) or after a clean
 /// `shutdown`.
 pub fn run_from_args(args: &[String]) -> Result<(), String> {
@@ -459,7 +459,7 @@ pub fn run_from_args(args: &[String]) -> Result<(), String> {
     run_core_at(home, sessions_root, runner)
 }
 
-/// `unpeel-host __pty_core__ --takeover`: replace the running core without
+/// `supercli-host __pty_core__ --takeover`: replace the running core without
 /// restarting any terminal (see `docs/agents/pty-core.md`, "Handoff").
 pub const TAKEOVER_ARG: &str = "--takeover";
 

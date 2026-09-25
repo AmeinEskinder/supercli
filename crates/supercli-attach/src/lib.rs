@@ -1,4 +1,4 @@
-//! Core logic for `unpeel-attach`, the tmux-style attach client for Unpeel
+//! Core logic for `supercli-attach`, the tmux-style attach client for Supercli
 //! hosted sessions.
 //!
 //! Protocol (must stay byte-compatible with
@@ -1118,7 +1118,7 @@ mod tests {
     #[test]
     fn replay_tail_honors_retention_floor_and_skips_sparse_prefix() {
         let temp = std::env::temp_dir().join(format!(
-            "unpeel-attach-retention-{}-{}",
+            "supercli-attach-retention-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

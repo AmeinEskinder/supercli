@@ -101,7 +101,7 @@ impl ConnectorHttp {
             serde_json::json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": { "name": "unpeel-host", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": "supercli-host", "version": env!("CARGO_PKG_VERSION") },
             }),
         );
         let init_result =

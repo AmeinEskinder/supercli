@@ -1,4 +1,4 @@
-//! `unpeel doctor` — R4 operability diagnostics.
+//! `supercli doctor` — R4 operability diagnostics.
 //!
 //! Checks:
 //! - Home-dir permissions (SUPERCLI_HOME exists, writable, not world-writable)
@@ -21,7 +21,7 @@ fn supercli_home() -> PathBuf {
 
 /// Run all doctor checks. Returns exit code (0 = all passed).
 /// With `--json`, emits a JSON report.
-/// Run the checks without printing. Shared by `run` and `unpeel init`
+/// Run the checks without printing. Shared by `run` and `supercli init`
 /// (which merges the doctor report into its own JSON output).
 pub fn run_checks() -> (PathBuf, Vec<(&'static str, bool, String)>) {
     let home = supercli_home();
@@ -48,7 +48,7 @@ pub fn run(args: &[String]) -> i32 {
         let output = args
             .get(idx + 1)
             .map(|s| s.as_str())
-            .unwrap_or("unpeel-doctor-bundle.tar.gz");
+            .unwrap_or("supercli-doctor-bundle.tar.gz");
         let output_path = std::path::PathBuf::from(output);
         let (home, _) = run_checks();
         match build_bundle(&home, &output_path) {
@@ -85,7 +85,7 @@ pub fn run(args: &[String]) -> i32 {
         });
         println!("{}", serde_json::to_string_pretty(&report).unwrap());
     } else {
-        println!("unpeel doctor — home: {}", home.display());
+        println!("supercli doctor — home: {}", home.display());
         for (name, ok, detail) in &checks {
             let status = if *ok { "OK  " } else { "FAIL" };
             println!("  [{status}] {name}: {detail}");
@@ -162,7 +162,7 @@ fn check_chain_integrity(home: &std::path::Path) -> (&'static str, bool, String)
             continue;
         }
         checked += 1;
-        // R4: use the real verify_review_chain from unpeel-core.
+        // R4: use the real verify_review_chain from supercli-core.
         // This validates the hash chain cryptographically, not just JSON syntax.
         match supercli_core::action_reviews::verify_review_chain(&session_dir) {
             Ok(count) => {
@@ -369,7 +369,7 @@ fn redact_value(value: &mut serde_json::Value) {
 
 /// Build the diagnostics bundle. Returns the path to the created archive.
 fn build_bundle(home: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
-    let staging = std::env::temp_dir().join(format!("unpeel-bundle-{}", std::process::id()));
+    let staging = std::env::temp_dir().join(format!("supercli-bundle-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).map_err(|e| format!("create staging dir: {e}"))?;
 

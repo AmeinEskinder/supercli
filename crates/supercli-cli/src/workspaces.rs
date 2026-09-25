@@ -1,4 +1,4 @@
-//! Workspaces from the CLI — isolated Unpeel instances with their own state homes.
+//! Workspaces from the CLI — isolated Supercli instances with their own state homes.
 //!
 //! The shared registry deliberately keeps its historical persistence contract:
 //! one file at the REAL `~/.supercli/profiles.json`, with a top-level `profiles`
@@ -11,7 +11,7 @@
 //! `SUPERCLI_HOME`: every instance must see the same registry. Writes are atomic
 //! last-writer-wins, matching the app.
 //!
-//! `unpeel --workspace NAME …` claims the flag before any dispatch and sets
+//! `supercli --workspace NAME …` claims the flag before any dispatch and sets
 //! `SUPERCLI_HOME` for the rest of the process; spawned hosts inherit the env,
 //! so sessions, state, hook broadcasts, and pairing all stay in that home.
 
@@ -203,11 +203,11 @@ fn not_found_message(real_dir: &Path, reference: &str) -> String {
     let known: Vec<String> = load(real_dir).iter().map(slug_of).collect();
     if known.is_empty() {
         format!(
-            "no workspace named {reference:?} — create one with `unpeel workspaces add {reference}`"
+            "no workspace named {reference:?} — create one with `supercli workspaces add {reference}`"
         )
     } else {
         format!(
-            "no workspace named {reference:?} (workspaces: {}) — create one with `unpeel workspaces add {reference}`",
+            "no workspace named {reference:?} (workspaces: {}) — create one with `supercli workspaces add {reference}`",
             known.join(", ")
         )
     }
@@ -276,7 +276,7 @@ pub fn current_scope() -> Result<Option<(String, PathBuf)>, String> {
         }
     }
     Err(format!(
-        "SUPERCLI_HOME ({}) is not a registered workspace; register it with `unpeel workspaces add` first",
+        "SUPERCLI_HOME ({}) is not a registered workspace; register it with `supercli workspaces add` first",
         home.display()
     ))
 }
@@ -330,7 +330,7 @@ pub fn enter(reference: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `unpeel workspaces [list | add <name> | remove <name>]`.
+/// `supercli workspaces [list | add <name> | remove <name>]`.
 pub fn cli(args: &[String], json: bool) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("list") | None => {
@@ -358,7 +358,7 @@ pub fn cli(args: &[String], json: bool) -> Result<(), String> {
                 return Ok(());
             }
             if records.is_empty() {
-                println!("no workspaces — create one with `unpeel workspaces add <name>`");
+                println!("no workspaces — create one with `supercli workspaces add <name>`");
                 return Ok(());
             }
             for record in &records {
@@ -380,12 +380,12 @@ pub fn cli(args: &[String], json: bool) -> Result<(), String> {
             let name = args[1..].join(" ");
             let record = create(&real_supercli_dir(), &name)?;
             println!("created {} → {}", record.name, record.home);
-            println!("run it with `unpeel --workspace {}`", slug_of(&record));
+            println!("run it with `supercli --workspace {}`", slug_of(&record));
             Ok(())
         }
         Some("remove") | Some("rm") => {
             let Some(reference) = args.get(1) else {
-                return Err("usage: unpeel workspaces remove <name>".into());
+                return Err("usage: supercli workspaces remove <name>".into());
             };
             let record = remove(&real_supercli_dir(), reference)?;
             println!(
@@ -404,7 +404,7 @@ mod tests {
 
     fn temp_real_dir() -> PathBuf {
         let dir = std::env::temp_dir()
-            .join("unpeel-workspaces-test")
+            .join("supercli-workspaces-test")
             .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&dir).unwrap();
         dir

@@ -1,4 +1,4 @@
-//! Screen-derived busy/idle for recognized agents whose Unpeel integration
+//! Screen-derived busy/idle for recognized agents whose Supercli integration
 //! is not installed (the Herdr-style fallback tier).
 //!
 //! Hooks stay the authority: this classifier is consulted only while a
@@ -141,7 +141,7 @@ mod tests {
             working: vec!["esc to interrupt".into(), "• Working".into()],
             idle_prompt: vec!["›".into()],
         };
-        let idle = "────\n⠁      ⠄\n› Ask Codex to do anything\n  gpt-6-astra xhigh · ~/Dev/unpeel";
+        let idle = "────\n⠁      ⠄\n› Ask Codex to do anything\n  gpt-6-astra xhigh · ~/Dev/supercli";
         assert_eq!(classify(idle, &rules), Some(ScreenActivity::Idle));
         let working = "• Working (12s • Esc to interrupt)\n› ";
         assert_eq!(classify(working, &rules), Some(ScreenActivity::Working));

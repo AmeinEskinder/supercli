@@ -1,4 +1,4 @@
-//! `unpeel backup` / `unpeel restore` — consistent, verifiable snapshots of a
+//! `supercli backup` / `supercli restore` — consistent, verifiable snapshots of a
 //! workspace home (`SUPERCLI_HOME`).
 //!
 //! A backup is a single `.tar` archive plus a manifest (`manifest.json`,
@@ -21,7 +21,7 @@
 //!
 //! Deliberately excluded: `*.lock` files (lock state is meaningless across
 //! processes), `*.sock` sockets, `serve.lock`/`serve.json` (transient Host
-//! liveness), and `worktrees/` (the user's project checkouts, not Unpeel
+//! liveness), and `worktrees/` (the user's project checkouts, not Supercli
 //! state).
 //!
 //! Trust model: the manifest is the trusted reference inside the archive.
@@ -128,7 +128,7 @@ pub struct RestoreReport {
 #[derive(Debug)]
 pub enum BackupError {
     Io(String),
-    /// The destination home holds existing Unpeel state and `--force` was
+    /// The destination home holds existing Supercli state and `--force` was
     /// not given.
     HomeNotEmpty(PathBuf),
     /// A Host currently holds this workspace's serve lease.
@@ -154,7 +154,7 @@ impl fmt::Display for BackupError {
             BackupError::Io(msg) => write!(f, "{msg}"),
             BackupError::HomeNotEmpty(home) => write!(
                 f,
-                "refusing to restore over existing Unpeel state in {} (use --force to overwrite)",
+                "refusing to restore over existing Supercli state in {} (use --force to overwrite)",
                 home.display()
             ),
             BackupError::HostRunning(home) => write!(
@@ -655,7 +655,7 @@ fn verify_staged_manifest(staging: &Path, manifest: &BackupManifest) -> Result<(
     Ok(())
 }
 
-/// Known Unpeel state files: restore refuses to overwrite these unless
+/// Known Supercli state files: restore refuses to overwrite these unless
 /// `--force` is given.
 fn home_has_state(home: &Path) -> bool {
     const MARKERS: [&str; 4] = [
@@ -673,7 +673,7 @@ fn home_has_state(home: &Path) -> bool {
 /// * Verifies every file against the manifest before installing.
 /// * Verifies every staged review hash chain before installing, so a
 ///   chain failure can never leave a partially restored home.
-/// * Refuses to overwrite existing Unpeel state unless `force`.
+/// * Refuses to overwrite existing Supercli state unless `force`.
 /// * Installs each file with tmp-file + rename (atomic per file) and
 ///   mode 0600 — restored state can carry device tokens.
 pub fn restore_backup(

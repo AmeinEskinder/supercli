@@ -1,39 +1,39 @@
-//! Standalone Unpeel session backend binary.
+//! Standalone Supercli session backend binary.
 //!
 //! Runs the same entry paths as the desktop app's argv-mode re-invocations,
 //! without any Tauri/GUI dependency. Invocation styles:
 //!
-//! - `unpeel-host __session_host__ <launch-file>` (drop-in for the
+//! - `supercli-host __session_host__ <launch-file>` (drop-in for the
 //!   self-re-invocation contract in `session_host::spawn_host_process`)
-//! - `unpeel-host <launch-file>` (launcher used by the native Swift app; it
+//! - `supercli-host <launch-file>` (launcher used by the native Swift app; it
 //!   spawns the detached `__session_host__` form and exits)
-//! - `unpeel-host __mcp__` (unified Unpeel MCP over stdio; this is the
+//! - `supercli-host __mcp__` (unified Supercli MCP over stdio; this is the
 //!   command recorded in `~/.supercli/mcp/claude-mcp.json` and the Codex
 //!   wrapper's `mcp_servers.supercli-sessions` overrides)
-//! - `unpeel-host __transcript__ snapshot|stream <session-id>` reads the
+//! - `supercli-host __transcript__ snapshot|stream <session-id>` reads the
 //!   provider transcript as normalized JSON for desktop/iOS remote clients.
-//! - `unpeel-host __auto_title__ <session-id>` titles an untitled session
+//! - `supercli-host __auto_title__ <session-id>` titles an untitled session
 //!   from its provider conversation (fired by the app when a hook capture
 //!   changes the session's provider id — an in-tool /resume).
-//! - `unpeel-host __restart_agent__ <session-id>` resumes only the known
+//! - `supercli-host __restart_agent__ <session-id>` resumes only the known
 //!   agent inside a live hosted terminal, preserving the Session and PTY.
-//! - `unpeel-host __resume_agent__ <session-id>` performs the shell-only form:
+//! - `supercli-host __resume_agent__ <session-id>` performs the shell-only form:
 //!   it refuses while any runtime or unrecognized foreground job is active.
-//! - `unpeel-host __managed_storage__ <session-id>` reports Host-validated,
+//! - `supercli-host __managed_storage__ <session-id>` reports Host-validated,
 //!   runtime-owned storage for provider-neutral cleanup by legacy clients.
-//! - `unpeel-host __viewport__ snapshot <session-id>` replays output.bin into a
+//! - `supercli-host __viewport__ snapshot <session-id>` replays output.bin into a
 //!   read-only virtual terminal viewport for remote clients.
-//! - `unpeel-host __request_screenshot__ <session-id>` sends the typed,
+//! - `supercli-host __request_screenshot__ <session-id>` sends the typed,
 //!   provider-neutral screenshot-artifact prompt through the safe input path.
-//! - `unpeel-host __remote__ [--bind ADDR] [--port N]` runs the remote control
+//! - `supercli-host __remote__ [--bind ADDR] [--port N]` runs the remote control
 //!   server (HTTPS + WSS over the hosted-session artifacts).
-//! - `unpeel-host __remote_stdio__` serves the same Host contract as bounded,
+//! - `supercli-host __remote_stdio__` serves the same Host contract as bounded,
 //!   concurrent frames over stdin/stdout for `ssh -T` Controllers.
-//! - `unpeel-host __serve__` runs the UI-free Host service embedded in the
-//!   desktop app bundle; `unpeel serve` is the public spelling.
+//! - `supercli-host __serve__` runs the UI-free Host service embedded in the
+//!   desktop app bundle; `supercli serve` is the public spelling.
 //! - With `SUPERCLI_SSH_ASKPASS_SECRET` set, this binary is the native app's
 //!   narrow local system-SSH askpass helper and prints only that secret.
-//! - `unpeel-host __compact_output_journals__` reclaims evicted physical
+//! - `supercli-host __compact_output_journals__` reclaims evicted physical
 //!   blocks from stopped legacy Session journals without touching live Hosts.
 //!
 //! The launch file is the JSON `SessionHostLaunch` written by
@@ -56,7 +56,7 @@ fn main() {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
 
     // OpenSSH invokes SSH_ASKPASS as `<program> <prompt>`; the prompt is not
-    // stable and must never be interpreted as a normal unpeel-host argv mode.
+    // stable and must never be interpreted as a normal supercli-host argv mode.
     if let Some(secret) = std::env::var_os("SUPERCLI_SSH_ASKPASS_SECRET") {
         println!("{}", secret.to_string_lossy());
         return;
@@ -82,7 +82,7 @@ fn main() {
     if args.first().map(String::as_str) == Some(session_host::COMPACT_OUTPUT_JOURNALS_ARG) {
         if args.len() != 1 {
             eprintln!(
-                "usage: unpeel-host {}",
+                "usage: supercli-host {}",
                 session_host::COMPACT_OUTPUT_JOURNALS_ARG
             );
             std::process::exit(2);
@@ -155,7 +155,7 @@ fn main() {
         args.remove(0);
         let session_id = args.first().cloned().unwrap_or_default();
         if session_id.is_empty() || args.len() != 1 {
-            eprintln!("usage: unpeel-host __managed_storage__ <session-id>");
+            eprintln!("usage: supercli-host __managed_storage__ <session-id>");
             std::process::exit(2);
         }
         match supercli_core::session_ops::managed_storage_path_for_session(&session_id) {
@@ -165,21 +165,21 @@ fn main() {
         return;
     }
 
-    // `unpeel-host __resume__ <session-id> [--fresh]` — print the
+    // `supercli-host __resume__ <session-id> [--fresh]` — print the
     // relaunch command a restart of this session should run, as JSON. The
     // native app calls this instead of duplicating the resume tiers; the
-    // logic itself lives in unpeel-core::session_ops::relaunch_command.
+    // logic itself lives in supercli-core::session_ops::relaunch_command.
     if args.first().map(String::as_str) == Some("__resume__") {
         args.remove(0);
         let session_id = args.first().cloned().unwrap_or_default();
         if session_id.is_empty() {
-            eprintln!("usage: unpeel-host __resume__ <session-id> [--fresh]");
+            eprintln!("usage: supercli-host __resume__ <session-id> [--fresh]");
             std::process::exit(2);
         }
         let mode = supercli_core::session_ops::RelaunchMode::Restart {
             force_fresh: args.iter().any(|a| a == "--fresh"),
         };
-        // unpeel-host keeps serde_json out of the binary; a one-field JSON
+        // supercli-host keeps serde_json out of the binary; a one-field JSON
         // object needs only string escaping.
         fn json_string(value: &str) -> String {
             let mut out = String::with_capacity(value.len() + 2);
@@ -224,7 +224,7 @@ fn main() {
         args.remove(0);
         let session_id = args.first().cloned().unwrap_or_default();
         if session_id.is_empty() || args.len() != 1 {
-            eprintln!("usage: unpeel-host __restart_agent__ <session-id>");
+            eprintln!("usage: supercli-host __restart_agent__ <session-id>");
             std::process::exit(2);
         }
         match supercli_core::session_ops::restart_agent(&session_id) {
@@ -243,7 +243,7 @@ fn main() {
         args.remove(0);
         let session_id = args.first().cloned().unwrap_or_default();
         if session_id.is_empty() || args.len() != 1 {
-            eprintln!("usage: unpeel-host __resume_agent__ <session-id>");
+            eprintln!("usage: supercli-host __resume_agent__ <session-id>");
             std::process::exit(2);
         }
         match supercli_core::session_ops::resume_agent(&session_id) {
@@ -270,7 +270,7 @@ fn main() {
     if args.first().map(String::as_str) == Some("__request_screenshot__") {
         args.remove(0);
         let Some(session_id) = args.first() else {
-            eprintln!("usage: unpeel-host __request_screenshot__ <session-id>");
+            eprintln!("usage: supercli-host __request_screenshot__ <session-id>");
             std::process::exit(2);
         };
         if let Err(error) = supercli_core::session_input::request_screenshot(session_id) {
@@ -284,7 +284,7 @@ fn main() {
     if args.first().map(String::as_str) == Some("__auto_title__") {
         args.remove(0);
         let Some(session_id) = args.first() else {
-            eprintln!("usage: unpeel-host __auto_title__ <session-id>");
+            eprintln!("usage: supercli-host __auto_title__ <session-id>");
             std::process::exit(1);
         };
         // Best-effort by design: untitleable (settled, no transcript yet,
@@ -323,7 +323,7 @@ fn main() {
     if args.first().map(String::as_str) == Some(remote_stdio::REMOTE_STDIO_ARG) {
         args.remove(0);
         if !args.is_empty() {
-            eprintln!("usage: unpeel-host {}", remote_stdio::REMOTE_STDIO_ARG);
+            eprintln!("usage: supercli-host {}", remote_stdio::REMOTE_STDIO_ARG);
             std::process::exit(2);
         }
         if let Err(error) = remote_stdio::run_stdio() {
@@ -390,7 +390,7 @@ fn main() {
         return;
     }
 
-    // `__apps__ list` — central-catalog Unpeel Apps whose binary resolves on
+    // `__apps__ list` — central-catalog Supercli Apps whose binary resolves on
     // the Host's PATH, as JSON for native's "Apps you can add" section.
     if args.first().map(String::as_str) == Some("__apps__") {
         args.remove(0);
@@ -399,7 +399,7 @@ fn main() {
                 println!("{}", supercli_core::apps_mcp::installable_apps_json());
             }
             _ => {
-                eprintln!("usage: unpeel-host __apps__ list");
+                eprintln!("usage: supercli-host __apps__ list");
                 std::process::exit(2);
             }
         }
@@ -424,7 +424,7 @@ fn main() {
     if args.first().map(String::as_str) == Some("__metrics__") {
         args.remove(0);
         let Some(session_id) = args.first() else {
-            eprintln!("usage: unpeel-host __metrics__ <session-id>");
+            eprintln!("usage: supercli-host __metrics__ <session-id>");
             std::process::exit(2);
         };
         match supercli_core::controller_api::read_session_metrics(session_id) {

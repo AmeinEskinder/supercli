@@ -200,13 +200,13 @@ impl Snapshot {
     }
 }
 
-/// Use Unpeel's flat preset list as the provider catalog when an Unpeel home
+/// Use Supercli's flat preset list as the provider catalog when an Supercli home
 /// exists and has readable preset state. Otherwise retain the standalone
 /// dashboard's complete, stable order.
 fn provider_order() -> Vec<ProviderKind> {
-    unpeel_home()
+    supercli_home()
         .as_deref()
-        .and_then(unpeel_preset_provider_order)
+        .and_then(supercli_preset_provider_order)
         .unwrap_or_else(|| {
             vec![
                 ProviderKind::Codex,
@@ -217,17 +217,17 @@ fn provider_order() -> Vec<ProviderKind> {
         })
 }
 
-fn unpeel_home() -> Option<PathBuf> {
-    if let Some(home) = std::env::var_os("UNPEEL_HOME").filter(|home| !home.is_empty()) {
+fn supercli_home() -> Option<PathBuf> {
+    if let Some(home) = std::env::var_os("SUPERCLI_HOME").filter(|home| !home.is_empty()) {
         return Some(PathBuf::from(home));
     }
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".unpeel"))
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".supercli"))
 }
 
-/// `Some` means Unpeel has an authoritative presets array, including an empty
-/// one. `None` means there is no usable Unpeel preset contract, so callers
+/// `Some` means Supercli has an authoritative presets array, including an empty
+/// one. `None` means there is no usable Supercli preset contract, so callers
 /// should keep standalone behavior.
-fn unpeel_preset_provider_order(home: &Path) -> Option<Vec<ProviderKind>> {
+fn supercli_preset_provider_order(home: &Path) -> Option<Vec<ProviderKind>> {
     if !home.is_dir() {
         return None;
     }
@@ -256,7 +256,7 @@ fn provider_order_from_app_state(raw: &[u8]) -> Option<Vec<ProviderKind>> {
     Some(order)
 }
 
-/// Match Unpeel's command-head convention: the first whitespace-delimited
+/// Match Supercli's command-head convention: the first whitespace-delimited
 /// token, reduced to its basename so absolute launch paths also work.
 fn provider_kind_for_command(command: &str) -> Option<ProviderKind> {
     let head = command.split_whitespace().next()?;
@@ -599,7 +599,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unpeel_presets_filter_deduplicate_and_order_supported_providers() {
+    fn supercli_presets_filter_deduplicate_and_order_supported_providers() {
         let raw = br#"{
             "presets": [
                 {"command": "/opt/tools/claude --dangerously-skip-permissions"},
@@ -637,7 +637,7 @@ mod tests {
             .expect("clock after Unix epoch")
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "unpeel-usage-project-{}-{nonce}",
+            "supercli-usage-project-{}-{nonce}",
             std::process::id()
         ));
         let nested = root.join("nested/folder");
@@ -806,9 +806,9 @@ mod tests {
             .expect("clock after Unix epoch")
             .as_nanos();
         let absent = std::env::temp_dir().join(format!(
-            "unpeel-usage-absent-home-{}-{nonce}",
+            "supercli-usage-absent-home-{}-{nonce}",
             std::process::id()
         ));
-        assert_eq!(unpeel_preset_provider_order(&absent), None);
+        assert_eq!(supercli_preset_provider_order(&absent), None);
     }
 }

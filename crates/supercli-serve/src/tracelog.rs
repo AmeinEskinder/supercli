@@ -45,7 +45,7 @@ mod test_sink {
         static PATH: OnceLock<PathBuf> = OnceLock::new();
         PATH.get_or_init(|| {
             let dir = std::env::temp_dir()
-                .join(format!("unpeel-serve-unit-trace-{}", std::process::id()));
+                .join(format!("supercli-serve-unit-trace-{}", std::process::id()));
             let _ = std::fs::create_dir_all(&dir);
             dir.join("trace.log")
         })

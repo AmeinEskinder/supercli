@@ -18,9 +18,9 @@
 //! pins the property, so a future arm added to the classifier cannot
 //! silently reintroduce an unsafe `DefiniteFailed`.
 
-use unpeel_connector::link::{CallOutcome, LinkError};
-use unpeel_connector::manifest::ConnectorKind;
-use unpeel_connector::{ConnectorError, HttpConnectorError};
+use supercli_connector::link::{CallOutcome, LinkError};
+use supercli_connector::manifest::ConnectorKind;
+use supercli_connector::{ConnectorError, HttpConnectorError};
 
 fn stdio_variants() -> Vec<ConnectorError> {
     vec![

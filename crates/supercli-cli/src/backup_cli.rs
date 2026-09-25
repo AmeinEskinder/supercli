@@ -1,4 +1,4 @@
-//! `unpeel backup` / `unpeel restore` — consistent, verifiable snapshots of
+//! `supercli backup` / `supercli restore` — consistent, verifiable snapshots of
 //! the workspace home.
 //!
 //! `backup` walks the home, snapshots each session's review log under its
@@ -8,7 +8,7 @@
 //!
 //! `restore` verifies every file against the manifest and every staged
 //! review hash chain before installing anything, refuses while a Host
-//! holds the workspace serve lease, refuses to overwrite existing Unpeel
+//! holds the workspace serve lease, refuses to overwrite existing Supercli
 //! state without `--force`, and installs each file with tmp-file + rename.
 
 use std::path::{Path, PathBuf};
@@ -17,27 +17,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use supercli_core::{app_paths, backup};
 
 pub const BACKUP_HELP: &str = "\
-unpeel backup — snapshot this workspace home into a verifiable archive
+supercli backup — snapshot this workspace home into a verifiable archive
 
-  unpeel backup [--to <path>] [--json]
+  supercli backup [--to <path>] [--json]
 
-Writes a single .tar archive (default ./unpeel-backup-<epoch>.tar) with a
+Writes a single .tar archive (default ./supercli-backup-<epoch>.tar) with a
 SHA-256 manifest of every file. Review logs are snapshotted under their
 log lock and the lease database through the SQLite online-backup API, so
 a backup is consistent even while the Host is writing.\
 ";
 
 pub const RESTORE_HELP: &str = "\
-unpeel restore — verify and reinstall a backup archive
+supercli restore — verify and reinstall a backup archive
 
-  unpeel restore --from <path> [--force] [--json]
+  supercli restore --from <path> [--force] [--json]
 
 Verifies every file against the archive manifest and every staged review
 hash chain before installing anything, refuses while a Host is serving
-this workspace, and refuses to overwrite existing Unpeel state unless
+this workspace, and refuses to overwrite existing Supercli state unless
 --force is given. Each file is installed with tmp-file + rename.
 
-Note: bare `unpeel restore <session>` (no --from) keeps its historical
+Note: bare `supercli restore <session>` (no --from) keeps its historical
 meaning — restoring an archived session — and is handled by the session
 commands, not here.\
 ";
@@ -95,14 +95,14 @@ pub fn backup_cmd(args: &[String]) -> i32 {
     let (values, bools) = match parse_flags(args, &["--to"], &["--json"]) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("unpeel backup: {e}\n{BACKUP_HELP}");
+            eprintln!("supercli backup: {e}\n{BACKUP_HELP}");
             return 2;
         }
     };
     let json = bools.contains(&"--json");
     let dest: PathBuf = match value(&values, "--to") {
         Some(p) => PathBuf::from(p),
-        None => PathBuf::from(format!("unpeel-backup-{}.tar", epoch_secs())),
+        None => PathBuf::from(format!("supercli-backup-{}.tar", epoch_secs())),
     };
     let home = app_paths::supercli_home();
     match backup::create_backup(&home, &dest) {
@@ -140,7 +140,7 @@ pub fn backup_cmd(args: &[String]) -> i32 {
                     serde_json::json!({ "ok": false, "error": e.to_string() })
                 );
             } else {
-                eprintln!("unpeel backup: {e}");
+                eprintln!("supercli backup: {e}");
             }
             1
         }
@@ -158,14 +158,14 @@ pub fn restore_cmd(args: &[String]) -> i32 {
     let (values, bools) = match parse_flags(args, &["--from"], &["--json", "--force"]) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("unpeel restore: {e}\n{RESTORE_HELP}");
+            eprintln!("supercli restore: {e}\n{RESTORE_HELP}");
             return 2;
         }
     };
     let json = bools.contains(&"--json");
     let force = bools.contains(&"--force");
     let Some(from) = value(&values, "--from") else {
-        eprintln!("unpeel restore: --from <path> is required\n{RESTORE_HELP}");
+        eprintln!("supercli restore: --from <path> is required\n{RESTORE_HELP}");
         return 2;
     };
     let home = app_paths::supercli_home();
@@ -200,7 +200,7 @@ pub fn restore_cmd(args: &[String]) -> i32 {
                     serde_json::json!({ "ok": false, "error": e.to_string() })
                 );
             } else {
-                eprintln!("unpeel restore: {e}");
+                eprintln!("supercli restore: {e}");
             }
             1
         }

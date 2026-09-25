@@ -19,8 +19,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use supercli_core::controller_protocol::{HostProtocolDescriptor, NATIVE_HOST_CAPABILITIES};
 
-pub const PLATFORM_ADAPTER_CONTROL_PATH: &str = "/_unpeel/platform-adapter";
-pub const PLATFORM_ADAPTER_CALLBACK_PATH: &str = "/_unpeel/platform-adapter/call";
+pub const PLATFORM_ADAPTER_CONTROL_PATH: &str = "/_supercli/platform-adapter";
+pub const PLATFORM_ADAPTER_CALLBACK_PATH: &str = "/_supercli/platform-adapter/call";
 pub const PLATFORM_ADAPTER_VERSION: u16 = 1;
 
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5);

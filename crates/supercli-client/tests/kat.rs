@@ -8,7 +8,7 @@
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
-use unpeel_client::crypto::{handshake, RelayCryptoSession};
+use supercli_client::crypto::{handshake, RelayCryptoSession};
 
 fn seq(base: u16, len: usize) -> Vec<u8> {
     (0..len).map(|i| ((base + i as u16) & 0xff) as u8).collect()

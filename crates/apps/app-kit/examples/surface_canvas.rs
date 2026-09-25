@@ -2,7 +2,7 @@
 //!
 //! The planet scene and pointer/key input stay on Surface's USRF channel. The
 //! closed CanvasPage toolbar is ordinary App Kit state and its Button actions
-//! use `unpeel.ui` when hosted. With no Host, the exact same controls are a
+//! use `supercli.ui` when hosted. With no Host, the exact same controls are a
 //! fully interactive Ratatui overlay.
 
 use std::error::Error;
@@ -23,15 +23,15 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Position, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::Paragraph;
-use unpeel_app_kit::surface_runtime::{
+use supercli_app_kit::surface_runtime::{
     EVENT_ACTION, EVENT_KEY_DOWN, EVENT_KEY_HOME, EVENT_KEY_UP, EVENT_POINTER_DOWN,
     EVENT_POINTER_DRAG, EVENT_POINTER_MOVE, EVENT_POINTER_UP, EVENT_SCROLL_DOWN, EVENT_SCROLL_UP,
 };
 #[cfg(feature = "ui-bridge")]
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AppMetadata, UiBridge, UiBridgeEvent, UiEvent, UiEventKind, UiEventOutcome, UiEventValue,
 };
-use unpeel_app_kit::{
+use supercli_app_kit::{
     Button, ButtonRole, CanvasPage, Surface, SurfaceBackground, SurfaceInputPolicy,
     SurfaceReference, SurfaceSpec, SurfaceView, TerminalPointerState,
 };
@@ -51,7 +51,7 @@ const PREVIOUS_ACTION: &str = "previous-planet";
 const NEXT_ACTION: &str = "next-planet";
 const SELECT_ACTION: &str = "select-planet";
 const DEFAULT_GUEST_RELATIVE_PATH: &str =
-    "../unpeel-surface/target/wasm32-unknown-unknown/release/surface_planets_example.wasm";
+    "../supercli-surface/target/wasm32-unknown-unknown/release/surface_planets_example.wasm";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CanvasIntent {
@@ -73,7 +73,7 @@ impl CanvasIntent {
 }
 
 fn surface_spec() -> SurfaceSpec {
-    let session_id = std::env::var("UNPEEL_SESSION_ID")
+    let session_id = std::env::var("SUPERCLI_SESSION_ID")
         .ok()
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "standalone-canvas".to_owned());
@@ -101,7 +101,7 @@ fn guest_path() -> Result<PathBuf, Box<dyn Error>> {
         }
         return Err(format!("unknown argument {argument:?}; expected --guest PATH").into());
     }
-    if let Some(path) = std::env::var_os("UNPEEL_SURFACE_PLANETS_WASM")
+    if let Some(path) = std::env::var_os("SUPERCLI_SURFACE_PLANETS_WASM")
         && !path.is_empty()
     {
         return existing_guest(PathBuf::from(path));
@@ -116,9 +116,9 @@ fn existing_guest(path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
     Err(format!(
         "planet guest not found at {}\n\
          build it with:\n  cargo build --release --manifest-path \
-         ../unpeel-surface/Cargo.toml -p surface-planets-example \
+         ../supercli-surface/Cargo.toml -p surface-planets-example \
          --target wasm32-unknown-unknown\n\
-         or pass --guest PATH / set UNPEEL_SURFACE_PLANETS_WASM",
+         or pass --guest PATH / set SUPERCLI_SURFACE_PLANETS_WASM",
         path.display()
     )
     .into())
@@ -219,7 +219,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "ui-bridge")]
     let mut bridge = UiBridge::detect(
         AppMetadata::new(
-            "dev.unpeel.app-kit.surface-canvas",
+            "dev.supercli.app-kit.surface-canvas",
             "Surface Canvas",
             env!("CARGO_PKG_VERSION"),
         )
@@ -230,8 +230,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "ui-bridge")]
     bridge.publish(VIEW_ID, revision, page.ui_node(ROOT_ID))?;
 
-    let has_remote_presenter = std::env::var_os("UNPEEL_SURFACE_SOCKET").is_some()
-        || std::env::var_os("UNPEEL_SURFACE_REMOTE_ADDR").is_some();
+    let has_remote_presenter = std::env::var_os("SUPERCLI_SURFACE_SOCKET").is_some()
+        || std::env::var_os("SUPERCLI_SURFACE_REMOTE_ADDR").is_some();
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();

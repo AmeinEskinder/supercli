@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
 pub const RETIRED_REASON: &str =
-    "Unpeel computer use has been retired. Configure desktop tools in your agent or environment.";
+    "Supercli computer use has been retired. Configure desktop tools in your agent or environment.";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComputerAdapterStatus {

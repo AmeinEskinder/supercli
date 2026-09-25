@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use unpeel_core::relay_wire::{self, TunnelRequest};
-use unpeel_core::remote_stdio;
+use supercli_core::relay_wire::{self, TunnelRequest};
+use supercli_core::remote_stdio;
 
 struct ServiceProcess {
     child: Child,
@@ -47,7 +47,7 @@ impl Drop for ServiceProcess {
         self.stop();
         // The worker detaches one PTY core per workspace home; removing the
         // home without shutting them down leaks a core per run.
-        unpeel_core::pty_core::shutdown_cores_under(&self.root, std::time::Duration::from_secs(15));
+        supercli_core::pty_core::shutdown_cores_under(&self.root, std::time::Duration::from_secs(15));
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }
@@ -100,7 +100,7 @@ fn bootstrap_over_socket(home: &Path) -> (u16, serde_json::Value) {
 #[test]
 fn one_service_supervises_and_serves_every_registered_workspace() {
     let root = fixture_root();
-    let real_home = root.join(".unpeel");
+    let real_home = root.join(".supercli");
     let writing = real_home.join("profiles/writing");
     let research = real_home.join("profiles/research");
     std::fs::create_dir_all(&writing).unwrap();
@@ -118,10 +118,10 @@ fn one_service_supervises_and_serves_every_registered_workspace() {
     )
     .unwrap();
 
-    let child = Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    let child = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .arg("serve")
         .env("HOME", &root)
-        .env_remove("UNPEEL_HOME")
+        .env_remove("SUPERCLI_HOME")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -154,8 +154,8 @@ fn one_service_supervises_and_serves_every_registered_workspace() {
     assert!(
         wait_until(Duration::from_secs(5), || {
             std::fs::read_to_string(real_home.join("hooks/trace.log")).is_ok_and(|trace| {
-                trace.contains("host-service Unpeel Host service started")
-                    && trace.contains("host-worker Unpeel Host serving")
+                trace.contains("host-service Supercli Host service started")
+                    && trace.contains("host-worker Supercli Host serving")
             })
         }),
         "app-style null stdio left no durable Host diagnostics"
@@ -168,10 +168,10 @@ fn one_service_supervises_and_serves_every_registered_workspace() {
         assert!(bootstrap["hostProtocol"]["capabilities"].is_array());
     }
 
-    let duplicate = Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    let duplicate = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .arg("serve")
         .env("HOME", process.root.as_path())
-        .env_remove("UNPEEL_HOME")
+        .env_remove("SUPERCLI_HOME")
         .output()
         .expect("run duplicate unified service");
     assert_eq!(duplicate.status.code(), Some(1));

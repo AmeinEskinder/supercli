@@ -1,5 +1,5 @@
 //! User configuration: refresh cadence and alert thresholds. Lives at
-//! `~/.config/unpeel-usage/config.toml`; a missing file means defaults, and
+//! `~/.config/supercli-usage/config.toml`; a missing file means defaults, and
 //! the file is written once with commented defaults so thresholds are
 //! discoverable without documentation.
 
@@ -144,7 +144,7 @@ impl Default for Alerts {
 }
 
 const DEFAULT_FILE: &str = "\
-# unpeel-usage configuration. Delete this file to restore defaults.
+# supercli-usage configuration. Delete this file to restore defaults.
 
 # Seconds between background rescans. Claude and Grok live responses are
 # independently cached for five minutes to respect provider endpoints.
@@ -155,7 +155,7 @@ refresh_secs = 30
 theme = \"auto\"
 
 [alerts]
-# Unpeel notifications. All are off until enabled in the `a` dialog or here.
+# Supercli notifications. All are off until enabled in the `a` dialog or here.
 close_to_limit = false
 limit_reached = false
 available_again = false
@@ -187,7 +187,7 @@ fn config_path() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("unpeel-usage").join("config.toml"))
+    Some(base.join("supercli-usage").join("config.toml"))
 }
 
 impl Config {

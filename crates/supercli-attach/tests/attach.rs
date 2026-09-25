@@ -1,6 +1,6 @@
 //! Integration tests: spin up a fake session host (manifest + output.bin +
 //! a Unix socket server speaking the session_host.rs control protocol) and
-//! run the real unpeel-attach binary against it.
+//! run the real supercli-attach binary against it.
 
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -312,7 +312,7 @@ fn spawn_attach_with_args(
     mute_input_ms: u64,
     extra_args: &[&str],
 ) -> AttachProcess {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unpeel-attach"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_supercli-attach"))
         .arg("test-session")
         .arg("--sessions-dir")
         .arg(sessions_dir)
@@ -359,7 +359,7 @@ fn wait_for<F: Fn() -> bool>(timeout: Duration, condition: F) -> bool {
 
 /// Reap a child within a hard bound so a hung attach becomes a fast, clearly
 /// labelled test failure instead of a stalled CI job. The Linux
-/// `unpeel-attach` job twice sat >1h on a single attach that never exited
+/// `supercli-attach` job twice sat >1h on a single attach that never exited
 /// (the whole `cargo test` step blocked, not one test), so every
 /// `child.wait()` in this file goes through here: on timeout the child is
 /// killed and the test panics rather than hanging forever.
@@ -1225,7 +1225,7 @@ fn startup_resize_waits_for_session_socket_after_preliminary_manifest() {
 
     let child_stdin = unsafe { Stdio::from_raw_fd(libc::dup(slave)) };
     let child_stdout = unsafe { Stdio::from_raw_fd(libc::dup(slave)) };
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unpeel-attach"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_supercli-attach"))
         .arg("test-session")
         .arg("--sessions-dir")
         .arg(&sessions_dir)
@@ -1314,7 +1314,7 @@ fn arrow_keys_reach_the_host_intact_on_a_real_pty() {
     // Child gets its own dup of the slave as stdin; we keep ours to inspect
     // termios. Stdout stays piped so replay does not loop back into the PTY.
     let child_stdin = unsafe { Stdio::from_raw_fd(libc::dup(slave)) };
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unpeel-attach"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_supercli-attach"))
         .arg("test-session")
         .arg("--sessions-dir")
         .arg(&sessions_dir)
@@ -1558,7 +1558,7 @@ fn pre_snapshot_host_falls_back_to_tail_replay() {
     let _ = fs::remove_dir_all(&sessions_dir);
 }
 
-/// `UNPEEL_ATTACH_SNAPSHOT=0` is the escape hatch back to raw tail replay
+/// `SUPERCLI_ATTACH_SNAPSHOT=0` is the escape hatch back to raw tail replay
 /// even against a snapshot-capable Host.
 #[test]
 fn snapshot_attach_escape_hatch_uses_tail_replay() {
@@ -1571,13 +1571,13 @@ fn snapshot_attach_escape_hatch_uses_tail_replay() {
     let received =
         spawn_fake_socket_server_with_snapshot(&session_dir, b"SNAPSHOT-LOSES", 99, b"LIVE-OFF");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unpeel-attach"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_supercli-attach"))
         .arg("test-session")
         .arg("--sessions-dir")
         .arg(&sessions_dir)
         .arg("--mute-input-ms")
         .arg("0")
-        .env("UNPEEL_ATTACH_SNAPSHOT", "0")
+        .env("SUPERCLI_ATTACH_SNAPSHOT", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

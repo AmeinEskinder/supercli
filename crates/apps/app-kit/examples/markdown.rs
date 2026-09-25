@@ -23,15 +23,15 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::Paragraph;
 use serde::{Deserialize, Serialize};
 use tui_textarea::{Input as TextInput, Key as TextKey};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AppMetadata, MarkdownCommandHint, MarkdownEditor, MarkdownEditorActions, MarkdownEditorConfig,
     MarkdownEditorEvent, MarkdownEditorInteraction, MarkdownEditorStyle, MarkdownPresentation,
     UiBridge, UiBridgeEvent, UiEventOutcome, UiNode, markdown_delta_operations,
 };
 
-const STATE_FORMAT: &str = "unpeel.app-kit.example.markdown";
+const STATE_FORMAT: &str = "supercli.app-kit.example.markdown";
 const STATE_FORMAT_VERSION: u32 = 1;
-const DEFAULT_STATE_FILE: &str = ".unpeel-markdown.json";
+const DEFAULT_STATE_FILE: &str = ".supercli-markdown.json";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const VIEW_ID: &str = "main";
 const EDITOR_ID: &str = "markdown-editor";
@@ -212,7 +212,7 @@ fn save_state(path: &Path, state: &MarkdownState) -> io::Result<()> {
 }
 
 fn state_path() -> io::Result<PathBuf> {
-    match std::env::var_os("UNPEEL_MARKDOWN_PATH") {
+    match std::env::var_os("SUPERCLI_MARKDOWN_PATH") {
         Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
         _ => Ok(std::env::current_dir()?.join(DEFAULT_STATE_FILE)),
     }
@@ -272,7 +272,7 @@ fn drain_bridge(app: &mut MarkdownApp, bridge: &mut UiBridge) -> Result<(), Box<
                 participant,
                 client_id,
                 ..
-            } if std::env::var_os("UNPEEL_KITCHEN_SINK").is_some() => {
+            } if std::env::var_os("SUPERCLI_KITCHEN_SINK").is_some() => {
                 let name = participant
                     .display_name
                     .as_deref()
@@ -357,7 +357,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     app.save_without_revision()?;
     let mut bridge = UiBridge::detect(
         AppMetadata::new(
-            "dev.unpeel.app-kit.markdown",
+            "dev.supercli.app-kit.markdown",
             "Markdown",
             env!("CARGO_PKG_VERSION"),
         )
@@ -563,7 +563,7 @@ mod tests {
         let operations = markdown_delta_operations(&previous, &app.node());
         assert!(operations.iter().any(|operation| matches!(
             operation,
-            unpeel_app_kit::UiDeltaOperation::MarkdownSetSelection { .. }
+            supercli_app_kit::UiDeltaOperation::MarkdownSetSelection { .. }
         )));
 
         assert_eq!(app.advance_projection_revision().unwrap(), (1, 2));
@@ -580,7 +580,7 @@ mod tests {
         app.editor.text_area_mut().move_cursor(CursorMove::End);
         app.editor.text_area_mut().insert_newline();
         let previous = app.node();
-        let unpeel_app_kit::UiComponent::MarkdownEditor(editor) = &previous.element else {
+        let supercli_app_kit::UiComponent::MarkdownEditor(editor) = &previous.element else {
             panic!("Markdown example must publish MarkdownEditor");
         };
         assert_eq!(
@@ -596,7 +596,7 @@ mod tests {
             Some("Type '/' for commands")
         );
 
-        let slash = unpeel_app_kit::UiEvent::new(
+        let slash = supercli_app_kit::UiEvent::new(
             "app-test",
             "person-test",
             "client-test",
@@ -604,11 +604,11 @@ mod tests {
             VIEW_ID,
             "event-slash",
             app.revision,
-            unpeel_app_kit::UiAction::new(
+            supercli_app_kit::UiAction::new(
                 EDITOR_ID,
                 MarkdownEditorActions::OPEN_MENU,
-                unpeel_app_kit::UiEventKind::Command,
-                unpeel_app_kit::UiEventValue::Text("slash".to_owned()),
+                supercli_app_kit::UiEventKind::Command,
+                supercli_app_kit::UiEventValue::Text("slash".to_owned()),
             ),
         );
         assert!(
@@ -621,18 +621,18 @@ mod tests {
         let operations = markdown_delta_operations(&previous, &with_menu);
         assert!(operations.iter().any(|operation| matches!(
             operation,
-            unpeel_app_kit::UiDeltaOperation::MarkdownSetMenus {
+            supercli_app_kit::UiDeltaOperation::MarkdownSetMenus {
                 insert_menu: Some(_),
                 ..
             }
         )));
-        let unpeel_app_kit::UiComponent::MarkdownEditor(editor) = &with_menu.element else {
+        let supercli_app_kit::UiComponent::MarkdownEditor(editor) = &with_menu.element else {
             panic!("slash must preserve MarkdownEditor");
         };
         let item = editor.insert_menu.as_ref().unwrap().items[0].clone();
         app.advance_projection_revision().unwrap();
 
-        let selection = unpeel_app_kit::UiEvent::new(
+        let selection = supercli_app_kit::UiEvent::new(
             "app-test",
             "person-test",
             "client-test",
@@ -640,7 +640,7 @@ mod tests {
             VIEW_ID,
             "event-selection",
             app.revision,
-            unpeel_app_kit::UiAction::activate(item.id, item.action),
+            supercli_app_kit::UiAction::activate(item.id, item.action),
         );
         assert!(
             app.interaction
@@ -649,7 +649,7 @@ mod tests {
                 .is_some_and(|outcome| outcome.text_changed())
         );
         let selected = app.node();
-        let unpeel_app_kit::UiComponent::MarkdownEditor(editor) = &selected.element else {
+        let supercli_app_kit::UiComponent::MarkdownEditor(editor) = &selected.element else {
             panic!("selection must preserve MarkdownEditor");
         };
         assert!(editor.insert_menu.is_none());

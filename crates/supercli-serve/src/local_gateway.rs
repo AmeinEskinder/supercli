@@ -25,7 +25,7 @@ use crate::platform_adapter::{
 
 const ACCEPT_INTERVAL: Duration = Duration::from_millis(25);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
-const PAIRING_CONTROL_PATH: &str = "/_unpeel/pairing";
+const PAIRING_CONTROL_PATH: &str = "/_supercli/pairing";
 /// Verbs the disk-backed runtime omits from its descriptor but this socket
 /// serves from the worker's live authorities; keep in step with
 /// `crate::mobile::handle_local_live_route`.
@@ -118,7 +118,7 @@ impl LocalGatewayServer {
         ));
         let connection_ids = Arc::new(AtomicU64::new(1));
         let accept_thread = std::thread::Builder::new()
-            .name("unpeel-local-host-accept".into())
+            .name("supercli-local-host-accept".into())
             .spawn(move || {
                 while !thread_shutdown.load(Ordering::Acquire) {
                     match listener.accept() {
@@ -152,7 +152,7 @@ impl LocalGatewayServer {
                             let pairing = Arc::clone(&pairing);
                             let snapshot = Arc::clone(&snapshot);
                             let worker = std::thread::Builder::new()
-                                .name(format!("unpeel-local-host-{id}"))
+                                .name(format!("supercli-local-host-{id}"))
                                 .spawn(move || {
                                     serve_connection(
                                         id,

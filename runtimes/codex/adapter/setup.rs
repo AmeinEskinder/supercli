@@ -15,8 +15,8 @@ pub(crate) const CODEX_NOTIFY_NORMALIZER_SCRIPT: &str = include_str!(concat!(
 /// Install the Codex integration into Codex's own global configuration:
 /// the native hook registrations in `~/.codex/hooks.json` (with the
 /// `[features] hooks` gate in `config.toml`), the `notify` reporter for
-/// Codex builds that predate native hooks, and the Unpeel MCP shim as
-/// `[mcp_servers.unpeel]`. Nothing wraps the `codex` executable.
+/// Codex builds that predate native hooks, and the Supercli MCP shim as
+/// `[mcp_servers.supercli]`. Nothing wraps the `codex` executable.
 pub fn install() -> Result<(), String> {
     let transport_path = notify_hook_script_path();
     write_executable_script(
@@ -169,10 +169,10 @@ pub(crate) fn finalize_codex_config_toml(lines: Vec<String>) -> Result<String, S
     Ok(updated)
 }
 
-/// Reconcile everything Unpeel owns in `~/.codex/config.toml`: the
-/// `[features] hooks` gate, the `[mcp_servers.unpeel]` table pointing at the
+/// Reconcile everything Supercli owns in `~/.codex/config.toml`: the
+/// `[features] hooks` gate, the `[mcp_servers.supercli]` table pointing at the
 /// shim, and the top-level `notify` reporter (set only when absent or
-/// already Unpeel-owned, so a user's own notify command is never replaced).
+/// already Supercli-owned, so a user's own notify command is never replaced).
 pub(crate) fn reconcile_codex_config_toml(
     raw: &str,
     notify_script_path: &Path,
@@ -189,7 +189,7 @@ pub(crate) fn reconcile_codex_config_toml(
 
 pub(crate) fn codex_mcp_server_table(shim: &Path) -> String {
     format!(
-        "[mcp_servers.unpeel]\ncommand = {}\nargs = []\n",
+        "[mcp_servers.supercli]\ncommand = {}\nargs = []\n",
         toml_basic_string(&shim.to_string_lossy())
     )
 }
@@ -215,7 +215,7 @@ fn is_table_header(line: &str) -> bool {
     uncommented.starts_with('[') && uncommented.ends_with(']')
 }
 
-/// Replace (or append) the `[mcp_servers.unpeel]` table. Only that table is
+/// Replace (or append) the `[mcp_servers.supercli]` table. Only that table is
 /// touched; every other line, comment, and table stays byte-identical.
 pub(crate) fn upsert_codex_mcp_server_table(raw: &str, shim: &Path) -> String {
     let lines = raw.lines().collect::<Vec<_>>();
@@ -224,8 +224,8 @@ pub(crate) fn upsert_codex_mcp_server_table(raw: &str, shim: &Path) -> String {
     for line in &lines {
         if is_table_header(line) {
             let header = line.split('#').next().unwrap_or("").trim();
-            skipping = header == "[mcp_servers.unpeel]"
-                || header.starts_with("[mcp_servers.unpeel.");
+            skipping = header == "[mcp_servers.supercli]"
+                || header.starts_with("[mcp_servers.supercli.");
             if skipping {
                 continue;
             }
@@ -245,7 +245,7 @@ pub(crate) fn upsert_codex_mcp_server_table(raw: &str, shim: &Path) -> String {
     updated
 }
 
-/// Set the top-level `notify` reporter when it is absent or Unpeel-owned.
+/// Set the top-level `notify` reporter when it is absent or Supercli-owned.
 /// Top-level keys must precede the first table, so an absent key is
 /// inserted before the first header.
 pub(crate) fn ensure_codex_notify(raw: &str, notify_script_path: &Path) -> String {
@@ -305,7 +305,7 @@ pub(crate) fn ensure_codex_config_toml(
     Ok(())
 }
 
-pub(crate) const CODEX_MANAGED_HOOK_SUFFIX: &str = "; fi # unpeel-managed";
+pub(crate) const CODEX_MANAGED_HOOK_SUFFIX: &str = "; fi # supercli-managed";
 
 pub(crate) fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -329,7 +329,7 @@ pub(crate) fn parse_managed_codex_hook_command(command: &str) -> Option<PathBuf>
 
 // Older builds registered the script path directly, before managed commands
 // carried an ownership marker. Keep this deliberately narrow so a missing
-// Clarity/Superset/user hook is never mistaken for an Unpeel hook.
+// Clarity/Superset/user hook is never mistaken for an Supercli hook.
 pub(crate) fn looks_like_legacy_supercli_notify_hook(path: &Path) -> bool {
     path.is_absolute()
         && path.file_name().and_then(|name| name.to_str()) == Some("notify-hook.sh")
@@ -343,7 +343,7 @@ pub(crate) fn looks_like_legacy_supercli_notify_hook(path: &Path) -> bool {
             .and_then(Path::parent)
             .and_then(Path::file_name)
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name == ".unpeel" || name.starts_with("unpeel-"))
+            .is_some_and(|name| name == ".supercli" || name.starts_with("supercli-"))
 }
 
 pub(crate) fn managed_codex_hook_path(
@@ -408,7 +408,7 @@ pub(crate) fn reconcile_codex_hooks_json(
         let array = entries.as_array_mut().unwrap();
 
         // SUPERCLI_HOME lets release, dev, and clean-state instances coexist, so
-        // retain every live Unpeel hook and prune only scripts that disappeared.
+        // retain every live Supercli hook and prune only scripts that disappeared.
         // Guarded commands make the gap before this startup cleanup harmless.
         array.retain_mut(|entry| {
             let Some(entry_hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) else {
@@ -456,7 +456,7 @@ pub(crate) fn reconcile_codex_hooks_json(
     changed
 }
 
-/// Writes Unpeel hook definitions into `~/.codex/hooks.json`.
+/// Writes Supercli hook definitions into `~/.codex/hooks.json`.
 /// Native Codex hooks provide the authoritative start/stop/approval lifecycle;
 /// the `notify` reporter in config.toml is the fallback for builds without them.
 pub(crate) fn ensure_codex_hooks_json(notify_script_path: &Path) -> Result<(), String> {

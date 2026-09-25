@@ -772,7 +772,7 @@ const TITLE_HEAD_BYTES: u64 = 256 * 1024;
 
 /// Title an untitled session from the provider conversation it is linked to
 /// — Claude's `summary` record when present, otherwise the conversation's
-/// first real user prompt. Called (via `unpeel-host __auto_title__` from the
+/// first real user prompt. Called (via `supercli-host __auto_title__` from the
 /// app, in-process from the TUI hook listener) when a hook capture *changes*
 /// a session's provider metadata: the user resumed or switched conversations
 /// inside the tool, and the line they typed to get there was a slash command,
@@ -880,7 +880,7 @@ pub fn read_transcript_markdown(
     ))
 }
 
-/// Resolve one Unpeel session and render its provider conversation with the
+/// Resolve one Supercli session and render its provider conversation with the
 /// shared app-wide transcript settings. This is the common entry point for
 /// frontend copy actions and the `__transcript__ markdown` CLI: `entries`
 /// overrides the configured range (`0` means the whole conversation), while
@@ -903,7 +903,7 @@ pub fn read_session_transcript_markdown(
 }
 
 /// The session-info header the Settings "Session info" toggle controls:
-/// title, the Unpeel session id (a valid target for Unpeel Sessions MCP
+/// title, the Supercli session id (a valid target for Supercli Sessions MCP
 /// tools, so a pasted transcript is actionable by other agents), CLI, model
 /// when the provider records one, and the launch command.
 fn session_info_header(
@@ -921,7 +921,7 @@ fn session_info_header(
         }
     ));
     out.push_str(&format!(
-        "- Unpeel session ID: `{}` (target id for the Unpeel MCP sessions tool)\n",
+        "- Supercli session ID: `{}` (target id for the Supercli MCP sessions tool)\n",
         session.id
     ));
     out.push_str(&format!("- CLI: {}\n", snapshot.provider));
@@ -1054,7 +1054,7 @@ fn append_entry_markdown(out: &mut String, entry: &TranscriptEntry) {
 pub fn run_cli(args: &[String]) -> Result<(), String> {
     let mode = args.first().map(String::as_str).unwrap_or("snapshot");
     let session_id = args.get(1).ok_or(
-        "usage: unpeel-host __transcript__ snapshot|stream|history|markdown <session-id> [options]",
+        "usage: supercli-host __transcript__ snapshot|stream|history|markdown <session-id> [options]",
     )?;
     let include_tools = args.iter().any(|arg| arg == "--include-tools");
     let entries = flag_usize(args, "--entries").unwrap_or(50).clamp(1, 500);
@@ -1109,7 +1109,7 @@ pub fn run_cli(args: &[String]) -> Result<(), String> {
                 .map_err(|e| format!("Failed to encode transcript stream chunk: {e}"))?
             }
             _ => return Err(
-                "usage: unpeel-host __transcript__ snapshot|stream|history|markdown <session-id> [options]"
+                "usage: supercli-host __transcript__ snapshot|stream|history|markdown <session-id> [options]"
                     .to_string(),
             ),
         };

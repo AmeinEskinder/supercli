@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "The unpeel CLI: the UI-free Host service (`unpeel serve`) and scriptable verbs over Unpeel sessions"
+description = "The supercli CLI: the UI-free Host service (`supercli serve`) and scriptable verbs over Supercli sessions"
 
 [[bin]]
 name = "supercli"

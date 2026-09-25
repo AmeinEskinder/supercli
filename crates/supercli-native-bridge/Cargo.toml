@@ -1,6 +1,6 @@
 [package]
 name = "supercli-native-bridge"
-description = "Panic-contained C ABI for the native Unpeel app to call supercli-core"
+description = "Panic-contained C ABI for the native Supercli app to call supercli-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

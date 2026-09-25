@@ -24,7 +24,7 @@ command = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
 # latest-version endpoint to compare against, so Settings offers no Update.
 
 # Google's `agy` (Antigravity CLI, the Gemini CLI successor): one Go binary
-# in ~/.local/bin. Community request: orgs/unpeel-com discussions #13.
+# in ~/.local/bin. Community request: orgs/supercli-com discussions #13.
 [detection]
 command_aliases = ["agy"]
 process_aliases = ["agy"]
@@ -46,4 +46,4 @@ command = "agy --dangerously-skip-permissions"
 quick_launch = false
 
 [integration]
-summary = "Adds the unpeel MCP server to Antigravity's global MCP config, ~/.gemini/config/mcp_config.json."
+summary = "Adds the supercli MCP server to Antigravity's global MCP config, ~/.gemini/config/mcp_config.json."

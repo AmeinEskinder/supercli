@@ -124,7 +124,7 @@ pub enum Flow {
 ///
 /// Raw mode, the alternate screen, and mouse capture are restored on exit or
 /// panic. With the `ui-bridge` feature the same process also serves hosted
-/// SwiftUI and web renderers when an Unpeel Host injects an endpoint.
+/// SwiftUI and web renderers when an Supercli Host injects an endpoint.
 pub fn run_app(app: impl App, metadata: AppMetadata) -> io::Result<()> {
     let mut session = Session::new(app, metadata)?;
     enable_raw_mode()?;

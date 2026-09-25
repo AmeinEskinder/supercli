@@ -25,7 +25,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     BusyStatus, KitTheme, SubmitMode, TextBox, TextBoxAction, TextBoxOutcome, TextBoxTheme,
     TitlePosition,
 };

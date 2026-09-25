@@ -28,8 +28,8 @@
 //! import LocalAuthentication
 //!
 //! // 0 = unavailable, 1 = passcode-only, 2 = touchID, 3 = faceID, 4 = opticID.
-//! @_cdecl("unpeel_shell_biometric_capability")
-//! public func unpeel_shell_biometric_capability() -> Int32 {
+//! @_cdecl("supercli_shell_biometric_capability")
+//! public func supercli_shell_biometric_capability() -> Int32 {
 //!     let context = LAContext()
 //!     var error: NSError?
 //!     guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return 0 }
@@ -44,8 +44,8 @@
 //! // 0 = success, 1 = user cancel, 2 = system/app cancel, 3 = failure.
 //! // Called on a Rust background thread — never the main thread — so
 //! // blocking on a semaphore here is safe.
-//! @_cdecl("unpeel_shell_biometric_authenticate")
-//! public func unpeel_shell_biometric_authenticate(_ reason: UnsafePointer<CChar>) -> Int32 {
+//! @_cdecl("supercli_shell_biometric_authenticate")
+//! public func supercli_shell_biometric_authenticate(_ reason: UnsafePointer<CChar>) -> Int32 {
 //!     let reasonString = String(cString: reason)
 //!     let context = LAContext()
 //!     let sema = DispatchSemaphore(value: 0)
@@ -186,8 +186,8 @@ mod shell_ffi {
     use std::os::raw::{c_char, c_int};
 
     extern "C" {
-        pub fn unpeel_shell_biometric_capability() -> c_int;
-        pub fn unpeel_shell_biometric_authenticate(reason: *const c_char) -> c_int;
+        pub fn supercli_shell_biometric_capability() -> c_int;
+        pub fn supercli_shell_biometric_authenticate(reason: *const c_char) -> c_int;
     }
 }
 
@@ -204,7 +204,7 @@ impl BiometricBackend for ShellBiometricBackend {
         {
             // SAFETY: the shell contract guarantees a pure, thread-safe
             // query returning 0–4 (module docs).
-            let code = unsafe { shell_ffi::unpeel_shell_biometric_capability() };
+            let code = unsafe { shell_ffi::supercli_shell_biometric_capability() };
             return match code {
                 1 => AppLockCapability {
                     available: true,
@@ -240,7 +240,7 @@ impl BiometricBackend for ShellBiometricBackend {
             // SAFETY: the shell contract guarantees a thread-safe,
             // semaphore-blocked call returning 0–3 (module docs).
             let code: c_int =
-                unsafe { shell_ffi::unpeel_shell_biometric_authenticate(c_reason.as_ptr()) };
+                unsafe { shell_ffi::supercli_shell_biometric_authenticate(c_reason.as_ptr()) };
             return match code {
                 0 => Ok(()),
                 1 => Err(AuthError::UserCancel),
@@ -323,7 +323,7 @@ impl AppLockManager {
             return true;
         }
         let reason = format!(
-            "Confirm {} to lock Unpeel when you leave the app",
+            "Confirm {} to lock Supercli when you leave the app",
             method_label(&self.capability())
         );
         if !self.authenticate(&reason) {
@@ -367,7 +367,7 @@ impl AppLockManager {
         if !self.is_locked {
             return true;
         }
-        if self.authenticate(&{ t("app_lock.unlock_unpeel") }) {
+        if self.authenticate(&{ t("app_lock.unlock_supercli") }) {
             self.is_locked = false;
             true
         } else {
@@ -428,7 +428,7 @@ pub fn AppLockOverlay(
                     path { d: "M8 10V7a4 4 0 0 1 8 0v3" }
                     circle { cx: "12", cy: "15", r: "1.4", fill: "currentColor", stroke: "none" }
                 }
-                div { class: "app-lock-title", {t("app_lock.unpeel_is_locked")} }
+                div { class: "app-lock-title", {t("app_lock.supercli_is_locked")} }
                 if let Some(error) = last_error {
                     div { class: "app-lock-error", "{error}" }
                 }

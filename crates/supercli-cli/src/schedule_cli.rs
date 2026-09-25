@@ -1,4 +1,4 @@
-//! `unpeel schedule` — manage and drive scheduled autonomous sessions.
+//! `supercli schedule` — manage and drive scheduled autonomous sessions.
 //!
 //! A schedule arms an explicit, operator-written list of connector tool
 //! calls to run unattended against one named session. Nothing here is
@@ -30,20 +30,20 @@ use supercli_core::session_connectors::SessionConnectors;
 use supercli_core::session_host;
 
 pub const HELP: &str = "\
-unpeel schedule — scheduled autonomous sessions (explicit operator opt-in)
+supercli schedule — scheduled autonomous sessions (explicit operator opt-in)
 
-  unpeel schedule add --id ID --session SID --interval SECS \\
+  supercli schedule add --id ID --session SID --interval SECS \\
       --tool TOOL [--arg KEY=VALUE ...] [--tool TOOL ...] \\
       [--max-duration SECS] [--max-steps N] [--max-output BYTES] [--max-retries N]
                                   arm a schedule: run the listed connector
                                   tools in order, every SECS (>= 60)
-  unpeel schedule list [--json]    list armed schedules
-  unpeel schedule pause <id>      pause (takes effect before the next trigger)
-  unpeel schedule resume <id>     resume a paused schedule
-  unpeel schedule remove <id>     delete a schedule (audit logs are kept)
-  unpeel schedule run-once <id> [--json]
+  supercli schedule list [--json]    list armed schedules
+  supercli schedule pause <id>      pause (takes effect before the next trigger)
+  supercli schedule resume <id>     resume a paused schedule
+  supercli schedule remove <id>     delete a schedule (audit logs are kept)
+  supercli schedule run-once <id> [--json]
                                   fire one trigger now (audited like any trigger)
-  unpeel schedule daemon          fire due triggers until killed; run this
+  supercli schedule daemon          fire due triggers until killed; run this
                                   under systemd/launchd, not cron
 
 A scheduled run executes an explicit ordered list of connector tool calls
@@ -74,7 +74,7 @@ pub fn run(args: &[String]) -> i32 {
     match result {
         Ok(code) => code,
         Err(message) => {
-            eprintln!("unpeel schedule: {message}");
+            eprintln!("supercli schedule: {message}");
             1
         }
     }
@@ -83,7 +83,7 @@ pub fn run(args: &[String]) -> i32 {
 fn single_id(args: &[String], verb: &str) -> Result<String, String> {
     match args {
         [id] => Ok(id.clone()),
-        _ => Err(format!("usage: unpeel schedule {verb} <id>")),
+        _ => Err(format!("usage: supercli schedule {verb} <id>")),
     }
 }
 
@@ -269,7 +269,7 @@ fn add(args: &[String]) -> Result<i32, String> {
 fn list(args: &[String]) -> Result<i32, String> {
     let json = args.iter().any(|a| a == "--json");
     if args.iter().any(|a| a != "--json") {
-        return Err("usage: unpeel schedule list [--json]".to_string());
+        return Err("usage: supercli schedule list [--json]".to_string());
     }
     let home = app_paths::supercli_home();
     let specs = load_schedules(&home).map_err(|e| e.to_string())?;
@@ -334,7 +334,7 @@ fn run_once(args: &[String]) -> Result<i32, String> {
     let (id, json) = match args {
         [id] => (id.clone(), false),
         [id, flag] if flag == "--json" => (id.clone(), true),
-        _ => return Err("usage: unpeel schedule run-once <id> [--json]".to_string()),
+        _ => return Err("usage: supercli schedule run-once <id> [--json]".to_string()),
     };
     let home = app_paths::supercli_home();
     let specs = load_schedules(&home).map_err(|e| e.to_string())?;
@@ -410,11 +410,11 @@ fn notify_failure(spec: &ScheduleSpec, record: &RunRecord) {
 
 fn daemon(args: &[String]) -> Result<i32, String> {
     if !args.is_empty() {
-        return Err("usage: unpeel schedule daemon (no arguments)".to_string());
+        return Err("usage: supercli schedule daemon (no arguments)".to_string());
     }
     let home = app_paths::ensure_supercli_home().map_err(|e| e.to_string())?;
     eprintln!(
-        "unpeel schedule daemon: watching {} (Ctrl-C to stop)",
+        "supercli schedule daemon: watching {} (Ctrl-C to stop)",
         schedules_path(&home).display()
     );
     let scheduler: Scheduler<SystemClock> = Scheduler::new(SystemClock);
@@ -448,7 +448,7 @@ fn daemon(args: &[String]) -> Result<i32, String> {
             );
         }
         for error in &report.errors {
-            eprintln!("unpeel schedule daemon: {error}");
+            eprintln!("supercli schedule daemon: {error}");
         }
         std::thread::sleep(scheduler.next_wake_in());
     }

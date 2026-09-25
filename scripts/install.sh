@@ -1,5 +1,5 @@
 #!/bin/sh
-# Unpeel CLI installer — served at https://supercli.com/install.sh by the
+# Supercli CLI installer — served at https://supercli.com/install.sh by the
 # supercli-release-updates worker (which substitutes __DEFAULT_CHANNEL__).
 #
 #   curl -fsSL https://supercli.com/install.sh | sh
@@ -221,7 +221,7 @@ esac
 
 echo ""
 echo "Start it:"
-echo "  supercli serve    run the Host service on this machine (or open the Unpeel app)"
+echo "  supercli serve    run the Host service on this machine (or open the Supercli app)"
 echo "  supercli pair     pair a phone or another Mac with this Host"
 echo "  supercli --help   every command and flag"
 echo ""

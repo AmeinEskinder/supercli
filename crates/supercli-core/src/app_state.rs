@@ -3,7 +3,7 @@
 //! This file is a **cross-frontend, cross-version contract**: the desktop app
 //! owns keys the Rust side has never heard of (theme, active tabs, pins,
 //! whatever ships next), and a user running an older app against a newer
-//! `unpeel` — or the reverse — must not lose any of them. Two rules make that
+//! `supercli` — or the reverse — must not lose any of them. Two rules make that
 //! safe, and every writer goes through here so they can't be forgotten:
 //!
 //! 1. **Never clobber a file we failed to understand.** A missing file is a
@@ -194,7 +194,7 @@ mod tests {
     /// resolve a path at that moment (it did — one run in five failed
     /// somewhere unrelated). The `_at` variants exist for exactly this.
     fn with_state<T>(body: impl FnOnce(&std::path::Path) -> T) -> T {
-        let dir = std::env::temp_dir().join(format!("unpeel-state-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("supercli-state-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let outcome = body(&dir.join("app-state.json"));
         let _ = std::fs::remove_dir_all(&dir);

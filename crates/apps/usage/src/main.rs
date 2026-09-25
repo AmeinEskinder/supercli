@@ -1,9 +1,9 @@
-//! unpeel-usage — local AI usage & credits at a glance.
+//! supercli-usage — local AI usage & credits at a glance.
 //!
 //! Standalone-first: a complete terminal dashboard in any shell, reading
 //! only the files your AI tools already write (`~/.codex`, `~/.claude`,
 //! `~/.grok`, `~/.local/share/muse`).
-//! Inside Unpeel it registers as an App: branded sidebar row, live status
+//! Inside Supercli it registers as an App: branded sidebar row, live status
 //! line, and opt-in informational alerts that reach Recent, desktop, and phone
 //! without changing the session lifecycle. Claude and Grok can reuse their
 //! CLI logins for live limits; history remains local.
@@ -31,7 +31,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
-use unpeel_app_kit::{
+use supercli_app_kit::{
     page_delta_operations, AppContext, AppMetadata, AppReporter, KeyboardEnhancementGuard,
     ListKeymap, ListNavigationAction, TerminalPointerState, ThemeMonitor, UiBridge, UiBridgeEvent,
     UiEventKind, UiEventOutcome, UiEventValue, UiNode,
@@ -47,15 +47,15 @@ fn main() {
             report(&config);
         }
         Some("--version") | Some("-V") => {
-            println!("unpeel-usage {}", env!("CARGO_PKG_VERSION"));
+            println!("supercli-usage {}", env!("CARGO_PKG_VERSION"));
         }
         Some(other) => {
-            eprintln!("unknown argument '{other}'. Usage: unpeel-usage [report|--version]");
+            eprintln!("unknown argument '{other}'. Usage: supercli-usage [report|--version]");
             std::process::exit(2);
         }
         None => {
             if let Err(error) = run_tui(config) {
-                eprintln!("unpeel-usage: {error}");
+                eprintln!("supercli-usage: {error}");
                 std::process::exit(1);
             }
         }
@@ -223,7 +223,7 @@ struct App {
     viewport_height: u16,
     reveal_selected: bool,
     back_focused: bool,
-    spinner: unpeel_app_kit::Spinner,
+    spinner: supercli_app_kit::Spinner,
     scanning: bool,
     hosted: bool,
     alert_dialog: Option<usize>,
@@ -623,7 +623,7 @@ fn run_tui(config: Config) -> io::Result<()> {
         viewport_height: 0,
         reveal_selected: true,
         back_focused: false,
-        spinner: unpeel_app_kit::Spinner::new(),
+        spinner: supercli_app_kit::Spinner::new(),
         scanning: true,
         hosted,
         alert_dialog: None,
@@ -632,7 +632,7 @@ fn run_tui(config: Config) -> io::Result<()> {
         quit: false,
     };
     let mut bridge = UiBridge::detect(
-        AppMetadata::new(install::APP_ID, "Unpeel Usage", env!("CARGO_PKG_VERSION")).description(
+        AppMetadata::new(install::APP_ID, "Supercli Usage", env!("CARGO_PKG_VERSION")).description(
             "One Usage component tree interpreted by Ratatui, native, and web renderers",
         ),
     )
@@ -828,12 +828,12 @@ fn run_tui(config: Config) -> io::Result<()> {
                         {
                             let primary = (mouse.kind == MouseEventKind::Down(MouseButton::Left))
                                 .then(|| match &published.element {
-                                    unpeel_app_kit::UiComponent::Page(page) => page
+                                    supercli_app_kit::UiComponent::Page(page) => page
                                         .list()
                                         .items
                                         .iter()
                                         .find(|item| item.id == hit.node_id)
-                                        .and_then(unpeel_app_kit::ListItem::primary_ui_action),
+                                        .and_then(supercli_app_kit::ListItem::primary_ui_action),
                                     _ => None,
                                 })
                                 .flatten();
@@ -863,12 +863,12 @@ fn run_tui(config: Config) -> io::Result<()> {
     Ok(())
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error.to_string())
 }
 
 fn semantic_action_is_declared(
-    page: &unpeel_app_kit::Page,
+    page: &supercli_app_kit::Page,
     node_id: &str,
     action: &str,
     kind: UiEventKind,
@@ -901,7 +901,7 @@ fn semantic_action_is_declared(
                 .into_iter()
                 .flatten()
                 .any(|slot| match slot {
-                    unpeel_app_kit::ListItemSlot::Toggle(toggle) => {
+                    supercli_app_kit::ListItemSlot::Toggle(toggle) => {
                         toggle.id == node_id && toggle.set_value == action
                     }
                     _ => false,
@@ -913,7 +913,7 @@ fn semantic_action_is_declared(
 mod tests {
     use super::*;
     use crate::sources::{Provider, ProviderKind};
-    use unpeel_app_kit::{FooterAction, List, ListItem, Page, UiDeltaOperation};
+    use supercli_app_kit::{FooterAction, List, ListItem, Page, UiDeltaOperation};
 
     fn limit_snapshot(level: Level, used: f64, annotation: Option<&str>) -> Snapshot {
         let mut metric =

@@ -85,7 +85,7 @@ fn claude_hook_script_ignores_grok_compat_session_start() {
         .arg(&script)
         .env("HOME", hook_env_home("claude-ignore-grok"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
         .env(
             "SUPERCLI_HOOK_TRACE_FILE",
@@ -118,7 +118,7 @@ fn claude_hook_script_ignores_grok_compat_session_start() {
 
 #[test]
 fn stale_tmp_claude_hooks_are_pruned() {
-    let current = "/Users/me/.unpeel/hooks/claude-hooks.sh";
+    let current = "/Users/me/.supercli/hooks/claude-hooks.sh";
     assert!(!crate::hook_assets::is_stale_supercli_claude_hook(current, current));
     assert!(crate::hook_assets::is_stale_supercli_claude_hook(
         "/tmp/ur-c8eem28y/hooks/claude-hooks.sh",

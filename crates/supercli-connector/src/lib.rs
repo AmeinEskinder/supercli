@@ -1,4 +1,4 @@
-//! Connector (plugin) runtime for the Unpeel harness host.
+//! Connector (plugin) runtime for the Supercli harness host.
 //!
 //! Implements `docs/connectors.md`: declarative `connector.toml` v1
 //! manifests, discovery, approval policy, keychain token storage, the

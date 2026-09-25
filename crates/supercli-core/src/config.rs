@@ -2,7 +2,7 @@
 //!
 //! The workspace "config" is the settings subset of `app-state.json`: the
 //! top-level setting keys plus the `experimental_features` object. This
-//! module owns the schema so the CLI (`unpeel config check`) and the Host
+//! module owns the schema so the CLI (`supercli config check`) and the Host
 //! (startup refusal) validate with exactly the same rules and messages.
 //!
 //! Rules:
@@ -43,7 +43,7 @@ pub struct SettingDef {
     pub allowed: &'static str,
 }
 
-/// The schema. Mirrors `unpeel settings set`'s accepted keys and values;
+/// The schema. Mirrors `supercli settings set`'s accepted keys and values;
 /// `computer_use` stays parseable as a legacy alias (it no longer enables
 /// the retired domain) and `computer_access` is the legacy read-fallback
 /// spelling of `computer_default_access`.
@@ -175,7 +175,7 @@ impl fmt::Display for ConfigIssue {
 pub struct ConfigReport {
     /// Unknown keys. Advisory; never fail a check on these alone.
     pub warnings: Vec<ConfigIssue>,
-    /// Invalid values. `unpeel config check` exits 2; the Host refuses to start.
+    /// Invalid values. `supercli config check` exits 2; the Host refuses to start.
     pub errors: Vec<ConfigIssue>,
 }
 
@@ -185,7 +185,7 @@ impl ConfigReport {
         self.errors.is_empty()
     }
 
-    /// The shared message format used by `unpeel config check` and the
+    /// The shared message format used by `supercli config check` and the
     /// Host's startup refusal, so both surfaces say the same thing.
     pub fn message(&self) -> String {
         let mut out = String::from("invalid config:");
@@ -295,7 +295,7 @@ pub fn check_config(state: &Map<String, Value>) -> ConfigReport {
         }
         report.warnings.push(ConfigIssue::new(
             key.clone(),
-            "unknown key; see `unpeel settings list` for the supported settings".to_string(),
+            "unknown key; see `supercli settings list` for the supported settings".to_string(),
         ));
     }
 

@@ -3,9 +3,9 @@
 use std::process::Command;
 
 use tempfile::tempdir;
-use unpeel_app_kit::{AppMetadata, UI_SOCKET_ENV, UI_TOKEN_ENV, UiBridge};
+use supercli_app_kit::{AppMetadata, UI_SOCKET_ENV, UI_TOKEN_ENV, UiBridge};
 
-const PROBE_ENV: &str = "UNPEEL_UI_ENV_SCRUB_PROBE";
+const PROBE_ENV: &str = "SUPERCLI_UI_ENV_SCRUB_PROBE";
 
 #[test]
 fn ui_bridge_detect_scrubs_credentials_before_spawning_children() {

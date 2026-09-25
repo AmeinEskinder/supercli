@@ -1,4 +1,4 @@
-//! `unpeel serve install|uninstall|status` — wrap the checked-in service
+//! `supercli serve install|uninstall|status` — wrap the checked-in service
 //! unit templates (`packaging/service/`) around the resolved binary and the
 //! platform's per-user service manager.
 //!
@@ -26,9 +26,9 @@ const SYSTEMD_GRAPHICAL_TEMPLATE: &str =
 /// The line that identifies an installed graphical unit on re-read.
 const GRAPHICAL_MARKER: &str = "PartOf=graphical-session.target";
 /// The path the verbatim templates ship with; rendering rewrites it.
-const TEMPLATE_BINARY: &str = "/usr/local/bin/unpeel";
+const TEMPLATE_BINARY: &str = "/usr/local/bin/supercli";
 const LAUNCHD_LABEL: &str = "com.supercli.serve";
-const SYSTEMD_UNIT: &str = "unpeel-serve";
+const SYSTEMD_UNIT: &str = "supercli-serve";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServiceManager {
@@ -173,17 +173,17 @@ pub fn render_unit(
             let mut unit = template.replace(&format!("ExecStart={TEMPLATE_BINARY} serve"), &exec);
             if let ServiceScope::Workspace { slug, .. } = scope {
                 let description = if graphical {
-                    format!("Description=Unpeel Host service (workspace {slug}, desktop session)")
+                    format!("Description=Supercli Host service (workspace {slug}, desktop session)")
                 } else {
-                    format!("Description=Unpeel Host service (workspace {slug})")
+                    format!("Description=Supercli Host service (workspace {slug})")
                 };
                 unit = unit
                     .replace(
-                        "Description=Unpeel Host service (desktop session)",
+                        "Description=Supercli Host service (desktop session)",
                         &description,
                     )
                     .replace(
-                        "Description=Unpeel Host service\n",
+                        "Description=Supercli Host service\n",
                         &format!("{description}\n"),
                     );
             }
@@ -241,7 +241,7 @@ pub fn install(
     scope.validate()?;
     if graphical && manager != ServiceManager::Systemd {
         return Err(
-            "--graphical is a Linux (systemd --user) option: on macOS the Unpeel app owns the \
+            "--graphical is a Linux (systemd --user) option: on macOS the Supercli app owns the \
 desktop-session daemon"
                 .into(),
         );
@@ -427,11 +427,11 @@ mod tests {
         let unit = render_unit(
             ServiceManager::Launchd,
             &ServiceScope::Machine,
-            Path::new("/opt/supercli/bin/unpeel"),
+            Path::new("/opt/supercli/bin/supercli"),
             false,
         );
         assert!(unit.contains("<string>com.supercli.serve</string>"));
-        assert!(unit.contains("<string>/opt/supercli/bin/unpeel</string>"));
+        assert!(unit.contains("<string>/opt/supercli/bin/supercli</string>"));
         assert!(unit.contains("<string>serve</string>"));
         assert!(!unit.contains(&format!("<string>{TEMPLATE_BINARY}</string>")));
         assert!(!unit.contains("<string>--workspace</string>"));
@@ -442,7 +442,7 @@ mod tests {
         let unit = render_unit(
             ServiceManager::Launchd,
             &workspace(),
-            Path::new("/opt/supercli/bin/unpeel"),
+            Path::new("/opt/supercli/bin/supercli"),
             false,
         );
         assert!(unit.contains("<string>com.supercli.serve.teama</string>"));
@@ -456,17 +456,17 @@ mod tests {
         let machine = render_unit(
             ServiceManager::Systemd,
             &ServiceScope::Machine,
-            Path::new("/home/u/.local/bin/unpeel"),
+            Path::new("/home/u/.local/bin/supercli"),
             false,
         );
-        assert!(machine.contains("ExecStart=/home/u/.local/bin/unpeel serve"));
+        assert!(machine.contains("ExecStart=/home/u/.local/bin/supercli serve"));
         let scoped = render_unit(
             ServiceManager::Systemd,
             &workspace(),
-            Path::new("/home/u/.local/bin/unpeel"),
+            Path::new("/home/u/.local/bin/supercli"),
             false,
         );
-        assert!(scoped.contains("ExecStart=/home/u/.local/bin/unpeel --workspace teama serve"));
+        assert!(scoped.contains("ExecStart=/home/u/.local/bin/supercli --workspace teama serve"));
         assert!(scoped.contains("(workspace teama)"));
     }
 
@@ -475,29 +475,29 @@ mod tests {
         let machine = render_unit(
             ServiceManager::Systemd,
             &ServiceScope::Machine,
-            Path::new("/usr/local/bin/unpeel"),
+            Path::new("/usr/local/bin/supercli"),
             true,
         );
-        assert!(machine.contains("ExecStart=/usr/local/bin/unpeel serve"));
+        assert!(machine.contains("ExecStart=/usr/local/bin/supercli serve"));
         assert!(machine.contains(GRAPHICAL_MARKER));
         assert!(machine.contains("After=graphical-session.target"));
         assert!(machine.contains("WantedBy=graphical-session.target"));
         assert!(!machine.contains("WantedBy=default.target"));
-        assert!(machine.contains("Description=Unpeel Host service (desktop session)"));
+        assert!(machine.contains("Description=Supercli Host service (desktop session)"));
         let scoped = render_unit(
             ServiceManager::Systemd,
             &workspace(),
-            Path::new("/usr/local/bin/unpeel"),
+            Path::new("/usr/local/bin/supercli"),
             true,
         );
-        assert!(scoped.contains("ExecStart=/usr/local/bin/unpeel --workspace teama serve"));
+        assert!(scoped.contains("ExecStart=/usr/local/bin/supercli --workspace teama serve"));
         assert!(scoped.contains("(workspace teama, desktop session)"));
         assert!(scoped.contains(GRAPHICAL_MARKER));
         // The plain unit never carries the marker status keys off.
         let plain = render_unit(
             ServiceManager::Systemd,
             &ServiceScope::Machine,
-            Path::new("/usr/local/bin/unpeel"),
+            Path::new("/usr/local/bin/supercli"),
             false,
         );
         assert!(!plain.contains(GRAPHICAL_MARKER));
@@ -518,8 +518,8 @@ mod tests {
 
     #[test]
     fn unit_file_names_are_scoped() {
-        assert_eq!(ServiceScope::Machine.systemd_unit(), "unpeel-serve.service");
-        assert_eq!(workspace().systemd_unit(), "unpeel-serve-teama.service");
+        assert_eq!(ServiceScope::Machine.systemd_unit(), "supercli-serve.service");
+        assert_eq!(workspace().systemd_unit(), "supercli-serve-teama.service");
         assert_eq!(workspace().launchd_label(), "com.supercli.serve.teama");
     }
 }

@@ -23,7 +23,7 @@ pub(crate) const HOOK_EVENTS: &[&str] = &[
     "SubagentStop",
 ];
 /// Install the Claude integration: the lifecycle hook script registered in
-/// `~/.claude/settings.json`, and the Unpeel MCP shim registered as a
+/// `~/.claude/settings.json`, and the Supercli MCP shim registered as a
 /// user-scope MCP server in `~/.claude.json` (the file `claude mcp add
 /// --scope user` writes). Both merges preserve every foreign entry and
 /// rewrite only on change.
@@ -49,8 +49,8 @@ pub(crate) fn claude_mcp_server_value(shim: &Path) -> Value {
     })
 }
 
-/// Reconcile the `unpeel` entry in a `~/.claude.json`-shaped object. Prunes
-/// the pre-unification names only when they are Unpeel-owned; returns
+/// Reconcile the `supercli` entry in a `~/.claude.json`-shaped object. Prunes
+/// the pre-unification names only when they are Supercli-owned; returns
 /// whether anything changed.
 pub(crate) fn reconcile_claude_mcp_servers(config: &mut Value, shim: &Path) -> bool {
     let Some(root) = config.as_object_mut() else {
@@ -65,18 +65,18 @@ pub(crate) fn reconcile_claude_mcp_servers(config: &mut Value, shim: &Path) -> b
     let servers = servers.as_object_mut().unwrap();
     let desired = claude_mcp_server_value(shim);
     let mut changed = false;
-    if servers.get("unpeel") != Some(&desired) {
-        servers.insert("unpeel".into(), desired);
+    if servers.get("supercli") != Some(&desired) {
+        servers.insert("supercli".into(), desired);
         changed = true;
     }
-    for legacy in ["unpeel-mcp", "unpeel-sessions", "unpeel-browser"] {
+    for legacy in ["supercli-mcp", "supercli-sessions", "supercli-browser"] {
         let owned = servers.get(legacy).is_some_and(|entry| {
             entry
                 .get("command")
                 .and_then(Value::as_str)
                 .is_some_and(|command| {
                     crate::integrations::install::is_mcp_shim_command(command)
-                        || command.ends_with("unpeel-host")
+                        || command.ends_with("supercli-host")
                 })
         });
         if owned {
@@ -99,7 +99,7 @@ pub(crate) fn ensure_claude_user_mcp_server(shim: &Path) -> Result<(), String> {
             )
         })?;
     }
-    // Lock beside Unpeel's own state rather than dropping a `.claude.lock`
+    // Lock beside Supercli's own state rather than dropping a `.claude.lock`
     // into the home directory root.
     let lock_target = machine_home().join("integrations").join("claude-user-config.json");
     if let Some(parent) = lock_target.parent() {
@@ -142,7 +142,7 @@ pub(crate) fn build_hook_entry(event: &str, command: &str) -> Value {
     entry
 }
 
-/// Unpeel-managed `claude-hooks.sh` copies left behind by tests or deleted
+/// Supercli-managed `claude-hooks.sh` copies left behind by tests or deleted
 /// workspaces. Grok also runs Claude settings hooks, so a stale `/tmp/...`
 /// copy that still posts `session_start` as busy will spin every Grok
 /// session even after the live script is fixed.
@@ -196,7 +196,7 @@ pub(crate) fn ensure_claude_settings_hook(script_path: &Path) -> Result<(), Stri
     let _settings_lock = crate::app_state::lock_exclusive(&settings_path)?;
     let Some(mut settings) = read_mergeable_json_object(&settings_path, "Claude settings")? else {
         // Existing settings.json is not a valid JSON object; skip rather than
-        // clobber the user's real settings with an Unpeel-only file.
+        // clobber the user's real settings with an Supercli-only file.
         return Ok(());
     };
 
@@ -263,20 +263,20 @@ mod hook_reconciliation_tests {
 
     #[test]
     fn user_scope_mcp_registration_merges_and_prunes_owned_entries_only() {
-        let shim = Path::new("/home/me/.unpeel/bin/unpeel-mcp");
+        let shim = Path::new("/home/me/.supercli/bin/supercli-mcp");
         let mut config = json!({
             "numStartups": 12,
             "mcpServers": {
-                "unpeel-sessions": {"type": "stdio", "command": "/old/unpeel-host", "args": ["__mcp__"]},
-                "unpeel-browser": {"type": "stdio", "command": "/user/custom-browser", "args": []},
+                "supercli-sessions": {"type": "stdio", "command": "/old/supercli-host", "args": ["__mcp__"]},
+                "supercli-browser": {"type": "stdio", "command": "/user/custom-browser", "args": []},
                 "github": {"type": "http", "url": "https://example.test"}
             }
         });
         assert!(reconcile_claude_mcp_servers(&mut config, shim));
         assert_eq!(config["numStartups"], 12);
-        assert_eq!(config["mcpServers"]["unpeel"]["command"], json!(shim.to_string_lossy()));
-        assert!(config["mcpServers"].get("unpeel-sessions").is_none());
-        assert_eq!(config["mcpServers"]["unpeel-browser"]["command"], "/user/custom-browser");
+        assert_eq!(config["mcpServers"]["supercli"]["command"], json!(shim.to_string_lossy()));
+        assert!(config["mcpServers"].get("supercli-sessions").is_none());
+        assert_eq!(config["mcpServers"]["supercli-browser"]["command"], "/user/custom-browser");
         assert_eq!(config["mcpServers"]["github"]["type"], "http");
         assert!(!reconcile_claude_mcp_servers(&mut config, shim));
         let mut scalar = json!({"mcpServers": "bogus"});

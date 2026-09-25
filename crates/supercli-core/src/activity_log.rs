@@ -279,7 +279,7 @@ mod tests {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
         let directory = std::env::temp_dir().join(format!(
-            "unpeel-activity-log-{label}-{}-{sequence}",
+            "supercli-activity-log-{label}-{}-{sequence}",
             std::process::id()
         ));
         fs::create_dir_all(&directory).unwrap();
@@ -296,7 +296,7 @@ mod tests {
             title: format!("Session {id}"),
             command: "codex --continue".to_string(),
             project_id: "project-1".to_string(),
-            project_name: "Unpeel".to_string(),
+            project_name: "Supercli".to_string(),
             message: None,
         }
     }
@@ -324,7 +324,7 @@ mod tests {
                 "title": "Session 7",
                 "command": "codex --continue",
                 "project_id": "project-1",
-                "project_name": "Unpeel"
+                "project_name": "Supercli"
             })
         );
         assert_eq!(

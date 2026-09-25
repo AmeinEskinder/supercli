@@ -1,4 +1,4 @@
-//! `unpeel self-update` — check for and apply updates.
+//! `supercli self-update` — check for and apply updates.
 //!
 //! Phase 14 (4): `--check` only. Reads a local manifest file (no network),
 //! compares the installed version against the manifest version, and
@@ -9,9 +9,9 @@
 //! 2 = usage/config error, 3 = update available.
 
 pub const HELP: &str = "\
-unpeel self-update — check for updates (Phase 14: --check only)
+supercli self-update — check for updates (Phase 14: --check only)
 
-  unpeel self-update --check [--manifest PATH] [--json]
+  supercli self-update --check [--manifest PATH] [--json]
 
 Reads a local update manifest (JSON) and compares its version against
 the installed version. No network calls are made in this phase: the
@@ -69,7 +69,7 @@ fn update_available(installed: &str, manifest: &str) -> Result<bool, String> {
     Ok(manifest_v > installed_v)
 }
 
-/// Run `unpeel self-update`. Returns the process exit code.
+/// Run `supercli self-update`. Returns the process exit code.
 pub fn run(args: &[String]) -> i32 {
     let mut check = false;
     let mut manifest_path: Option<String> = None;
@@ -81,7 +81,7 @@ pub fn run(args: &[String]) -> i32 {
             "--manifest" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("unpeel self-update: --manifest requires a PATH");
+                    eprintln!("supercli self-update: --manifest requires a PATH");
                     return 2;
                 }
                 manifest_path = Some(args[i].clone());
@@ -92,28 +92,28 @@ pub fn run(args: &[String]) -> i32 {
                 return 0;
             }
             "--apply" => {
-                eprintln!("unpeel self-update: --apply is not implemented in this phase (see docs/self-update-design.md)");
+                eprintln!("supercli self-update: --apply is not implemented in this phase (see docs/self-update-design.md)");
                 return 2;
             }
             "--rollback" => {
-                eprintln!("unpeel self-update: --rollback is not implemented in this phase (see docs/self-update-design.md)");
+                eprintln!("supercli self-update: --rollback is not implemented in this phase (see docs/self-update-design.md)");
                 return 2;
             }
             other => {
-                eprintln!("unpeel self-update: unknown argument {other:?}\n{HELP}");
+                eprintln!("supercli self-update: unknown argument {other:?}\n{HELP}");
                 return 2;
             }
         }
         i += 1;
     }
     if !check {
-        eprintln!("unpeel self-update: --check is required in this phase\n{HELP}");
+        eprintln!("supercli self-update: --check is required in this phase\n{HELP}");
         return 2;
     }
     let manifest_path = match manifest_path {
         Some(p) => p,
         None => {
-            eprintln!("unpeel self-update --check: --manifest PATH is required");
+            eprintln!("supercli self-update --check: --manifest PATH is required");
             return 2;
         }
     };
@@ -121,14 +121,14 @@ pub fn run(args: &[String]) -> i32 {
     let manifest = match read_manifest(&manifest_path) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("unpeel self-update: {e}");
+            eprintln!("supercli self-update: {e}");
             return 2;
         }
     };
     let available = match update_available(INSTALLED_VERSION, &manifest.version) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("unpeel self-update: {e}");
+            eprintln!("supercli self-update: {e}");
             return 2;
         }
     };

@@ -1,6 +1,6 @@
 //! Real-process proof for the loopback workspace gateway
 //! (the private "workspaces-unification" design record phase 2): the Controller-side
-//! `LocalProcessConnection` spawns this build's `unpeel-host __remote_stdio__`
+//! `LocalProcessConnection` spawns this build's `supercli-host __remote_stdio__`
 //! directly against a workspace home and drives the same semantic
 //! `RemoteSessionBackend` as SSH — including a home that does not exist yet.
 
@@ -15,14 +15,14 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
-use unpeel_core::host_connection::{
+use supercli_core::host_connection::{
     HostCall, HostConnection, HostConnectionError, RequestSemantics,
 };
-use unpeel_core::remote_session_backend::{
+use supercli_core::remote_session_backend::{
     RemoteEffectFailureKind, RemoteOutputPollOptions, RemoteProjectOrganizationPatch,
     RemoteSessionBackend, RemoteSessionBackendError,
 };
-use unpeel_core::ssh_connection::LocalProcessConnection;
+use supercli_core::ssh_connection::LocalProcessConnection;
 
 fn wait_until(timeout: Duration, mut condition: impl FnMut() -> bool) -> bool {
     let deadline = std::time::Instant::now() + timeout;
@@ -39,27 +39,27 @@ fn adapter_control(
     stream: &mut UnixStream,
     id: u64,
     body: serde_json::Value,
-) -> unpeel_core::relay_wire::TunnelResponse {
-    let request = unpeel_core::relay_wire::TunnelRequest {
+) -> supercli_core::relay_wire::TunnelResponse {
+    let request = supercli_core::relay_wire::TunnelRequest {
         id,
         method: "POST".into(),
-        path: "/_unpeel/platform-adapter".into(),
+        path: "/_supercli/platform-adapter".into(),
         query: Vec::new(),
         auth: None,
         content_type: Some("application/json".into()),
         body: serde_json::to_vec(&body).unwrap(),
     };
-    unpeel_core::remote_stdio::write_frame(
+    supercli_core::remote_stdio::write_frame(
         stream,
-        unpeel_core::remote_stdio::FRAME_KIND_REQUEST,
-        &unpeel_core::relay_wire::encode_tunnel_request(&request),
+        supercli_core::remote_stdio::FRAME_KIND_REQUEST,
+        &supercli_core::relay_wire::encode_tunnel_request(&request),
     )
     .unwrap();
-    let frame = unpeel_core::remote_stdio::read_frame(stream)
+    let frame = supercli_core::remote_stdio::read_frame(stream)
         .unwrap()
         .expect("adapter control response");
-    assert_eq!(frame.kind, unpeel_core::remote_stdio::FRAME_KIND_RESPONSE);
-    unpeel_core::relay_wire::parse_tunnel_response(&frame.payload).unwrap()
+    assert_eq!(frame.kind, supercli_core::remote_stdio::FRAME_KIND_RESPONSE);
+    supercli_core::relay_wire::parse_tunnel_response(&frame.payload).unwrap()
 }
 
 fn read_fixed_http_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
@@ -139,12 +139,12 @@ fn direct_tls_request(
     bearer: &str,
     body: &[u8],
 ) -> Vec<u8> {
-    use unpeel_core::rustls;
+    use supercli_core::rustls;
     let fingerprint =
-        unpeel_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
+        supercli_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
             .expect("workspace Host certificate")
             .fingerprint;
-    let config = Arc::new(unpeel_core::remote_attach::pinned_client_config(Some(
+    let config = Arc::new(supercli_core::remote_attach::pinned_client_config(Some(
         fingerprint,
     )));
     let name = rustls::pki_types::ServerName::try_from("localhost").unwrap();
@@ -259,7 +259,7 @@ impl Fixture {
 
     fn connection(&self) -> LocalProcessConnection {
         LocalProcessConnection::local_gateway(
-            Path::new(env!("CARGO_BIN_EXE_unpeel-host")),
+            Path::new(env!("CARGO_BIN_EXE_supercli-host")),
             &self.host_home,
         )
         .unwrap()
@@ -267,7 +267,7 @@ impl Fixture {
 
     fn service_connection(&self) -> LocalProcessConnection {
         LocalProcessConnection::local_host_service(
-            Path::new(env!("CARGO_BIN_EXE_unpeel-host")),
+            Path::new(env!("CARGO_BIN_EXE_supercli-host")),
             &self.host_home,
         )
         .unwrap()
@@ -305,7 +305,7 @@ fn teardown_fixture_root(root: &Path) {
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.starts_with("u-lg-")));
-    unpeel_core::pty_core::shutdown_cores_under(root, Duration::from_secs(15));
+    supercli_core::pty_core::shutdown_cores_under(root, Duration::from_secs(15));
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -322,11 +322,11 @@ impl Drop for FixtureRoot {
 #[test]
 fn semantic_backend_serves_the_configured_home_not_the_inherited_one() {
     let fixture = Fixture::new("backend");
-    // A Controller can itself run as a workspace instance with UNPEEL_HOME
+    // A Controller can itself run as a workspace instance with SUPERCLI_HOME
     // set. The gateway must serve ONLY the configured home; the inherited
     // env is stripped at spawn.
     let decoy_home = fixture.root.join("decoy-home");
-    std::env::set_var("UNPEEL_HOME", &decoy_home);
+    std::env::set_var("SUPERCLI_HOME", &decoy_home);
     std::env::set_var("HERDR_SOCKET", "/tmp/never-used");
     let backend = RemoteSessionBackend::new(Arc::new(fixture.connection()));
 
@@ -367,12 +367,12 @@ fn semantic_backend_serves_the_configured_home_not_the_inherited_one() {
         .is_file());
     assert!(
         !decoy_home.exists(),
-        "gateway leaked the Controller's inherited UNPEEL_HOME"
+        "gateway leaked the Controller's inherited SUPERCLI_HOME"
     );
     assert_eq!(fixture.gateway_start_count(), 1);
 
     backend.disconnect();
-    std::env::remove_var("UNPEEL_HOME");
+    std::env::remove_var("SUPERCLI_HOME");
     std::env::remove_var("HERDR_SOCKET");
     fixture.cleanup();
 }
@@ -380,7 +380,7 @@ fn semantic_backend_serves_the_configured_home_not_the_inherited_one() {
 #[test]
 fn local_gateway_becomes_a_proxy_when_the_unified_host_service_is_live() {
     let fixture = Fixture::new("service-proxy");
-    let real_home = fixture.root.join(".unpeel");
+    let real_home = fixture.root.join(".supercli");
     std::fs::create_dir_all(&real_home).unwrap();
     let registry = serde_json::json!({
         "version": 1,
@@ -396,13 +396,13 @@ fn local_gateway_becomes_a_proxy_when_the_unified_host_service_is_live() {
         serde_json::to_vec(&registry).unwrap(),
     )
     .unwrap();
-    let service = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
-        .arg(unpeel_serve::service::SERVICE_ARG)
+    let service = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
+        .arg(supercli_serve::service::SERVICE_ARG)
         // Test workers never download the Browser MCP or Computer Use engine.
-        .env("UNPEEL_BROWSER_ENGINE_INSTALL", "0")
-        .env("UNPEEL_COMPUTER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_BROWSER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_COMPUTER_ENGINE_INSTALL", "0")
         .env("HOME", &fixture.root)
-        .env_remove("UNPEEL_HOME")
+        .env_remove("SUPERCLI_HOME")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -411,7 +411,7 @@ fn local_gateway_becomes_a_proxy_when_the_unified_host_service_is_live() {
     let mut service = ScopedChild(service);
     assert!(
         wait_until(Duration::from_secs(15), || {
-            unpeel_core::remote_stdio::local_host_socket_path(&fixture.host_home).exists()
+            supercli_core::remote_stdio::local_host_socket_path(&fixture.host_home).exists()
                 && fixture.host_home.join("serve.json").exists()
         }),
         "workspace Host worker never became ready"
@@ -443,7 +443,7 @@ fn local_gateway_becomes_a_proxy_when_the_unified_host_service_is_live() {
 #[test]
 fn unified_worker_advertises_and_withdraws_connection_scoped_platform_adapter() {
     let fixture = Fixture::new("platform-adapter");
-    let real_home = fixture.root.join(".unpeel");
+    let real_home = fixture.root.join(".supercli");
     std::fs::create_dir_all(&real_home).unwrap();
     std::fs::write(
         real_home.join("profiles.json"),
@@ -497,20 +497,20 @@ fn unified_worker_advertises_and_withdraws_connection_scoped_platform_adapter() 
     std::fs::write(app_session_dir.join("output.bin"), b"").unwrap();
     let open_target = fixture.root.join("open-me.txt");
     std::fs::write(&open_target, b"open me").unwrap();
-    let service = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
-        .arg(unpeel_serve::service::SERVICE_ARG)
+    let service = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
+        .arg(supercli_serve::service::SERVICE_ARG)
         // Test workers never download the Browser MCP or Computer Use engine.
-        .env("UNPEEL_BROWSER_ENGINE_INSTALL", "0")
-        .env("UNPEEL_COMPUTER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_BROWSER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_COMPUTER_ENGINE_INSTALL", "0")
         .env("HOME", &fixture.root)
-        .env_remove("UNPEEL_HOME")
+        .env_remove("SUPERCLI_HOME")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("start unified Host service");
     let mut service = ScopedChild(service);
-    let socket = unpeel_core::remote_stdio::local_host_socket_path(&fixture.host_home);
+    let socket = supercli_core::remote_stdio::local_host_socket_path(&fixture.host_home);
     assert!(
         wait_until(Duration::from_secs(15), || socket.exists()),
         "workspace Host worker never became ready"
@@ -523,7 +523,7 @@ fn unified_worker_advertises_and_withdraws_connection_scoped_platform_adapter() 
     let (callback_stop_tx, callback_stop_rx) = mpsc::channel();
     let overlay_plist = br#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>unpeel.native.appTint</key><string>teal</string><key>unpeel.native.sessionTitles</key><dict><key>s1</key><string>Native Overlay Title</string></dict></dict></plist>"#;
+<plist version="1.0"><dict><key>supercli.native.appTint</key><string>teal</string><key>supercli.native.sessionTitles</key><dict><key>s1</key><string>Native Overlay Title</string></dict></dict></plist>"#;
     let overlay_body = serde_json::to_vec(&serde_json::json!({
         "defaultsPlistBase64": base64::engine::general_purpose::STANDARD.encode(overlay_plist),
     }))
@@ -658,7 +658,7 @@ fn unified_worker_advertises_and_withdraws_connection_scoped_platform_adapter() 
         .set_session_notify_when_done("s1", true)
         .expect("registered native adapter handles the Host verb");
     let request = recv_platform_callback(&captured_rx, "session.notify_when_done.set");
-    assert!(request.contains("POST /_unpeel/platform-adapter/call HTTP/1.1"));
+    assert!(request.contains("POST /_supercli/platform-adapter/call HTTP/1.1"));
     assert!(request.contains("Authorization: Bearer 0123456789abcdef0123456789abcdef"));
     assert!(request.contains("\"operation\":\"session.notify_when_done.set\""));
 
@@ -815,7 +815,7 @@ fn unified_worker_advertises_and_withdraws_connection_scoped_platform_adapter() 
     let request = recv_platform_callback(&captured_rx, "relay.credentials.recover");
     assert!(request.contains("\"operation\":\"relay.credentials.recover\""));
     assert!(request.contains("\"deviceID\":\"phone-process\""));
-    unpeel_serve::local_gateway::revoke_device(&fixture.host_home, "phone-process")
+    supercli_serve::local_gateway::revoke_device(&fixture.host_home, "phone-process")
         .expect("worker revokes paired Controller");
     let request = recv_platform_callback(&captured_rx, "mobile.e2e-key.reconcile");
     assert!(request.contains("\"action\":\"remove\""));
@@ -1021,7 +1021,7 @@ fn fresh_workspace_home_comes_up_empty_and_disconnect_spawns_no_replacement() {
 
     let connection = Arc::new(
         LocalProcessConnection::local_gateway(
-            Path::new(env!("CARGO_BIN_EXE_unpeel-host")),
+            Path::new(env!("CARGO_BIN_EXE_supercli-host")),
             &host_home,
         )
         .unwrap(),

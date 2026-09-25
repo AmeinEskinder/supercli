@@ -7,7 +7,7 @@
 //! showing the session, phone push fires when no phone is viewing it.
 //!
 //! The Dioxus desktop launcher is a webview, so the OS banner goes through
-//! the **Web Notification API** (`window.__unpeelNotify`, installed by
+//! the **Web Notification API** (`window.__supercliNotify`, installed by
 //! [`NOTIFIER_JS`]) instead of `UNUserNotificationCenter` — no native shell
 //! code needed. The ported policy:
 //!
@@ -22,7 +22,7 @@
 //!   `dioxus.send`; the launcher maps the tag back to a session id and
 //!   selects it — Swift's `onSelectSession`.
 //! - Swift's `requestAuthorizationIfNeeded` (ask once, early) becomes the
-//!   lazy `Notification.requestPermission()` inside `__unpeelNotify`: the
+//!   lazy `Notification.requestPermission()` inside `__supercliNotify`: the
 //!   first post prompts, a denial silently no-ops later posts.
 //!
 //! Trigger wiring (the Dioxus equivalent of the HookServer
@@ -122,7 +122,7 @@ impl NotifierState {
     }
 }
 
-/// Installs `window.__unpeelNotify(title, body, tag)`.
+/// Installs `window.__supercliNotify(title, body, tag)`.
 ///
 /// - Requests Notification permission lazily on first post; denial (or a
 ///   browser without the API) silently no-ops — mirroring Swift's
@@ -132,9 +132,9 @@ impl NotifierState {
 ///   the launcher's eval pump (which must stay open) routes it via
 ///   [`NotifierState::session_for_click_message`].
 pub const NOTIFIER_JS: &str = r#"(function() {
-  if (window.__unpeelNotifyInstalled) return true;
-  window.__unpeelNotifyInstalled = true;
-  window.__unpeelNotify = function(title, body, tag) {
+  if (window.__supercliNotifyInstalled) return true;
+  window.__supercliNotifyInstalled = true;
+  window.__supercliNotify = function(title, body, tag) {
     if (!({t("notifier.notification")} in window)) return;
     function post() {
       try {
@@ -166,7 +166,7 @@ pub fn notifier_post_js(notif: &DesktopNotification) -> String {
     });
     // `</` escaping: the JSON is inlined in a <script>-eval'd string.
     let json = args.to_string().replace("</", "<\\/");
-    format!("(function(a){{ window.__unpeelNotify(a.title, a.body, a.tag); }})({json})")
+    format!("(function(a){{ window.__supercliNotify(a.title, a.body, a.tag); }})({json})")
 }
 
 #[cfg(test)]
@@ -252,6 +252,6 @@ mod tests {
             !js.contains("</script>"),
             "must escape </ to stay in the eval string"
         );
-        assert!(js.contains("window.__unpeelNotify(a.title, a.body, a.tag)"));
+        assert!(js.contains("window.__supercliNotify(a.title, a.body, a.tag)"));
     }
 }

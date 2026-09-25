@@ -8,16 +8,16 @@
 # staple, so for app notarization you submit the ZIP and staple the .app.
 #
 # Preferred setup:
-#   xcrun notarytool store-credentials unpeel-notary \
+#   xcrun notarytool store-credentials supercli-notary \
 #     --apple-id you@example.com \
 #     --team-id TEAMID1234
 #
 # Usage:
-#   NOTARY_KEYCHAIN_PROFILE=unpeel-notary clients/native/notarize-dmg.sh
-#   NOTARY_KEYCHAIN_PROFILE=unpeel-notary clients/native/notarize-dmg.sh clients/native/dist/Unpeel.dmg
+#   NOTARY_KEYCHAIN_PROFILE=supercli-notary clients/native/notarize-dmg.sh
+#   NOTARY_KEYCHAIN_PROFILE=supercli-notary clients/native/notarize-dmg.sh clients/native/dist/Supercli.dmg
 #   # submit a ZIP of the app, staple the app itself:
-#   NOTARY_KEYCHAIN_PROFILE=unpeel-notary clients/native/notarize-dmg.sh \
-#     /tmp/Unpeel-notary.zip --staple clients/native/dist/Unpeel.app
+#   NOTARY_KEYCHAIN_PROFILE=supercli-notary clients/native/notarize-dmg.sh \
+#     /tmp/Supercli-notary.zip --staple clients/native/dist/Supercli.app
 #
 # Alternative: an App Store Connect API key (most reliable headless — the
 # keychain profile lives in the data-protection keychain, which can be
@@ -36,7 +36,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ARTIFACT="$REPO_ROOT/clients/native/dist/Unpeel.dmg"
+ARTIFACT="$REPO_ROOT/clients/native/dist/Supercli.dmg"
 STAPLE_TARGET=""
 NOTARY_TIMEOUT="${NOTARY_TIMEOUT:-30m}"
 
@@ -65,12 +65,12 @@ else
 FAIL: missing notary credentials.
 
 Recommended:
-  xcrun notarytool store-credentials unpeel-notary \
+  xcrun notarytool store-credentials supercli-notary \
     --apple-id you@example.com \
     --team-id TEAMID1234
 
 Then run:
-  NOTARY_KEYCHAIN_PROFILE=unpeel-notary clients/native/notarize-dmg.sh
+  NOTARY_KEYCHAIN_PROFILE=supercli-notary clients/native/notarize-dmg.sh
 EOF
   exit 1
 fi

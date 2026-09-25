@@ -30,8 +30,8 @@ use ratatui::{Frame, Terminal};
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 #[cfg(test)]
-use unpeel_app_kit::UiDeltaOperation;
-use unpeel_app_kit::{
+use supercli_app_kit::UiDeltaOperation;
+use supercli_app_kit::{
     AgentBridge, AppContext, AppMetadata, AppReporter, ColorScheme, Content, ContentEmphasis,
     ContentFont, ContentLine, ContentLineTone, ContentRun, ContentSelection, ContentState,
     ContentTheme, ContentTone, DragSurface, EditorBridge, FooterAction, InputField,
@@ -43,7 +43,7 @@ use unpeel_app_kit::{
     page_delta_operations,
 };
 #[cfg(test)]
-use unpeel_app_kit::{SELECTABLE_LEFT_PADDING, VerticalScrollbar};
+use supercli_app_kit::{SELECTABLE_LEFT_PADDING, VerticalScrollbar};
 
 use crate::app::{App, Screen, Tab};
 use crate::git::{ChangedFile, DiffDocument, RemoteAction};
@@ -390,7 +390,7 @@ pub fn run(
                                     .list()
                                     .items
                                     .get(hit.index)
-                                    .and_then(unpeel_app_kit::ListItem::primary_ui_action),
+                                    .and_then(supercli_app_kit::ListItem::primary_ui_action),
                                 _ => None,
                             };
                             if let Some(action) = action {
@@ -901,8 +901,8 @@ fn published_context_menu(node: &UiNode) -> Option<&SemanticMenu> {
         return None;
     };
     match &page.body {
-        unpeel_app_kit::PageBodySlot::List(list) => list.context_menu.as_ref(),
-        unpeel_app_kit::PageBodySlot::Content(content) => content.context_menu.as_ref(),
+        supercli_app_kit::PageBodySlot::List(list) => list.context_menu.as_ref(),
+        supercli_app_kit::PageBodySlot::Content(content) => content.context_menu.as_ref(),
         _ => None,
     }
 }
@@ -978,7 +978,7 @@ fn drain_bridge(
 fn apply_semantic_action(
     app: &mut App,
     agent: &AgentBridge,
-    action: &unpeel_app_kit::UiAction,
+    action: &supercli_app_kit::UiAction,
 ) -> Result<(), String> {
     if action.kind == UiEventKind::Activate
         && action.value == UiEventValue::None
@@ -1173,7 +1173,7 @@ fn file_index_from_node_id(node_id: &str) -> Option<usize> {
     node_id.strip_prefix("file-")?.parse().ok()
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error.to_string())
 }
 
@@ -1673,7 +1673,7 @@ fn render_component_frame(
     let layout = page.layout(frame.area());
     let mut input = InputField::new("");
     let mut list_state = match &page.body {
-        unpeel_app_kit::PageBodySlot::List(list) => {
+        supercli_app_kit::PageBodySlot::List(list) => {
             let selected = list
                 .selected_id
                 .as_deref()
@@ -1708,7 +1708,7 @@ fn render_component_frame(
     );
 
     let mut result = match (&app.screen, &page.body) {
-        (_, unpeel_app_kit::PageBodySlot::List(list)) => {
+        (_, supercli_app_kit::PageBodySlot::List(list)) => {
             let hits = (list_state.offset()..list.items.len())
                 .map_while(|index| list_state.item_area(index).map(|area| (index, area)))
                 .map(|(index, row_area)| {
@@ -1731,7 +1731,7 @@ fn render_component_frame(
                 ..RenderResult::default()
             }
         }
-        (Screen::Diff(_), unpeel_app_kit::PageBodySlot::Content(content)) => {
+        (Screen::Diff(_), supercli_app_kit::PageBodySlot::Content(content)) => {
             let scroll_offset = usize::from(content_state.vertical_offset());
             let viewport_rows = usize::from(content_state.viewport_rows());
             let overflow = content.lines.len() > viewport_rows && layout.list.width > 1;
@@ -2380,8 +2380,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         for arguments in [
             vec!["init", "-b", "main"],
-            vec!["config", "user.name", "Unpeel Tests"],
-            vec!["config", "user.email", "tests@unpeel.local"],
+            vec!["config", "user.name", "Supercli Tests"],
+            vec!["config", "user.email", "tests@supercli.local"],
         ] {
             let output = Command::new("git")
                 .arg("-C")
@@ -2690,7 +2690,7 @@ mod tests {
         let (_directory, mut app) = file_app();
         let agent = AgentBridge::new();
         let first = semantic_node(&app, true);
-        let unpeel_app_kit::UiComponent::Page(page) = &first.element else {
+        let supercli_app_kit::UiComponent::Page(page) = &first.element else {
             unreachable!()
         };
         page.validate().unwrap();
@@ -2707,7 +2707,7 @@ mod tests {
         apply_semantic_action(
             &mut app,
             &agent,
-            &unpeel_app_kit::UiAction::new(
+            &supercli_app_kit::UiAction::new(
                 FILE_LIST_ID,
                 SELECT_FILE_ACTION,
                 UiEventKind::Change,

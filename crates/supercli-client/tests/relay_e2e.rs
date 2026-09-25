@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use tungstenite::http::{Request, Response};
-use unpeel_client::relay::{RelayCredentials, RelayTunnelRequest};
-use unpeel_client::{PerformParams, RelayConnection, RelayError};
+use supercli_client::relay::{RelayCredentials, RelayTunnelRequest};
+use supercli_client::{PerformParams, RelayConnection, RelayError};
 
 mod common;
 
@@ -148,7 +148,7 @@ fn relay_connect_rejects_wrong_device_key() {
                 matches!(
                     err,
                     RelayError::Transport {
-                        delivery: unpeel_client::DeliveryState::NotSent,
+                        delivery: supercli_client::DeliveryState::NotSent,
                         ..
                     }
                 ),

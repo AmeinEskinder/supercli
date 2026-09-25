@@ -58,4 +58,4 @@ command = "fx"
 quick_launch = false
 
 [integration]
-summary = "Adds the unpeel MCP server to ~/.fx/mcp.json."
+summary = "Adds the supercli MCP server to ~/.fx/mcp.json."

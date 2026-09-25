@@ -23,20 +23,20 @@ mod tests {
     #[test]
     fn paths_inside_a_project_are_root_relative() {
         assert_eq!(
-            display_path_from_root("/work/unpeel/apps/native/App.swift", "/work/unpeel"),
+            display_path_from_root("/work/supercli/apps/native/App.swift", "/work/supercli"),
             "apps/native/App.swift"
         );
-        assert_eq!(display_path_from_root("/work/unpeel", "/work/unpeel"), ".");
+        assert_eq!(display_path_from_root("/work/supercli", "/work/supercli"), ".");
     }
 
     #[test]
     fn component_boundaries_and_outsiders_stay_absolute() {
         assert_eq!(
-            display_path_from_root("/work/unpeel-other/file", "/work/unpeel"),
-            "/work/unpeel-other/file"
+            display_path_from_root("/work/supercli-other/file", "/work/supercli"),
+            "/work/supercli-other/file"
         );
         assert_eq!(
-            display_path_from_root("/tmp/file", "/work/unpeel"),
+            display_path_from_root("/tmp/file", "/work/supercli"),
             "/tmp/file"
         );
     }

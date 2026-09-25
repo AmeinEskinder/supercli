@@ -27,6 +27,19 @@ pub const FAKE_PNG: &[u8] = &[
     0x42, 0x60, 0x82,
 ];
 
+/// Canned accessibility tree (baguette-style JSON): enough for
+/// describe-ui assertions. Agents act on elements, not pixels.
+pub const FAKE_A11Y_JSON: &str = r#"{
+  "elements": [
+    {"id": "btn-login", "label": "Log in", "type": "button",
+     "bounds": {"x": 100, "y": 200, "width": 200, "height": 48},
+     "actions": ["tap"]},
+    {"id": "input-email", "label": "Email", "type": "textfield",
+     "bounds": {"x": 100, "y": 300, "width": 200, "height": 48},
+     "actions": ["tap", "type"]}
+  ]
+}"#;
+
 struct FakeInner {
     devices: Vec<DeviceInfo>,
     calls: Vec<FakeCall>,
@@ -189,6 +202,11 @@ impl DeviceBackend for FakeBackend {
             "FakeBackend does not stream; use a real backend".to_string(),
         ))
     }
+
+    fn describe_ui(&self, id: &DeviceId) -> Result<String, DeviceError> {
+        self.record("describe_ui", vec![id.to_string()])?;
+        Ok(FAKE_A11Y_JSON.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -302,6 +320,26 @@ mod tests {
         assert!(matches!(err, DeviceError::Unsupported(_)));
         // The attempt is still recorded.
         assert_eq!(b.calls()[0].method, "stream");
+    }
+
+    #[test]
+    fn describe_ui_returns_canned_a11y_tree() {
+        let b = backend();
+        let tree = b
+            .describe_ui(&DeviceId::new("emulator-5554"))
+            .expect("describe_ui");
+        // Agents act on elements, not pixels: ids, labels, bounds present.
+        assert!(tree.contains("btn-login"));
+        assert!(tree.contains("Log in"));
+        assert!(tree.contains("input-email"));
+        assert!(tree.contains("\"bounds\""));
+        assert_eq!(
+            b.calls(),
+            vec![FakeCall {
+                method: "describe_ui",
+                args: vec!["emulator-5554".to_string()]
+            }]
+        );
     }
 
     #[test]

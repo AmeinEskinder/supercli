@@ -2,7 +2,7 @@
 name = "supercli-attach"
 version = "0.1.0"
 edition = "2021"
-description = "tmux-style attach client for Unpeel hosted sessions"
+description = "tmux-style attach client for Supercli hosted sessions"
 publish = false
 
 # Standalone crate: must never be absorbed into a parent cargo workspace.

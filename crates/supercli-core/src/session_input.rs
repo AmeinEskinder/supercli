@@ -19,7 +19,7 @@ pub const TEXT_SETTLE_DELAY_PATH_MS: u64 = 900;
 pub const ENTER_FOLLOWUP_DELAY_MS: u64 = 80;
 
 /// Provider-neutral request used by every Host implementation.
-pub const SCREENSHOT_REQUEST_PROMPT: &str = "Please capture the current visual result with the Unpeel Browser tool's screenshot action, setting gallery to true so it is saved as a screenshot artifact in this session's gallery. If this task has no visual result, say so instead.";
+pub const SCREENSHOT_REQUEST_PROMPT: &str = "Please capture the current visual result with the Supercli Browser tool's screenshot action, setting gallery to true so it is saved as a screenshot artifact in this session's gallery. If this task has no visual result, say so instead.";
 
 pub fn sanitize_paste_text(text: &str) -> String {
     text.replace("\r\n", "\n")
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn prompt_is_provider_neutral_and_names_the_artifact_contract() {
-        assert!(SCREENSHOT_REQUEST_PROMPT.contains("Unpeel Browser tool"));
+        assert!(SCREENSHOT_REQUEST_PROMPT.contains("Supercli Browser tool"));
         assert!(SCREENSHOT_REQUEST_PROMPT.contains("screenshot artifact"));
         assert!(!SCREENSHOT_REQUEST_PROMPT.contains("Claude"));
         assert!(!SCREENSHOT_REQUEST_PROMPT.contains("Codex"));

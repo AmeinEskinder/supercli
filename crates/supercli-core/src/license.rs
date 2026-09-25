@@ -1,4 +1,4 @@
-//! Rust side of the Unpeel Link license flow, for the TUI / headless hosts.
+//! Rust side of the Supercli Link license flow, for the TUI / headless hosts.
 //! Mirrors `LicenseManager.swift`: same key format (`CLRTY-<b64>.<b64>`,
 //! Ed25519 over the encoded-payload string), same endpoints
 //! (`/api/activate`, `/api/deactivate`, `/api/remote/entitlement`), same
@@ -492,7 +492,7 @@ fn api_base() -> String {
         .ok()
         .map(|s| s.trim().trim_end_matches('/').to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "https://unpeel.com".into())
+        .unwrap_or_else(|| "https://supercli.com".into())
 }
 
 /// Minimal HTTPS/HTTP JSON POST (rustls + webpki roots; `http://` allowed
@@ -669,7 +669,7 @@ pub struct ActivationCommit {
 /// response that may have taken seconds to arrive.
 pub fn request_activation(raw_key: &str, device_name: &str) -> Result<PendingActivation, String> {
     let key = normalize_key(raw_key);
-    let payload = verify(&key).ok_or("that doesn't look like a valid Unpeel license key")?;
+    let payload = verify(&key).ok_or("that doesn't look like a valid Supercli license key")?;
     // Capture suppression before crossing the network. The commit refuses a
     // response if another frontend deactivated/rejected Link meanwhile.
     let observed_tombstone = with_license_lock(link_tombstone_unlocked)?;

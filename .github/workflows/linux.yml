@@ -180,18 +180,18 @@ jobs:
           npx playwright test
 
   rename-guard:
-    name: Rename guard (no 'unpeel' remnants)
+    name: Rename guard (no 'supercli' remnants)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Fail on any remaining 'unpeel' references
+      - name: Fail on any remaining 'supercli' references
         run: |
-          # The rename unpeel -> supercli must be complete. Allowlist:
+          # The rename supercli -> supercli must be complete. Allowlist:
           # - THIRD_PARTY_NOTICES.txt (generated third-party licenses)
           # - docs/internal/ (historical records)
           # - *.lock (cargo lockfiles may reference old names transiently)
-          if grep -ri 'unpeel' \
+          if grep -ri 'supercli' \
             --exclude-dir=target \
             --exclude-dir=.git \
             --exclude-dir=docs/internal \
@@ -199,7 +199,7 @@ jobs:
             --exclude=THIRD_PARTY_NOTICES.txt \
             --exclude='*.lock' \
             . ; then
-            echo "ERROR: found 'unpeel' references outside the allowlist"
+            echo "ERROR: found 'supercli' references outside the allowlist"
             exit 1
           fi
-          echo "Rename guard passed: no 'unpeel' remnants."
+          echo "Rename guard passed: no 'supercli' remnants."

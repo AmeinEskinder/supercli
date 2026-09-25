@@ -312,7 +312,7 @@ fn spawn_bonjour(name: &str, port: u16, mac_id: &str) -> Option<std::process::Ch
     let port = port.to_string();
     let txt = format!("macid={mac_id}");
     std::process::Command::new("dns-sd")
-        .args(["-R", name, "_unpeel-remote._tcp", ".", &port, &txt])
+        .args(["-R", name, "_supercli-remote._tcp", ".", &port, &txt])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -320,7 +320,7 @@ fn spawn_bonjour(name: &str, port: u16, mac_id: &str) -> Option<std::process::Ch
         .ok()
         .or_else(|| {
             std::process::Command::new("avahi-publish-service")
-                .args([name, "_unpeel-remote._tcp", &port, &txt])
+                .args([name, "_supercli-remote._tcp", &port, &txt])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -484,7 +484,7 @@ impl Drop for MobileServer {
     }
 }
 
-/// One-process endpoint handoff used by `unpeel pair --serve`.
+/// One-process endpoint handoff used by `supercli pair --serve`.
 ///
 /// This is deliberately not Bonjour rediscovery: the paired Controller must
 /// never send its long-lived bearer token to a plaintext candidate based only
@@ -1119,7 +1119,7 @@ fn read_request<S: Read>(stream: &mut S, pending: &mut Vec<u8>) -> Option<Reques
         _ => version == "HTTP/1.1",
     };
     let request_id = headers
-        .get("x-unpeel-request-id")
+        .get("x-supercli-request-id")
         .filter(|value| !value.is_empty() && value.len() <= 128)
         .cloned();
     Some(Request {
@@ -3249,7 +3249,7 @@ mod tests {
     use super::*;
 
     fn scratch_dir(label: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("unpeel-mobile-{label}-{}", uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!("supercli-mobile-{label}-{}", uuid::Uuid::new_v4()))
     }
 
     /// A live process that is NOT the `__remote__` streamer, standing in for
@@ -4519,7 +4519,7 @@ mod tests {
     /// Port-using tests in this module run one at a time — across threads
     /// AND across processes: they bind real `0.0.0.0` sockets, and several
     /// release a port and expect to reclaim it, which only holds while no
-    /// other test (a parallel `cargo test -p unpeel-serve` next to a
+    /// other test (a parallel `cargo test -p supercli-serve` next to a
     /// workspace run, say) is grabbing ephemeral ports. The in-process mutex
     /// covers threads; the exclusive flock on a well-known temp file covers
     /// sibling test processes. Both are released on drop, and by the OS if a
@@ -4541,7 +4541,7 @@ mod tests {
         // (a staging script exporting its own, a harness that scopes one)
         // would never share the lock. /tmp is the one place every unix
         // process of this user agrees on.
-        let path = std::path::PathBuf::from("/tmp/unpeel-serve-port-tests.lock");
+        let path = std::path::PathBuf::from("/tmp/supercli-serve-port-tests.lock");
         let file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -4579,8 +4579,8 @@ mod tests {
 
     /// Release-then-reclaim scenarios can only be proven on a port nothing
     /// else takes in between. The guard above keeps sibling PORT tests off
-    /// it, but other test binaries in a workspace run (unpeel-core,
-    /// unpeel-host process tests) and anything else on the machine bind `:0`
+    /// it, but other test binaries in a workspace run (supercli-core,
+    /// supercli-host process tests) and anything else on the machine bind `:0`
     /// freely and may be handed a just-released port. So a failed reclaim is
     /// treated as an invalidated premise — `scenario` returns `None` — and the
     /// scenario is retried on a fresh `:0` port, bounded. No second probe

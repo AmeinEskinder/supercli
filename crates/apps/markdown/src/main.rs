@@ -18,17 +18,17 @@ use app::App;
 use backend::BackendCapture;
 use picker::Picker;
 use theme::Theme;
-use unpeel_app_kit::{AppContext, AppMetadata, AppReporter, KeyboardEnhancementGuard, UiBridge};
+use supercli_app_kit::{AppContext, AppMetadata, AppReporter, KeyboardEnhancementGuard, UiBridge};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     match std::env::args_os().nth(1).as_deref() {
         Some(argument) if argument == "--help" || argument == "-h" => {
-            println!("Usage: unpeel-markdown [FILE|FOLDER]");
+            println!("Usage: supercli-markdown [FILE|FOLDER]");
             return Ok(());
         }
         Some(argument) if argument == "--version" => {
-            println!("unpeel-markdown {}", env!("CARGO_PKG_VERSION"));
+            println!("supercli-markdown {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         _ => {}
@@ -42,7 +42,7 @@ fn main() -> color_eyre::Result<()> {
     let mut ui_bridge = UiBridge::detect(
         AppMetadata::new(
             install::APP_ID,
-            "Unpeel Markdown",
+            "Supercli Markdown",
             env!("CARGO_PKG_VERSION"),
         )
         .description(

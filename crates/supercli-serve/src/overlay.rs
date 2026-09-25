@@ -164,7 +164,7 @@ pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Resu
             return Err("folder colors are not supported by this Host".into());
         }
         const DOMAIN: &str = "com.supercli.native";
-        const KEY: &str = "unpeel.native.projectFolderColors";
+        const KEY: &str = "supercli.native.projectFolderColors";
         let run = |args: &[&str]| {
             Command::new("defaults")
                 .args(args)
@@ -212,18 +212,18 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
     let mut overlay = NativeOverlay::default();
 
     overlay.app_tint = dict
-        .get("unpeel.native.appTint")
+        .get("supercli.native.appTint")
         .and_then(plist::Value::as_string)
         .filter(|raw| workspace_tint_hex(raw).is_some())
         .map(str::to_owned);
     overlay.default_workspace_name = dict
-        .get("unpeel.native.defaultWorkspaceName")
+        .get("supercli.native.defaultWorkspaceName")
         .and_then(plist::Value::as_string)
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .map(str::to_owned);
 
-    if let Some(projects) = dict.get("unpeel.native.projects").and_then(blob_json) {
+    if let Some(projects) = dict.get("supercli.native.projects").and_then(blob_json) {
         if let Some(list) = projects.as_array() {
             for p in list {
                 if let (Some(id), Some(name)) = (
@@ -258,10 +258,10 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
             }
         }
     }
-    if let Some(order) = dict.get("unpeel.native.projectOrder") {
+    if let Some(order) = dict.get("supercli.native.projectOrder") {
         overlay.project_order = as_string_array(order);
     }
-    if let Some(pins) = dict.get("unpeel.sidebar.pins").and_then(blob_json) {
+    if let Some(pins) = dict.get("supercli.sidebar.pins").and_then(blob_json) {
         let removed: HashSet<&str> = pins
             .get("removedKeys")
             .and_then(|v| v.as_array())
@@ -281,7 +281,7 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
         }
     }
     if let Some(titles) = dict
-        .get("unpeel.native.sessionTitles")
+        .get("supercli.native.sessionTitles")
         .and_then(|v| v.as_dictionary())
     {
         for (id, title) in titles {
@@ -291,7 +291,7 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
         }
     }
     if let Some(colors) = dict
-        .get("unpeel.native.projectFolderColors")
+        .get("supercli.native.projectFolderColors")
         .and_then(|v| v.as_dictionary())
     {
         for (id, color) in colors {
@@ -300,11 +300,11 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
             }
         }
     }
-    if let Some(archived) = dict.get("unpeel.native.archivedSessions") {
+    if let Some(archived) = dict.get("supercli.native.archivedSessions") {
         overlay.archived = as_string_array(archived).into_iter().collect();
     }
     if let Some(at) = dict
-        .get("unpeel.native.archivedAt")
+        .get("supercli.native.archivedAt")
         .and_then(|v| v.as_dictionary())
     {
         for (id, stamp) in at {
@@ -313,7 +313,7 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
             }
         }
     }
-    if let Some(presets) = dict.get("unpeel.native.presets").and_then(blob_json) {
+    if let Some(presets) = dict.get("supercli.native.presets").and_then(blob_json) {
         if let Some(added) = presets.get("added").and_then(|v| v.as_array()) {
             for p in added {
                 if p.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
@@ -331,11 +331,11 @@ pub(crate) fn from_plist(root: &plist::Value) -> Option<NativeOverlay> {
         }
     }
     for (key, value) in dict {
-        if let Some(project_id) = key.strip_prefix("unpeel.native.sessionOrder.") {
+        if let Some(project_id) = key.strip_prefix("supercli.native.sessionOrder.") {
             overlay
                 .session_order
                 .insert(project_id.to_string(), as_string_array(value));
-        } else if let Some(project_id) = key.strip_prefix("unpeel.native.pinnedOrder.") {
+        } else if let Some(project_id) = key.strip_prefix("supercli.native.pinnedOrder.") {
             overlay
                 .pinned_order
                 .insert(project_id.to_string(), as_string_array(value));
@@ -413,22 +413,22 @@ mod tests {
 
     #[test]
     fn worktree_parents_read_the_native_camel_case_dialect() {
-        // `NativeProjectRecord` in UnpeelStore.swift has no CodingKeys, so
+        // `NativeProjectRecord` in SupercliStore.swift has no CodingKeys, so
         // the desktop writes camelCase — snake_case here would silently
         // orphan every desktop-created worktree into the top-level list.
         let projects = serde_json::json!([
-            {"id": "p1", "name": "supercli", "path": "/tmp/unpeel"},
+            {"id": "p1", "name": "supercli", "path": "/tmp/supercli"},
             {"id": "w1", "name": "Example", "path": "/tmp/wt",
              "parentProjectID": "p1", "worktreeBranch": "worktree/example"},
             {"id": "w2", "name": "legacy", "path": "/tmp/wt2",
              "parent_project_id": "p1", "worktree_branch": "legacy"},
             // A group: parent, no branch. Must still be read as a child.
-            {"id": "g1", "name": "Backlog", "path": "/tmp/unpeel",
+            {"id": "g1", "name": "Backlog", "path": "/tmp/supercli",
              "parentProjectID": "p1", "isFolder": true},
         ]);
         let mut dict = plist::Dictionary::new();
         dict.insert(
-            "unpeel.native.projects".into(),
+            "supercli.native.projects".into(),
             plist::Value::Data(serde_json::to_vec(&projects).unwrap()),
         );
         let overlay = from_plist(&plist::Value::Dictionary(dict)).expect("parses");
@@ -458,7 +458,7 @@ mod tests {
         colors.insert("p2".into(), plist::Value::String("graphite".into()));
         let mut dict = plist::Dictionary::new();
         dict.insert(
-            "unpeel.native.projectFolderColors".into(),
+            "supercli.native.projectFolderColors".into(),
             plist::Value::Dictionary(colors),
         );
         let overlay = from_plist(&plist::Value::Dictionary(dict)).expect("parses");
@@ -476,11 +476,11 @@ mod tests {
         titles.insert("s1".into(), plist::Value::String("Native title".into()));
         let mut dict = plist::Dictionary::new();
         dict.insert(
-            "unpeel.native.appTint".into(),
+            "supercli.native.appTint".into(),
             plist::Value::String("teal".into()),
         );
         dict.insert(
-            "unpeel.native.sessionTitles".into(),
+            "supercli.native.sessionTitles".into(),
             plist::Value::Dictionary(titles),
         );
         let mut bytes = Vec::new();

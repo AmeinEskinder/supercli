@@ -156,7 +156,7 @@ pub(crate) fn repo_root() -> PathBuf {
 
 pub(crate) fn temp_path(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "unpeel-live-cli-{}-{}-{}",
+        "supercli-live-cli-{}-{}-{}",
         label,
         std::process::id(),
         crate::state::current_timestamp_ms()
@@ -210,7 +210,7 @@ pub(crate) fn run_hook_script_with_stdin(
         .args(args)
         .env("HOME", hook_env_home(label))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("SUPERCLI_RUNTIME_GENERATION", "7")
         .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file(label))
         .stdin(Stdio::piped())
@@ -297,7 +297,7 @@ pub(crate) fn run_hook_path_recording(
         .arg(script)
         .args(args)
         .env("HOME", hook_env_home(label))
-        .env("SUPERCLI_SESSION_ID", "unpeel-record-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-record-session")
         .env("SUPERCLI_SESSION_DIR", session_dir)
         .env("SUPERCLI_RUNTIME_GENERATION", "7")
         .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file(label))

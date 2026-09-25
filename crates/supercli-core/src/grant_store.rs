@@ -39,7 +39,7 @@
 //! Startup reconciliation (`grant_audit::reconcile_grants`, run by both the
 //! supervisor and the worker): a grant WITHOUT an audit entry is
 //! quarantined to `grants.json.quarantined` and reported (tamper-evidence
-//! violation); an audit entry without a grant stays revoked. `unpeel doctor`
+//! violation); an audit entry without a grant stays revoked. `supercli doctor`
 //! verifies `grants ⊆ chain` at any time.
 //!
 //! A grant can NEVER be 'applied' without the user's explicit approval,

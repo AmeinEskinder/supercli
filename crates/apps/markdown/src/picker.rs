@@ -12,7 +12,7 @@ use ratatui::crossterm::event::{
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::{DefaultTerminal, Frame};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     DoubleClickTracker, DragSurface, Explorer, ExplorerEntryDetail, ExplorerEvent, ExplorerInput,
     ExplorerTheme, FooterAction, Input, InputField, InputFieldTheme, List, ListState, Page,
     PageTheme, ThemeMonitor, TreeState, TreeTheme, UiBridge, UiBridgeEvent, UiComponent, UiEvent,
@@ -667,7 +667,7 @@ fn create_note(root: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error)
 }
 
@@ -706,7 +706,7 @@ mod tests {
         let mut picker = Picker::open(root.path().to_path_buf(), Theme::dark()).unwrap();
         picker.status = Some("could not refresh".to_string());
         let node = picker.ui_node();
-        let unpeel_app_kit::UiComponent::Tree(tree) = node.element else {
+        let supercli_app_kit::UiComponent::Tree(tree) = node.element else {
             panic!("picker must publish Tree");
         };
         assert_eq!(tree.label, "Notes");

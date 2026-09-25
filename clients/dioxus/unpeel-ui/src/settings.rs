@@ -1,11 +1,11 @@
 //! Desktop settings surface: feature flags, MCP policy sections, plugin
 //! settings, the mouse-wheel preference, and debug toggles. Ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/FeatureFlags.swift`,
+//! `clients/native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift`,
 //! `Views/SettingsView.swift`, `Views/AgentAccessSettingsPanel.swift`,
 //! `Views/BrowserAccessSections.swift`, `Views/SessionsAccessSections.swift`,
 //! `Views/PluginSettingsPanel.swift`, `Views/PluginSettingsList.swift`,
-//! `clients/ios/UnpeelIOS/Sources/UnpeelIOS/DevSettings.swift`, and the wheel
-//! preference in `clients/ios/UnpeelIOS/Sources/UnpeelIOS/RemoteGhosttyTerminalView.swift`.
+//! `clients/ios/SupercliIOS/Sources/SupercliIOS/DevSettings.swift`, and the wheel
+//! preference in `clients/ios/SupercliIOS/Sources/SupercliIOS/RemoteGhosttyTerminalView.swift`.
 
 use crate::i18n::t;
 use serde::{Deserialize, Serialize};
@@ -47,10 +47,10 @@ impl AppFeature {
         }
     }
 
-    /// The persisted key — the `unpeel.experimental.` prefix is the shipped
+    /// The persisted key — the `supercli.experimental.` prefix is the shipped
     /// spelling for every feature, graduated or not.
     pub fn defaults_key(&self) -> String {
-        format!("unpeel.experimental.{}", self.key)
+        format!("supercli.experimental.{}", self.key)
     }
 
     pub fn env_overrides(&self) -> Vec<&'static str> {
@@ -67,7 +67,7 @@ pub const FEATURE_WORKTREES: AppFeature = AppFeature::new(
     "worktrees",
     "Git worktrees",
     "Run sessions in an isolated git worktree of a project so multiple agents can work the same repo in parallel without touching each other's files.",
-    Some("UNPEEL_DEV_WORKTREES"),
+    Some("SUPERCLI_DEV_WORKTREES"),
     &[],
     true,
     false,
@@ -76,7 +76,7 @@ pub const FEATURE_SESSIONS_MCP: AppFeature = AppFeature::new(
     "sessionsMcp",
     "Sessions use",
     "Let an agent session see your other sessions: it can read them all, and asks before writing to another session unless you already approved that pair.",
-    Some("UNPEEL_DEV_SESSIONS_MCP"),
+    Some("SUPERCLI_DEV_SESSIONS_MCP"),
     &[],
     true,
     false,
@@ -87,8 +87,8 @@ pub const FEATURE_WORKSPACES: AppFeature = AppFeature::new(
     "profiles",
     "Workspaces",
     "Use extra, fully separate workspaces — each has its own sessions, projects, presets, settings, and pairs with your phone as its own workspace.",
-    Some("UNPEEL_DEV_WORKSPACES"),
-    &["UNPEEL_DEV_PROFILES"],
+    Some("SUPERCLI_DEV_WORKSPACES"),
+    &["SUPERCLI_DEV_PROFILES"],
     true,
     false,
 );
@@ -96,7 +96,7 @@ pub const FEATURE_BROWSER_MCP: AppFeature = AppFeature::new(
     "browserMcp",
     "Browser use",
     "Let agent sessions drive a real browser — open pages, click, fill forms, and take screenshots. Each session gets its own isolated browser.",
-    Some("UNPEEL_DEV_BROWSER_MCP"),
+    Some("SUPERCLI_DEV_BROWSER_MCP"),
     &[],
     true,
     true,
@@ -104,8 +104,8 @@ pub const FEATURE_BROWSER_MCP: AppFeature = AppFeature::new(
 pub const FEATURE_REMOTE_WORKSPACES: AppFeature = AppFeature::new(
     "remoteWorkspaces",
     "Remote workspaces",
-    "Add and control workspaces on other machines — pair another Mac, a headless `unpeel serve` box, or an SSH host. Direct connections are for your own network or VPN; Unpeel Link carries the encrypted path when you are away.",
-    Some("UNPEEL_DEV_REMOTE_WORKSPACES"),
+    "Add and control workspaces on other machines — pair another Mac, a headless `supercli serve` box, or an SSH host. Direct connections are for your own network or VPN; Supercli Link carries the encrypted path when you are away.",
+    Some("SUPERCLI_DEV_REMOTE_WORKSPACES"),
     &[],
     true,
     false,
@@ -122,7 +122,7 @@ pub fn all_features() -> [&'static AppFeature; 5] {
     ]
 }
 
-/// Feature-flag evaluation. Mirrors `UnpeelFeatureFlags`: env override
+/// Feature-flag evaluation. Mirrors `SupercliFeatureFlags`: env override
 /// first (dev escape hatch), then the stored preference, then the built-in
 /// default. (The workspace-inheritance tier is launcher state; the pure
 /// rule lives here and is what the tests pin.)
@@ -237,7 +237,7 @@ pub struct DevSettings {
 }
 
 impl DevSettings {
-    pub const BOUNDS_KEY: &'static str = "unpeel.dev.showTerminalBounds";
+    pub const BOUNDS_KEY: &'static str = "supercli.dev.showTerminalBounds";
 }
 
 /// Agents whose TUI owns wheel scrolling itself (its transcript scrolls in
@@ -421,11 +421,11 @@ mod tests {
         assert_eq!(FEATURE_WORKSPACES.key, "profiles");
         assert_eq!(
             FEATURE_WORKSPACES.defaults_key(),
-            "unpeel.experimental.profiles"
+            "supercli.experimental.profiles"
         );
         assert_eq!(
             FEATURE_WORKSPACES.env_overrides(),
-            vec!["UNPEEL_DEV_WORKSPACES", "UNPEEL_DEV_PROFILES"]
+            vec!["SUPERCLI_DEV_WORKSPACES", "SUPERCLI_DEV_PROFILES"]
         );
         assert_eq!(shipped_features().len(), 4);
         assert_eq!(experimental_features().len(), 1);
@@ -443,7 +443,7 @@ mod tests {
         assert!(!is_enabled(&FEATURE_WORKTREES, &stored, &no_env));
         // Env override wins over everything (dev escape hatch).
         let env = |name: &str| {
-            if name == "UNPEEL_DEV_WORKTREES" {
+            if name == "SUPERCLI_DEV_WORKTREES" {
                 Some("1".to_string())
             } else {
                 None
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn dev_settings_key() {
-        assert_eq!(DevSettings::BOUNDS_KEY, "unpeel.dev.showTerminalBounds");
+        assert_eq!(DevSettings::BOUNDS_KEY, "supercli.dev.showTerminalBounds");
         assert!(!DevSettings::default().show_terminal_bounds);
     }
 

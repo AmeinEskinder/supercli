@@ -166,7 +166,7 @@ impl ConnectorProcess {
             serde_json::json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": { "name": "unpeel-host", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": "supercli-host", "version": env!("CARGO_PKG_VERSION") },
             }),
         );
         let init_result =
@@ -422,7 +422,7 @@ provides = ["stub.echo"]
 
     fn test_dir(name: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("unpeel-conn-proc-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-conn-proc-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

@@ -14,7 +14,7 @@ tint = "#22C55D"
 spinner_tint = "#22C55D"
 icon = "cursor"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -42,7 +42,7 @@ completion_reliable = true
 attention_reliable = true
 
 [integration]
-summary = "Registers hooks in ~/.cursor/hooks.json and the unpeel MCP server in ~/.cursor/mcp.json."
+summary = "Registers hooks in ~/.cursor/hooks.json and the supercli MCP server in ~/.cursor/mcp.json."
 legacy_evidence = ["hooks/cursor-hook.sh"]
 
 [[usage.stores]]

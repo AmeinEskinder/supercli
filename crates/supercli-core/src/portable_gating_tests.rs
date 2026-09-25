@@ -1,6 +1,6 @@
 //! Guard for the portable Controller core feature set.
 //!
-//! `unpeel-core` compiles in two shapes: the default `native-host` build every
+//! `supercli-core` compiles in two shapes: the default `native-host` build every
 //! Host binary uses, and `--no-default-features --features controller-core`,
 //! the transport-neutral slice a Controller (Swift bridge tests, a wasm32
 //! Controller) builds. A module gated `controller-core` must never reach into

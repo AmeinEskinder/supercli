@@ -1,4 +1,4 @@
-//! Relay latency probe (`unpeel-host __relay_probe__`) — increment 0 of
+//! Relay latency probe (`supercli-host __relay_probe__`) — increment 0 of
 //! the private "relay-direct-upgrade" design record. Decomposes off-LAN latency into
 //! peer→edge and edge→DO legs and benches seal/unseal locally, so the
 //! direct-path upgrade has a measured baseline to beat.
@@ -87,7 +87,7 @@ pub fn run_cli(args: &[String]) -> Result<(), String> {
 }
 
 fn usage() -> String {
-    "usage: unpeel-host __relay_probe__ [options]\n\
+    "usage: supercli-host __relay_probe__ [options]\n\
      \n\
      --url <ws(s)://host[:port]>  relay to probe (default: SUPERCLI_RELAY_URL or production)\n\
      --samples <n>                passive samples per measurement (default 5)\n\
@@ -558,7 +558,7 @@ impl WsProbeSocket {
         Self::connect(
             endpoint,
             &format!("/v1/client/{mac_id}"),
-            &format!("Sec-WebSocket-Protocol: unpeel-relay-token.{token}\r\n"),
+            &format!("Sec-WebSocket-Protocol: supercli-relay-token.{token}\r\n"),
         )
     }
 

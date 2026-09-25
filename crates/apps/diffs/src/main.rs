@@ -8,18 +8,18 @@ use std::path::PathBuf;
 
 use app::App;
 use git::Repository;
-use unpeel_app_kit::AppContext;
+use supercli_app_kit::AppContext;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match std::env::args_os().nth(1).as_deref() {
         Some(argument) if argument == "--help" || argument == "-h" => {
             println!(
-                "Usage: unpeel-diffs [PATH]\n\nBrowse Git changes and commit history for PATH."
+                "Usage: supercli-diffs [PATH]\n\nBrowse Git changes and commit history for PATH."
             );
             return Ok(());
         }
         Some(argument) if argument == "--version" => {
-            println!("unpeel-diffs {}", env!("CARGO_PKG_VERSION"));
+            println!("supercli-diffs {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Some(argument) if argument == "--syntax-licenses" => {

@@ -8,10 +8,10 @@ use serde::Deserialize;
 /// Standard content inset for full-width selectable rows.
 pub const SELECTABLE_LEFT_PADDING: u16 = 2;
 
-/// Host-provided accent for the current App Session. Unpeel sets this to a
+/// Host-provided accent for the current App Session. Supercli sets this to a
 /// canonical `#RRGGBB` value from the Session's project folder color, falling
 /// back to the workspace App color.
-pub const APP_ACCENT_ENV: &str = "UNPEEL_APP_ACCENT";
+pub const APP_ACCENT_ENV: &str = "SUPERCLI_APP_ACCENT";
 const LIVE_THEME_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Terminal color scheme used to choose a kit palette.
@@ -23,12 +23,12 @@ pub enum ColorScheme {
 }
 
 impl ColorScheme {
-    /// Detects a scheme from `UNPEEL_TUI_THEME=dark|light`, then the common
+    /// Detects a scheme from `SUPERCLI_TUI_THEME=dark|light`, then the common
     /// `COLORFGBG` terminal hint. Detection deliberately falls back to dark;
     /// Apps with their own appearance setting should pass it explicitly.
     #[must_use]
     pub fn detect() -> Self {
-        std::env::var("UNPEEL_TUI_THEME")
+        std::env::var("SUPERCLI_TUI_THEME")
             .ok()
             .as_deref()
             .and_then(parse_name)
@@ -146,12 +146,12 @@ fn parse_colorfgbg(value: &str) -> Option<ColorScheme> {
     })
 }
 
-/// Returns the accent supplied by an Unpeel Host for this App Session.
+/// Returns the accent supplied by an Supercli Host for this App Session.
 ///
 /// The environment value is deliberately ignored unless a non-empty
-/// `UNPEEL_SESSION_ID` is present. This keeps standalone runs visually and
+/// `SUPERCLI_SESSION_ID` is present. This keeps standalone runs visually and
 /// behaviorally independent even if a parent shell happens to retain an old
-/// `UNPEEL_APP_ACCENT` value.
+/// `SUPERCLI_APP_ACCENT` value.
 #[must_use]
 pub fn hosted_accent() -> Option<Color> {
     hosted_accent_for_scheme(ColorScheme::detect())
@@ -164,11 +164,11 @@ pub fn hosted_accent() -> Option<Color> {
 /// environment value remains the compatibility fallback for older Hosts.
 #[must_use]
 pub fn hosted_accent_for_scheme(scheme: ColorScheme) -> Option<Color> {
-    let session_id = std::env::var("UNPEEL_SESSION_ID").ok()?;
+    let session_id = std::env::var("SUPERCLI_SESSION_ID").ok()?;
     if !valid_session_id(&session_id) {
         return None;
     }
-    if let Some(port) = std::env::var("UNPEEL_APP_PORT")
+    if let Some(port) = std::env::var("SUPERCLI_APP_PORT")
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         && let Some(response) = query_hosted_accent(port, &session_id, scheme)

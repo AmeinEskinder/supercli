@@ -62,9 +62,9 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: $ARCH
-Maintainer: Unpeel <noreply@example.com>
+Maintainer: Supercli <noreply@example.com>
 Description: AI-native terminal workspace for running CLI agents
- The Unpeel CLI, session host, and attach client.
+ The Supercli CLI, session host, and attach client.
 EOF
 dpkg-deb --build "$DEB_DIR" "$DEB_PKG" >/dev/null
 rm -rf "$DEB_DIR"

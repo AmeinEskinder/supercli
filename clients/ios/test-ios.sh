@@ -5,8 +5,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/SupercliIOS" && pwd)"
-DESTINATION="${UNPEEL_IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}"
-DERIVED_DATA="${UNPEEL_IOS_TEST_DERIVED_DATA:-${TMPDIR:-/tmp}/unpeel-ios-tests}"
+DESTINATION="${SUPERCLI_IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}"
+DERIVED_DATA="${SUPERCLI_IOS_TEST_DERIVED_DATA:-${TMPDIR:-/tmp}/supercli-ios-tests}"
 
 xcodebuild \
   -project "$HERE/SupercliIOS.xcodeproj" \

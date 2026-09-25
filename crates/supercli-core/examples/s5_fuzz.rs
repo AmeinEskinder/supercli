@@ -42,11 +42,11 @@ fn main() {
         // Call parser, catch panics.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if target == "sealed_envelope" {
-                let _ = unpeel_core::relay_crypto::decode_incoming(&input);
+                let _ = supercli_core::relay_crypto::decode_incoming(&input);
             } else if target == "config" {
                 if let Ok(s) = std::str::from_utf8(&input) {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
-                        let _ = unpeel_core::config::check_document(&v);
+                        let _ = supercli_core::config::check_document(&v);
                     }
                 }
             }

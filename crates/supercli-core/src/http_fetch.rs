@@ -1,5 +1,5 @@
 //! Minimal blocking HTTP(S) GET for small manifests — the CLI update check
-//! fetching `cli/latest.json` from unpeel.com. Same TLS stack as the relay
+//! fetching `cli/latest.json` from supercli.com. Same TLS stack as the relay
 //! uplink (rustls + webpki roots), `http://` allowed for tests and local
 //! dev servers. Not a general client: no redirects, no keep-alive, response
 //! capped at 2 MB.
@@ -18,7 +18,7 @@ pub fn get(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// `get` with extra request headers — the CLI update check uses this to carry
-/// its anonymous install id (see `unpeel-cli`'s `update` module).
+/// its anonymous install id (see `supercli-cli`'s `update` module).
 pub fn get_with_headers(url: &str, extra_headers: &[(&str, &str)]) -> Result<Vec<u8>, String> {
     let response = fetch_once(url, extra_headers, MAX_RESPONSE)?;
     if response.status != 200 {
@@ -347,7 +347,7 @@ fn open_request(
     tcp.set_write_timeout(Some(TIMEOUT)).ok();
 
     let mut request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: unpeel/{}\r\nConnection: close\r\n",
+        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: supercli/{}\r\nConnection: close\r\n",
         env!("CARGO_PKG_VERSION")
     );
     if !extra_headers
@@ -469,7 +469,7 @@ mod tests {
     }
 
     fn temp_file(tag: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("unpeel-http-fetch-{tag}-{}", std::process::id()))
+        std::env::temp_dir().join(format!("supercli-http-fetch-{tag}-{}", std::process::id()))
     }
 
     #[test]

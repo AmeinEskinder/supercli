@@ -1,6 +1,6 @@
-//! Typed context detection for standalone and Unpeel-hosted Apps.
+//! Typed context detection for standalone and Supercli-hosted Apps.
 //!
-//! Hosted details come from the Host rather than from parsing Unpeel's state
+//! Hosted details come from the Host rather than from parsing Supercli's state
 //! files. That keeps workspace naming, project/worktree resolution, and
 //! principal fallback in the authority that owns them.
 
@@ -25,7 +25,7 @@ pub enum AppMode {
     Hosted,
 }
 
-/// The current isolated Unpeel workspace instance.
+/// The current isolated Supercli workspace instance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceContext {
     /// Stable workspace registry id. The implicit workspace uses `default`;
@@ -63,7 +63,7 @@ pub struct WorktreeContext {
 /// Apps must not infer an email, account provider, or display name from this
 /// value. Those claims require a separate consented identity API.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnpeelUser {
+pub struct SupercliUser {
     /// Opaque, Host-scoped principal id suitable only for attribution keys.
     pub id: String,
 }
@@ -71,7 +71,7 @@ pub struct UnpeelUser {
 /// Environment-neutral context for a Ratatui App.
 ///
 /// `detect()` is infallible and standalone-safe. A valid
-/// `UNPEEL_SESSION_ID` always produces `Hosted` mode even if an older or
+/// `SUPERCLI_SESSION_ID` always produces `Hosted` mode even if an older or
 /// temporarily unavailable Host cannot answer the typed context query; use
 /// [`Self::host_available`] to distinguish that state.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,15 +82,15 @@ pub struct AppContext {
     workspace: Option<WorkspaceContext>,
     project: Option<ProjectContext>,
     worktree: Option<WorktreeContext>,
-    user: Option<UnpeelUser>,
+    user: Option<SupercliUser>,
 }
 
 impl AppContext {
     /// Detect the current process context without making standalone Apps
-    /// depend on Unpeel.
+    /// depend on Supercli.
     #[must_use]
     pub fn detect() -> Self {
-        let Some(session_id) = std::env::var("UNPEEL_SESSION_ID")
+        let Some(session_id) = std::env::var("SUPERCLI_SESSION_ID")
             .ok()
             .filter(|value| valid_id(value))
         else {
@@ -194,7 +194,7 @@ impl AppContext {
 
     #[must_use]
     /// Opaque current Session owner, when supplied by the Host.
-    pub fn current_user(&self) -> Option<&UnpeelUser> {
+    pub fn current_user(&self) -> Option<&SupercliUser> {
         self.user.as_ref()
     }
 
@@ -247,7 +247,7 @@ struct ValidatedContext {
     workspace: Option<WorkspaceContext>,
     project: Option<ProjectContext>,
     worktree: Option<WorktreeContext>,
-    user: Option<UnpeelUser>,
+    user: Option<SupercliUser>,
 }
 
 fn validate_response(
@@ -309,7 +309,7 @@ fn validate_response(
             if !valid_id(&user.id) {
                 return None;
             }
-            Some(UnpeelUser { id: user.id })
+            Some(SupercliUser { id: user.id })
         }
         None => None,
     };
@@ -402,7 +402,7 @@ mod tests {
                     "version":1,
                     "session_id":"session-1",
                     "workspace":{"id":"work","name":"Work"},
-                    "project":{"id":"project-1","name":"Unpeel","path":"/repo"},
+                    "project":{"id":"project-1","name":"Supercli","path":"/repo"},
                     "worktree":{"path":"/repo-feature","branch":"feature/context"},
                     "user":{"id":"host-owner:abc"}
                 }"#,

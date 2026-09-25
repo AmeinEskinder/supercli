@@ -949,7 +949,7 @@ mod tests {
     fn with_temp_home(tag: &str, f: impl FnOnce()) {
         let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
         let dir =
-            std::env::temp_dir().join(format!("unpeel-events-test-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-events-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let prev = std::env::var_os("SUPERCLI_HOME");

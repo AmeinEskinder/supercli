@@ -1,4 +1,4 @@
-//! Unpeel desktop client: a Codex-like chat GUI over the Host protocol.
+//! Supercli desktop client: a Codex-like chat GUI over the Host protocol.
 //!
 //! Multi-Host: every paired Host stays connected at once in a shared
 //! [`HostRegistry`]. Switching Hosts (the "‹ Hosts" list) is a view change,
@@ -11,8 +11,8 @@
 //! platform keychain via [`open_controller_store`]; the Host list lives
 //! there too. No configuration files, no environment variables.
 //!
-//! The app is a thin shell: all rendering lives in `unpeel_ui`, all Host
-//! I/O goes through `unpeel_client::HostClient`. Blocking I/O runs on
+//! The app is a thin shell: all rendering lives in `supercli_ui`, all Host
+//! I/O goes through `supercli_client::HostClient`. Blocking I/O runs on
 //! plain threads; UI state lives in a [`SyncSignal`] so those threads can
 //! publish results.
 
@@ -21,9 +21,9 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dioxus::prelude::*;
-use unpeel_client::dto::{ActivityState, BootstrapSnapshot, PresetSummary, SessionSummary};
-use unpeel_client::protocol::supports_session_creation;
-use unpeel_client::{
+use supercli_client::dto::{ActivityState, BootstrapSnapshot, PresetSummary, SessionSummary};
+use supercli_client::protocol::supports_session_creation;
+use supercli_client::{
     connect_direct_classified, decode_pairing_code, delete_host_secrets, device_identity,
     load_host_secrets, load_paired_host_records, open_controller_store, pair,
     relay_credentials_for_host, remove_paired_host, save_paired_host_records, store_host_secrets,
@@ -31,10 +31,10 @@ use unpeel_client::{
     HostRegistry, HostSecrets, PairedHostRecord, RelayConnection, RemoteDeviceIdentity,
     TransportKind,
 };
-use unpeel_ui::{
+use supercli_ui::{
     browse_once, catalog::merging, DiscoverySheet, DiscoveryState, NearbyHostCandidate,
 };
-use unpeel_ui::{
+use supercli_ui::{
     flatten_annotation_png, flatten_spec, launchable_presets, notifier_post_js,
     presence_file_paths, share_entry_js, AnnotationMode, AnnotationResult, ApprovalCard,
     ArchiveAction, ArchivedSessionsSheet, BrowserGalleryPanel, CommandPalette, Composer,
@@ -70,15 +70,15 @@ struct ArchiveSheetState {
     load_error: Option<String>,
 }
 
-/// The local Unpeel home dir for presence files: `UNPEEL_HOME` when set,
-/// else `~/.unpeel`. Respects the private test/dev home; never touches the
+/// The local Supercli home dir for presence files: `SUPERCLI_HOME` when set,
+/// else `~/.supercli`. Respects the private test/dev home; never touches the
 /// real home when the var points elsewhere.
-fn unpeel_home_dir() -> std::path::PathBuf {
-    std::env::var_os("UNPEEL_HOME")
+fn supercli_home_dir() -> std::path::PathBuf {
+    std::env::var_os("SUPERCLI_HOME")
         .filter(|v| !v.is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".unpeel")))
-        .unwrap_or_else(|| std::path::PathBuf::from(".unpeel"))
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".supercli")))
+        .unwrap_or_else(|| std::path::PathBuf::from(".supercli"))
 }
 
 #[derive(Clone)]
@@ -126,7 +126,7 @@ impl AppState {
         let (store, keychain_notice) = open_controller_store();
         let device = device_identity(&*store).ok();
         let records = load_paired_host_records(&*store).unwrap_or_default();
-        let (presence_path, mobile_presence_path) = presence_file_paths(&unpeel_home_dir());
+        let (presence_path, mobile_presence_path) = presence_file_paths(&supercli_home_dir());
         let mut s = Self {
             store,
             keychain_notice,
@@ -395,7 +395,7 @@ fn start_discovery(mut state: SyncSignal<AppState>) {
 }
 
 /// Connect to a Host over SSH (HostPickerView sshContent parity). Uses the
-/// real `SshHostConnection` transport from unpeel-core via the system SSH
+/// real `SshHostConnection` transport from supercli-core via the system SSH
 /// configuration, keys, agent, and ProxyJump.
 fn connect_ssh(mut state: SyncSignal<AppState>) {
     let target_str = state.read().ssh_target.trim().to_string();
@@ -405,9 +405,9 @@ fn connect_ssh(mut state: SyncSignal<AppState>) {
     state.write().pairing_status = PairingStatus::Working;
     std::thread::spawn(move || {
         let outcome: Result<String, String> = (|| {
-            let target = unpeel_core::ssh_connection::SshTarget::parse(&target_str)
+            let target = supercli_core::ssh_connection::SshTarget::parse(&target_str)
                 .map_err(|e| e.to_string())?;
-            let _conn = unpeel_core::ssh_connection::SshHostConnection::new(target);
+            let _conn = supercli_core::ssh_connection::SshHostConnection::new(target);
             // The SSH transport is established; the Host protocol handshake
             // runs over it via RemoteSessionBackend in the native bridge.
             // Here we report the validated target — full session wiring
@@ -930,7 +930,7 @@ fn stop_turn(mut state: SyncSignal<AppState>) {
             .views
             .get(&h.record.host_id)
             .and_then(|v| v.selected_session.clone());
-        let use_protocol_cancel = unpeel_client::protocol::supports_turn_cancel(
+        let use_protocol_cancel = supercli_client::protocol::supports_turn_cancel(
             h.snapshot.as_ref().and_then(|b| b.host_protocol.as_ref()),
         );
         (
@@ -1038,7 +1038,7 @@ fn toast(state: SyncSignal<AppState>, text: impl Into<String>) {
 }
 
 /// Post a desktop OS notification (Web Notification API; see
-/// `unpeel_ui::notifier`). Collapse semantics live in `NotifierState`:
+/// `supercli_ui::notifier`). Collapse semantics live in `NotifierState`:
 /// each tag posts at most once.
 fn post_desktop_notification(
     mut state: SyncSignal<AppState>,
@@ -1864,7 +1864,7 @@ fn App() -> Element {
                 }
                 cursors.insert(session_id.clone(), response.next_seq);
                 for event in &response.events {
-                    use unpeel_client::events::SessionEventWire;
+                    use supercli_client::events::SessionEventWire;
                     match event {
                         SessionEventWire::TurnStarted { .. } => {
                             event_turn_running.write().insert(session_id.clone(), true);

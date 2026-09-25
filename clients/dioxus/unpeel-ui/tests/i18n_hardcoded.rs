@@ -1,6 +1,6 @@
 //! Q6 — Static test: fail on hardcoded user-facing strings.
 //!
-//! Scans the `unpeel-ui` source for string literals that look like
+//! Scans the `supercli-ui` source for string literals that look like
 //! user-facing text in RSX. Any literal that is not routed through the
 //! i18n catalog (`t("...")`) must be on the `ALLOWLIST` below — a
 //! hardcoded string added without an allowlist entry fails the test.

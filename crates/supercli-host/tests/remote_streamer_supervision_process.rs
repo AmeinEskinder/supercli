@@ -1,12 +1,12 @@
 //! Real-process proof that the workspace worker supervises its own
-//! `unpeel-host __remote__` TLS terminal streamer
+//! `supercli-host __remote__` TLS terminal streamer
 //! (the private "remote-streamer-supervision" design record, deliverable 1).
 //!
-//! Case 1 runs this build's `unpeel-host __serve__` against an isolated
+//! Case 1 runs this build's `supercli-host __serve__` against an isolated
 //! workspace with one paired device, kills the streamer named in
 //! `remote.json`, and asserts a replacement appears, `serve.json` reports it
 //! live, and `/mobile/bootstrap` advertises a WSS endpoint again — with no
-//! service restart. Case 2 swaps in a shim `unpeel-host` whose `__remote__`
+//! service restart. Case 2 swaps in a shim `supercli-host` whose `__remote__`
 //! exits immediately and asserts the crash-loop ceiling holds until the
 //! paired-device set changes.
 
@@ -49,7 +49,7 @@ impl Drop for ServeProcess {
         }
         // The worker's detached PTY core survives the worker on purpose; a
         // fixture must ask it to exit or every run leaks one core.
-        unpeel_core::pty_core::shutdown_cores_under(&self.home, Duration::from_secs(15));
+        supercli_core::pty_core::shutdown_cores_under(&self.home, Duration::from_secs(15));
         let _ = std::fs::remove_dir_all(&self.home);
     }
 }
@@ -73,12 +73,12 @@ fn wait_until(timeout: Duration, mut condition: impl FnMut() -> bool) -> bool {
 /// One home per test, never shared. The name used to be pid + a nanosecond
 /// timestamp — whose real resolution is microseconds — so two tests starting
 /// on the same tick got the SAME directory: one worker refused with "an
-/// Unpeel Host is already serving this workspace" and the other test read
+/// Supercli Host is already serving this workspace" and the other test read
 /// its neighbour's serve.json (the "both tests fail together" signature under
 /// load). A process-wide counter makes the name unique by construction, and
 /// `create_dir` (not `create_dir_all`) proves it.
 fn isolated_home() -> PathBuf {
-    let home = std::env::temp_dir().join(format!("unpeel-streamer-supervision-{}", uuid_like()));
+    let home = std::env::temp_dir().join(format!("supercli-streamer-supervision-{}", uuid_like()));
     std::fs::create_dir(&home)
         .unwrap_or_else(|e| panic!("isolated home {} must be fresh: {e}", home.display()));
     home
@@ -122,7 +122,7 @@ fn reserve_port() -> u16 {
 }
 
 fn sha256_hex(input: &str) -> String {
-    unpeel_serve::pairing::sha256_hex(input)
+    supercli_serve::pairing::sha256_hex(input)
 }
 
 fn write_pairing_fixture(home: &Path, port: u16, token: &str) {
@@ -182,13 +182,13 @@ fn write_devices(home: &Path, devices: &[(&str, &str)]) {
 }
 
 fn spawn_serve(home: &Path, host_cmd: Option<&Path>) -> ServeProcess {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_unpeel-host"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_supercli-host"));
     command
         .arg("__serve__")
         // Test workers never download the Browser MCP or Computer Use engine.
-        .env("UNPEEL_BROWSER_ENGINE_INSTALL", "0")
-        .env("UNPEEL_COMPUTER_ENGINE_INSTALL", "0")
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_BROWSER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_COMPUTER_ENGINE_INSTALL", "0")
+        .env("SUPERCLI_HOME", home)
         .stdout(Stdio::null())
         // The worker's stderr is the only place a failed start explains
         // itself; keep it next to the home for the failure messages.
@@ -199,13 +199,13 @@ fn spawn_serve(home: &Path, host_cmd: Option<&Path>) -> ServeProcess {
         );
     match host_cmd {
         Some(path) => {
-            command.env("UNPEEL_HOST_CMD", path);
+            command.env("SUPERCLI_HOST_CMD", path);
         }
         None => {
-            command.env_remove("UNPEEL_HOST_CMD");
+            command.env_remove("SUPERCLI_HOST_CMD");
         }
     }
-    let child = command.spawn().expect("start unpeel-host __serve__");
+    let child = command.spawn().expect("start supercli-host __serve__");
     ServeProcess {
         child,
         home: home.to_path_buf(),
@@ -255,7 +255,7 @@ fn process_alive(pid: u32) -> bool {
 /// bounded wait for the listener instead of an immediate `connect().unwrap()`
 /// that once failed in a solo staging run.
 fn bootstrap(home: &Path, port: u16, token: &str) -> (u16, serde_json::Value) {
-    use unpeel_core::rustls;
+    use supercli_core::rustls;
     let deadline = Instant::now() + Duration::from_secs(60);
     let mut last_error = None;
     let tcp = loop {
@@ -274,10 +274,10 @@ fn bootstrap(home: &Path, port: u16, token: &str) -> (u16, serde_json::Value) {
     // The direct endpoint is TLS, pinned to the workspace's Host certificate
     // — the same file the worker's streamer serves.
     let fingerprint =
-        unpeel_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
+        supercli_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
             .expect("workspace Host certificate")
             .fingerprint;
-    let config = Arc::new(unpeel_core::remote_attach::pinned_client_config(Some(
+    let config = Arc::new(supercli_core::remote_attach::pinned_client_config(Some(
         fingerprint,
     )));
     let name = rustls::pki_types::ServerName::try_from("localhost").unwrap();
@@ -421,9 +421,9 @@ fn worker_respawns_a_killed_streamer_without_a_service_restart() {
 }
 
 fn write_crashing_shim(home: &Path) -> (PathBuf, PathBuf) {
-    let shim = home.join("crashing-unpeel-host.sh");
+    let shim = home.join("crashing-supercli-host.sh");
     let counter = home.join("remote-launches.log");
-    let real = env!("CARGO_BIN_EXE_unpeel-host");
+    let real = env!("CARGO_BIN_EXE_supercli-host");
     std::fs::write(
         &shim,
         format!(

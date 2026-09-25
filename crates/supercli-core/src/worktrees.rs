@@ -17,7 +17,7 @@ use crate::app_paths;
 pub struct Worktree {
     pub path: String,
     pub branch: Option<String>,
-    /// True when Unpeel created it (it lives under the worktrees root).
+    /// True when Supercli created it (it lives under the worktrees root).
     pub managed: bool,
 }
 
@@ -134,7 +134,7 @@ pub fn default_base_ref(repo: &str) -> Option<String> {
 }
 
 /// Every worktree of the repo containing `path`, `managed` marking the ones
-/// under Unpeel's worktrees root.
+/// under Supercli's worktrees root.
 pub fn list(path: &str) -> Result<Vec<Worktree>, String> {
     let toplevel = repo_toplevel(path)?;
     let raw = run_git(&toplevel, &["worktree", "list", "--porcelain"])?;
@@ -235,7 +235,7 @@ pub fn remove(path: &str, force: bool) -> Result<(), String> {
     let managed_root = canonical_or_self(&app_paths::worktrees_root());
     let target = canonical_or_self(Path::new(path));
     if !target.starts_with(&managed_root) {
-        return Err("refusing to remove a worktree Unpeel does not manage".into());
+        return Err("refusing to remove a worktree Supercli does not manage".into());
     }
     let toplevel = repo_toplevel(path)?;
     let mut args = vec!["worktree", "remove"];

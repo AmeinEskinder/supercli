@@ -2,13 +2,13 @@
 
 use std::io::{BufReader, Cursor};
 
-use unpeel_app_kit::{
+use supercli_app_kit::{
     ButtonRole, CanvasControl, ListItemActionRole, ListItemSlot, MarkdownMenuTrigger, MediaSource,
     PageBodySlot, RowPrimaryRole, SurfaceInputPolicy, UiComponent, UiEventKind, UiEventValue,
     UiMessage, read_ui_message,
 };
 
-const STREAM: &str = include_str!("../protocol/unpeel-ui-v1.ndjson");
+const STREAM: &str = include_str!("../protocol/supercli-ui-v1.ndjson");
 
 #[test]
 fn shared_v1_stream_decodes_and_validates_every_frame() {
@@ -309,7 +309,7 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     assert!(menu.items[1].disabled);
     assert_eq!(
         menu.items[2].role,
-        unpeel_app_kit::SemanticMenuItemRole::Danger
+        supercli_app_kit::SemanticMenuItemRole::Danger
     );
 
     let UiMessage::Delta(menu_delta) = &messages[26] else {
@@ -329,7 +329,7 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     };
     assert_eq!(
         editor.insert_menu.as_ref().unwrap().anchor,
-        unpeel_app_kit::SemanticMenuAnchor::Caret
+        supercli_app_kit::SemanticMenuAnchor::Caret
     );
     assert_eq!(
         editor
@@ -444,7 +444,7 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     };
     assert!(matches!(
         sparkline_delta.operations.as_slice(),
-        [unpeel_app_kit::UiDeltaOperation::SparklineSetData { node_id, .. }]
+        [supercli_app_kit::UiDeltaOperation::SparklineSetData { node_id, .. }]
             if node_id == "usage-trend-series"
     ));
     let updated = sparkline_snapshot.applying(sparkline_delta).unwrap();
@@ -600,23 +600,23 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     assert_eq!(text_box.prompt, "❯ ");
     assert_eq!(
         text_box.titles[0].position,
-        unpeel_app_kit::TitlePosition::BottomRight
+        supercli_app_kit::TitlePosition::BottomRight
     );
     assert_eq!(
         text_box_snapshot.root.required_capabilities(),
-        vec![unpeel_app_kit::TEXT_BOX_COMPONENT_CAPABILITY]
+        vec![supercli_app_kit::TEXT_BOX_COMPONENT_CAPABILITY]
     );
     let UiMessage::Event(set_text) = &messages[45] else {
         panic!("text box renderer must send set-text");
     };
     assert_eq!(set_text.action.kind, UiEventKind::Change);
-    let mut terminal_box = unpeel_app_kit::TextBox::from_spec(text_box);
-    let config = unpeel_app_kit::TextBoxConfig::new("chat-prompt");
+    let mut terminal_box = supercli_app_kit::TextBox::from_spec(text_box);
+    let config = supercli_app_kit::TextBoxConfig::new("chat-prompt");
     assert_eq!(
         terminal_box
             .handle_ui_event(100, &config, set_text)
             .unwrap(),
-        Some(unpeel_app_kit::TextBoxUiEvent::TextChanged { changed: true })
+        Some(supercli_app_kit::TextBoxUiEvent::TextChanged { changed: true })
     );
     assert_eq!(terminal_box.text(), "Ship it\n🙂 second line");
     let UiMessage::Delta(text_box_delta) = &messages[46] else {
@@ -636,7 +636,7 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     assert_eq!(submit.action.kind, UiEventKind::Submit);
     assert_eq!(
         terminal_box.handle_ui_event(101, &config, submit).unwrap(),
-        Some(unpeel_app_kit::TextBoxUiEvent::Submitted(
+        Some(supercli_app_kit::TextBoxUiEvent::Submitted(
             "Ship it\n🙂 second line".to_owned()
         ))
     );
@@ -663,7 +663,7 @@ fn shared_v1_stream_decodes_and_validates_every_frame() {
     };
     assert_eq!(editor.text, "/");
     let menu = editor.insert_menu.as_ref().expect("published insert Menu");
-    assert_eq!(menu.anchor, unpeel_app_kit::SemanticMenuAnchor::Caret);
+    assert_eq!(menu.anchor, supercli_app_kit::SemanticMenuAnchor::Caret);
     assert_eq!(menu.selected_id.as_deref(), Some("block-heading-1"));
 
     let UiMessage::Event(selection_event) = &messages[51] else {
@@ -715,8 +715,8 @@ fn footer_status_round_trips_and_uses_a_capability_gated_delta() {
         next.root.footer().unwrap().actions,
         snapshot.root.footer().unwrap().actions
     );
-    let operations = unpeel_app_kit::markdown_delta_operations(&snapshot.root, &next.root);
+    let operations = supercli_app_kit::markdown_delta_operations(&snapshot.root, &next.root);
     assert!(
-        matches!(operations.as_slice(), [unpeel_app_kit::UiDeltaOperation::FooterSetActions { status: Some(status), .. }] if status == "3:4")
+        matches!(operations.as_slice(), [supercli_app_kit::UiDeltaOperation::FooterSetActions { status: Some(status), .. }] if status == "3:4")
     );
 }

@@ -10,31 +10,31 @@ use std::ffi::c_char;
 
 /// Install the JSON event callback. Call once at startup.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_ios_bridge_set_event_callback(cb: BridgeCallback) {
+pub extern "C" fn supercli_ios_bridge_set_event_callback(cb: BridgeCallback) {
     crate::set_event_callback(cb);
 }
 
 /// Speech: request `SFSpeechRecognizer` authorization.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_speech_request_authorization() {
+pub extern "C" fn supercli_speech_request_authorization() {
     catch(speech::request_authorization);
 }
 
 /// Speech: start streaming dictation (partial + final result events).
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_speech_start() {
+pub extern "C" fn supercli_speech_start() {
     catch(speech::start);
 }
 
 /// Speech: stop dictation and tear down the audio session.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_speech_stop() {
+pub extern "C" fn supercli_speech_stop() {
     catch(speech::stop);
 }
 
 /// Notifications: request alert+badge+sound authorization.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_notifications_request_authorization() {
+pub extern "C" fn supercli_notifications_request_authorization() {
     catch(notifications::request_authorization);
 }
 
@@ -42,27 +42,27 @@ pub extern "C" fn unpeel_notifications_request_authorization() {
 /// error comes back through the shell's app delegate into the ingest
 /// functions below.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_notifications_register_remote() {
+pub extern "C" fn supercli_notifications_register_remote() {
     catch(notifications::register_for_remote_notifications);
 }
 
 /// Notifications: install the tap-response delegate on the current
 /// notification center.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_notifications_install_response_delegate() {
+pub extern "C" fn supercli_notifications_install_response_delegate() {
     catch(notifications::install_response_delegate);
 }
 
 /// APNs: the device token from the shell's app delegate, as NUL-terminated
 /// hex. Null is an error event, not a crash.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_apns_ingest_token(hex: *const c_char) {
+pub extern "C" fn supercli_apns_ingest_token(hex: *const c_char) {
     catch(|| notifications::ingest_apns_token(hex));
 }
 
 /// APNs: registration failure from the shell's app delegate.
 #[unsafe(no_mangle)]
-pub extern "C" fn unpeel_apns_ingest_error(message: *const c_char) {
+pub extern "C" fn supercli_apns_ingest_error(message: *const c_char) {
     catch(|| notifications::ingest_apns_error(message));
 }
 

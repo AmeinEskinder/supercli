@@ -1,5 +1,5 @@
 //! Session activity rows and the session-context model. Ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/SessionActivity.swift`
+//! `clients/native/SupercliNative/Sources/SupercliNative/SessionActivity.swift`
 //! and `SessionRowContext.swift`.
 //!
 //! The row is "everything the Host streams about a session's current state,

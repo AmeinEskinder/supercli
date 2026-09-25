@@ -1,11 +1,13 @@
-//! LITE device control for supercli: Android emulators via `adb`/`emulator`
-//! and iOS simulators via `xcrun simctl`.
+//! LITE device control for supercli: Android via `adb`/`emulator` (fallback)
+//! and `scrcpy` (primary), iOS via installed `baguette` (stream/input/a11y)
+//! and `xcrun simctl` (lifecycle + screenshots only).
 //!
 //! This module (trait + error types + tool runner) is always compiled and
 //! has no dependencies beyond `std`. The real backends live behind the
 //! `device` cargo feature; without it this crate compiles to a few KB.
 //!
-//! Design: `docs/device.md`.
+//! Design: `docs/device.md`. Nothing here is vendored: baguette and scrcpy
+//! must be installed by the user; the crate shells out to them.
 
 use std::error::Error;
 use std::fmt;
@@ -379,10 +381,11 @@ pub fn spawn_stream(tool: &str, args: &[&str]) -> Result<DeviceStream, DeviceErr
     DeviceStream::from_child(child).map_err(DeviceError::Io)
 }
 
-/// Backend operations shared by Android (adb) and iOS (simctl).
+/// Backend operations shared by Android (adb/scrcpy) and iOS
+/// (baguette/simctl).
 ///
-/// `id` semantics: adb serial or simctl UDID; for [`DeviceBackend::boot`]
-/// it is the AVD name (Android) or UDID (iOS).
+/// `id` semantics: adb serial, baguette session id, or simctl UDID; for
+/// [`DeviceBackend::boot`] it is the AVD name (Android) or UDID (iOS).
 pub trait DeviceBackend {
     /// All devices the backend knows about (running + stopped + available).
     fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError>;
@@ -416,12 +419,22 @@ pub trait DeviceBackend {
     /// Start a continuous H.264 screen stream; the caller reads bytes from
     /// the returned stream. Dropping it stops the tool.
     fn stream(&self, id: &DeviceId) -> Result<DeviceStream, DeviceError>;
+    /// Accessibility tree for agent perception: baguette a11y JSON on iOS,
+    /// `uiautomator dump` XML on Android. Returned as a raw string; parsing
+    /// is the caller's job. Agents act on elements, not pixels.
+    fn describe_ui(&self, id: &DeviceId) -> Result<String, DeviceError>;
 }
 
 #[cfg(feature = "device")]
 pub mod adb;
+#[cfg(feature = "device")]
+pub mod baguette;
 #[cfg(test)]
 mod fake;
+#[cfg(feature = "device")]
+pub(crate) mod json;
+#[cfg(feature = "device")]
+pub mod scrcpy;
 #[cfg(feature = "device")]
 pub mod simctl;
 

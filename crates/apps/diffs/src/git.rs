@@ -688,10 +688,10 @@ mod tests {
     fn repository() -> (tempfile::TempDir, Repository) {
         let directory = tempfile::tempdir().unwrap();
         run_git(directory.path(), &["init", "-b", "main"]);
-        run_git(directory.path(), &["config", "user.name", "Unpeel Tests"]);
+        run_git(directory.path(), &["config", "user.name", "Supercli Tests"]);
         run_git(
             directory.path(),
-            &["config", "user.email", "tests@unpeel.local"],
+            &["config", "user.email", "tests@supercli.local"],
         );
         std::fs::write(directory.path().join("kept.txt"), "before\n").unwrap();
         std::fs::write(directory.path().join("removed.txt"), "remove me\n").unwrap();
@@ -722,10 +722,10 @@ mod tests {
     fn clone_remote(remote: &Path) -> tempfile::TempDir {
         let clone = tempfile::tempdir().unwrap();
         run_git(clone.path(), &["clone", remote.to_str().unwrap(), "."]);
-        run_git(clone.path(), &["config", "user.name", "Unpeel Tests"]);
+        run_git(clone.path(), &["config", "user.name", "Supercli Tests"]);
         run_git(
             clone.path(),
-            &["config", "user.email", "tests@unpeel.local"],
+            &["config", "user.email", "tests@supercli.local"],
         );
         clone
     }
@@ -878,7 +878,7 @@ mod tests {
         let commits = repository.history(10).unwrap();
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].subject, "initial");
-        assert_eq!(commits[0].author, "Unpeel Tests");
+        assert_eq!(commits[0].author, "Supercli Tests");
         let files = repository.commit_files(&commits[0]).unwrap();
         assert_eq!(files.len(), 2);
         let patch = repository.commit_diff(&commits[0], &files[0]).unwrap();

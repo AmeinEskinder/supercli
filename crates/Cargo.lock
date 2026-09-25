@@ -2281,6 +2281,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercli-license-notices"
+version = "0.9.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "supercli-load"
 version = "0.9.0"
 dependencies = [
@@ -2717,14 +2725,6 @@ checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
 dependencies = [
  "crypto-common 0.1.7",
  "subtle",
-]
-
-[[package]]
-name = "unpeel-license-notices"
-version = "0.9.0"
-dependencies = [
- "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]

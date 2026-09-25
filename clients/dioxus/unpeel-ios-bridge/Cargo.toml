@@ -1,5 +1,5 @@
 [package]
-name = "unpeel-ios-bridge"
+name = "supercli-ios-bridge"
 version = "0.8.0"
 edition = "2021"
 rust-version = "1.88.0"

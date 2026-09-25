@@ -483,7 +483,7 @@ fn get_with_token(url: &str, token: &str) -> Result<RawResponse, ()> {
         .header("Accept", "application/json")
         .header(
             "User-Agent",
-            concat!("unpeel-usage/", env!("CARGO_PKG_VERSION")),
+            concat!("supercli-usage/", env!("CARGO_PKG_VERSION")),
         )
         .call()
         .map_err(|_| ())?;
@@ -1321,7 +1321,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "unpeel-usage-grok-{label}-{}-{nonce}",
+            "supercli-usage-grok-{label}-{}-{nonce}",
             std::process::id()
         ));
         std::fs::create_dir(&path).unwrap();

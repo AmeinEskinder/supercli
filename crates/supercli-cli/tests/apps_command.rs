@@ -8,11 +8,11 @@ fn apps_install_refuses_noninteractive_without_yes() {
         .unwrap()
         .as_nanos();
     let home =
-        std::env::temp_dir().join(format!("unpeel-apps-cli-{}-{nonce:x}", std::process::id()));
+        std::env::temp_dir().join(format!("supercli-apps-cli-{}-{nonce:x}", std::process::id()));
 
-    let output = Command::new(env!("CARGO_BIN_EXE_unpeel"))
-        .args(["apps", "install", "unpeel.app.markdown"])
-        .env("UNPEEL_HOME", &home)
+    let output = Command::new(env!("CARGO_BIN_EXE_supercli"))
+        .args(["apps", "install", "supercli.app.markdown"])
+        .env("SUPERCLI_HOME", &home)
         .env("HOME", &home)
         .env("PATH", "/usr/bin:/bin")
         .stdin(Stdio::null())
@@ -23,6 +23,6 @@ fn apps_install_refuses_noninteractive_without_yes() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Refusing to install Markdown non-interactively"));
     assert!(stderr.contains("--yes"));
-    assert!(!home.join("apps/bin/unpeel-markdown").exists());
+    assert!(!home.join("apps/bin/supercli-markdown").exists());
     let _ = std::fs::remove_dir_all(home);
 }

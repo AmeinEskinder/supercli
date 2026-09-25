@@ -2,6 +2,11 @@
 //!
 //! Compiled only with the `device` cargo feature. No dependencies beyond
 //! `std` — every operation is a [`Command`] invocation parsed in plain Rust.
+//!
+//! This is the **fallback tier**: `super::scrcpy::ScrcpyBackend`
+//! (scrcpy-server, 60 fps H.264 + input injection) is preferred when `scrcpy`
+//! is on PATH. `describe_ui` uses the same `uiautomator dump` the scrcpy
+//! tier uses.
 
 use super::{
     run_tool_ok, run_tool_with_timeout, spawn_stream, tool_on_path, DeviceBackend, DeviceError,
@@ -111,6 +116,20 @@ pub fn parse_avd_list(output: &str) -> Vec<String> {
         .filter(|l| !l.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+/// Dump the accessibility tree via `uiautomator`.
+///
+/// `adb shell uiautomator dump /dev/stdout` prints the raw XML hierarchy.
+/// Shared with `ScrcpyBackend` (`super::scrcpy`); the `AdbBackend` is the
+/// fallback tier (tried when `scrcpy` is not on PATH), so this stays honest
+/// about which tool produced the tree.
+pub(crate) fn uiautomator_dump(serial: &DeviceId) -> Result<String, DeviceError> {
+    let out = AdbBackend::adb(
+        Some(serial),
+        &["shell", "uiautomator", "dump", "/dev/stdout"],
+    )?;
+    Ok(out.stdout_lossy())
 }
 
 /// Merge `adb devices` (running) with the AVD list (available):
@@ -306,7 +325,9 @@ impl DeviceBackend for AdbBackend {
     fn stream(&self, id: &DeviceId) -> Result<DeviceStream, DeviceError> {
         Self::check_adb()?;
         // Raw H.264 Annex-B on stdout; the caller reconnects before the
-        // 180 s screenrecord cap (design §3).
+        // 180 s screenrecord cap (design §3). This is the fallback tier:
+        // `ScrcpyBackend` (scrcpy-server, 60 fps) is preferred when `scrcpy`
+        // is on PATH.
         let args = [
             "-s",
             id.as_str(),
@@ -316,6 +337,12 @@ impl DeviceBackend for AdbBackend {
             "-",
         ];
         spawn_stream("adb", &args)
+    }
+
+    fn describe_ui(&self, id: &DeviceId) -> Result<String, DeviceError> {
+        // Fallback tier for describe-ui: same `uiautomator dump` the
+        // scrcpy tier uses; tried when `scrcpy` is not on PATH.
+        uiautomator_dump(id)
     }
 }
 

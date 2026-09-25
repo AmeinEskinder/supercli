@@ -228,7 +228,7 @@ pub fn fetch(
             entry.sha256.clone(),
         ));
     }
-    let sig_path = bundle_path.with_extension("unpeel-connector.sig");
+    let sig_path = bundle_path.with_extension("supercli-connector.sig");
     Ok((bundle, sig_path))
 }
 
@@ -256,7 +256,7 @@ provides = ["regme.echo"]
     #[test]
     fn publish_resolve_fetch_roundtrip() {
         let _guard = ENV_LOCK.lock().unwrap();
-        let base = std::env::temp_dir().join(format!("unpeel-reg-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("supercli-reg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let keys = base.join("keys");
         std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &keys);

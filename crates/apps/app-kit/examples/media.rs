@@ -21,15 +21,15 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::Paragraph;
 use serde::{Deserialize, Serialize};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AppMetadata, Media, MediaCellSize, MediaFit, MediaPicker, MediaPixelSize, MediaPointSize,
     MediaSource, MediaSpec, TerminalPointerState, UiBridge, UiBridgeEvent, UiDeltaOperation,
     UiEventKind, UiEventOutcome, UiEventValue,
 };
 
-const STATE_FORMAT: &str = "unpeel.app-kit.example.media";
+const STATE_FORMAT: &str = "supercli.app-kit.example.media";
 const STATE_FORMAT_VERSION: u32 = 1;
-const DEFAULT_STATE_FILE: &str = ".unpeel-media.json";
+const DEFAULT_STATE_FILE: &str = ".supercli-media.json";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const VIEW_ID: &str = "main";
 const MEDIA_ID: &str = "sample-media";
@@ -155,7 +155,7 @@ fn save_state(path: &Path, state: &MediaState) -> io::Result<()> {
 }
 
 fn state_path() -> io::Result<PathBuf> {
-    match std::env::var_os("UNPEEL_MEDIA_PATH") {
+    match std::env::var_os("SUPERCLI_MEDIA_PATH") {
         Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
         _ => Ok(std::env::current_dir()?.join(DEFAULT_STATE_FILE)),
     }
@@ -184,7 +184,7 @@ fn drain_bridge(app: &mut MediaApp, bridge: &mut UiBridge) -> Result<(), Box<dyn
                 participant,
                 client_id,
                 ..
-            } if std::env::var_os("UNPEEL_KITCHEN_SINK").is_some() => {
+            } if std::env::var_os("SUPERCLI_KITCHEN_SINK").is_some() => {
                 let name = participant
                     .display_name
                     .as_deref()
@@ -227,7 +227,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     save_state(&app.state_path, &app.state)?;
     let mut bridge = UiBridge::detect(
         AppMetadata::new(
-            "dev.unpeel.app-kit.media",
+            "dev.supercli.app-kit.media",
             "Media",
             env!("CARGO_PKG_VERSION"),
         )

@@ -180,7 +180,7 @@ pub struct LocalSiteServer {
     pub command: String,
     /// The hosted session whose process tree contains the server — the only
     /// case a Stop action is offered. `None` means the server was started
-    /// outside Unpeel (the user's own infra): show, never touch.
+    /// outside Supercli (the user's own infra): show, never touch.
     pub session_id: Option<String>,
 }
 
@@ -210,7 +210,7 @@ pub fn stop_server_for_url(url: &str) -> Result<LocalSiteServer, String> {
     let server = server_for_url(url).ok_or("no server is listening on that port")?;
     if server.session_id.is_none() {
         return Err(format!(
-            "{} (pid {}) was not started by an Unpeel session",
+            "{} (pid {}) was not started by an Supercli session",
             server.command, server.pid
         ));
     }
@@ -563,7 +563,7 @@ mod tests {
 
     fn scratch_sessions_root(label: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "unpeel-local-urls-{label}-{}-{}",
+            "supercli-local-urls-{label}-{}-{}",
             std::process::id(),
             uuid::Uuid::new_v4()
         ));
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn ignores_non_loopback_hosts() {
-        assert!(extract_local_urls("https://unpeel.com:443/x http://example.com:3000").is_empty());
+        assert!(extract_local_urls("https://supercli.com:443/x http://example.com:3000").is_empty());
     }
 
     #[test]

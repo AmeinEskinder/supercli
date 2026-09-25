@@ -231,7 +231,7 @@ provides = ["packme.echo"]
 "#;
 
     fn fixture() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("unpeel-pack-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-pack-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("connector.toml"), MANIFEST).unwrap();
@@ -248,7 +248,7 @@ provides = ["packme.echo"]
     #[test]
     fn pack_sign_verify_unpack_roundtrip() {
         let _guard = ENV_LOCK.lock().unwrap();
-        let keys = std::env::temp_dir().join(format!("unpeel-pack-keys-{}", std::process::id()));
+        let keys = std::env::temp_dir().join(format!("supercli-pack-keys-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&keys);
         std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &keys);
         keygen("packkey").expect("keygen");

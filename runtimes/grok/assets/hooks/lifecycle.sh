@@ -1,15 +1,15 @@
 #!/bin/bash
 INPUT=$(cat)
-# Global provider hooks must be inert outside a hosted Unpeel Session.
+# Global provider hooks must be inert outside a hosted Supercli Session.
 [ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
 # Native Grok invokes turn hooks inside subagents too. Those events belong
 # to the child, never to the foreground turn represented by this reporter.
 if printf '%s' "$INPUT" | grep -qE '"subagent(Type|_type)"[[:space:]]*:[[:space:]]*"[^"[:space:]][^"]*"'; then
   exit 0
 fi
-TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
-SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/app-ports}"
 
 json_escape_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -30,7 +30,7 @@ record_last_hook_event() {
   # Session metadata must not erase a Stop/cancellation needed after restart.
   [ "$_record_event_name" != HookSeen ] || return 0
   [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
-  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   # Repeated idle pings must preserve the known turn outcome and its recency.
   if [ "$_record_event_name" = Idle ] && [ -f "$_record_dir/last-hook-event.json" ]; then

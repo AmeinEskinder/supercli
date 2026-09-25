@@ -2,7 +2,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use unpeel_app_kit::TerminalPointerState;
+use supercli_app_kit::TerminalPointerState;
 
 use crate::git::{ChangedFile, Commit, DiffDocument, RemoteAction, RemoteState, Repository};
 
@@ -582,8 +582,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         for arguments in [
             vec!["init", "-b", "main"],
-            vec!["config", "user.name", "Unpeel Tests"],
-            vec!["config", "user.email", "tests@unpeel.local"],
+            vec!["config", "user.name", "Supercli Tests"],
+            vec!["config", "user.email", "tests@supercli.local"],
         ] {
             let output = Command::new("git")
                 .arg("-C")

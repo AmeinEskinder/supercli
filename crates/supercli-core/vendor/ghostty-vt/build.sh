@@ -40,7 +40,7 @@ fi
 
 echo "[*] zig: $("$ZIG" version) building lib-vt from $GHOSTTY_SRC"
 
-# Unpeel-specific source patches (patches/*.patch, applied in order) shape
+# Supercli-specific source patches (patches/*.patch, applied in order) shape
 # the Host-side VT — smaller standard pages, no page preheat — without
 # touching the checkout the app's GhosttyKit build uses: they are applied
 # for the duration of this script and reverted on exit, even on failure.

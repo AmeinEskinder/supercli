@@ -12,7 +12,7 @@ use std::ffi::OsString;
 /// App Kit calls this during App startup, before the App starts worker
 /// threads. Rust 2024 makes environment mutation unsafe because concurrent
 /// foreign environment access cannot be synchronized by the standard
-/// library. Unpeel Apps must therefore construct `UiBridge` before spawning
+/// library. Supercli Apps must therefore construct `UiBridge` before spawning
 /// threads.
 pub(crate) fn take_var_os(key: &str) -> Option<OsString> {
     let value = env::var_os(key);

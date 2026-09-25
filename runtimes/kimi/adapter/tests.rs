@@ -31,7 +31,7 @@ command = "prettier"
 
 [[hooks]]
 event = "Stop"
-command = "\"${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh\" old"
+command = "\"${SUPERCLI_HOME:-$HOME/.supercli}/hooks/kimi-hook.sh\" old"
 timeout = 5
 "#;
     let updated = crate::hook_assets::reconcile_kimi_config(raw, true).expect("reconcile Kimi Code config");
@@ -45,7 +45,7 @@ timeout = 5
     assert_eq!(updated.matches("[[hooks]]").count(), 10);
     assert_eq!(
         updated
-            .matches("${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh")
+            .matches("${SUPERCLI_HOME:-$HOME/.supercli}/hooks/kimi-hook.sh")
             .count(),
         9
     );
@@ -68,36 +68,36 @@ fn legacy_kimi_config_omits_kimi_code_only_hook_events() {
 fn kimi_code_mcp_entries_preserve_user_name_collisions() {
     let mut servers = serde_json::Map::new();
     servers.insert(
-        "unpeel-sessions".to_string(),
+        "supercli-sessions".to_string(),
         json!({"command":"user-owned-server"}),
     );
     crate::hook_assets::upsert_kimi_code_managed_mcp(
         &mut servers,
-        "unpeel-sessions",
+        "supercli-sessions",
         crate::mcp_gate::SESSIONS_KIND,
-        json!({"command":"/tmp/home/.unpeel/bin/unpeel-mcp", "args":[]}),
+        json!({"command":"/tmp/home/.supercli/bin/supercli-mcp", "args":[]}),
     );
     assert_eq!(
-        servers["unpeel-sessions"]["command"],
+        servers["supercli-sessions"]["command"],
         Value::String("user-owned-server".to_string())
     );
     assert_eq!(
-        servers["unpeel-sessions-unpeel"]["command"],
-        "/tmp/home/.unpeel/bin/unpeel-mcp"
+        servers["supercli-sessions-supercli"]["command"],
+        "/tmp/home/.supercli/bin/supercli-mcp"
     );
     // Legacy gate entries written by older builds still count as ours.
     servers.insert(
-        "unpeel".to_string(),
-        json!({"command":"/tmp/unpeel-host",
+        "supercli".to_string(),
+        json!({"command":"/tmp/supercli-host",
                "args":[crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::UNIFIED_KIND]}),
     );
     crate::hook_assets::upsert_kimi_code_managed_mcp(
         &mut servers,
-        "unpeel",
+        "supercli",
         crate::mcp_gate::UNIFIED_KIND,
-        json!({"command":"/tmp/home/.unpeel/bin/unpeel-mcp", "args":[]}),
+        json!({"command":"/tmp/home/.supercli/bin/supercli-mcp", "args":[]}),
     );
-    assert_eq!(servers["unpeel"]["command"], "/tmp/home/.unpeel/bin/unpeel-mcp");
+    assert_eq!(servers["supercli"]["command"], "/tmp/home/.supercli/bin/supercli-mcp");
 }
 
 #[test]

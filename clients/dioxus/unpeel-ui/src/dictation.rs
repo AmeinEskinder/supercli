@@ -286,7 +286,7 @@ pub const DICTATION_JS: &str = r##"
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { dioxus.send('dictation:unavailable'); return; }
   let rec = null, stream = null, live = false;
-  window.__unpeelDictationTeardown = () => {
+  window.__supercliDictationTeardown = () => {
     live = false;
     if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -348,8 +348,8 @@ pub const DICTATION_JS: &str = r##"
 /// Fire-and-forget teardown for unmount: releases the mic and recognizer
 /// even if the control eval is already gone.
 pub const DICTATION_TEARDOWN_JS: &str = r##"
-if (typeof window.__unpeelDictationTeardown === 'function') {
-  window.__unpeelDictationTeardown();
+if (typeof window.__supercliDictationTeardown === 'function') {
+  window.__supercliDictationTeardown();
 }
 "##;
 
@@ -359,7 +359,7 @@ if (typeof window.__unpeelDictationTeardown === 'function') {
 /// live in the native shell. The shell exposes one JS function:
 ///
 /// ```js
-/// window.__unpeelNativeSpeech(cmd)  // cmd: "start" | "stop" | "cancel"
+/// window.__supercliNativeSpeech(cmd)  // cmd: "start" | "stop" | "cancel"
 /// ```
 ///
 /// and feeds results back through the SAME `dictation:` message protocol the
@@ -369,18 +369,18 @@ if (typeof window.__unpeelDictationTeardown === 'function') {
 /// form can't safely embed a transcript the shell didn't escape).
 /// `cancel` must also abandon an in-flight reflection pass.
 ///
-/// The shell must install `__unpeelNativeSpeech` before the webview probes
+/// The shell must install `__supercliNativeSpeech` before the webview probes
 /// for it (a `WKUserScript` at document start is the reliable point).
 /// Capability declarations: `NSSpeechRecognitionUsageDescription` and
 /// `NSMicrophoneUsageDescription` in Info.plist. Full Mac-side instructions
 /// plus drop-in Swift live in `clients/dioxus/native-shell/`.
 ///
 /// Probe: evaluates to `true` when the native speech backend is present.
-pub const NATIVE_SPEECH_PROBE_JS: &str = r#"typeof window.__unpeelNativeSpeech === 'function'"#;
+pub const NATIVE_SPEECH_PROBE_JS: &str = r#"typeof window.__supercliNativeSpeech === 'function'"#;
 
 /// Probe for the native reflection backend (FoundationModels). Independent
 /// from the speech probe: a shell may bridge speech without reflection.
-pub const NATIVE_REFLECT_PROBE_JS: &str = r#"typeof window.__unpeelNativeReflect === 'function'"#;
+pub const NATIVE_REFLECT_PROBE_JS: &str = r#"typeof window.__supercliNativeReflect === 'function'"#;
 
 /// Pump script for native mode. The script itself does nothing — it only
 /// needs to complete, because (like the app-lock visibility bridge) a
@@ -393,7 +393,7 @@ pub const NATIVE_SPEECH_PUMP_JS: &str = r#"(function(){ return 0; })()"#;
 /// set — command strings are never interpolated unchecked.
 pub fn native_speech_cmd_js(cmd: &str) -> Option<String> {
     match cmd {
-        "start" | "stop" | "cancel" => Some(format!("window.__unpeelNativeSpeech(\"{cmd}\");")),
+        "start" | "stop" | "cancel" => Some(format!("window.__supercliNativeSpeech(\"{cmd}\");")),
         _ => None,
     }
 }
@@ -434,7 +434,7 @@ pub const REFINE_TIMEOUT_MS: u64 = 6000;
 ///
 /// `text` is JSON-encoded (a JSON string literal is valid JS, so hostile
 /// transcripts can't break out). The shell contract:
-/// - `window.__unpeelNativeReflect(nonce, text)` runs the FoundationModels
+/// - `window.__supercliNativeReflect(nonce, text)` runs the FoundationModels
 ///   cleanup (4s cap, Swift `sanitized` rules) and answers exactly once
 ///   with `dioxus.send('dictation:refined:' + nonce + ':' +
 ///   JSON.stringify(refined))` — `JSON.stringify("")` on any failure or
@@ -451,7 +451,7 @@ pub fn native_reflect_js(nonce: u64, text: &str) -> String {
   function answer(t) {{
     try {{ dioxus.send('dictation:refined:' + nonce + ':' + JSON.stringify(t)); }} catch (e) {{}}
   }}
-  try {{ window.__unpeelNativeReflect(nonce, {arg}); }}
+  try {{ window.__supercliNativeReflect(nonce, {arg}); }}
   catch (e) {{ answer(""); }}
   setTimeout(function() {{ answer(""); }}, {REFINE_TIMEOUT_MS});
 }})()"#,
@@ -472,7 +472,7 @@ pub fn DictationView(settings: DictationSettings, on_commit: EventHandler<String
     let ctl = use_signal(|| None::<dioxus::document::Eval>);
     // Native iOS shell presence, probed once at mount. When the shell
     // drives speech, the Web Speech backend stays uninstalled (it would
-    // double-drive the mic) and commands route to `__unpeelNativeSpeech`.
+    // double-drive the mic) and commands route to `__supercliNativeSpeech`.
     let is_native = use_signal(|| false);
     let has_reflect = use_signal(|| false);
 
@@ -964,11 +964,11 @@ mod tests {
     fn native_command_builder_allows_only_known_commands() {
         assert_eq!(
             native_speech_cmd_js("start").as_deref(),
-            Some("window.__unpeelNativeSpeech(\"start\");")
+            Some("window.__supercliNativeSpeech(\"start\");")
         );
         assert_eq!(
             native_speech_cmd_js("cancel").as_deref(),
-            Some("window.__unpeelNativeSpeech(\"cancel\");")
+            Some("window.__supercliNativeSpeech(\"cancel\");")
         );
         assert_eq!(native_speech_cmd_js("start\");evil();//"), None);
         assert_eq!(native_speech_cmd_js(""), None);
@@ -982,7 +982,7 @@ mod tests {
         // can't break out of it. (No </ escaping needed: this goes to
         // evaluateJavaScript, not into an HTML <script> block.)
         assert!(
-            js.contains(r#"window.__unpeelNativeReflect(nonce, "say \"hi\" </script>")"#),
+            js.contains(r#"window.__supercliNativeReflect(nonce, "say \"hi\" </script>")"#),
             "escaped:\n{js}"
         );
         assert!(

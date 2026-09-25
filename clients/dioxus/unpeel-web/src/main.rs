@@ -1,7 +1,7 @@
-//! `unpeel-web`: Dioxus web target for the Unpeel clients.
+//! `supercli-web`: Dioxus web target for the Supercli clients.
 //!
 //! This is a **component preview**, not a functional Controller: it renders
-//! the real `unpeel-ui` component library (pairing, session list, terminal,
+//! the real `supercli-ui` component library (pairing, session list, terminal,
 //! find bar, toasts) in a browser against in-memory demo state. No network,
 //! no threads, no filesystem, no keychain — everything the browser build
 //! cannot do is replaced with scripted demo data, and the banner says so.
@@ -16,11 +16,11 @@
 
 use dioxus::document::document;
 use dioxus::prelude::*;
-use unpeel_client::dto::{
+use supercli_client::dto::{
     ActivityState, PendingApproval, SessionCapabilities, SessionStatus, SessionSummary,
 };
-use unpeel_client::types::PairedHostRecord;
-use unpeel_ui::{
+use supercli_client::types::PairedHostRecord;
+use supercli_ui::{
     AnnotationMode, AnnotationResult, ApprovalCard, BrowserGalleryPanel, Composer, DictationView,
     FindBar, FindState, GalleryDetailView, PairingStatus, PairingView, SessionList, TerminalModel,
     TerminalView, ToastCenter, ToastOverlay, APP_CSS,
@@ -109,7 +109,7 @@ fn demo_sessions() -> Vec<SessionSummary> {
             runtime_launch_pending: false,
             provider_id: Some("codex".to_string()),
             title: "harness build".to_string(),
-            command: "unpeel".to_string(),
+            command: "supercli".to_string(),
             created_at_unix_ms: 1_786_999_100_000,
             updated_at_unix_ms: None,
             status: SessionStatus::Running,
@@ -133,7 +133,7 @@ fn demo_sessions() -> Vec<SessionSummary> {
             runtime_launch_pending: false,
             provider_id: Some("claude".to_string()),
             title: "docs pass".to_string(),
-            command: "unpeel".to_string(),
+            command: "supercli".to_string(),
             created_at_unix_ms: 1_786_999_000_000,
             updated_at_unix_ms: None,
             status: SessionStatus::Running,
@@ -155,7 +155,7 @@ fn demo_sessions() -> Vec<SessionSummary> {
 
 /// Scripted PTY bytes: a fake shell session so the terminal demo has
 /// styled content (bold prompt, colored output) without a Host.
-const DEMO_SCRIPT: &[u8] = b"\x1b[1m$\x1b[0m unpeel status\r\n\x1b[32mhost:\x1b[0m demo-mac-1 (Direct)\r\nsessions: 2 running, 1 idle\r\n\x1b[1m$\x1b[0m _";
+const DEMO_SCRIPT: &[u8] = b"\x1b[1m$\x1b[0m supercli status\r\n\x1b[32mhost:\x1b[0m demo-mac-1 (Direct)\r\nsessions: 2 running, 1 idle\r\n\x1b[1m$\x1b[0m _";
 
 #[component]
 fn App() -> Element {
@@ -232,7 +232,7 @@ fn PairingDemo(on_paired: EventHandler<()>) -> Element {
                 // Demo pairing: accept the demo code, fail anything else.
                 // On success the demo transitions to the Sessions tab, like
                 // the real mobile launcher does after pairing.
-                if code.trim() == "UNPEEL:1:demo" {
+                if code.trim() == "SUPERCLI:1:demo" {
                     status.set(PairingStatus::Working);
                     on_paired.call(());
                 } else {
@@ -291,8 +291,8 @@ fn TerminalDemo(session_id: String) -> Element {
 #[component]
 fn GalleryDemo() -> Element {
     let mut entries = use_signal(|| {
-        vec![unpeel_ui::GalleryEntry {
-            meta: unpeel_client::ArtifactMeta {
+        vec![supercli_ui::GalleryEntry {
+            meta: supercli_client::ArtifactMeta {
                 kind: "screenshot".to_string(),
                 name: "demo-screenshot.png".to_string(),
                 size: 1024,
@@ -301,7 +301,7 @@ fn GalleryDemo() -> Element {
             preview_url: None,
         }]
     });
-    let mut opened = use_signal(|| None::<unpeel_ui::GalleryEntry>);
+    let mut opened = use_signal(|| None::<supercli_ui::GalleryEntry>);
     let mut editor = use_signal(|| None::<AnnotationMode>);
     let mut last_annotation = use_signal(|| None::<String>);
 
@@ -319,7 +319,7 @@ fn GalleryDemo() -> Element {
                     editor.set(None);
                 },
                 on_delete: {
-                    move |e: unpeel_ui::GalleryEntry| {
+                    move |e: supercli_ui::GalleryEntry| {
                         let name = e.meta.name.clone();
                         entries.write().retain(|x| x.meta.name != name);
                         opened.set(None);
@@ -346,10 +346,10 @@ fn GalleryDemo() -> Element {
                 entries: entries(),
                 loading: false,
                 on_refresh: move |_| {},
-                on_open: move |entry: unpeel_ui::GalleryEntry| {
+                on_open: move |entry: supercli_ui::GalleryEntry| {
                     opened.set(Some(entry));
                 },
-                on_delete: move |entry: unpeel_ui::GalleryEntry| {
+                on_delete: move |entry: supercli_ui::GalleryEntry| {
                     let name = entry.meta.name.clone();
                     entries.write().retain(|e| e.meta.name != name);
                 },
@@ -357,8 +357,8 @@ fn GalleryDemo() -> Element {
                 on_screenshot: move |_| {
                     // Demo: screenshot adds a new entry (mock Host capture).
                     let n = entries.read().len() + 1;
-                    entries.write().push(unpeel_ui::GalleryEntry {
-                        meta: unpeel_client::ArtifactMeta {
+                    entries.write().push(supercli_ui::GalleryEntry {
+                        meta: supercli_client::ArtifactMeta {
                             kind: "screenshot".to_string(),
                             name: format!("demo-screenshot-{n}.png"),
                             size: 2048,
@@ -535,7 +535,7 @@ fn DictationDemo() -> Element {
                 "the toggle exercises the control plane (start/stop) without a mic."
             }
             DictationView {
-                settings: unpeel_ui::DictationSettings::default(),
+                settings: supercli_ui::DictationSettings::default(),
                 on_commit: move |text: String| committed.set(text),
             }
             if !committed.read().is_empty() {

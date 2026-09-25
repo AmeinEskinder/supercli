@@ -1,6 +1,6 @@
 //! Session-attached connector tools, consumed by the unified MCP server.
 //!
-//! `unpeel connector enable <name> --session <id>` writes the attachment
+//! `supercli connector enable <name> --session <id>` writes the attachment
 //! record (`<session-dir>/connectors.json`); this module is the Host side
 //! that consumes it. For every attached connector it opens a link — the
 //! connector's MCP stdio process (one per MCP server process) or its
@@ -61,7 +61,7 @@ const SPAWN_TIMEOUT: Duration = Duration::from_secs(10);
 const TOKEN_RECHECK_INTERVAL: Duration = Duration::from_secs(60);
 /// Per-session audit log, append-only JSONL.
 const AUDIT_FILE: &str = "connectors-audit.jsonl";
-/// Approval hub route (served by `unpeel serve`'s hook listener, like the
+/// Approval hub route (served by `supercli serve`'s hook listener, like the
 /// other `/mcp/approve-*` routes).
 const APPROVE_ROUTE: &str = "/mcp/approve-connector";
 
@@ -132,10 +132,10 @@ fn resolve_token(
     supercli_connector::resolve_connector_token(manifest, dir, store, name, SPAWN_TIMEOUT).map_err(
         |e| match e {
             OAuthError::NotConnected => {
-                format!("{name} is not connected — run `unpeel connector connect {name}`")
+                format!("{name} is not connected — run `supercli connector connect {name}`")
             }
             _ => format!(
-                "{name}: token unavailable ({e}) — reconnect with `unpeel connector connect {name}`"
+                "{name}: token unavailable ({e}) — reconnect with `supercli connector connect {name}`"
             ),
         },
     )
@@ -243,7 +243,7 @@ impl std::error::Error for ToolCallFailure {}
 ///
 /// Tool calls usually execute in other processes (the scheduled daemon,
 /// the MCP server), which cannot reach an in-process listener. For those,
-/// unpeel-serve's session-event bus reconciles new outcome records from
+/// supercli-serve's session-event bus reconciles new outcome records from
 /// the durable `action-reviews.jsonl` into the same events on every
 /// `/mobile/events` poll — the log is the cross-process authority, the
 /// listener is the in-process fast path.
@@ -277,7 +277,7 @@ pub struct SessionConnectors {
     /// on — the tool then provably does not execute.
     lease_fence: Option<crate::schedule_leases::LeaseFence>,
     /// Optional listener notified after every terminal attempt outcome is
-    /// durably recorded. The Host (unpeel-serve) installs this to emit
+    /// durably recorded. The Host (supercli-serve) installs this to emit
     /// `tool.executed` / `tool.ambiguous` session events; the listener
     /// only fires after the durable record exists, so events are never
     /// emitted first.
@@ -1222,7 +1222,7 @@ fn request_tool_approval(
                 declined: false,
                 message: format!(
                     "Tool '{tool}' (connector '{connector}') needs your approval, but the approval \
-                     prompt did not complete: {error}. If no Unpeel frontend is running, start one; \
+                     prompt did not complete: {error}. If no Supercli frontend is running, start one; \
                      otherwise answer the prompt and retry."
                 ),
             })
@@ -1476,7 +1476,7 @@ provides = ["county.echo"]
             let guard = FIXTURE_LOCK.lock().unwrap();
             let n = FIXTURE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let dir = std::env::temp_dir()
-                .join(format!("unpeel-core-conn-test-{}-{n}", std::process::id()));
+                .join(format!("supercli-core-conn-test-{}-{n}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             Self::write_connector(&dir, "asky", MANIFEST_ASK, "asky.echo");
@@ -2264,7 +2264,7 @@ provides = ["oauthy.echo"]
         let fx = Fixture::new();
         fx.attach("allowy", HashMap::new());
         let lease_home =
-            std::env::temp_dir().join(format!("unpeel-fence-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-fence-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&lease_home);
         std::fs::create_dir_all(&lease_home).unwrap();
 
@@ -2339,7 +2339,7 @@ provides = ["oauthy.echo"]
         let fx = Fixture::new();
         fx.attach("allowy", HashMap::new());
         let lease_home =
-            std::env::temp_dir().join(format!("unpeel-neverran-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-neverran-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&lease_home);
         std::fs::create_dir_all(&lease_home).unwrap();
 

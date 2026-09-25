@@ -1,4 +1,4 @@
-//! The Controller side of Unpeel Remote: one WebSocket to the relay
+//! The Controller side of Supercli Remote: one WebSocket to the relay
 //! carrying end-to-end encrypted `/mobile/*` request/response frames.
 //!
 //! Blocking twin of `RemoteRelayConnection.swift`:
@@ -314,7 +314,7 @@ impl RelayConnection {
             .into_client_request()
             .map_err(|e| transport_not_sent(format!("bad relay URL: {e}")))?;
         let protocol_value = format!(
-            "unpeel-relay, unpeel-relay-token.{}",
+            "supercli-relay, supercli-relay-token.{}",
             credentials.relay_token
         );
         request.headers_mut().insert(

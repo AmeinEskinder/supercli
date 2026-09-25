@@ -1,6 +1,6 @@
 //! Ratatui master/detail rendering.
 //!
-//! The default surface follows the shared Unpeel TUI list language: compact,
+//! The default surface follows the shared Supercli TUI list language: compact,
 //! borderless, full-width selected rows with a two-cell content inset. Enter
 //! opens one provider's detailed meters and history without changing that
 //! selected-list vocabulary.
@@ -25,10 +25,10 @@ use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
 use std::path::Path;
 #[cfg(test)]
-use unpeel_app_kit::SelectableRow;
+use supercli_app_kit::SelectableRow;
 #[cfg(test)]
-use unpeel_app_kit::VerticalScrollbar;
-use unpeel_app_kit::{
+use supercli_app_kit::VerticalScrollbar;
+use supercli_app_kit::{
     Badge, FooterAction, Gauge, InputField, KitTheme, List, ListItem, ListItemBand,
     ListItemEmphasis, ListItemSlot, ListItemTone, ListPageBehavior, ListRowLayout, ListState, Page,
     PageTheme, Sparkline, TerminalPointerState, Toggle, UiComponent, UiNode,
@@ -1557,7 +1557,7 @@ mod tests {
                     },
                 ],
                 project_usage: vec![crate::sources::ProjectUsage {
-                    path: "/work/unpeel".into(),
+                    path: "/work/supercli".into(),
                     monthly_tokens: vec![crate::sources::MonthUsage {
                         year: 2026,
                         month: 8,
@@ -1600,7 +1600,7 @@ mod tests {
         for expected in [
             "‹  Total usage",
             "This month",
-            "unpeel",
+            "supercli",
             "1,000,000",
             "August 2026 · current",
             "1,234,567",
@@ -1617,10 +1617,10 @@ mod tests {
             providers: vec![Provider {
                 kind: ProviderKind::CurrentProject,
                 name: "Current project".into(),
-                badge: "unpeel".into(),
+                badge: "supercli".into(),
                 present: true,
                 metrics: vec![Metric::new("This month", "42k tokens".into(), Level::Ok)],
-                detail: vec![("path".into(), "/work/unpeel".into())],
+                detail: vec![("path".into(), "/work/supercli".into())],
                 as_of: None,
                 alert: None,
                 status_fragment: None,
@@ -1663,7 +1663,7 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(screen.contains("Current project · Unpeel"), "{screen}");
+        assert!(screen.contains("Current project · Supercli"), "{screen}");
         assert!(screen.contains("August 2026 · current"), "{screen}");
         assert!(screen.contains("42,000"), "{screen}");
         assert!(
@@ -2236,7 +2236,7 @@ mod tests {
     }
 
     #[test]
-    fn alert_controls_are_absent_outside_unpeel() {
+    fn alert_controls_are_absent_outside_supercli() {
         let (screen, rendered, _) = render_state(72, 24, 0, false, 0, true);
         assert!(rendered.alert_option_hits.is_empty());
         assert!(!screen.contains("alerts off"));

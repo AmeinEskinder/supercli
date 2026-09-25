@@ -1,4 +1,4 @@
-//! `unpeel connector new`: scaffold a new connector directory.
+//! `supercli connector new`: scaffold a new connector directory.
 //!
 //! Generates a valid `connector.toml` (validated through the real
 //! manifest parser before it is returned) plus a stub MCP server for
@@ -286,7 +286,7 @@ mod tests {
     fn scaffolded_stub_answers_mcp() {
         let s = scaffold("demo", ScaffoldOptions::default()).unwrap();
         let dir =
-            std::env::temp_dir().join(format!("unpeel-conn-scaffold-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-conn-scaffold-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("connector");

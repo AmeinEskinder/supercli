@@ -4,7 +4,7 @@
 //! shared fixtures in `protocol/` all agree on these exact strings. Renaming a
 //! kind, capability, event, or value tag breaks cross-renderer Apps silently,
 //! so any change here must be a deliberate, reviewed diff that also updates
-//! `protocol/unpeel-ui-v1.schema.json`, `protocol/unpeel-ui-v1.ndjson`,
+//! `protocol/supercli-ui-v1.schema.json`, `protocol/supercli-ui-v1.ndjson`,
 //! `web/src/protocol.ts`, and the SwiftUI protocol models.
 //!
 //! The component match below is intentionally exhaustive with no wildcard arm:
@@ -12,7 +12,7 @@
 //! and capability are pinned here too.
 #![cfg(feature = "ui-bridge")]
 
-use unpeel_app_kit::{
+use supercli_app_kit::{
     CanvasPage, List, MarkdownEditorSpec, MediaPixelSize, MediaSource, MediaSpec, Page,
     SemanticMenu, SurfaceReference, SurfaceSpec, TextBoxSpec, TextEdit, TextRange, TextSelection,
     Tree, UiComponent, UiEventKind, UiEventValue,

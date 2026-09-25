@@ -14,7 +14,7 @@ tint = "#7C95FF"
 spinner_tint = "#7C95FF"
 icon = "pi"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 

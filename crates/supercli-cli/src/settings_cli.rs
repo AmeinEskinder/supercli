@@ -9,13 +9,13 @@ use serde_json::{Map, Value};
 
 use supercli_core::state::{BrowserAccess, ComputerAccess, McpNonChildWriteAccess};
 
-const SETTINGS_USAGE: &str = "usage: unpeel settings list|get <key>|set <key> <value> [--json]";
+const SETTINGS_USAGE: &str = "usage: supercli settings list|get <key>|set <key> <value> [--json]";
 
 pub const HELP: &str = "\
-usage: unpeel settings list [--json]
-       unpeel settings get <key> [--json]
-       unpeel settings set <key> <value> [--json]
-       unpeel settings openers set <selector> <editor|system|app:id> [--json]
+usage: supercli settings list [--json]
+       supercli settings get <key> [--json]
+       supercli settings set <key> <value> [--json]
+       supercli settings openers set <selector> <editor|system|app:id> [--json]
 
 Script this workspace's allowlisted settings:
   experimental_features.sessions_mcp   true | false
@@ -372,7 +372,7 @@ pub fn run(args: &[String], json: bool) -> Result<(), String> {
 fn set_opener(args: &[String], json_output: bool) -> Result<(), String> {
     if args.len() != 3 || args[0] != "set" {
         return Err(
-            "usage: unpeel settings openers set <file:media-type|resource:kind> <editor|system|app:id>".into(),
+            "usage: supercli settings openers set <file:media-type|resource:kind> <editor|system|app:id>".into(),
         );
     }
     let (status, body) = supercli_core::controller_host::opener_response(

@@ -75,7 +75,7 @@ impl Drop for FakeNativeFrontend {
 }
 
 fn isolated_home() -> PathBuf {
-    std::env::temp_dir().join(format!("unpeel-serve-test-{}", uuid::Uuid::new_v4()))
+    std::env::temp_dir().join(format!("supercli-serve-test-{}", uuid::Uuid::new_v4()))
 }
 
 fn reserve_port() -> u16 {
@@ -100,7 +100,7 @@ fn wait_until(timeout: Duration, mut condition: impl FnMut() -> bool) -> bool {
 /// The pin a paired phone holds: the Host certificate under this workspace's
 /// `remote/tls`. Generating it here first means serve loads this exact file.
 fn host_certificate_fingerprint(home: &Path) -> String {
-    unpeel_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
+    supercli_core::remote_server::ensure_tls_material_in(&home.join("remote").join("tls"))
         .expect("workspace Host certificate")
         .fingerprint
 }
@@ -108,8 +108,8 @@ fn host_certificate_fingerprint(home: &Path) -> String {
 /// A bearer request over the direct `/mobile` endpoint: TLS, pinned to the
 /// Host certificate, the way the phone speaks to it.
 fn mobile_request(home: &Path, port: u16, token: &str) -> (u16, serde_json::Value) {
-    use unpeel_core::rustls;
-    let config = Arc::new(unpeel_core::remote_attach::pinned_client_config(Some(
+    use supercli_core::rustls;
+    let config = Arc::new(supercli_core::remote_attach::pinned_client_config(Some(
         host_certificate_fingerprint(home),
     )));
     let name = rustls::pki_types::ServerName::try_from("localhost").unwrap();
@@ -172,7 +172,7 @@ fn write_pairing_fixture(home: &Path, port: u16, token: &str) {
             "id": "serve-test-phone",
             "name": "Serve Test Phone",
             "platform": "iOS",
-            "tokenHash": unpeel_serve::pairing::sha256_hex(token),
+            "tokenHash": supercli_serve::pairing::sha256_hex(token),
             "pairedAtUnixMs": 1,
             "relayAllowed": false
         }]
@@ -191,13 +191,13 @@ fn serve_runs_the_host_protocol_and_holds_one_workspace_lease() {
     let token = "serve-command-controller-token";
     write_pairing_fixture(&home, port, token);
 
-    let child = Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    let child = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .arg("serve")
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("start unpeel serve");
+        .expect("start supercli serve");
     let mut process = ServeProcess {
         child,
         home: home.clone(),
@@ -243,25 +243,25 @@ fn serve_runs_the_host_protocol_and_holds_one_workspace_lease() {
     assert_eq!(status, 426, "{body}");
     assert_eq!(body["error"], "use https");
 
-    let duplicate = Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    let duplicate = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .arg("serve")
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .output()
         .expect("run duplicate serve");
     assert_eq!(duplicate.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&duplicate.stderr).contains("already serving this workspace"));
 
-    let pairing_code = unpeel_serve::local_gateway::begin_pairing(&home, None, None)
+    let pairing_code = supercli_serve::local_gateway::begin_pairing(&home, None, None)
         .expect("the running Host opens pairing without a second listener");
-    assert!(pairing_code.starts_with("UNPEEL:1:"));
+    assert!(pairing_code.starts_with("SUPERCLI:1:"));
     assert_eq!(
-        unpeel_serve::local_gateway::pairing_status(&home).unwrap(),
-        unpeel_serve::local_gateway::PairingStatus::Active
+        supercli_serve::local_gateway::pairing_status(&home).unwrap(),
+        supercli_serve::local_gateway::PairingStatus::Active
     );
-    unpeel_serve::local_gateway::cancel_pairing(&home).unwrap();
+    supercli_serve::local_gateway::cancel_pairing(&home).unwrap();
     assert_eq!(
-        unpeel_serve::local_gateway::pairing_status(&home).unwrap(),
-        unpeel_serve::local_gateway::PairingStatus::Closed
+        supercli_serve::local_gateway::pairing_status(&home).unwrap(),
+        supercli_serve::local_gateway::PairingStatus::Closed
     );
 
     let initial_status: serde_json::Value =
@@ -316,13 +316,13 @@ fn serve_runs_the_host_protocol_and_holds_one_workspace_lease() {
         "serve left a live-looking status file"
     );
 
-    process.child = Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    process.child = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .arg("serve")
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("restart unpeel serve");
+        .expect("restart supercli serve");
     assert!(
         wait_until(Duration::from_secs(10), || {
             std::fs::read(&status_path)

@@ -132,7 +132,7 @@ pub struct HostProtocolDescriptor {
 /// there has to be a published App release target for its platform
 /// (`app_installer::release_target()`), which is a Host-side fact.
 pub const APPS_INSTALL_CAPABILITY: &str = "apps.install";
-/// Install one runtime's Unpeel integration (hooks + MCP registration) on
+/// Install one runtime's Supercli integration (hooks + MCP registration) on
 /// the Host: `POST /mobile/integrations/install` with `{"runtimeID": …}`.
 pub const INTEGRATIONS_INSTALL_CAPABILITY: &str = "integrations.install";
 
@@ -146,7 +146,7 @@ impl HostProtocolDescriptor {
         )
     }
 
-    /// The descriptor a headless (`unpeel serve`) Host advertises in bootstrap.
+    /// The descriptor a headless (`supercli serve`) Host advertises in bootstrap.
     #[cfg(feature = "native-host")]
     pub fn headless_v1() -> Self {
         Self::advertised_v1(

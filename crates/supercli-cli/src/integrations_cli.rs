@@ -1,22 +1,22 @@
-//! `unpeel integrations` — install Unpeel's integration with each agent CLI.
+//! `supercli integrations` — install Supercli's integration with each agent CLI.
 //!
 //! A preset launches its command in your login shell exactly as typed; the
 //! integration is what makes that agent report busy/idle/attention through
-//! hooks and reach the unified `unpeel` MCP server. It is installed once per
+//! hooks and reach the unified `supercli` MCP server. It is installed once per
 //! Host, explicitly, into the provider's own global configuration, and kept
 //! current by the Host after upgrades.
 
 use supercli_core::integrations::install;
 
 pub const HELP: &str = "\
-unpeel integrations — Unpeel's integration with each agent CLI
+supercli integrations — Supercli's integration with each agent CLI
 
-  unpeel integrations [list] [--json]
-  unpeel integrations install <runtime> [--project DIR] [--json]
-  unpeel integrations install --all [--json]
+  supercli integrations [list] [--json]
+  supercli integrations install <runtime> [--project DIR] [--json]
+  supercli integrations install --all [--json]
 
 An integration registers the runtime's lifecycle hooks and the unified
-`unpeel` MCP server in that CLI's own global configuration (for example
+`supercli` MCP server in that CLI's own global configuration (for example
 ~/.claude/settings.json and ~/.claude.json for Claude, ~/.codex/hooks.json and
 ~/.codex/config.toml for Codex). Launching a preset never installs anything:
 a command runs in your login shell as typed. Once installed, the Host keeps

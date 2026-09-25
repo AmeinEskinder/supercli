@@ -1,9 +1,9 @@
 //! Nearby-Host discovery (mDNS), ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/NearbyHostBrowser.swift`.
+//! `clients/native/SupercliNative/Sources/SupercliNative/NearbyHostBrowser.swift`.
 //!
 //! Bonjour is only a hint: choosing a row never grants access, and the
 //! sealed one-time pairing code still authenticates the Host identity and
-//! endpoint. The service type is `_unpeel-remote._tcp.local`; the Host
+//! endpoint. The service type is `_supercli-remote._tcp.local`; the Host
 //! identity comes from the TXT record's `macid` key.
 //!
 //! mDNS itself is implemented here over `std::net::UdpSocket` (multicast
@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, UdpSocket};
 use std::time::{Duration, Instant};
 
-/// The mDNS service type Unpeel Hosts advertise.
-pub const MDNS_SERVICE_TYPE: &str = "_unpeel-remote._tcp.local";
+/// The mDNS service type Supercli Hosts advertise.
+pub const MDNS_SERVICE_TYPE: &str = "_supercli-remote._tcp.local";
 /// mDNS multicast group and port.
 pub const MDNS_MULTICAST: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 pub const MDNS_PORT: u16 = 5353;
@@ -55,7 +55,7 @@ pub mod catalog {
             host_id,
             name: if name.is_empty() {
                 {
-                    crate::i18n::t("discovery.unpeel_host")
+                    crate::i18n::t("discovery.supercli_host")
                 }
             } else {
                 name.to_string()
@@ -114,7 +114,7 @@ impl std::fmt::Display for DiscoveryError {
     }
 }
 
-/// One blocking browse pass: send a PTR query for the Unpeel service type
+/// One blocking browse pass: send a PTR query for the Supercli service type
 /// and collect answers until `timeout` elapses. Returns raw candidates;
 /// callers merge with [`catalog::merging`] (excluding their own Host id).
 pub fn browse_once(timeout: Duration) -> Result<Vec<NearbyHostCandidate>, DiscoveryError> {
@@ -152,7 +152,7 @@ pub fn browse_once(timeout: Duration) -> Result<Vec<NearbyHostCandidate>, Discov
         .into_iter()
         .filter_map(|(instance, txt)| {
             let name = instance
-                .strip_suffix("._unpeel-remote._tcp.local")
+                .strip_suffix("._supercli-remote._tcp.local")
                 .unwrap_or(&instance);
             catalog::candidate(name, &txt)
         })
@@ -363,7 +363,7 @@ pub mod component {
                     DiscoveryState::Idle => rsx! {},
                 }
                 if candidates.is_empty() {
-                    p { class: "discovery-empty", "No Unpeel Hosts found nearby. They appear here when the Host app advertises itself on this network." }
+                    p { class: "discovery-empty", "No Supercli Hosts found nearby. They appear here when the Host app advertises itself on this network." }
                 } else {
                     ul { class: "discovery-list",
                         for c in candidates {
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn candidate_blank_name_falls_back() {
         let c = candidate("   ", &txt(&[("macid", "x")]).clone()).unwrap();
-        assert_eq!(c.name, "Unpeel Host");
+        assert_eq!(c.name, "Supercli Host");
     }
 
     #[test]
@@ -471,16 +471,16 @@ mod tests {
         p.extend_from_slice(&[0x00, 0x00]); // qdcount
         p.extend_from_slice(&[0x00, 0x02]); // ancount = 2
         p.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]); // ns/ar
-                                                        // PTR _unpeel-remote._tcp.local -> MyMac._unpeel-remote._tcp.local
+                                                        // PTR _supercli-remote._tcp.local -> MyMac._supercli-remote._tcp.local
         encode_name(&mut p, MDNS_SERVICE_TYPE);
         p.extend_from_slice(&[0x00, 0x0c, 0x00, 0x01]); // PTR/IN
         p.extend_from_slice(&[0x00, 0x00, 0x00, 0x78]); // ttl
         let mut target = Vec::new();
-        encode_name(&mut target, "MyMac._unpeel-remote._tcp.local");
+        encode_name(&mut target, "MyMac._supercli-remote._tcp.local");
         p.extend_from_slice(&(target.len() as u16).to_be_bytes());
         p.extend_from_slice(&target);
-        // TXT MyMac._unpeel-remote._tcp.local: macid=host-1
-        encode_name(&mut p, "MyMac._unpeel-remote._tcp.local");
+        // TXT MyMac._supercli-remote._tcp.local: macid=host-1
+        encode_name(&mut p, "MyMac._supercli-remote._tcp.local");
         p.extend_from_slice(&[0x00, 0x10, 0x00, 0x01]); // TXT/IN
         p.extend_from_slice(&[0x00, 0x00, 0x00, 0x78]); // ttl
         let kv = b"macid=host-1";
@@ -495,10 +495,10 @@ mod tests {
         let parsed = parse_mdns_response(&fake_response());
         assert_eq!(parsed.len(), 1);
         let (instance, txt) = &parsed[0];
-        assert_eq!(instance, "MyMac._unpeel-remote._tcp.local");
+        assert_eq!(instance, "MyMac._supercli-remote._tcp.local");
         assert_eq!(txt.get("macid").map(String::as_str), Some("host-1"));
         let c = candidate(
-            instance.strip_suffix("._unpeel-remote._tcp.local").unwrap(),
+            instance.strip_suffix("._supercli-remote._tcp.local").unwrap(),
             txt,
         )
         .unwrap();
@@ -525,16 +525,16 @@ mod tests {
         p.extend_from_slice(&[0x00, 0x01]); // ancount = 1 (PTR)
         p.extend_from_slice(&[0x00, 0x00]); // nscount
         p.extend_from_slice(&[0x00, 0x01]); // arcount = 1 (TXT)
-                                            // PTR _unpeel-remote._tcp.local -> MyMac._unpeel-remote._tcp.local
+                                            // PTR _supercli-remote._tcp.local -> MyMac._supercli-remote._tcp.local
         encode_name(&mut p, MDNS_SERVICE_TYPE);
         p.extend_from_slice(&[0x00, 0x0c, 0x00, 0x01]); // PTR/IN
         p.extend_from_slice(&[0x00, 0x00, 0x00, 0x78]); // ttl
         let mut target = Vec::new();
-        encode_name(&mut target, "MyMac._unpeel-remote._tcp.local");
+        encode_name(&mut target, "MyMac._supercli-remote._tcp.local");
         p.extend_from_slice(&(target.len() as u16).to_be_bytes());
         p.extend_from_slice(&target);
         // TXT in the additional section.
-        encode_name(&mut p, "MyMac._unpeel-remote._tcp.local");
+        encode_name(&mut p, "MyMac._supercli-remote._tcp.local");
         p.extend_from_slice(&[0x00, 0x10, 0x00, 0x01]); // TXT/IN
         p.extend_from_slice(&[0x00, 0x00, 0x00, 0x78]); // ttl
         let kv = b"macid=host-9";
@@ -545,7 +545,7 @@ mod tests {
         let parsed = parse_mdns_response(&p);
         assert_eq!(parsed.len(), 1);
         let (instance, txt) = &parsed[0];
-        assert_eq!(instance, "MyMac._unpeel-remote._tcp.local");
+        assert_eq!(instance, "MyMac._supercli-remote._tcp.local");
         assert_eq!(txt.get("macid").map(String::as_str), Some("host-9"));
     }
 }

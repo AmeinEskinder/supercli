@@ -242,7 +242,7 @@ fn spawn_punch_worker(
     cancel: Arc<AtomicBool>,
 ) {
     let _ = std::thread::Builder::new()
-        .name("unpeel-direct-punch".into())
+        .name("supercli-direct-punch".into())
         .spawn(move || {
             let mut punch = PunchSession::new(
                 key,

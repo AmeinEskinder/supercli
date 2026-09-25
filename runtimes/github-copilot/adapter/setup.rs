@@ -34,11 +34,11 @@ pub fn prepare_copilot_project_hooks(cwd: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialize Copilot hook config: {e}"))?;
     write_project_file_no_symlinks(
         Path::new(cwd),
-        Path::new(".github/hooks/unpeel-notify.json"),
+        Path::new(".github/hooks/supercli-notify.json"),
         format!("{serialized}\n").as_bytes(),
     )?;
 
-    ensure_project_exclude_entry(cwd, ".github/hooks/unpeel-notify.json");
+    ensure_project_exclude_entry(cwd, ".github/hooks/supercli-notify.json");
 
     Ok(())
 }

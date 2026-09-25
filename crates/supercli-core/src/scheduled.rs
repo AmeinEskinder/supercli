@@ -44,7 +44,7 @@
 //! with backoff, one [`RunRecord`] appended per trigger), and the
 //! tick-based [`Scheduler`] daemon that arms specs from
 //! `<SUPERCLI_HOME>/schedules.json` and fires due triggers. Drive schedules
-//! with `unpeel schedule daemon` (or `unpeel schedule run-once` for one
+//! with `supercli schedule daemon` (or `supercli schedule run-once` for one
 //! manual trigger). Do NOT drive schedules from system cron: single-flight
 //! is enforced in-process by the daemon's [`RunGuard`], so a second driver
 //! would break the no-overlap guarantee.
@@ -1416,7 +1416,7 @@ mod tests {
 
     #[test]
     fn append_run_record_appends_lines() {
-        let dir = std::env::temp_dir().join(format!("unpeel-sched-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-sched-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let record = RunRecord {
@@ -1569,7 +1569,7 @@ mod tests {
 
     fn runner_test_dir(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("unpeel-sched-runner-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("supercli-sched-runner-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

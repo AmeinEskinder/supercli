@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use unpeel_client::HostClient;
+use supercli_client::HostClient;
 
 const TOKEN: &str = "auth-token-1";
 

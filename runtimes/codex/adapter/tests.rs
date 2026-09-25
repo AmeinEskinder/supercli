@@ -52,7 +52,7 @@ fn notify_hook_script_preserves_codex_session_and_transcript_for_busy_events() {
         .arg(&payload)
         .env("HOME", hook_env_home("notify-busy"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("SUPERCLI_HOOK_POST_SYNC", "1")
         .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file("notify-busy"))
         .output()
@@ -97,7 +97,7 @@ fn notify_hook_script_preserves_codex_metadata_for_permission_events() {
         .arg(&payload)
         .env("HOME", hook_env_home("notify-permission"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("SUPERCLI_HOOK_POST_SYNC", "1")
         .env(
             "SUPERCLI_HOOK_TRACE_FILE",
@@ -182,7 +182,7 @@ js_repl = false
 
 #[test]
 fn codex_permission_request_hook_entry_matches_all_tools() {
-    let script_path = PathBuf::from("/tmp/unpeel notify's hook");
+    let script_path = PathBuf::from("/tmp/supercli notify's hook");
     let entry = crate::hook_assets::build_codex_hook_entry("PermissionRequest", &script_path);
     assert_eq!(entry.get("matcher").and_then(Value::as_str), Some("*"));
     let command = entry
@@ -227,9 +227,9 @@ fn codex_managed_hook_command_guards_only_a_missing_script() {
 #[test]
 fn codex_hooks_prune_only_stale_supercli_entries() {
     let root = temp_path("codex-hook-cleanup");
-    let current = root.join(".unpeel/hooks/notify-hook.sh");
-    let other_live = root.join("unpeel-dev/hooks/notify-hook.sh");
-    let stale = root.join("unpeel-color-probe-test/hooks/notify-hook.sh");
+    let current = root.join(".supercli/hooks/notify-hook.sh");
+    let other_live = root.join("supercli-dev/hooks/notify-hook.sh");
+    let stale = root.join("supercli-color-probe-test/hooks/notify-hook.sh");
     let foreign = root.join(".clarity/hooks/notify-hook.sh");
     for path in [&current, &other_live] {
         fs::create_dir_all(path.parent().unwrap()).expect("create hook dir");

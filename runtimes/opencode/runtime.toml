@@ -14,7 +14,7 @@ tint = "#8F8787"
 spinner_tint = "#8F8787"
 icon = "opencode"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 icon_template = false
 
@@ -40,7 +40,7 @@ completion_reliable = true
 attention_reliable = true
 
 [integration]
-summary = "Installs the unpeel notify plugin in ~/.config/opencode/plugin."
+summary = "Installs the supercli notify plugin in ~/.config/opencode/plugin."
 
 [[usage.stores]]
 root = ".local/share/opencode/storage/session"

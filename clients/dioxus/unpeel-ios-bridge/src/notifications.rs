@@ -150,7 +150,7 @@ pub(crate) mod apple {
 
     define_class!(
         #[unsafe(super(NSObject))]
-        #[name = "UnpeelNotificationDelegate"]
+        #[name = "SupercliNotificationDelegate"]
         struct NotificationDelegate;
 
         // NSObjectProtocol has default bodies (forwarded via msg_send to the

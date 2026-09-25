@@ -1,4 +1,4 @@
-//! Worker-owned supervision of the `unpeel-host __remote__` TLS/WSS terminal
+//! Worker-owned supervision of the `supercli-host __remote__` TLS/WSS terminal
 //! streamer.
 //!
 //! The workspace worker owns the phone-facing data plane in the client-only
@@ -35,7 +35,7 @@ pub enum StreamerState {
     Restarting,
     /// Crash-loop ceiling reached; waiting for a pairing change.
     GaveUp,
-    /// No `unpeel-host` binary could be resolved or spawned.
+    /// No `supercli-host` binary could be resolved or spawned.
     Unavailable,
 }
 

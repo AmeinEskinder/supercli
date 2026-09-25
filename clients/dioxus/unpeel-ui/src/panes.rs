@@ -1,5 +1,5 @@
 //! The recursive split-tree pane model, ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/PaneLayoutState.swift`
+//! `clients/native/SupercliNative/Sources/SupercliNative/PaneLayoutState.swift`
 //! and `PaneLayoutController.swift`.
 //!
 //! The normative cross-implementation contract — operation semantics, durable

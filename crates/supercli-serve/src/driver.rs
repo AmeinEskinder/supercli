@@ -1,6 +1,6 @@
-//! UI-free Host driver used by `unpeel serve`.
+//! UI-free Host driver used by `supercli serve`.
 //!
-//! Session state remains owned by the individual `unpeel-host` processes and
+//! Session state remains owned by the individual `supercli-host` processes and
 //! their journals. This process only rebuilds the same in-memory model the TUI
 //! used to publish, owns the Controller transports while no native app does,
 //! and can be restarted without affecting a running Session.
@@ -104,7 +104,7 @@ impl fmt::Display for ServeEvent {
                 hook_port,
             } => write!(
                 formatter,
-                "Unpeel Host serving {} (pid {pid}, hook port {hook_port})",
+                "Supercli Host serving {} (pid {pid}, hook port {hook_port})",
                 home.display()
             ),
             Self::DirectStarted { port } => {
@@ -121,8 +121,8 @@ impl fmt::Display for ServeEvent {
             Self::DirectStopped { reason } => {
                 write!(formatter, "Direct Controller endpoint stopped: {reason}")
             }
-            Self::LinkStarted => formatter.write_str("Unpeel Link uplink started"),
-            Self::LinkStopped { reason } => write!(formatter, "Unpeel Link stopped: {reason}"),
+            Self::LinkStarted => formatter.write_str("Supercli Link uplink started"),
+            Self::LinkStopped { reason } => write!(formatter, "Supercli Link stopped: {reason}"),
             Self::Streamer(event) => {
                 use crate::remote_streamer::StreamerEvent;
                 match event {
@@ -227,7 +227,7 @@ impl fmt::Display for ServeEvent {
                 formatter.write_str("canonical Host owns Controller serving")
             }
             Self::Warning(message) => write!(formatter, "warning: {message}"),
-            Self::Stopped => formatter.write_str("Unpeel Host stopped"),
+            Self::Stopped => formatter.write_str("Supercli Host stopped"),
         }
     }
 }
@@ -271,7 +271,7 @@ struct ServeStatus<'a> {
     native_app_owns_controllers: bool,
     platform_capabilities: Vec<String>,
     /// Identity of the serving binary (additive, 0.4.0): a Controller
-    /// bundled with a different `unpeel-host` compares these before
+    /// bundled with a different `supercli-host` compares these before
     /// attaching so an in-place app update never drives a stale worker.
     #[serde(skip_serializing_if = "Option::is_none")]
     executable: Option<PathBuf>,
@@ -305,7 +305,7 @@ impl ServeLease {
             let error = std::io::Error::last_os_error();
             if error.kind() == std::io::ErrorKind::WouldBlock {
                 return Err(format!(
-                    "an Unpeel Host is already serving this workspace ({})",
+                    "an Supercli Host is already serving this workspace ({})",
                     home.display()
                 ));
             }
@@ -403,7 +403,7 @@ impl NativeProbe {
         let latest = Arc::new(Mutex::new(initial));
         let worker_value = Arc::clone(&latest);
         std::thread::Builder::new()
-            .name("unpeel-serve-native-probe".into())
+            .name("supercli-serve-native-probe".into())
             .spawn(move || {
                 let mut published = initial;
                 let mut consecutive_present = match initial {
@@ -506,7 +506,7 @@ fn request_probe(port: u16, path: &str, token: &str) -> ProbeResult {
         return ProbeResult::Unresolved;
     }
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nx-unpeel-auth: {token}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nx-supercli-auth: {token}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
     );
     if stream.write_all(request.as_bytes()).is_err() {
         return ProbeResult::Unresolved;
@@ -536,8 +536,8 @@ fn parse_probe_response(response: &[u8]) -> ProbeResponse {
                 .then(|| value.trim().to_ascii_lowercase())
         })
     };
-    let frontend = header("x-unpeel-frontend");
-    let controller_owner = header("x-unpeel-controller-owner");
+    let frontend = header("x-supercli-frontend");
+    let controller_owner = header("x-supercli-controller-owner");
     ProbeResponse {
         status,
         frontend,
@@ -617,7 +617,7 @@ enum OverlayRefreshResult {
 
 /// Canonical per-workspace Host engine.
 ///
-/// `unpeel serve` owns one of these in a foreground process. Native and other
+/// `supercli serve` owns one of these in a foreground process. Native and other
 /// launchers should drive this same runtime with platform capability adapters
 /// instead of implementing a parallel serving loop.
 pub struct HostRuntime {
@@ -791,7 +791,7 @@ impl HostRuntime {
                 // it for this home at start so the first agent write never
                 // races the file into existence.
                 if let Err(error) = supercli_core::mcp_auth::ensure_auth_token() {
-                    eprintln!("unpeel serve: MCP auth token: {error}");
+                    eprintln!("supercli serve: MCP auth token: {error}");
                 }
                 spawn_integrations_refresh()
             },
@@ -956,7 +956,7 @@ impl HostRuntime {
         let adapters = Arc::clone(&self.platform_adapters);
         let (sender, receiver) = mpsc::channel();
         std::thread::Builder::new()
-            .name("unpeel-serve-overlay".into())
+            .name("supercli-serve-overlay".into())
             .spawn(move || {
                 let result = adapters
                     .call("overlay.snapshot", serde_json::json!({}))
@@ -1028,14 +1028,14 @@ impl HostRuntime {
         }
         let adapters = Arc::clone(&self.platform_adapters);
         let _ = std::thread::Builder::new()
-            .name("unpeel-serve-platform-maintenance".into())
+            .name("supercli-serve-platform-maintenance".into())
             .spawn(move || {
                 let _ = adapters.call(operation, request);
             });
     }
 
     /// Once per rescan: archive Sessions idle past the workspace cutoff. The
-    /// setting is re-read from disk each time so a `unpeel settings set` or
+    /// setting is re-read from disk each time so a `supercli settings set` or
     /// an app edit applies at the next sweep without a restart.
     fn sweep_auto_archive(&mut self, emitted: &mut Vec<ServeEvent>) {
         let now_ms = std::time::SystemTime::now()
@@ -1427,7 +1427,7 @@ impl HostRuntime {
         }
         let flag = Arc::clone(&self.reap_in_flight);
         let spawned = std::thread::Builder::new()
-            .name("unpeel-host-reaper".into())
+            .name("supercli-host-reaper".into())
             .spawn(move || {
                 for reaped in supercli_core::session_host::reap_orphan_session_hosts() {
                     crate::tracelog::trace(
@@ -1716,7 +1716,7 @@ impl HostRuntime {
                 let refresh_mac_id = mac_id.clone();
                 let refresh_key = key.clone();
                 std::thread::Builder::new()
-                    .name("unpeel-serve-link-refresh".into())
+                    .name("supercli-serve-link-refresh".into())
                     .spawn(move || {
                         let result = supercli_core::license::request_relay_entitlement_for_key(
                             &refresh_mac_id,
@@ -1735,7 +1735,7 @@ impl HostRuntime {
                 let (sender, receiver) = mpsc::channel();
                 let refresh_mac_id = mac_id.clone();
                 std::thread::Builder::new()
-                    .name("unpeel-serve-native-link-refresh".into())
+                    .name("supercli-serve-native-link-refresh".into())
                     .spawn(move || {
                         let result = adapters.call(
                             "link.entitlement.refresh",
@@ -1864,7 +1864,7 @@ impl HostRuntime {
             crate::notifications::NotificationRequest {
                 session_id: &row.id,
                 title: if raw_title.is_empty() {
-                    "Unpeel session"
+                    "Supercli session"
                 } else {
                     raw_title
                 },
@@ -1965,13 +1965,13 @@ impl HostRuntime {
 /// worker's start: the result lands in `serve.json.browserEngine` on a later
 /// tick, and a failure is a `browser-engine` trace line plus that status,
 /// never a startup error. The install itself is flock-serialised, so a
-/// concurrent `unpeel browser install` or a sibling workspace worker simply
+/// concurrent `supercli browser install` or a sibling workspace worker simply
 /// waits and re-verifies.
 /// `SUPERCLI_BROWSER_ENGINE_INSTALL=0` (or `false`/`off`/`no`) keeps the
 /// worker from installing the Browser MCP engine at start: no thread, no
 /// network, `serve.json.browserEngine.state = "disabled"`. Benchmarks set it
 /// so the start-up footprint never includes a download; an operator who
-/// manages the engine by hand (or `unpeel browser install`) can too.
+/// manages the engine by hand (or `supercli browser install`) can too.
 fn browser_engine_install_enabled() -> bool {
     !matches!(
         std::env::var("SUPERCLI_BROWSER_ENGINE_INSTALL")
@@ -1994,7 +1994,7 @@ fn spawn_integrations_refresh() -> Option<std::thread::JoinHandle<()>> {
     std::thread::Builder::new()
         .name("integrations-refresh".into())
         .spawn(|| {
-            // Upgrade from 0.6: hooks Unpeel installed at launch time become
+            // Upgrade from 0.6: hooks Supercli installed at launch time become
             // installed integrations, then the refresh below re-runs their
             // installers so the MCP shim gets registered as well.
             for runtime in supercli_core::integrations::install::adopt_legacy_installs() {
@@ -2081,7 +2081,7 @@ pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
 }
 
 /// The Host refuses to serve an invalid config. Same schema and same
-/// message as `unpeel config check`: invalid values are errors, unknown
+/// message as `supercli config check`: invalid values are errors, unknown
 /// keys are warnings and never block. A missing app-state file keeps its
 /// historical behavior (load() tolerates it; the seed path fills it in);
 /// a present-but-unreadable file is refused just like the CLI refuses it.
@@ -2269,8 +2269,8 @@ mod tests {
     #[test]
     fn native_probe_distinguishes_client_only_app_from_compatibility_host() {
         let client = parse_probe_response(
-            b"HTTP/1.1 200 OK\r\nX-Unpeel-Frontend: native\r\n\
-              x-unpeel-controller-owner: Serve\r\nContent-Length: 2\r\n\r\n{}",
+            b"HTTP/1.1 200 OK\r\nX-Supercli-Frontend: native\r\n\
+              x-supercli-controller-owner: Serve\r\nContent-Length: 2\r\n\r\n{}",
         );
         assert_eq!(client.status, 200);
         assert_eq!(client.frontend.as_deref(), Some("native"));
@@ -2278,12 +2278,12 @@ mod tests {
         assert!(response_is_non_owning_frontend(&client));
 
         let compatibility = parse_probe_response(
-            b"HTTP/1.1 200 OK\r\nX-Unpeel-Frontend: native\r\nContent-Length: 2\r\n\r\n{}",
+            b"HTTP/1.1 200 OK\r\nX-Supercli-Frontend: native\r\nContent-Length: 2\r\n\r\n{}",
         );
         assert!(!response_is_non_owning_frontend(&compatibility));
 
         let tui = parse_probe_response(
-            b"HTTP/1.1 200 OK\r\nX-Unpeel-Frontend: tui\r\nContent-Length: 2\r\n\r\n{}",
+            b"HTTP/1.1 200 OK\r\nX-Supercli-Frontend: tui\r\nContent-Length: 2\r\n\r\n{}",
         );
         assert!(response_is_non_owning_frontend(&tui));
     }
@@ -2361,7 +2361,7 @@ mod tests {
             native_app_owns_controllers: false,
             platform_capabilities: Vec::new(),
             executable: Some(PathBuf::from(
-                "/Applications/Unpeel.app/Contents/MacOS/unpeel-host",
+                "/Applications/Supercli.app/Contents/MacOS/supercli-host",
             )),
             host_version: "0.4.0",
             build_id: Some("1788338230.000000001:4242".into()),
@@ -2372,7 +2372,7 @@ mod tests {
         assert_eq!(value["buildId"], "1788338230.000000001:4242");
         assert_eq!(
             value["executable"],
-            "/Applications/Unpeel.app/Contents/MacOS/unpeel-host"
+            "/Applications/Supercli.app/Contents/MacOS/supercli-host"
         );
         assert_eq!(value["terminalStreamer"]["state"], "live");
         assert_eq!(value["terminalStreamer"]["pid"], 4242);

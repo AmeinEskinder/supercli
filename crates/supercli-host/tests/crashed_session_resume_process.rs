@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use unpeel_core::session_host::{
+use supercli_core::session_host::{
     manifest_pid_identity, HostedSessionManifest, HostedSessionState, PidIdentity,
     SESSION_HOST_RESUME_AGENT_PROTOCOL_VERSION,
 };
-use unpeel_core::state::SessionInfo;
+use supercli_core::state::SessionInfo;
 
 fn temp_home() -> PathBuf {
     let nonce = SystemTime::now()
@@ -101,21 +101,21 @@ fn create_stale_socket(home: &Path, session_id: &str) {
 fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected() {
     let home = temp_home();
     fs::create_dir_all(&home).unwrap();
-    let old_unpeel_home = std::env::var_os("UNPEEL_HOME");
+    let old_supercli_home = std::env::var_os("SUPERCLI_HOME");
     let old_home = std::env::var_os("HOME");
     let old_shell = std::env::var_os("SHELL");
-    let old_host_cmd = std::env::var_os("UNPEEL_HOST_CMD");
+    let old_host_cmd = std::env::var_os("SUPERCLI_HOST_CMD");
     unsafe {
-        std::env::set_var("UNPEEL_HOME", &home);
+        std::env::set_var("SUPERCLI_HOME", &home);
         std::env::set_var("HOME", &home);
         std::env::set_var("SHELL", "/bin/bash");
-        std::env::set_var("UNPEEL_HOST_CMD", env!("CARGO_BIN_EXE_unpeel-host"));
+        std::env::set_var("SUPERCLI_HOST_CMD", env!("CARGO_BIN_EXE_supercli-host"));
     }
 
     let healthy_id = "healthy-running";
     create_stale_socket(&home, healthy_id);
-    unpeel_core::session_host::save_manifest(&manifest(healthy_id, std::process::id())).unwrap();
-    let healthy_error = unpeel_core::session_ops::resume_session(healthy_id, None, 80, 24)
+    supercli_core::session_host::save_manifest(&manifest(healthy_id, std::process::id())).unwrap();
+    let healthy_error = supercli_core::session_ops::resume_session(healthy_id, None, 80, 24)
         .expect_err("a healthy running Host must never be replaced");
     assert!(healthy_error.contains("still running"), "{healthy_error}");
     assert!(home.join("app-sessions").join(healthy_id).exists());
@@ -134,14 +134,14 @@ fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected()
         .unwrap();
     let live_manifest = manifest(live_missing_socket_id, live_child.id());
     assert_eq!(manifest_pid_identity(&live_manifest), PidIdentity::Matches);
-    unpeel_core::session_host::save_manifest(&live_manifest).unwrap();
-    assert!(!unpeel_core::session_host::socket_path(live_missing_socket_id).exists());
-    let live_error = unpeel_core::session_ops::resume_session(live_missing_socket_id, None, 80, 24)
+    supercli_core::session_host::save_manifest(&live_manifest).unwrap();
+    assert!(!supercli_core::session_host::socket_path(live_missing_socket_id).exists());
+    let live_error = supercli_core::session_ops::resume_session(live_missing_socket_id, None, 80, 24)
         .expect_err("a matching live child without a socket must not be replaced");
     assert!(live_error.contains("still running"), "{live_error}");
     assert!(live_child.try_wait().unwrap().is_none());
     assert_eq!(
-        unpeel_core::session_host::load_manifest(live_missing_socket_id)
+        supercli_core::session_host::load_manifest(live_missing_socket_id)
             .unwrap()
             .state,
         HostedSessionState::Running
@@ -157,33 +157,33 @@ fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected()
     create_stale_socket(&home, crashed_id);
     // Deliberately impossible live ownership: the stale manifest still says
     // Running, but its recorded child is gone.
-    unpeel_core::session_host::save_manifest(&manifest(crashed_id, i32::MAX as u32)).unwrap();
+    supercli_core::session_host::save_manifest(&manifest(crashed_id, i32::MAX as u32)).unwrap();
     let replacement_id =
-        unpeel_core::session_ops::resume_session(crashed_id, None, 80, 24).unwrap();
+        supercli_core::session_ops::resume_session(crashed_id, None, 80, 24).unwrap();
     assert_ne!(replacement_id, crashed_id);
     assert!(!home.join("app-sessions").join(crashed_id).exists());
     assert!(wait_until(Duration::from_secs(5), || {
-        unpeel_core::session_host::socket_path(&replacement_id).exists()
-            && unpeel_core::session_host::load_manifest(&replacement_id)
+        supercli_core::session_host::socket_path(&replacement_id).exists()
+            && supercli_core::session_host::load_manifest(&replacement_id)
                 .is_some_and(|manifest| manifest.state == HostedSessionState::Running)
     }));
-    let replacement_error = unpeel_core::session_ops::resume_session(&replacement_id, None, 80, 24)
+    let replacement_error = supercli_core::session_ops::resume_session(&replacement_id, None, 80, 24)
         .expect_err("the healthy replacement Host must not be replaced again");
     assert!(
         replacement_error.contains("still running"),
         "{replacement_error}"
     );
-    assert!(unpeel_core::session_host::socket_path(&replacement_id).exists());
+    assert!(supercli_core::session_host::socket_path(&replacement_id).exists());
 
-    unpeel_core::session_ops::stop_session(&replacement_id).unwrap();
+    supercli_core::session_ops::stop_session(&replacement_id).unwrap();
     let _ = fs::remove_dir_all(home.join("app-sessions").join(healthy_id));
     let _ = fs::remove_dir_all(home.join("app-sessions").join(live_missing_socket_id));
     let _ = fs::remove_dir_all(&home);
 
     unsafe {
-        match old_unpeel_home {
-            Some(value) => std::env::set_var("UNPEEL_HOME", value),
-            None => std::env::remove_var("UNPEEL_HOME"),
+        match old_supercli_home {
+            Some(value) => std::env::set_var("SUPERCLI_HOME", value),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         match old_home {
             Some(value) => std::env::set_var("HOME", value),
@@ -194,8 +194,8 @@ fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected()
             None => std::env::remove_var("SHELL"),
         }
         match old_host_cmd {
-            Some(value) => std::env::set_var("UNPEEL_HOST_CMD", value),
-            None => std::env::remove_var("UNPEEL_HOST_CMD"),
+            Some(value) => std::env::set_var("SUPERCLI_HOST_CMD", value),
+            None => std::env::remove_var("SUPERCLI_HOST_CMD"),
         }
     }
 }

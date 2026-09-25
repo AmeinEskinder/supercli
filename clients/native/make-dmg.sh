@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# make-dmg.sh — package dist/Unpeel.app into a drag-to-install DMG.
+# make-dmg.sh — package dist/Supercli.app into a drag-to-install DMG.
 #
-# Produces clients/native/dist/Unpeel.dmg: a Finder window holding Unpeel.app
+# Produces clients/native/dist/Supercli.dmg: a Finder window holding Supercli.app
 # next to an /Applications alias, so the user drags the app across to install.
 # Run build-app.sh first (or pass --build to do it here), then open the DMG.
 #
@@ -16,9 +16,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NATIVE_DIR="$REPO_ROOT/clients/native"
 DIST="$NATIVE_DIR/dist"
-APP="$DIST/Unpeel.app"
-VOLNAME="Unpeel"
-FINAL_DMG="$DIST/Unpeel.dmg"
+APP="$DIST/Supercli.app"
+VOLNAME="Supercli"
+FINAL_DMG="$DIST/Supercli.dmg"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 
 DO_BUILD=0
@@ -81,7 +81,7 @@ hdiutil create -srcfolder "$STAGE" -volname "$VOLNAME" -fs HFS+ \
 # resolution is tied to the mount path, so a layout done at a temporary
 # mountpoint ships a DMG whose background silently fails to appear for end
 # users (verified 2026-07-10). If something is already mounted there (usually
-# a previously opened Unpeel install DMG), eject it first — non-forced, so a
+# a previously opened Supercli install DMG), eject it first — non-forced, so a
 # busy or non-disk-image volume fails loudly instead of being yanked. Also
 # no -nobrowse: a nobrowse volume is invisible to Finder scripting entirely
 # (Finder addresses disks by mount folder name).
@@ -120,7 +120,7 @@ tell application "Finder"
     -- dark mode here) — the artwork draws light plates under the labels.
     set background color of opts to {3084, 3084, 3855}
     set background picture of opts to file ".background:background.tiff"
-    set position of item "Unpeel.app" of container window to {140, 165}
+    set position of item "Supercli.app" of container window to {140, 165}
     set position of item "Applications" of container window to {380, 165}
     -- Housekeeping items are dotfiles (invisible normally), but users with
     -- "show hidden files" on would see them — park them out of the visible

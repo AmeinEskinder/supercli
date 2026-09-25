@@ -386,7 +386,7 @@ pub fn reconcile_grants() -> Result<(), String> {
         return Err(format!(
             "SECURITY: {} grant(s) without audit entry quarantined to {}. \
              This indicates tampering or a crash during grant creation. \
-             Run `unpeel doctor` for details.",
+             Run `supercli doctor` for details.",
             orphaned.len(),
             quarantine.display(),
         ));

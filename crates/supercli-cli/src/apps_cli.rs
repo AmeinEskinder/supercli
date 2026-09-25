@@ -1,17 +1,17 @@
-//! `unpeel apps` — inspect and install official Host-side Unpeel Apps.
+//! `supercli apps` — inspect and install official Host-side Supercli Apps.
 
 use std::io::{self, IsTerminal, Write};
 
 use supercli_core::{app_installer, apps_mcp};
 
 pub const HELP: &str = "\
-unpeel apps — Host-side Unpeel Apps
+supercli apps — Host-side Supercli Apps
 
-  unpeel apps list [--json]
-  unpeel apps install <app-id> [--check] [--yes] [--json]
-  unpeel apps update [<app-id> | --all] [--check] [--yes] [--json]
-  unpeel apps link <app-id> <executable>
-  unpeel apps unlink <app-id>
+  supercli apps list [--json]
+  supercli apps install <app-id> [--check] [--yes] [--json]
+  supercli apps update [<app-id> | --all] [--check] [--yes] [--json]
+  supercli apps link <app-id> <executable>
+  supercli apps unlink <app-id>
 
 Apps install under ~/.supercli/apps/bin after the release tarball is verified
 against its mandatory SHA-256 sidecar. --check never downloads anything.

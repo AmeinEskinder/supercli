@@ -1,7 +1,7 @@
 //! Host protocol versioning and capability identifiers.
 //!
 //! Mirrors `RemoteControlProtocol` in
-//! `clients/shared/UnpeelShared/Sources/UnpeelShared/RemoteControlProtocol.swift`
+//! `clients/shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift`
 //! and `protocol/host-capabilities-v1.json`. Major versions must match;
 //! minor versions are additive and unknown capability ids are ignored.
 

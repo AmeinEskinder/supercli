@@ -1,10 +1,10 @@
 //! Phase 9 H1 — fuzz + property tests for the review-log reader and the
-//! hash chain (`unpeel_core::action_reviews`).
+//! hash chain (`supercli_core::action_reviews`).
 //!
 //! cargo-fuzz/libFuzzer could not be installed offline, so this is a
 //! deterministic in-tree harness with the same discipline: a seeded
 //! xorshift RNG, a corpus of valid seed inputs, structural byte mutations,
-//! a bounded iteration count (`UNPEEL_FUZZ_ITERS`, default 20 000), and
+//! a bounded iteration count (`SUPERCLI_FUZZ_ITERS`, default 20 000), and
 //! crash capture that prints the failing input. The decoders under test
 //! are total (`Result`, never panic); any panic is a bug.
 //!
@@ -16,7 +16,7 @@
 use std::panic;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use unpeel_core::action_reviews::*;
+use supercli_core::action_reviews::*;
 
 // ------------------------------------------------------------------ rng ---
 
@@ -97,7 +97,7 @@ fn mutate(rng: &mut Rng, data: &[u8], seeds: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn iters() -> usize {
-    std::env::var("UNPEEL_FUZZ_ITERS")
+    std::env::var("SUPERCLI_FUZZ_ITERS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20_000)
@@ -105,7 +105,7 @@ fn iters() -> usize {
 
 fn tmpdir(name: &str) -> PathBuf {
     let dir =
-        std::env::temp_dir().join(format!("unpeel-fuzz-reviews-{name}-{}", std::process::id()));
+        std::env::temp_dir().join(format!("supercli-fuzz-reviews-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

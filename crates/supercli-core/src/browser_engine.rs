@@ -2,7 +2,7 @@
 //!
 //! The Browser MCP drives the `agent-browser` engine (Apache-2.0, a native
 //! Rust CDP daemon — never Node). Until 2026-09-03 the only deterministic copy
-//! was the one the Mac app build bundled next to `unpeel-host`, so a headless
+//! was the one the Mac app build bundled next to `supercli-host`, so a headless
 //! Host had no engine and the public server repo would have depended on the
 //! app for it. Now the pin lives in `protocol/browser-engine-v1.json`
 //! (embedded here), and the Host installs the platform binary itself into
@@ -23,7 +23,7 @@
 //!   bundle, kept as a compatibility candidate until the repo split) →
 //!   `PATH`.
 //! - `system_browser()` — the engine drives a system Chrome/Chromium; on a
-//!   Host without one, `unpeel browser install --check` and the MCP error
+//!   Host without one, `supercli browser install --check` and the MCP error
 //!   must say so and name what was looked for. Nothing here installs Chrome.
 
 use std::io::Write;
@@ -121,7 +121,7 @@ fn version_marker_path(home: &Path) -> PathBuf {
 }
 
 /// Published additively as `serve.json.browserEngine` and printed by
-/// `unpeel browser install`.
+/// `supercli browser install`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
@@ -505,7 +505,7 @@ pub fn missing_engine_message(home: &Path) -> String {
         _ => format!("{} is not installed", managed.display()),
     };
     format!(
-        "The browser engine (agent-browser {}) is not available: {hint}. Run `unpeel browser \
+        "The browser engine (agent-browser {}) is not available: {hint}. Run `supercli browser \
 install` on this Host (or set SUPERCLI_AGENT_BROWSER_BIN to an engine binary).",
         pinned().version
     )
@@ -565,7 +565,7 @@ pub fn missing_browser_message(path_dirs: &[PathBuf]) -> String {
     format!(
         "no Chrome/Chromium found on this Host (looked for {} in /Applications and on PATH). The \
 engine drives a system browser; install Google Chrome or Chromium, or run `agent-browser install` \
-to fetch Chrome for Testing into the engine's own cache. Unpeel does not install a browser.",
+to fetch Chrome for Testing into the engine's own cache. Supercli does not install a browser.",
         names.join(", ")
     )
 }
@@ -596,7 +596,7 @@ mod tests {
 
     fn temp_home(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-browser-engine-{tag}-{}-{}",
+            "supercli-browser-engine-{tag}-{}-{}",
             std::process::id(),
             crate::state::current_timestamp_ms()
         ));
@@ -733,7 +733,7 @@ mod tests {
             // resolve_with skips the stale managed copy rather than using it
             // (verify() uses the real pin, which the fake bytes also fail).
             let err = resolve_with(None, &home, None, &[]).unwrap_err();
-            assert!(err.contains("unpeel browser install"), "{err}");
+            assert!(err.contains("supercli browser install"), "{err}");
             err
         };
         assert!(message.contains("not available"));
@@ -848,7 +848,7 @@ mod tests {
         );
         // nothing → the install hint
         let err = resolve_with(None, &home, None, &[]).unwrap_err();
-        assert!(err.contains("unpeel browser install"));
+        assert!(err.contains("supercli browser install"));
         assert!(
             err.contains("does not match the pinned agent-browser"),
             "{err}"

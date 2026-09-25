@@ -1,4 +1,4 @@
-//! Unpeel mobile client: pairing, session list, live terminal detail.
+//! Supercli mobile client: pairing, session list, live terminal detail.
 //!
 //! Architectural rule: the iOS session detail is a **live terminal, never
 //! semantic chat** (see repo AGENTS.md). Tapping a session opens a
@@ -34,9 +34,9 @@ use dioxus::html::geometry::WheelDelta;
 use dioxus::html::input_data::MouseButton;
 use dioxus::html::InteractionLocation;
 use dioxus::prelude::*;
-use unpeel_client::dto::{BootstrapSnapshot, PresetSummary, SessionSummary};
-use unpeel_client::protocol::supports_session_creation;
-use unpeel_client::{
+use supercli_client::dto::{BootstrapSnapshot, PresetSummary, SessionSummary};
+use supercli_client::protocol::supports_session_creation;
+use supercli_client::{
     connect_direct_classified, decode_pairing_code, delete_host_secrets, device_identity,
     load_host_secrets, load_paired_host_records, open_controller_store, pair,
     relay_credentials_for_host, remove_paired_host, save_paired_host_records, store_host_secrets,
@@ -44,7 +44,7 @@ use unpeel_client::{
     HostRegistry, HostSecrets, PairedHostRecord, RelayConnection, RemoteDeviceIdentity,
     TransportKind,
 };
-use unpeel_ui::{
+use supercli_ui::{
     detect_scroll_shift, fit_grid, flatten_annotation_png, flatten_spec, launchable_presets,
     matches_in_row, method_label, parse_push_bridge_message, row_text, share_entry_js,
     should_resize_remote, viewport_text, word_anchor_at, AnnotationMode, AnnotationResult,
@@ -364,8 +364,8 @@ const JSQR_LIB: &str = include_str!("vendor/jsqr-1.4.0.js");
 /// visible maps to the single automatic foreground unlock prompt —
 /// mirroring Swift's `.background` / `.active` scene-phase handling.
 const APP_LOCK_VISIBILITY_JS: &str = r#"(function() {
-  if (window.__unpeelAppLockInstalled) return true;
-  window.__unpeelAppLockInstalled = true;
+  if (window.__supercliAppLockInstalled) return true;
+  window.__supercliAppLockInstalled = true;
   var report = function() {
     dioxus.send(document.hidden ? "app-lock:hidden" : "app-lock:visible");
   };
@@ -374,15 +374,15 @@ const APP_LOCK_VISIBILITY_JS: &str = r#"(function() {
   return true;
 })()"#;
 
-/// Installs `window.__unpeelQrStart` / `window.__unpeelQrStop` for the
-/// shared [`unpeel_ui::QrScannerView`]. The camera loop runs entirely in
+/// Installs `window.__supercliQrStart` / `window.__supercliQrStop` for the
+/// shared [`supercli_ui::QrScannerView`]. The camera loop runs entirely in
 /// JS — `getUserMedia` → `<video>` → frame canvas → jsQR — and only
 /// decoded strings cross into Rust via `dioxus.send`. Pausing stops the
 /// camera (and its status indicator), it doesn't just gate the decode.
 const QR_BRIDGE_INSTALL_JS: &str = r#"(function() {
-  if (window.__unpeelQrInstalled) return true;
-  window.__unpeelQrInstalled = true;
-  var st = window.__unpeelQr = { stream: null, raf: 0, video: null, canvas: null, ctx: null };
+  if (window.__supercliQrInstalled) return true;
+  window.__supercliQrInstalled = true;
+  var st = window.__supercliQr = { stream: null, raf: 0, video: null, canvas: null, ctx: null };
   function loop() {
     if (!st.stream) return;
     var video = st.video;
@@ -399,7 +399,7 @@ const QR_BRIDGE_INSTALL_JS: &str = r#"(function() {
     }
     st.raf = requestAnimationFrame(loop);
   }
-  window.__unpeelQrStart = async function() {
+  window.__supercliQrStart = async function() {
     if (st.stream) { loop(); return; }
     var stream;
     try {
@@ -426,7 +426,7 @@ const QR_BRIDGE_INSTALL_JS: &str = r#"(function() {
     st.ctx = canvas.getContext('2d', { willReadFrequently: true });
     loop();
   };
-  window.__unpeelQrStop = function() {
+  window.__supercliQrStop = function() {
     if (st.raf) cancelAnimationFrame(st.raf);
     st.raf = 0;
     if (st.stream) { st.stream.getTracks().forEach(function(t) { t.stop(); }); st.stream = null; }
@@ -560,7 +560,7 @@ struct MobileState {
     show_qr_scanner: bool,
     /// APNs push registration. The token itself comes from the native shell
     /// (the OS hands it to the app delegate, like the Swift client's
-    /// `PushAppDelegate`); `UNPEEL_APNS_TOKEN` seeds one for simulator/dev
+    /// `PushAppDelegate`); `SUPERCLI_APNS_TOKEN` seeds one for simulator/dev
     /// builds. Uploads to the Host go through `on_token_change`, wired in
     /// the mount effect once the signal exists.
     push: PushManager,
@@ -578,10 +578,10 @@ struct MobileState {
 }
 
 /// Keychain account for the app-lock armed flag (the Swift client's
-/// `unpeel.ios.appLockEnabled` UserDefaults key, kept in the credential
+/// `supercli.ios.appLockEnabled` UserDefaults key, kept in the credential
 /// store so it follows the same keychain/memory-fallback path as the
 /// pairing records).
-const APP_LOCK_ENABLED_ACCOUNT: &str = "unpeel.app_lock_enabled";
+const APP_LOCK_ENABLED_ACCOUNT: &str = "supercli.app_lock_enabled";
 
 /// Load the persisted app-lock armed flag. A missing or unreadable entry
 /// means disarmed — fail-open on the preference, never on the lock itself.
@@ -861,7 +861,7 @@ fn push_open_session(mut state: SyncSignal<MobileState>, session_id: String) {
 }
 
 /// Ingest a hex APNs token from the native shell bridge, the pre-pump
-/// probe, or the `UNPEEL_APNS_TOKEN` dev seam. Validates via
+/// probe, or the `SUPERCLI_APNS_TOKEN` dev seam. Validates via
 /// `PushManager::did_register_hex`, uploads only when the token actually
 /// changed (the callback stays detached: it reads launcher state and must
 /// never fire while a `state.write()` guard is held).
@@ -890,14 +890,14 @@ fn push_ingest_hex_token(mut state: SyncSignal<MobileState>, hex: &str, source: 
     }
 }
 
-/// Seed a push token from the `UNPEEL_APNS_TOKEN` hex string (simulator /
+/// Seed a push token from the `SUPERCLI_APNS_TOKEN` hex string (simulator /
 /// dev seam). The real token arrives from the native shell via the push
 /// bridge — this just makes the upload path testable without one.
 fn push_ingest_env_token(state: SyncSignal<MobileState>) {
-    let Ok(hex) = std::env::var("UNPEEL_APNS_TOKEN") else {
+    let Ok(hex) = std::env::var("SUPERCLI_APNS_TOKEN") else {
         return;
     };
-    push_ingest_hex_token(state, &hex, "UNPEEL_APNS_TOKEN");
+    push_ingest_hex_token(state, &hex, "SUPERCLI_APNS_TOKEN");
 }
 
 fn connect_host(mut state: SyncSignal<MobileState>, host_id: String) {
@@ -1041,7 +1041,7 @@ fn refresh(mut state: SyncSignal<MobileState>) {
 /// Answer a pending approval, then re-bootstrap so the approval list and
 /// session states reflect the decision.
 ///
-/// A 429 from the Host never drops the approval: `unpeel_client` sleeps
+/// A 429 from the Host never drops the approval: `supercli_client` sleeps
 /// for the Host's `Retry-After` and retries automatically, and the card
 /// shows the retry state until the answer lands.
 fn answer_approval(mut state: SyncSignal<MobileState>, approval_id: String, approved: bool) {
@@ -1127,7 +1127,7 @@ fn answer_approval(mut state: SyncSignal<MobileState>, approval_id: String, appr
                 // the decision. Render as "Resolved — see activity log",
                 // never as a retryable failure.
                 let state = match &e {
-                    unpeel_client::HostClientError::Status(409, _) => {
+                    supercli_client::HostClientError::Status(409, _) => {
                         AnswerUiState::ResolvedUnknown
                     }
                     _ => AnswerUiState::Failed,
@@ -2673,7 +2673,7 @@ fn MobileApp() -> Element {
                 cursors.insert(session_id.clone(), response.next_seq);
                 let mut new_approval = false;
                 for event in &response.events {
-                    use unpeel_client::events::SessionEventWire;
+                    use supercli_client::events::SessionEventWire;
                     match event {
                         SessionEventWire::TurnStarted { .. } => {
                             event_turn_running.write().insert(session_id.clone(), true);
@@ -2698,7 +2698,7 @@ fn MobileApp() -> Element {
     }
 
     // Mount effect: install the QR camera bridge (vendored jsQR + the
-    // `__unpeelQrStart/Stop` functions the shared QrScannerView drives),
+    // `__supercliQrStart/Stop` functions the shared QrScannerView drives),
     // and arm Direct probe-back for Hosts that connected over the relay
     // at startup. `pending_probes` is drained here because no signal
     // existed when `initial()` ran.
@@ -2717,9 +2717,9 @@ fn MobileApp() -> Element {
             }));
         }
         push_ingest_env_token(state);
-        // Native-shell push bridge: install `window.__unpeelPush`, pick up
+        // Native-shell push bridge: install `window.__supercliPush`, pick up
         // a token that arrived before this pump existed (the shell stashes
-        // it at `window.__unpeelPushToken`), then pump `push:` messages for
+        // it at `window.__supercliPushToken`), then pump `push:` messages for
         // the app's lifetime. Each message is a short signal write; the
         // token upload runs on its own background thread.
         spawn(async move {
@@ -2820,7 +2820,7 @@ fn MobileApp() -> Element {
             )
         };
         // App-lock Security row: mirrors Swift's PairingView securitySection
-        // ("Require <method>", "Locks Unpeel when you leave the app."),
+        // ("Require <method>", "Locks Supercli when you leave the app."),
         // disabled when the device cannot authenticate at all.
         let (lock_capability, lock_enabled) = {
             let s = state.read();
@@ -2867,7 +2867,7 @@ fn MobileApp() -> Element {
                 div { class: "security-row",
                     span { class: "security-text",
                         span { "Require {lock_method}" }
-                        span { class: "security-sub", "Locks Unpeel when you leave the app." }
+                        span { class: "security-sub", "Locks Supercli when you leave the app." }
                     }
                     button {
                         class: "security-toggle",

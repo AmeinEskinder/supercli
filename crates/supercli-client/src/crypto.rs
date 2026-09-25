@@ -5,7 +5,7 @@
 //! - Per-device static 32-byte `e2e_key`, exchanged at pairing over the LAN.
 //! - Per-connection handshake: both sides contribute a fresh 16-byte salt;
 //!   session keys are `HKDF-SHA256(e2e_key ‖ shared_secret,
-//!   client_salt ‖ host_salt, "unpeel-relay-v1:{c2h,h2c}")` — one
+//!   client_salt ‖ host_salt, "supercli-relay-v1:{c2h,h2c}")` — one
 //!   AES-256-GCM key per direction.
 //! - Nonces are 12 bytes: a 4-byte direction tag (`c2h!` / `h2c!`) followed
 //!   by an 8-byte strictly increasing counter. Receivers enforce
@@ -23,7 +23,7 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use thiserror::Error;
 
-const INFO_PREFIX: &str = "unpeel-relay-v1:";
+const INFO_PREFIX: &str = "supercli-relay-v1:";
 const CLIENT_TAG: &[u8; 4] = b"c2h!";
 const HOST_TAG: &[u8; 4] = b"h2c!";
 /// `[counter u64 BE]` plus the 16-byte AES-GCM authentication tag.

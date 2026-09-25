@@ -1,6 +1,6 @@
 [package]
 name = "supercli-core"
-description = "Unpeel session backend: hosted PTY sessions, provider integrations, hook assets, MCP host"
+description = "Supercli session backend: hosted PTY sessions, provider integrations, hook assets, MCP host"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

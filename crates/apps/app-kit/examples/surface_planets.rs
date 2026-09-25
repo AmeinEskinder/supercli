@@ -1,7 +1,7 @@
-//! App Kit Surface embed using unpeel-surface's existing planet guest.
+//! App Kit Surface embed using supercli-surface's existing planet guest.
 //!
 //! Build the guest in a sibling checkout first:
-//! `cargo build --release --manifest-path ../unpeel-surface/Cargo.toml
+//! `cargo build --release --manifest-path ../supercli-surface/Cargo.toml
 //!   -p surface-planets-example --target wasm32-unknown-unknown`
 //!
 //! Then run this ordinary TUI:
@@ -22,12 +22,12 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Alignment;
 use ratatui::style::{Color, Style};
 use ratatui::widgets::Paragraph;
-use unpeel_app_kit::surface_runtime::{
+use supercli_app_kit::surface_runtime::{
     EVENT_ACTION, EVENT_KEY_DOWN, EVENT_KEY_END, EVENT_KEY_HOME, EVENT_KEY_UP,
 };
 #[cfg(feature = "ui-bridge")]
-use unpeel_app_kit::{AppMetadata, UiBridge, UiBridgeEvent, UiEventOutcome};
-use unpeel_app_kit::{
+use supercli_app_kit::{AppMetadata, UiBridge, UiBridgeEvent, UiEventOutcome};
+use supercli_app_kit::{
     Surface, SurfaceBackground, SurfaceInputPolicy, SurfaceReference, SurfaceSpec, SurfaceView,
 };
 
@@ -37,10 +37,10 @@ const VIEW_ID: &str = "main";
 const SURFACE_ID: &str = "planet-surface";
 const STREAM_ID: &str = "planets";
 const DEFAULT_GUEST_RELATIVE_PATH: &str =
-    "../unpeel-surface/target/wasm32-unknown-unknown/release/surface_planets_example.wasm";
+    "../supercli-surface/target/wasm32-unknown-unknown/release/surface_planets_example.wasm";
 
 fn surface_spec() -> SurfaceSpec {
-    let session_id = std::env::var("UNPEEL_SESSION_ID")
+    let session_id = std::env::var("SUPERCLI_SESSION_ID")
         .ok()
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "standalone-planets".to_owned());
@@ -60,7 +60,7 @@ fn guest_path() -> Result<PathBuf, Box<dyn Error>> {
         }
         return Err(format!("unknown argument {argument:?}; expected --guest PATH").into());
     }
-    if let Some(path) = std::env::var_os("UNPEEL_SURFACE_PLANETS_WASM")
+    if let Some(path) = std::env::var_os("SUPERCLI_SURFACE_PLANETS_WASM")
         && !path.is_empty()
     {
         return existing_guest(PathBuf::from(path));
@@ -75,9 +75,9 @@ fn existing_guest(path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
     Err(format!(
         "planet guest not found at {}\n\
          build it with:\n  cargo build --release --manifest-path \
-         ../unpeel-surface/Cargo.toml -p surface-planets-example \
+         ../supercli-surface/Cargo.toml -p surface-planets-example \
          --target wasm32-unknown-unknown\n\
-         or pass --guest PATH / set UNPEEL_SURFACE_PLANETS_WASM",
+         or pass --guest PATH / set SUPERCLI_SURFACE_PLANETS_WASM",
         path.display()
     )
     .into())
@@ -125,11 +125,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "ui-bridge")]
     let mut bridge = UiBridge::detect(
         AppMetadata::new(
-            "dev.unpeel.app-kit.surface-planets",
+            "dev.supercli.app-kit.surface-planets",
             "Surface Planets",
             env!("CARGO_PKG_VERSION"),
         )
-        .description("Reference-only App Kit embed of the unpeel-surface planet guest"),
+        .description("Reference-only App Kit embed of the supercli-surface planet guest"),
     )?;
     #[cfg(feature = "ui-bridge")]
     let revision = 1;
@@ -139,8 +139,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     // SurfaceLayer consumes this independent route itself. Its presence means
     // the guest must keep producing retained scenes even when the local PTY is
     // hidden in favor of a connected presenter.
-    let has_remote_presenter = std::env::var_os("UNPEEL_SURFACE_SOCKET").is_some()
-        || std::env::var_os("UNPEEL_SURFACE_REMOTE_ADDR").is_some();
+    let has_remote_presenter = std::env::var_os("SUPERCLI_SURFACE_SOCKET").is_some()
+        || std::env::var_os("SUPERCLI_SURFACE_REMOTE_ADDR").is_some();
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();

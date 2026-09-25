@@ -5,9 +5,9 @@
 //! run on every `cargo test`, so this is opt-in:
 //!
 //! ```sh
-//! UNPEEL_TUI_PTY_TESTS=1 cargo test -p unpeel-cli --test pty_suites
+//! SUPERCLI_TUI_PTY_TESTS=1 cargo test -p supercli-cli --test pty_suites
 //! # or, equivalently and with nicer output:
-//! crates/unpeel-cli/tests/run.sh
+//! crates/supercli-cli/tests/run.sh
 //! ```
 //!
 //! Without the variable the test passes with a note, so a plain `cargo test`
@@ -18,10 +18,10 @@ use std::process::Command;
 
 #[test]
 fn pty_suites() {
-    if std::env::var("UNPEEL_TUI_PTY_TESTS").is_err() {
+    if std::env::var("SUPERCLI_TUI_PTY_TESTS").is_err() {
         eprintln!(
-            "skipping the PTY suites — set UNPEEL_TUI_PTY_TESTS=1 (or run \
-             crates/unpeel-cli/tests/run.sh) to include them"
+            "skipping the PTY suites — set SUPERCLI_TUI_PTY_TESTS=1 (or run \
+             crates/supercli-cli/tests/run.sh) to include them"
         );
         return;
     }
@@ -33,7 +33,7 @@ fn pty_suites() {
     let status = Command::new("bash")
         .arg(&runner)
         // cargo has already built the binary this test links against.
-        .env("UNPEEL_TUI_SKIP_BUILD", "1")
+        .env("SUPERCLI_TUI_SKIP_BUILD", "1")
         .status()
         .expect("failed to run the PTY suites");
     assert!(status.success(), "PTY suites failed — see the output above");

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# dev-app.sh — build, stably sign, and launch Unpeel.app for local development.
+# dev-app.sh — build, stably sign, and launch Supercli.app for local development.
 #
 # Why this exists: build-app.sh defaults to ad-hoc signing ("-") when no
 # CODESIGN_IDENTITY is set. An ad-hoc signature's designated requirement is the
 # binary's cdhash, which changes on every rebuild, so the macOS keychain ACL for
 # com.supercli.license never matches the new build and you get the
-# "Unpeel wants to access key" password prompt after every rebuild — even after
+# "Supercli wants to access key" password prompt after every rebuild — even after
 # clicking "Always Allow", because that only trusts the old cdhash.
 #
 # Signing with a stable identity (your local "Apple Development" cert) anchors
@@ -35,15 +35,15 @@ fi
 
 echo "==> dev build, signing with: $CODESIGN_IDENTITY"
 # Server binaries and the bridge are built from this tree by build-app.sh
-# (UNPEEL_SERVER_ARCHIVE=<tar.gz> bundles a published archive instead).
-UNPEEL_DEV_BUILD=1 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" "$HERE/build-app.sh"
+# (SUPERCLI_SERVER_ARCHIVE=<tar.gz> bundles a published archive instead).
+SUPERCLI_DEV_BUILD=1 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" "$HERE/build-app.sh"
 
-APP="$HERE/dist/Unpeel.app"
+APP="$HERE/dist/Supercli.app"
 EXE="$APP/Contents/MacOS/SupercliNative"
 
 # PIDs whose executable is this dist binary. Never matches
-# /Applications/Unpeel.app — that process must stay running.
-dist_unpeel_pids() {
+# /Applications/Supercli.app — that process must stay running.
+dist_supercli_pids() {
   local exe="$1"
   ps -axo pid=,command= | awk -v exe="$exe" '
     {
@@ -57,38 +57,38 @@ dist_unpeel_pids() {
 wait_for_dist_exit() {
   local exe="$1"
   local deadline=$((SECONDS + $2))
-  while [ -n "$(dist_unpeel_pids "$exe")" ] && [ "$SECONDS" -lt "$deadline" ]; do
+  while [ -n "$(dist_supercli_pids "$exe")" ] && [ "$SECONDS" -lt "$deadline" ]; do
     sleep 0.1
   done
 }
 
-# Replace the running Unpeel Dev after the new bundle is ready so the old
+# Replace the running Supercli Dev after the new bundle is ready so the old
 # instance stays usable during the compile. Quit by CFBundleName first (Cocoa
-# termination), then signal leftover dist PIDs only — never `quit app "Unpeel"`
+# termination), then signal leftover dist PIDs only — never `quit app "Supercli"`
 # or the shared bundle id, both of which would hit the installed app.
-pids="$(dist_unpeel_pids "$EXE")"
+pids="$(dist_supercli_pids "$EXE")"
 if [ -n "$pids" ]; then
-  echo "==> quitting running Unpeel Dev"
+  echo "==> quitting running Supercli Dev"
   osascript >/dev/null 2>&1 <<'APPLESCRIPT' || true
-if application "Unpeel Dev" is running then
-  tell application "Unpeel Dev" to quit
+if application "Supercli Dev" is running then
+  tell application "Supercli Dev" to quit
 end if
 APPLESCRIPT
   wait_for_dist_exit "$EXE" 5
-  pids="$(dist_unpeel_pids "$EXE")"
+  pids="$(dist_supercli_pids "$EXE")"
   if [ -n "$pids" ]; then
     # Fallback for extra `open -n` instances / a release-flavored dist bundle
-    # still named "Unpeel". xargs is BSD here: empty stdin does not run kill.
+    # still named "Supercli". xargs is BSD here: empty stdin does not run kill.
     echo "$pids" | xargs kill 2>/dev/null || true
     wait_for_dist_exit "$EXE" 2
   fi
-  pids="$(dist_unpeel_pids "$EXE")"
+  pids="$(dist_supercli_pids "$EXE")"
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -9 2>/dev/null || true
     sleep 0.1
   fi
-  if [ -n "$(dist_unpeel_pids "$EXE")" ]; then
-    echo "warning: Unpeel Dev still running from $EXE; launching another instance" >&2
+  if [ -n "$(dist_supercli_pids "$EXE")" ]; then
+    echo "warning: Supercli Dev still running from $EXE; launching another instance" >&2
   fi
 fi
 

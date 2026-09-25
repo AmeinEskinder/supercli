@@ -1,4 +1,4 @@
-//! Unified Unpeel MCP: `unpeel-host __mcp__` speaks MCP (JSON-RPC 2.0 over
+//! Unified Supercli MCP: `supercli-host __mcp__` speaks MCP (JSON-RPC 2.0 over
 //! stdio) and exposes small capability domains for terminal Sessions,
 //! recognized agent occupants, Apps/skills, workspace setup, artifacts,
 //! and browser automation.
@@ -112,12 +112,12 @@ impl McpDomainMask {
 
 const PROTOCOL_VERSION_FALLBACK: &str = "2025-06-18";
 pub(crate) const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
-// The unified Unpeel MCP server: one tool per capability domain (`sessions`,
+// The unified Supercli MCP server: one tool per capability domain (`sessions`,
 // `browser`, `apps`, `skills`), each taking an `action` parameter,
 // instead of one server per domain with a dozen tools each. Keeps the
 // per-request context cost flat as domains are added; full per-action docs
 // load lazily through `action: "help"`.
-// Renamed from `unpeel-mcp` 2026-07-25; the old name survives only as pruned
+// Renamed from `supercli-mcp` 2026-07-25; the old name survives only as pruned
 // legacy config entries and the pre-rename config-file names (kept stable so
 // restart commands recorded by older sessions keep resolving).
 const SERVER_NAME: &str = "supercli";
@@ -163,7 +163,7 @@ pub fn run_stdio() -> Result<(), String> {
 }
 
 /// Execute one tool call in-process for a client that is not an MCP stdio
-/// peer — the `unpeel` CLI. Identical to what the stdio server does for
+/// peer — the `supercli` CLI. Identical to what the stdio server does for
 /// `tools/call` under the full registration mask: the same caller identity
 /// (`self_session_id`), the same per-call manifest gates, and the same
 /// cooperative write policy with its approval prompt. Returns the tool's
@@ -546,7 +546,7 @@ fn initialize_result(params: &Value) -> Value {
             "name": SERVER_NAME,
             "version": env!("CARGO_PKG_VERSION"),
         },
-        "instructions": "Unpeel capabilities for this session, one tool per domain; every tool \
+        "instructions": "Supercli capabilities for this session, one tool per domain; every tool \
     takes an 'action' plus parameters, and {\"action\":\"help\"} returns full per-action docs \
     (add help_for for one action). \
     'sessions' inspects and controls terminal containers (shells, agents, or Apps); use \
@@ -563,7 +563,7 @@ fn initialize_result(params: &Value) -> Value {
     use agents wait with status 'idle' (also matches 'done'), or sessions wait_for_text for a \
     specific terminal result. Spatial words from the user such as left, right, above, below, or \
     next to me are relative to your own pane: call sessions current to resolve its direct \
-    neighbors, including Unpeel App panes, then use sessions read_screen on the returned Session \
+    neighbors, including Supercli App panes, then use sessions read_screen on the returned Session \
     id. User phrases like 'the selected …' or 'what I have open' — a design, document, note, or \
     anything else an App can show — usually mean a neighboring App pane: start with sessions \
     current and read that neighbor's app_context rather than guessing from the filesystem. Use \
@@ -577,7 +577,7 @@ fn initialize_result(params: &Value) -> Value {
     misbehaves; call {\"action\":\"context\"} if browser tools seem unavailable. Do not paste \
     cookies, tokens, passwords, or downloaded private files into the conversation unless the \
     user explicitly asks. \
-    'apps' (when present) discovers the Unpeel Apps installed on this Host: 'list' them, \
+    'apps' (when present) discovers the Supercli Apps installed on this Host: 'list' them, \
     'describe' an app's declared tools plus its optional skill references, and use 'context' \
     to distinguish Apps attached to this agent from other App instances in its project and \
     identify one occupying a direct neighboring pane. \
@@ -666,7 +666,7 @@ fn run_tool(name: &str, arguments: &Value) -> Result<String, String> {
             run_browser_action(&action, arguments)
         }
         COMPUTER_TOOL => {
-            Err("Unpeel computer use has been retired. Configure desktop tools in your agent or environment.".into())
+            Err("Supercli computer use has been retired. Configure desktop tools in your agent or environment.".into())
         }
         APPS_TOOL => {
             let action = required_action(arguments, apps_action_names())?;
@@ -682,7 +682,7 @@ fn run_tool(name: &str, arguments: &Value) -> Result<String, String> {
         name if name.strip_prefix("browser_").is_some_and(is_browser_action) => {
             run_browser_action(name.strip_prefix("browser_").unwrap(), arguments)
         }
-        // Session creation is a user-only action in Unpeel — agents never spawn
+        // Session creation is a user-only action in Supercli — agents never spawn
         // sessions. These tools are no longer advertised; refuse them explicitly
         // in case a stale client still calls one.
         "start_session" | "delegate_task" | "delegate_batch" => Err(creation_disabled_message()),
@@ -1249,7 +1249,7 @@ Settings ▸ Agent access (\"Let sessions create worktrees\")."
     }
 }
 
-/// Create (or adopt) an Unpeel-managed worktree of a project and register it
+/// Create (or adopt) an Supercli-managed worktree of a project and register it
 /// as a child project without launching a session. Users launch sessions from
 /// the resulting child project after the worktree exists.
 fn tool_create_worktree(args: &Value) -> Result<String, String> {
@@ -1291,7 +1291,7 @@ commands at the path.",
     Ok(message)
 }
 
-/// List a project's Unpeel-managed worktree child projects.
+/// List a project's Supercli-managed worktree child projects.
 fn tool_list_worktrees(args: &Value) -> Result<String, String> {
     require_worktree_access()?;
     let project_id = resolve_project_id(args)?;
@@ -1566,8 +1566,8 @@ fn caller_refusal_reason() -> Option<String> {
     let manifest = caller_manifest();
     if manifest.is_none() {
         return Some(
-            "The calling session is unknown, so Unpeel MCP can't authorize access. \
-Run this from a hosted Unpeel session."
+            "The calling session is unknown, so Supercli MCP can't authorize access. \
+Run this from a hosted Supercli session."
                 .into(),
         );
     }
@@ -1585,8 +1585,8 @@ Restart the session to use the session-control tools."
 /// sessions for any known caller, so an unknown caller is the only read
 /// refusal left.
 fn read_denied_message() -> String {
-    "The calling session is unknown, so Unpeel MCP can't authorize \
-cross-session access. Run this from a hosted Unpeel session."
+    "The calling session is unknown, so Supercli MCP can't authorize \
+cross-session access. Run this from a hosted Supercli session."
         .into()
 }
 
@@ -1599,10 +1599,10 @@ user changes that setting."
 }
 
 /// Error returned when a caller tries to create a session. Creation is a
-/// user-only action in Unpeel; agents drive sessions the user created, they
+/// user-only action in Supercli; agents drive sessions the user created, they
 /// never spawn their own.
 fn creation_disabled_message() -> String {
-    "Agents cannot create sessions in Unpeel — session creation is a user-only action. \
+    "Agents cannot create sessions in Supercli — session creation is a user-only action. \
 Ask the user to create the session; you can read it immediately and request write access when \
 you need to affect it."
         .into()
@@ -1610,8 +1610,8 @@ you need to affect it."
 
 /// Session lifecycle is owned by the user, just like session creation.
 fn close_disabled_message() -> String {
-    "Agents cannot close sessions in Unpeel — session lifecycle is a user-only action. Ask the \
-user to close the session from an Unpeel Controller."
+    "Agents cannot close sessions in Supercli — session lifecycle is a user-only action. Ask the \
+user to close the session from an Supercli Controller."
         .into()
 }
 
@@ -1671,7 +1671,7 @@ fn tool_definitions_for_manifest(
     if advertise_skills {
         tools.push(skills_tool_definition());
     }
-    // Session-attached connector tools (`unpeel connector enable`): the
+    // Session-attached connector tools (`supercli connector enable`): the
     // session's own MCP registration, resolved from its connectors.json.
     // Empty when this server runs outside a session.
     tools.extend(crate::session_connectors::connector_tool_definitions());
@@ -1732,7 +1732,7 @@ fn skills_tool_definition() -> Value {
 fn agents_tool_definition() -> Value {
     json!({
         "name": AGENTS_TOOL,
-        "description": "Inspect recognized agent runtimes occupying Unpeel sessions. 'list' \
+        "description": "Inspect recognized agent runtimes occupying Supercli sessions. 'list' \
     returns occurrence-bound agent_ref values; use one with 'get', 'read_transcript', or \
     'wait' so a later occupant cannot be mistaken for the same agent. Every action targets one \
     explicit occurrence; use sessions list/current to choose peers or resolve neighboring panes. \
@@ -1770,7 +1770,7 @@ fn agents_tool_definition() -> Value {
 fn sessions_tool_definition() -> Value {
     json!({
         "name": SESSIONS_TOOL,
-        "description": "Inspect and control Unpeel terminal sessions as terminal containers, \
+        "description": "Inspect and control Supercli terminal sessions as terminal containers, \
     whether they hold a shell, agent, or App. Use 'current' to identify yourself and resolve \
     direct left/right/up/down pane neighbors: each entry names the occupant (shell, which \
     agent runtime, or which App), its cwd, and activity; a neighboring App pane's entry also \
@@ -1823,7 +1823,7 @@ fn sessions_tool_definition() -> Value {
 fn workspace_tool_definition() -> Value {
     json!({
         "name": WORKSPACE_TOOL,
-        "description": "Read workspace launch presets and manage Unpeel worktrees without \
+        "description": "Read workspace launch presets and manage Supercli worktrees without \
     creating sessions. {\"action\":\"help\"} returns full per-action docs.",
         "inputSchema": {
             "type": "object",
@@ -2022,7 +2022,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
         Sessions MCP access, organizational sidebar group, and caller-relative direct pane neighbors. \
         Use this to answer questions like \"who am I\", \"what is on my left\", or \"which \
         sessions are near me\" without reading manifests from disk. \
-        Neighbor entries identify agents (runtime id and name), terminals, and Unpeel Apps \
+        Neighbor entries identify agents (runtime id and name), terminals, and Supercli Apps \
         (declared tools, skill id, live app_context) with cwd, activity, and the Session id \
         to use with read_screen.",
             "inputSchema": {
@@ -2033,7 +2033,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "list_sessions",
-            "description": "List running Unpeel terminal sessions (agents and shells). \
+            "description": "List running Supercli terminal sessions (agents and shells). \
         Use this only to choose a target, then call inspect_session before deeper reads. \
         The calling session is marked with \"self\": true and cannot be written to.",
             "inputSchema": {
@@ -2256,7 +2256,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "list_presets",
-            "description": "List the launch presets configured in Unpeel (global and \
+            "description": "List the launch presets configured in Supercli (global and \
         project-scoped) so you can tell the user which presets exist when they ask. Defaults \
         to the calling session's project.",
             "inputSchema": {
@@ -2269,7 +2269,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "create_worktree",
-            "description": "Create (or adopt) an Unpeel-managed git worktree of a project and \
+            "description": "Create (or adopt) an Supercli-managed git worktree of a project and \
         register it as a child project in the sidebar. Session creation remains user-only. \
         Requires the user's Settings ▸ Agent access permission.",
             "inputSchema": {
@@ -2286,7 +2286,7 @@ pub(crate) fn legacy_sessions_tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "list_worktrees",
-            "description": "List a project's Unpeel-managed worktree child projects (branch \
+            "description": "List a project's Supercli-managed worktree child projects (branch \
         and checkout path each).",
             "inputSchema": {
                 "type": "object",
@@ -2898,11 +2898,11 @@ fn tool_read_screen(args: &Value) -> Result<String, String> {
     let snapshot =
         session_host::request_current_viewport_snapshot(session_id, scroll_offset_rows, rows)?;
     if snapshot.cols <= 2 && snapshot.rows <= 2 {
-        // Hosts spawned by older Unpeel builds treat cols=0/rows=0 as a real
+        // Hosts spawned by older Supercli builds treat cols=0/rows=0 as a real
         // resize instead of "keep current size" and end up with a 1x1 grid.
         return Err(format!(
-            "Session '{session_id}' is hosted by an older Unpeel build that cannot \
-serve screen snapshots. Use read_output for this session, or restart it from Unpeel."
+            "Session '{session_id}' is hosted by an older Supercli build that cannot \
+serve screen snapshots. Use read_output for this session, or restart it from Supercli."
         ));
     }
 
@@ -3534,7 +3534,7 @@ fn group_peer_status_json(
         "label": session.label,
         // Launch-command metadata, not occurrence-bound occupant identity
         // (that is the agents domain). Standalone group clients — the
-        // unpeel-design "Send to agent" bridge — pick their target peer by
+        // supercli-design "Send to agent" bridge — pick their target peer by
         // this field; removing it silently breaks them.
         "provider": provider_label_for_command(&session.command),
         "activity_status": activity_status_for_manifest(activity, manifest),
@@ -3570,7 +3570,7 @@ pub(crate) fn app_request_with_timeout(
     let ports = candidate_app_ports();
     if ports.is_empty() {
         return Err(
-            "Unpeel desktop app is not reachable (no SUPERCLI_APP_PORT and no ~/.supercli/app-ports)"
+            "Supercli desktop app is not reachable (no SUPERCLI_APP_PORT and no ~/.supercli/app-ports)"
                 .into(),
         );
     }
@@ -3610,7 +3610,7 @@ fn bridge_request_over(
             Ok(connected) => connected,
             Err(error) => {
                 last_error =
-                    format!("Unpeel desktop app is not reachable on port {candidate}: {error}");
+                    format!("Supercli desktop app is not reachable on port {candidate}: {error}");
                 continue;
             }
         };
@@ -3618,7 +3618,7 @@ fn bridge_request_over(
             bridge_exchange(stream, *candidate, path, body, token, read_timeout)?;
         outcome = Some((status, response));
         if status == 404 {
-            last_error = "Unpeel app rejected the request (404): not found".to_string();
+            last_error = "Supercli app rejected the request (404): not found".to_string();
             continue;
         }
         break;
@@ -3631,7 +3631,7 @@ fn bridge_request_over(
             .and_then(Value::as_str)
             .unwrap_or("bridge request failed");
         return Err(format!(
-            "Unpeel app rejected the request ({status}): {message}"
+            "Supercli app rejected the request ({status}): {message}"
         ));
     }
     Ok(response)
@@ -3702,7 +3702,7 @@ fn bridge_exchange(
 
 fn candidate_app_ports() -> Vec<u16> {
     let mut ports = Vec::new();
-    // The workspace Host worker (`unpeel serve`) owns hooks, approvals, and
+    // The workspace Host worker (`supercli serve`) owns hooks, approvals, and
     // the `/mcp/*` bridge; a client-only app registers a loopback port in
     // `app-ports` too, but it serves none of those routes.
     if let Some(port) = serve_hook_port() {
@@ -4319,10 +4319,10 @@ mod tests {
     fn neighboring_app_pane_carries_declared_tools_and_skill_inline() {
         let installed = crate::apps_mcp::InstalledApp {
             id: "supercli.app.design".into(),
-            name: "Unpeel Design".into(),
+            name: "Supercli Design".into(),
             version: Some("0.1.0".into()),
             description: "Visual React designer".into(),
-            command: Some("unpeel-design".into()),
+            command: Some("supercli-design".into()),
             media_types: vec![],
             file_extensions: Default::default(),
             resource_kinds: Vec::new(),
@@ -4357,7 +4357,7 @@ mod tests {
             std::slice::from_ref(&installed),
             &HashMap::new(),
         );
-        assert_eq!(context["app"]["name"], "Unpeel Design");
+        assert_eq!(context["app"]["name"], "Supercli Design");
         assert_eq!(context["app"]["description"], "Visual React designer");
         assert_eq!(context["app"]["tools"][0]["name"], "set_text");
         assert_eq!(
@@ -4496,7 +4496,7 @@ mod tests {
         json!({
             "io.modelcontextprotocol/protocolVersion": version,
             "io.modelcontextprotocol/clientInfo": {
-                "name": "unpeel-test",
+                "name": "supercli-test",
                 "version": "1",
             },
             "io.modelcontextprotocol/clientCapabilities": {},
@@ -4925,7 +4925,7 @@ mod tests {
         // Stale clients (sessions launched before the unified surface) call
         // the old names; every legacy name must still resolve to a handler.
         // No tool is invoked here: the test environment may itself be a
-        // hosted Unpeel session, so a live call could really list sessions.
+        // hosted Supercli session, so a live call could really list sessions.
         for definition in legacy_sessions_tool_definitions() {
             let legacy = definition["name"].as_str().unwrap();
             assert!(
@@ -5006,8 +5006,8 @@ mod tests {
             &json!({
                 "status": "done",
                 "summary": "Looks correct.",
-                "proof": ["cargo test -p unpeel-core mcp_host"],
-                "changed_paths": ["crates/unpeel-core/src/mcp_host.rs"],
+                "proof": ["cargo test -p supercli-core mcp_host"],
+                "changed_paths": ["crates/supercli-core/src/mcp_host.rs"],
             }),
             &caller,
             &target,
@@ -5018,7 +5018,7 @@ mod tests {
         assert!(report.contains("Role: Reviewer"));
         assert!(report.contains("Task: Check the implementation"));
         assert!(report.contains("Summary:"));
-        assert!(report.contains("cargo test -p unpeel-core mcp_host"));
+        assert!(report.contains("cargo test -p supercli-core mcp_host"));
     }
 
     #[test]
@@ -5140,7 +5140,7 @@ mod tests {
         let raw = r##"
 {"type":"event_msg","payload":{"type":"user_message","message":"# AGENTS.md instructions for /tmp/repo\nFollow these rules."}}
 {"type":"event_msg","payload":{"type":"user_message","message":"<environment_context>\n  <cwd>/tmp/repo</cwd>\n</environment_context>"}}
-{"type":"event_msg","payload":{"type":"user_message","message":"fix the broken prompt\n\n[sent from Unpeel session_id=\"caller-1\"]"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"fix the broken prompt\n\n[sent from Supercli session_id=\"caller-1\"]"}}
 {"type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"exec_command","arguments":"{\"cmd\":\"cargo test\"}"}}
 {"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"test output"}}
 {"type":"event_msg","payload":{"type":"agent_message","message":"Patched."}}

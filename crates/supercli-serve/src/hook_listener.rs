@@ -39,7 +39,7 @@ pub struct HookEventMessage {
     pub session_id: String,
     pub event_name: String,
     pub tool_name: Option<String>,
-    /// Host-owned managed-runtime generation carried by current Unpeel hook
+    /// Host-owned managed-runtime generation carried by current Supercli hook
     /// assets. `None` is the compatibility shape from older installed hooks.
     pub runtime_generation: Option<u64>,
     /// Captured as soon as the complete HTTP request reached this listener.
@@ -118,7 +118,7 @@ fn app_alert_from_json(json: &serde_json::Value) -> Result<AppAlertMessage, ()> 
 fn runtime_generation_from_json(json: &serde_json::Value) -> Option<u64> {
     let value = json
         .get("supercli_runtime_generation")
-        .or_else(|| json.get("unpeelRuntimeGeneration"))?;
+        .or_else(|| json.get("supercliRuntimeGeneration"))?;
     value.as_u64()
 }
 
@@ -227,13 +227,13 @@ pub fn unregister_port(port: u16) {
 fn respond(stream: &mut TcpStream, status: &str, body: &str) {
     let _ = write!(
         stream,
-        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nX-Unpeel-Frontend: tui\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nX-Supercli-Frontend: tui\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
 }
 
 /// `/mcp/approve-*` from the MCP host (which found our port in the
-/// registry because no app is running). Auth: the shared x-unpeel-auth
+/// registry because no app is running). Auth: the shared x-supercli-auth
 /// token; blocking until the user answers in the TUI or from a phone.
 fn handle_mcp(
     stream: &mut TcpStream,
@@ -242,7 +242,7 @@ fn handle_mcp(
     body: &[u8],
     hub: &Arc<ApprovalHub>,
 ) {
-    if !supercli_core::mcp_auth::verify_auth(headers.get("x-unpeel-auth").map(String::as_str)) {
+    if !supercli_core::mcp_auth::verify_auth(headers.get("x-supercli-auth").map(String::as_str)) {
         respond(stream, "401 Unauthorized", r#"{"error":"unauthorized"}"#);
         return;
     }
@@ -576,7 +576,7 @@ fn handle_connection(
         return;
     }
     let is_mcp = path.starts_with("/mcp/");
-    // The cross-frontend change ping: another Unpeel wrote shared state and
+    // The cross-frontend change ping: another Supercli wrote shared state and
     // is telling us to re-read it now rather than on our next poll. Carries
     // no session id.
     let is_state = path == supercli_core::state_bus::ROUTE;
@@ -687,7 +687,7 @@ fn handle_connection(
             );
             return;
         };
-        // Alerts are an Unpeel App surface, not a general-purpose local
+        // Alerts are an Supercli App surface, not a general-purpose local
         // notification socket. A stopped or non-App session cannot use it.
         if manifest.state != supercli_core::session_host::HostedSessionState::Running
             || manifest.active_app.is_none()
@@ -919,7 +919,7 @@ mod tests {
     ) {
         let guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
         let dir =
-            std::env::temp_dir().join(format!("unpeel-hook-mcp-test-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("supercli-hook-mcp-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let prev = std::env::var_os("SUPERCLI_HOME");
@@ -936,7 +936,7 @@ mod tests {
     }
 
     fn auth_headers(token: &str) -> HashMap<String, String> {
-        HashMap::from([("x-unpeel-auth".to_string(), token.to_string())])
+        HashMap::from([("x-supercli-auth".to_string(), token.to_string())])
     }
 
     #[test]
@@ -994,7 +994,7 @@ mod tests {
     #[test]
     fn concurrent_registry_updates_preserve_every_frontend() {
         let dir =
-            std::env::temp_dir().join(format!("unpeel-app-ports-race-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("supercli-app-ports-race-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("app-ports");
         let barrier = Arc::new(std::sync::Barrier::new(8));
@@ -1036,7 +1036,7 @@ mod tests {
             Some(7)
         );
         assert_eq!(
-            runtime_generation_from_json(&serde_json::json!({"unpeelRuntimeGeneration": 8})),
+            runtime_generation_from_json(&serde_json::json!({"supercliRuntimeGeneration": 8})),
             Some(8)
         );
         assert_eq!(

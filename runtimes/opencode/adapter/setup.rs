@@ -9,10 +9,10 @@ pub(crate) const OPENCODE_PLUGIN_SCRIPT: &str = include_str!(concat!(
     "/../../runtimes/opencode/assets/hooks/plugin.js"
 ));
 
-/// Install the Unpeel notify plugin into OpenCode's own global plugin
+/// Install the Supercli notify plugin into OpenCode's own global plugin
 /// directory. OpenCode loads every `plugin/*.js` beneath its config dir, so
 /// a hand-typed `opencode` reports through the plugin without any launch
-/// environment. The plugin no-ops outside an Unpeel session.
+/// environment. The plugin no-ops outside an Supercli session.
 pub fn install() -> Result<(), String> {
     let notify_path = notify_hook_script_path();
     write_executable_script(&notify_path, NOTIFY_HOOK_SCRIPT, "notify hook script")?;
@@ -47,5 +47,5 @@ pub(crate) fn opencode_plugin_dir() -> PathBuf {
 }
 
 pub(crate) fn opencode_plugin_path() -> PathBuf {
-    opencode_plugin_dir().join("unpeel-notify.js")
+    opencode_plugin_dir().join("supercli-notify.js")
 }

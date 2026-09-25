@@ -1,4 +1,4 @@
-//! Shared first-run seeding: what a brand-new Unpeel install should show
+//! Shared first-run seeding: what a brand-new Supercli install should show
 //! before the user configures anything. The desktop does this in Swift at
 //! startup (PATH scan + usage ordering); this is the frontend-agnostic
 //! version, so the TUI, the CLI, and a headless Linux host all arrive at

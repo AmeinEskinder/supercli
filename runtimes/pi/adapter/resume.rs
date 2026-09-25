@@ -62,14 +62,14 @@ mod tests {
 
     #[test]
     fn older_pinned_storage_survives_resume() {
-        let pinned = "pi --yolo --session-dir '/root/.unpeel/pi-sessions/s1'";
+        let pinned = "pi --yolo --session-dir '/root/.supercli/pi-sessions/s1'";
         assert_eq!(
-            managed_session_dir(pinned, "/root/.unpeel"),
-            Some("/root/.unpeel/pi-sessions/s1".to_string())
+            managed_session_dir(pinned, "/root/.supercli"),
+            Some("/root/.supercli/pi-sessions/s1".to_string())
         );
         assert_eq!(
             resumed(pinned, None),
-            "pi --yolo --session-dir '/root/.unpeel/pi-sessions/s1' --continue"
+            "pi --yolo --session-dir '/root/.supercli/pi-sessions/s1' --continue"
         );
         assert_eq!(resumed("pi --yolo", None), "pi --yolo --continue");
     }
@@ -78,8 +78,8 @@ mod tests {
     fn managed_storage_rejects_path_traversal() {
         assert_eq!(
             managed_session_dir(
-                "pi --session-dir '/root/.unpeel/pi-sessions/../escape'",
-                "/root/.unpeel/pi-sessions"
+                "pi --session-dir '/root/.supercli/pi-sessions/../escape'",
+                "/root/.supercli/pi-sessions"
             ),
             None
         );
@@ -100,7 +100,7 @@ mod tests {
             "pi --resume latest --yolo"
         );
         assert_eq!(
-            managed_session_dir("pi --session-dir=/tmp/custom", "/root/.unpeel"),
+            managed_session_dir("pi --session-dir=/tmp/custom", "/root/.supercli"),
             None
         );
     }

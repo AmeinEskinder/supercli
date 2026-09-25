@@ -2,8 +2,8 @@
 //! this pane, their editor, or the system opener.
 //!
 //! The policy (Settings ▸ Open resources) lives on the Host. An App never
-//! guesses it: it asks `unpeel open <path> --resolve`, then acts — an App
-//! through `unpeel open` (which creates or reuses the companion pane beside
+//! guesses it: it asks `supercli open <path> --resolve`, then acts — an App
+//! through `supercli open` (which creates or reuses the companion pane beside
 //! this Session), the editor through the same bridge the "Open in editor"
 //! action uses, the system through the platform opener. Standalone (no
 //! Host), everything falls back to the editor bridge.
@@ -35,7 +35,7 @@ pub fn open_resource(path: impl AsRef<Path>) -> Result<OpenOutcome, AgentError> 
             .map(|()| OpenOutcome::Editor)
             .map_err(|error| AgentError::new(error.to_string()));
     }
-    let resolution = run_unpeel(&["open", &path.to_string_lossy(), "--resolve", "--json"])?;
+    let resolution = run_supercli(&["open", &path.to_string_lossy(), "--resolve", "--json"])?;
     let opener = resolution
         .get("opener")
         .and_then(Value::as_str)
@@ -61,7 +61,7 @@ pub fn open_resource(path: impl AsRef<Path>) -> Result<OpenOutcome, AgentError> 
                     "{name} is not installed — add it in Settings ▸ Open resources"
                 )));
             }
-            let receipt = run_unpeel(&["open", &path.to_string_lossy(), "--json"])?;
+            let receipt = run_supercli(&["open", &path.to_string_lossy(), "--json"])?;
             let name = receipt
                 .pointer("/app/name")
                 .and_then(Value::as_str)
@@ -85,35 +85,35 @@ fn absolute(path: &Path) -> PathBuf {
     }
 }
 
-/// The `unpeel` CLI that belongs to the Host running this App: it ships
-/// next to the `unpeel-host` the Host advertises (`UNPEEL_HOST_BIN`), so a
+/// The `supercli` CLI that belongs to the Host running this App: it ships
+/// next to the `supercli-host` the Host advertises (`SUPERCLI_HOST_BIN`), so a
 /// stale CLI elsewhere on PATH never answers for a newer Host.
-fn unpeel_cli() -> PathBuf {
-    std::env::var_os("UNPEEL_HOST_BIN")
+fn supercli_cli() -> PathBuf {
+    std::env::var_os("SUPERCLI_HOST_BIN")
         .map(PathBuf::from)
-        .and_then(|host| host.parent().map(|dir| dir.join("unpeel")))
+        .and_then(|host| host.parent().map(|dir| dir.join("supercli")))
         .filter(|cli| cli.is_file())
-        .unwrap_or_else(|| PathBuf::from("unpeel"))
+        .unwrap_or_else(|| PathBuf::from("supercli"))
 }
 
-fn run_unpeel(args: &[&str]) -> Result<Value, AgentError> {
-    let output = Command::new(unpeel_cli())
+fn run_supercli(args: &[&str]) -> Result<Value, AgentError> {
+    let output = Command::new(supercli_cli())
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|error| AgentError::new(format!("unpeel not available: {error}")))?;
+        .map_err(|error| AgentError::new(format!("supercli not available: {error}")))?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(AgentError::new(if message.is_empty() {
-            "unpeel open failed".to_owned()
+            "supercli open failed".to_owned()
         } else {
             message
         }));
     }
     serde_json::from_slice(&output.stdout)
-        .map_err(|error| AgentError::new(format!("unpeel open reply was not JSON: {error}")))
+        .map_err(|error| AgentError::new(format!("supercli open reply was not JSON: {error}")))
 }
 
 fn open_with_system(path: &Path) -> Result<(), AgentError> {

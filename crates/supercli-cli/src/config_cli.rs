@@ -1,4 +1,4 @@
-//! `unpeel config check` — validate the workspace configuration.
+//! `supercli config check` — validate the workspace configuration.
 //!
 //! The config is the settings subset of `app-state.json`. Unknown keys are
 //! reported as warnings (exit stays 0); invalid values are errors and the
@@ -8,16 +8,16 @@
 use supercli_core::{app_state, config};
 
 pub const CONFIG_HELP: &str = "\
-unpeel config — inspect the workspace configuration
+supercli config — inspect the workspace configuration
 
-  unpeel config check [--json]   validate settings in app-state.json
-  unpeel config reference        print the schema-generated config reference (Markdown)
+  supercli config check [--json]   validate settings in app-state.json
+  supercli config reference        print the schema-generated config reference (Markdown)
 
 Unknown keys print as warnings; invalid values print as errors and exit 2.\
 ";
 
 fn usage_error(what: &str) -> i32 {
-    eprintln!("unpeel config: {what}\n{CONFIG_HELP}");
+    eprintln!("supercli config: {what}\n{CONFIG_HELP}");
     2
 }
 
@@ -98,10 +98,10 @@ fn print_reference() -> i32 {
     use supercli_core::config::{SettingType, SETTINGS};
     println!("# Config reference");
     println!();
-    println!("Generated from the typed config schema (`unpeel config reference`).");
+    println!("Generated from the typed config schema (`supercli config reference`).");
     println!("Every setting has a documented default applied by its reader;");
     println!("missing keys are never an issue. Unknown keys produce warnings;");
-    println!("invalid values produce errors (exit 2 from `unpeel config check`).");
+    println!("invalid values produce errors (exit 2 from `supercli config check`).");
     println!();
     for def in SETTINGS {
         let ty_desc = match def.ty {

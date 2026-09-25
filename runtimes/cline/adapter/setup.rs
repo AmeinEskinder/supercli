@@ -21,7 +21,7 @@ pub(crate) const CLINE_HOOK_EVENTS: &[&str] = &[
     "SessionShutdown",
 ];
 /// Install the Cline integration: one managed shim per global hook event
-/// under `~/.cline/hooks/`, and the Unpeel MCP shim merged into Cline's own
+/// under `~/.cline/hooks/`, and the Supercli MCP shim merged into Cline's own
 /// user MCP settings. Cline's shared hub daemon inherits whichever session
 /// started it; the hook and gate both resolve the calling Session from the
 /// hosted environment (or process ancestry), so concurrent sessions stay
@@ -40,7 +40,7 @@ pub fn install() -> Result<(), String> {
     let quoted_script = crate::integrations::shared::shell_quote(&script_path.to_string_lossy());
     for event in CLINE_HOOK_EVENTS {
         let contents = format!(
-            "#!/bin/bash\n# Managed by Unpeel. Local edits are replaced.\nexec {quoted_script} {event}\n"
+            "#!/bin/bash\n# Managed by Supercli. Local edits are replaced.\nexec {quoted_script} {event}\n"
         );
         write_cline_event_hook(&hooks_dir, event, &contents)?;
     }
@@ -109,10 +109,10 @@ pub(crate) fn ensure_cline_user_mcp_server(shim: &Path) -> Result<(), String> {
     }
     let servers = servers.as_object_mut().unwrap();
     let desired = cline_mcp_server_value(shim);
-    if servers.get("unpeel") == Some(&desired) {
+    if servers.get("supercli") == Some(&desired) {
         return Ok(());
     }
-    servers.insert("unpeel".into(), desired);
+    servers.insert("supercli".into(), desired);
     let serialized = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize Cline MCP settings: {e}"))?;
     write_file_atomic(&path, &format!("{serialized}\n"), "Cline MCP settings")
@@ -123,7 +123,7 @@ pub(crate) fn write_cline_event_hook(
     event: &str,
     contents: &str,
 ) -> Result<(), String> {
-    const MANAGED_MARKER: &str = "# Managed by Unpeel.";
+    const MANAGED_MARKER: &str = "# Managed by Supercli.";
     // Cline recognizes every one of these as the same event basename and runs
     // multiple matching files. Prefer `.bash`, but never overwrite a user's
     // hook: reuse our existing slot or take the next unoccupied extension.
@@ -145,7 +145,7 @@ pub(crate) fn write_cline_event_hook(
         .ok_or_else(|| {
             format!(
                 "Cline already has user-owned hooks in every supported slot for {event}; \
-                 Unpeel left them untouched."
+                 Supercli left them untouched."
             )
         })?;
     write_executable_script(&target, contents, "Cline lifecycle hook")

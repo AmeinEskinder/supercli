@@ -1,12 +1,12 @@
 //! Opinionated Ratatui components for ordinary terminal Apps.
 //!
-//! The component APIs require no Unpeel runtime or bridge setup and work in any
+//! The component APIs require no Supercli runtime or bridge setup and work in any
 //! terminal. The default-on `ui-bridge` feature additionally lets a hosted App
 //! publish semantic state to SwiftUI or web; disabling default features removes
 //! all socket, authentication, persistence-envelope, and UI protocol code.
 //! Markdown editing and terminal Media decoding/rendering are separate opt-in
 //! features. Dynamic Surface embedding is separately default-off, so ordinary
-//! Apps never pull `unpeel-surface` or wgpu.
+//! Apps never pull `supercli-surface` or wgpu.
 
 #![deny(unsafe_code)]
 
@@ -93,7 +93,7 @@ pub use content::{
     ContentTheme, ContentTone, ContentWidget, MAX_CONTENT_LINES,
 };
 pub use context::{
-    AppContext, AppMode, ProjectContext, UnpeelUser, WorkspaceContext, WorktreeContext,
+    AppContext, AppMode, ProjectContext, SupercliUser, WorkspaceContext, WorktreeContext,
 };
 pub use drag::{DRAG_MAP_FILENAME, DragRegion, DragSurface};
 pub use drop_target::{
@@ -215,5 +215,5 @@ pub use ui_state::{
 /// Upstream scene/runtime API used by the optional Surface embed. App Kit does
 /// not reinterpret USRF messages or own the GPU presenter.
 #[cfg(feature = "surface-embed")]
-pub use unpeel_surface as surface_runtime;
+pub use supercli_surface as surface_runtime;
 pub use widgets::{DragSource, DraggablePath};

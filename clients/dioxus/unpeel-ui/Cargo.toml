@@ -1,10 +1,10 @@
 [package]
-name = "unpeel-ui"
+name = "supercli-ui"
 version = "0.8.0"
 edition = "2021"
 rust-version = "1.88.0"
 license = "MIT"
-description = "Shared Dioxus components for the Unpeel cross-platform clients (desktop + mobile)"
+description = "Shared Dioxus components for the Supercli cross-platform clients (desktop + mobile)"
 
 [features]
 # Enabled by the iOS shell build: links the native shell's biometric
@@ -15,7 +15,7 @@ shell-biometric = []
 
 [dependencies]
 dioxus = { workspace = true, features = ["lib", "document"] }
-unpeel-client = { workspace = true }
+supercli-client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 vt100 = { workspace = true }

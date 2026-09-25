@@ -204,7 +204,7 @@ pub fn remove_paired_host(records: Vec<PairedHostRecord>, host_id: &str) -> Vec<
 // ---------------------------------------------------------------------------
 
 /// Decode a pairing QR / paste code. The compact form is
-/// `UNPEEL:<version>:<host>:<port>:<macID>:<token>:<expiresUnixSeconds>`
+/// `SUPERCLI:<version>:<host>:<port>:<macID>:<token>:<expiresUnixSeconds>`
 /// with an optional eighth `<proxyID>` field for controller-assisted
 /// pairing — kept to the QR alphanumeric charset so codes stay small.
 pub fn decode_pairing_code(raw: &str) -> Option<RemotePairingPayload> {
@@ -217,7 +217,7 @@ pub fn decode_pairing_code(raw: &str) -> Option<RemotePairingPayload> {
     if parts.len() != 7 && parts.len() != 8 {
         return None;
     }
-    if !parts[0].eq_ignore_ascii_case("UNPEEL") {
+    if !parts[0].eq_ignore_ascii_case("SUPERCLI") {
         return None;
     }
     let version: u32 = parts[1].parse().ok()?;
@@ -264,7 +264,7 @@ pub fn encode_pairing_code(payload: &RemotePairingPayload) -> Option<String> {
         return None;
     }
     let mut fields = vec![
-        "UNPEEL".to_string(),
+        "SUPERCLI".to_string(),
         payload.protocol_version.to_string(),
         host,
         port.to_string(),
@@ -331,7 +331,7 @@ fn pairing_derive_key(token: &str, salt: &[u8], direction: PairingDirection) -> 
     let hk = Hkdf::<Sha256>::new(Some(salt), token.as_bytes());
     let mut okm = [0u8; 32];
     hk.expand(
-        format!("unpeel-pairing-v1:{}", direction.as_str()).as_bytes(),
+        format!("supercli-pairing-v1:{}", direction.as_str()).as_bytes(),
         &mut okm,
     )
     .expect("HKDF expand with fixed length cannot fail");
@@ -340,7 +340,7 @@ fn pairing_derive_key(token: &str, salt: &[u8], direction: PairingDirection) -> 
 
 fn pairing_aad(mac_id: &str, endpoint: &str, direction: PairingDirection) -> Vec<u8> {
     format!(
-        "unpeel-pairing-v1\0{}\0{mac_id}\0{endpoint}",
+        "supercli-pairing-v1\0{}\0{mac_id}\0{endpoint}",
         direction.as_str()
     )
     .into_bytes()
@@ -628,7 +628,7 @@ pub fn device_identity(
     let identity = RemoteDeviceIdentity {
         id: id_bytes.iter().map(|b| format!("{b:02x}")).collect(),
         name: std::env::var("SUPERCLI_DEVICE_NAME")
-            .unwrap_or_else(|_| "Unpeel Controller".to_string()),
+            .unwrap_or_else(|_| "Supercli Controller".to_string()),
         platform: std::env::consts::OS.to_string(),
         app_version: None,
     };
@@ -697,7 +697,7 @@ mod tests {
         let code = encode_pairing_code(&payload).expect("encodable");
         assert_eq!(
             code,
-            "UNPEEL:1:192.168.1.10:8321:HOST-123:one-time-secret:1800000000"
+            "SUPERCLI:1:192.168.1.10:8321:HOST-123:one-time-secret:1800000000"
         );
         let decoded = decode_pairing_code(&code).expect("decodable");
         assert_eq!(decoded.mac_id, payload.mac_id);
@@ -719,10 +719,10 @@ mod tests {
     #[test]
     fn qr_code_rejects_garbage() {
         assert!(decode_pairing_code("").is_none());
-        assert!(decode_pairing_code("UNPEEL:1:host").is_none());
+        assert!(decode_pairing_code("SUPERCLI:1:host").is_none());
         assert!(decode_pairing_code("OTHER:1:h:1:m:t:2").is_none());
         // Token case is preserved verbatim.
-        let decoded = decode_pairing_code("UNPEEL:1:example.com:8321:MACID:ToKeN:1800000000")
+        let decoded = decode_pairing_code("SUPERCLI:1:example.com:8321:MACID:ToKeN:1800000000")
             .expect("decodable");
         assert_eq!(decoded.token, "ToKeN");
         assert_eq!(decoded.mac_id, "macid");

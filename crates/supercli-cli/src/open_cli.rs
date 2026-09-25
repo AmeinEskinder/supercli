@@ -1,4 +1,4 @@
-//! `unpeel open` — resolve a typed resource through this workspace's Host
+//! `supercli open` — resolve a typed resource through this workspace's Host
 //! catalog and opener policy, then use the shared user-owned App open path.
 
 use std::io::{self, IsTerminal, Write};
@@ -10,14 +10,14 @@ use supercli_core::app_presentations::AppResourceRef;
 use supercli_core::{app_installer, app_open, apps_mcp};
 
 pub const HELP: &str = "\
-unpeel open — open a resource with a workspace App
+supercli open — open a resource with a workspace App
 
-  unpeel open <path> [--with <app-id>] [--media-type <type>] [--json]
-  unpeel open git:working-tree [--with diffs] [--json]
-  unpeel open <resource-id> --kind <resource-kind> [--with <app-id>] [--json]
-  unpeel open <path> --resolve [--json]
+  supercli open <path> [--with <app-id>] [--media-type <type>] [--json]
+  supercli open git:working-tree [--with diffs] [--json]
+  supercli open <resource-id> --kind <resource-kind> [--with <app-id>] [--json]
+  supercli open <path> --resolve [--json]
 
-Inside an Unpeel Session, the App opens in a companion pane. Outside one, it
+Inside an Supercli Session, the App opens in a companion pane. Outside one, it
 opens as a new hosted Session. Missing Apps require user confirmation.
 --resolve reports which opener this workspace's policy picks for the
 resource (an App, the editor, or the system) without opening anything —
@@ -114,7 +114,7 @@ fn run_inner(arguments: &[String]) -> Result<i32, String> {
     if status.state != "ready" {
         if !confirm_install(&app.name)? {
             return Err(format!(
-                "{} is not installed. Install it from Open resources settings or run `unpeel apps install {}`.",
+                "{} is not installed. Install it from Open resources settings or run `supercli apps install {}`.",
                 app.name, app.id
             ));
         }
@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn parser_accepts_explicit_typed_resource() {
         let args = parse(&[
-            "github:unpeel-com/unpeel#42".into(),
+            "github:supercli-com/supercli#42".into(),
             "--kind".into(),
             "github.pull-request".into(),
             "--with".into(),

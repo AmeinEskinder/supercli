@@ -1,4 +1,4 @@
-# XcodeGen project for the Unpeel Dioxus iOS native shell.
+# XcodeGen project for the Supercli Dioxus iOS native shell.
 #
 # This generates the Xcode project that hosts the Dioxus mobile launcher's
 # WKWebView plus the native bridges (push, speech, reflection). The Rust
@@ -10,22 +10,22 @@
 # Usage (on a Mac with Xcode):
 #   cd clients/dioxus/native-shell
 #   xcodegen generate
-#   open UnpeelShell.xcodeproj
+#   open SupercliShell.xcodeproj
 #
 # The generated project is Mac-only: it requires the iOS SDK, code signing,
 # and Apple frameworks (UserNotifications, Speech, FoundationModels).
 # CI builds it on macos-15+ runners (see .github/workflows/apple.yml).
 
-name: UnpeelShell
+name: SupercliShell
 options:
-  bundleIdPrefix: com.unpeel
+  bundleIdPrefix: com.supercli
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "16.0"
 
 settings:
   base:
-    PRODUCT_NAME: Unpeel
+    PRODUCT_NAME: Supercli
     MARKETING_VERSION: "0.7.1"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
@@ -40,42 +40,42 @@ settings:
       APS_ENVIRONMENT: production
 
 targets:
-  UnpeelShell:
+  SupercliShell:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: UnpeelPushBridge.swift
-      - path: UnpeelSpeechBridge.swift
-      - path: UnpeelReflectBridge.swift
+      - path: SupercliPushBridge.swift
+      - path: SupercliSpeechBridge.swift
+      - path: SupercliReflectBridge.swift
       # The shell's app/scene lifecycle and WKWebView host are created in
       # Xcode (File → New → Target → iOS App). Add your App.swift / SceneDelegate
       # here, or generate them via the Xcode template and add to sources.
     info:
       path: InfoPlistAdditions.plist
       properties:
-        CFBundleDisplayName: Unpeel
-        CFBundleIdentifier: com.unpeel.controller
+        CFBundleDisplayName: Supercli
+        CFBundleIdentifier: com.supercli.controller
         UILaunchStoryboardName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
     entitlements:
-      path: Unpeel.entitlements
+      path: Supercli.entitlements
     capabilities:
       - push: true
     settings:
       base:
-        INFOPLIST_FILE: UnpeelShell/Info.plist
-        CODE_SIGN_ENTITLEMENTS: UnpeelShell/Unpeel.entitlements
+        INFOPLIST_FILE: SupercliShell/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SupercliShell/Supercli.entitlements
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
 
 schemes:
-  UnpeelShell:
+  SupercliShell:
     build:
       targets:
-        UnpeelShell: all
+        SupercliShell: all
     run:
       config: Debug
     test:

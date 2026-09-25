@@ -2,7 +2,7 @@
 //!
 //! App Kit owns only the component box and opaque Host route. Retained scenes,
 //! resources, input packets, GPU rendering, and Kitty presentation remain in
-//! `unpeel-surface` and its USRF channel. In particular, this module has no
+//! `supercli-surface` and its USRF channel. In particular, this module has no
 //! frame-streaming representation.
 
 use std::collections::HashSet;
@@ -311,7 +311,7 @@ impl CanvasControl {
 
 /// Opinionated canvas screen: exactly one out-of-band Surface slot with a
 /// bounded row of semantic Button controls overlaid at the top. Scene input
-/// stays on USRF; every control action stays on `unpeel.ui`.
+/// stays on USRF; every control action stays on `supercli.ui`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasPage {
@@ -548,7 +548,7 @@ impl Default for CanvasPageTheme {
 }
 
 /// Ratatui overlay for CanvasPage's fixed top toolbar. The underlying Surface
-/// is rendered separately by unpeel-surface and remains visible in every cell
+/// is rendered separately by supercli-surface and remains visible in every cell
 /// outside this opaque semantic control region.
 #[derive(Clone, Copy, Debug)]
 pub struct CanvasPageWidget<'a> {
@@ -733,7 +733,7 @@ mod terminal {
     use std::io::{self, Write};
     use std::path::Path;
 
-    pub use unpeel_surface::ratatui::{SurfaceFrame, SurfaceView};
+    pub use supercli_surface::ratatui::{SurfaceFrame, SurfaceView};
 
     use super::SurfaceSpec;
 
@@ -741,10 +741,10 @@ mod terminal {
     ///
     /// It deliberately delegates guest execution, retained-scene encoding,
     /// local wgpu rendering, mmap frames, and Kitty lifecycle to
-    /// `unpeel_surface::ratatui::SurfaceLayer`.
+    /// `supercli_surface::ratatui::SurfaceLayer`.
     pub struct Surface {
         spec: SurfaceSpec,
-        layer: unpeel_surface::ratatui::SurfaceLayer,
+        layer: supercli_surface::ratatui::SurfaceLayer,
     }
 
     impl Surface {
@@ -755,7 +755,7 @@ mod terminal {
             rows: u16,
         ) -> Result<Self, Box<dyn Error>> {
             spec.validate()?;
-            let layer = unpeel_surface::ratatui::SurfaceLayer::load(
+            let layer = supercli_surface::ratatui::SurfaceLayer::load(
                 guest_path,
                 columns.max(1),
                 rows.max(1),
@@ -769,12 +769,12 @@ mod terminal {
         }
 
         #[must_use]
-        pub fn layer(&self) -> &unpeel_surface::ratatui::SurfaceLayer {
+        pub fn layer(&self) -> &supercli_surface::ratatui::SurfaceLayer {
             &self.layer
         }
 
         #[must_use]
-        pub fn layer_mut(&mut self) -> &mut unpeel_surface::ratatui::SurfaceLayer {
+        pub fn layer_mut(&mut self) -> &mut supercli_surface::ratatui::SurfaceLayer {
             &mut self.layer
         }
 

@@ -1,6 +1,6 @@
-//! Rust client for the Unpeel Host protocol.
+//! Rust client for the Supercli Host protocol.
 //!
-//! This crate is the portable replacement for the Swift `UnpeelShared`
+//! This crate is the portable replacement for the Swift `SupercliShared`
 //! Host-protocol client (`RemoteControlProtocol.swift`,
 //! `RelayProtocol.swift`). Every cross-platform client — Dioxus desktop,
 //! Dioxus mobile, the chat TUI — speaks to a Host through this crate, so

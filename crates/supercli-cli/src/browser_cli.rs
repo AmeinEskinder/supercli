@@ -1,4 +1,4 @@
-//! `unpeel browser` — the Host-owned Browser MCP engine, scripted.
+//! `supercli browser` — the Host-owned Browser MCP engine, scripted.
 //!
 //! The only browser verb the CLI carries: it delegates every decision to
 //! `supercli_core::browser_engine` (the pinned manifest, hash verification,
@@ -15,14 +15,14 @@ use std::path::PathBuf;
 use supercli_core::browser_engine as engine;
 
 pub const HELP: &str = "\
-unpeel browser — Host-owned Browser MCP engine (agent-browser)
+supercli browser — Host-owned Browser MCP engine (agent-browser)
 
-  unpeel browser install [--check] [--json]
+  supercli browser install [--check] [--json]
       install (or confirm) the pinned engine under ~/.supercli/browser/bin
       after sha256 verification against protocol/browser-engine-v1.json.
       --check only reports: exit 0 ready, 3 missing/stale, 4 no browser.
 
-The engine drives a system Chrome/Chromium; Unpeel never installs one.
+The engine drives a system Chrome/Chromium; Supercli never installs one.
 Override the engine with SUPERCLI_AGENT_BROWSER_BIN=<path>.";
 
 /// `args` are the raw words after `browser` (flags parsed here so this verb

@@ -15,8 +15,8 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use unpeel_client::dto::{ProjectSummary, SessionStatus, SessionSummary};
-use unpeel_client::protocol::{capabilities, HostProtocolDescriptor};
+use supercli_client::dto::{ProjectSummary, SessionStatus, SessionSummary};
+use supercli_client::protocol::{capabilities, HostProtocolDescriptor};
 
 /// Which resume affordance the organize sheet offers for a session.
 ///
@@ -168,9 +168,9 @@ pub fn SessionOrganizeSheet(
     // patch — the fallback is restrictive (hide the verb), mirroring Swift.
     let can_archive = session.capabilities.archive;
 
-    let can_move = unpeel_client::protocol::supports_session_project_move(host_protocol.as_ref());
+    let can_move = supercli_client::protocol::supports_session_project_move(host_protocol.as_ref());
     let destinations =
-        unpeel_client::dto::move_destinations(&session.project_id, &session.project_id, &projects);
+        supercli_client::dto::move_destinations(&session.project_id, &session.project_id, &projects);
 
     let do_save = move |_| {
         let trimmed = title.read().trim().to_string();
@@ -578,7 +578,7 @@ mod tests {
             } else {
                 SessionStatus::Other
             },
-            activity: unpeel_client::dto::ActivityState::Idle,
+            activity: supercli_client::dto::ActivityState::Idle,
             activity_source: None,
             unread: false,
             pinned: false,
@@ -589,7 +589,7 @@ mod tests {
             notify_when_done: false,
             terminal_background_hex: None,
             archived,
-            capabilities: unpeel_client::dto::SessionCapabilities {
+            capabilities: supercli_client::dto::SessionCapabilities {
                 restart,
                 resume_agent,
                 archive: false,
@@ -600,9 +600,9 @@ mod tests {
 
     fn proto() -> HostProtocolDescriptor {
         HostProtocolDescriptor {
-            major_version: unpeel_client::protocol::PROTOCOL_MAJOR,
+            major_version: supercli_client::protocol::PROTOCOL_MAJOR,
             minor_version: 0,
-            capabilities: vec![unpeel_client::protocol::Capability::Id(
+            capabilities: vec![supercli_client::protocol::Capability::Id(
                 capabilities::SESSION_RUNTIME_RESUME.to_string(),
             )],
         }

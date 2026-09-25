@@ -7,7 +7,7 @@ if [ -n "$1" ]; then
 else
   INPUT=$(cat)
 fi
-# Global provider hooks must be inert outside a hosted Unpeel Session.
+# Global provider hooks must be inert outside a hosted Supercli Session.
 [ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
 TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
@@ -154,8 +154,8 @@ HOOK_PAYLOAD=$(add_runtime_generation_to_payload "$HOOK_PAYLOAD")
 
 _hook_post_results=""
 if [ -n "$SUPERCLI_SESSION_ID" ]; then
-  post_to_unpeel() {
-    # Several Unpeel instances can run at once (e.g. a dev build next to the
+  post_to_supercli() {
+    # Several Supercli instances can run at once (e.g. a dev build next to the
     # installed app) and they share the port registry. Post to every known
     # port, not just the first that answers, so the instance that owns this
     # session always receives the event.
@@ -167,9 +167,9 @@ if [ -n "$SUPERCLI_SESSION_ID" ]; then
   # event), and concurrent posts could arrive out of order. Set
   # SUPERCLI_HOOK_POST_SYNC=0 to restore backgrounded posts.
   if [ "${SUPERCLI_HOOK_POST_SYNC:-1}" = "1" ]; then
-    post_to_unpeel
+    post_to_supercli
   else
-    ( post_to_unpeel ) &
+    ( post_to_supercli ) &
   fi
 fi
 

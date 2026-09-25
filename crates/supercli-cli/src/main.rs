@@ -1,12 +1,12 @@
-//! `unpeel` — the command-line client of the shared Unpeel contracts.
+//! `supercli` — the command-line client of the shared Supercli contracts.
 //!
-//! One binary, three roles: `unpeel serve` runs the UI-free Host service
-//! (`unpeel-serve`), the one-shot verbs script sessions, presets, projects,
-//! workspaces, settings, pairing, and Unpeel Link against the same on-disk
+//! One binary, three roles: `supercli serve` runs the UI-free Host service
+//! (`supercli-serve`), the one-shot verbs script sessions, presets, projects,
+//! workspaces, settings, pairing, and Supercli Link against the same on-disk
 //! contract the Mac app and phone use, and `--workspace NAME` re-homes any of
 //! them into an isolated workspace. There is no interactive terminal UI:
-//! bare `unpeel` prints usage. The Controllers are the Unpeel app, the phone,
-//! and the web Controller — all clients of `unpeel serve`.
+//! bare `supercli` prints usage. The Controllers are the Supercli app, the phone,
+//! and the web Controller — all clients of `supercli serve`.
 
 mod apps_cli;
 mod backup_cli;
@@ -36,13 +36,13 @@ fn main() {
     match workspaces::claim_workspace_flag(&mut args) {
         Ok(Some(reference)) => {
             if let Err(error) = workspaces::enter(&reference) {
-                eprintln!("unpeel: {error}");
+                eprintln!("supercli: {error}");
                 std::process::exit(2);
             }
         }
         Ok(None) => {}
         Err(error) => {
-            eprintln!("unpeel: {error}");
+            eprintln!("supercli: {error}");
             std::process::exit(2);
         }
     }
@@ -59,7 +59,7 @@ fn main() {
                 }
                 None => {
                     eprintln!(
-                        "unpeel: invalid --log-level {level_str:?} (expected DEBUG, INFO, WARN, ERROR)"
+                        "supercli: invalid --log-level {level_str:?} (expected DEBUG, INFO, WARN, ERROR)"
                     );
                     std::process::exit(2);
                 }

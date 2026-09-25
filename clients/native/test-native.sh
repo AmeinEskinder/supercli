@@ -2,7 +2,7 @@
 # Native app unit suite: builds the debug bridge from this tree, then runs
 # `swift test` in clients/native/SupercliNative. The Swift conformance tests read
 # the protocol contracts from this checkout's protocol/ directory (walking up
-# from their own file; UNPEEL_PROTOCOL_DIR overrides), and the runtime catalog
+# from their own file; SUPERCLI_PROTOCOL_DIR overrides), and the runtime catalog
 # copy in clients/shared is checked against runtimes/ by `bun run check:runtimes`.
 set -euo pipefail
 

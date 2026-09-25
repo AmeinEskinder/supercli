@@ -39,7 +39,7 @@ fn project_hook_write_refuses_committed_symlink() {
     let result = super::write_project_file_no_symlinks(
         &project,
         Path::new(".github/hooks/victim.txt"),
-        b"overwritten by unpeel\n",
+        b"overwritten by supercli\n",
     );
     assert!(result.is_err(), "expected symlink traversal to be refused");
     assert_eq!(
@@ -51,11 +51,11 @@ fn project_hook_write_refuses_committed_symlink() {
     // A symlink at the leaf itself is also refused.
     let safe_dir = project.join(".amp").join("plugins");
     fs::create_dir_all(&safe_dir).expect("create plugins dir");
-    std::os::unix::fs::symlink(&secret, safe_dir.join("unpeel-notify.js"))
+    std::os::unix::fs::symlink(&secret, safe_dir.join("supercli-notify.js"))
         .expect("plant symlink leaf");
     let leaf = super::write_project_file_no_symlinks(
         &project,
-        Path::new(".amp/plugins/unpeel-notify.js"),
+        Path::new(".amp/plugins/supercli-notify.js"),
         b"overwritten\n",
     );
     assert!(leaf.is_err(), "expected leaf symlink to be refused");
@@ -66,11 +66,11 @@ fn project_hook_write_refuses_committed_symlink() {
     let hardlink_project = temp_path("hardlink-hook-repo");
     let hardlink_dir = hardlink_project.join(".amp").join("plugins");
     fs::create_dir_all(&hardlink_dir).expect("create hardlink plugins dir");
-    let hardlink_leaf = hardlink_dir.join("unpeel-notify.js");
+    let hardlink_leaf = hardlink_dir.join("supercli-notify.js");
     fs::hard_link(&secret, &hardlink_leaf).expect("plant hardlink leaf");
     super::write_project_file_no_symlinks(
         &hardlink_project,
-        Path::new(".amp/plugins/unpeel-notify.js"),
+        Path::new(".amp/plugins/supercli-notify.js"),
         b"installed hook\n",
     )
     .expect("hardlink leaf should be safely replaced");
@@ -142,12 +142,12 @@ fn project_hook_write_refuses_committed_symlink() {
     // A clean repo path still installs normally.
     super::write_project_file_no_symlinks(
         &project,
-        Path::new(".config/hooks/unpeel.json"),
+        Path::new(".config/hooks/supercli.json"),
         b"{}\n",
     )
     .expect("clean install should succeed");
     assert_eq!(
-        fs::read_to_string(project.join(".config/hooks/unpeel.json")).unwrap(),
+        fs::read_to_string(project.join(".config/hooks/supercli.json")).unwrap(),
         "{}\n"
     );
 }
@@ -349,7 +349,7 @@ fn all_hook_scripts_record_last_hook_event() {
 }
 
 #[test]
-fn hook_reporters_are_inert_outside_unpeel() {
+fn hook_reporters_are_inert_outside_supercli() {
     for (label, script) in [
         ("claude", CLAUDE_HOOK_SCRIPT),
         ("notify", NOTIFY_HOOK_SCRIPT),
@@ -466,7 +466,7 @@ fn every_owned_hook_reporter_tags_http_payload_and_durable_seed_generation() {
             .args(case.args)
             .env("HOME", hook_env_home(case.label))
             .env("SUPERCLI_APP_PORT", capture.port.to_string())
-            .env("SUPERCLI_SESSION_ID", "unpeel-generation-session")
+            .env("SUPERCLI_SESSION_ID", "supercli-generation-session")
             .env("SUPERCLI_SESSION_DIR", &session_dir)
             .env("SUPERCLI_RUNTIME_GENERATION", "42")
             .env_remove("SUPERCLI_HOOK_POST_SYNC")
@@ -572,7 +572,7 @@ fn record_last_hook_event_skips_missing_session_dir() {
 
 #[test]
 fn read_mergeable_json_skips_update_on_malformed_settings() {
-    let dir = std::env::temp_dir().join(format!("unpeel-merge-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("supercli-merge-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
 
     // Missing file → an empty object to merge into.
@@ -584,7 +584,7 @@ fn read_mergeable_json_skips_update_on_malformed_settings() {
 
     // Malformed JSON (e.g. trailing comma / torn write) → None, so callers
     // skip the update and leave the user's file intact instead of clobbering
-    // it with an Unpeel-only object.
+    // it with an Supercli-only object.
     let malformed = dir.join("malformed.json");
     std::fs::write(&malformed, "{ \"hooks\": {,,, ").unwrap();
     assert_eq!(

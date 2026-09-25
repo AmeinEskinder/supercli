@@ -18,7 +18,7 @@ use crate::MAX_SAFE_UI_INTEGER;
 /// Stable filename stored next to the Host-owned `ui.sock`.
 pub const UI_STATE_FILENAME: &str = "ui-state.json";
 /// Envelope discriminator for persisted App state.
-pub const UI_STATE_FORMAT: &str = "unpeel.app-kit.state";
+pub const UI_STATE_FORMAT: &str = "supercli.app-kit.state";
 /// Current persistence-envelope version. App model schemas version separately.
 pub const UI_STATE_FORMAT_VERSION: u32 = 1;
 
@@ -284,7 +284,7 @@ mod tests {
     fn state_round_trips_and_replaces_atomically() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join(UI_STATE_FILENAME);
-        let store = UiStateStore::new(&path, "com.unpeel.markdown", "0.1.0");
+        let store = UiStateStore::new(&path, "com.supercli.markdown", "0.1.0");
         assert!(store.load::<Model>().unwrap().is_none());
 
         store

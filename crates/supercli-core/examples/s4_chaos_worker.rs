@@ -1,6 +1,6 @@
 //! S4 chaos worker: runs c8 concurrent grant submissions until killed.
 //!
-//! Usage: s4_chaos_worker <unpeel_home> <concurrency> <ops_per_thread>
+//! Usage: s4_chaos_worker <supercli_home> <concurrency> <ops_per_thread>
 //!
 //! Each thread submits grants via persist_grant_grouped. The process is
 //! expected to be kill -9'd at a random point; the driver script then
@@ -12,14 +12,14 @@ use std::sync::{Arc, Barrier};
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
-        eprintln!("usage: s4_chaos_worker <unpeel_home> <concurrency> <ops_per_thread>");
+        eprintln!("usage: s4_chaos_worker <supercli_home> <concurrency> <ops_per_thread>");
         std::process::exit(2);
     }
     let home = args[1].clone();
     let concurrency: usize = args[2].parse().unwrap();
     let ops: usize = args[3].parse().unwrap();
 
-    std::env::set_var("UNPEEL_HOME", &home);
+    std::env::set_var("SUPERCLI_HOME", &home);
 
     let barrier = Arc::new(Barrier::new(concurrency));
     let completed = Arc::new(AtomicU64::new(0));
@@ -36,7 +36,7 @@ fn main() {
                 // Bounded unique grants so the file doesn't grow unbounded.
                 let caller = format!("s4-t{t}-{}", i % 20);
                 let target = format!("s4-target-{}", i % 20);
-                match unpeel_core::grant_writer::persist_grant_grouped(
+                match supercli_core::grant_writer::persist_grant_grouped(
                     "write",
                     &caller,
                     Some(&target),

@@ -1,10 +1,10 @@
 #![cfg(unix)]
 
-//! The serve worker's orphan-host reaper (unpeel_core::session_host::
+//! The serve worker's orphan-host reaper (supercli_core::session_host::
 //! reap_orphan_session_hosts): a per-process `__session_host__` still running
 //! after its session is filed is terminated, and a running one is left alone.
 //!
-//! One `#[test]` on purpose: it sets this process's own `UNPEEL_HOME` (the
+//! One `#[test]` on purpose: it sets this process's own `SUPERCLI_HOME` (the
 //! reaper reads it), so a second test in the same binary would race the env.
 
 use serde_json::{json, Value};
@@ -81,13 +81,13 @@ impl Drop for HostProc {
 }
 
 fn spawn_host(home: &Path, launch: &Path) -> HostProc {
-    let child = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let child = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__session_host__")
         .arg(launch)
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_HOME", home)
         .env("HOME", home)
         .env("SHELL", "/bin/bash")
-        .env("UNPEEL_PTY_CORE", "0")
+        .env("SUPERCLI_PTY_CORE", "0")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -117,9 +117,9 @@ fn alive(pid: u32) -> bool {
 fn reaps_a_filed_host_and_leaves_a_running_one() {
     let home = temp_home("mix");
     fs::create_dir_all(home.join("app-sessions")).unwrap();
-    // The reaper reads UNPEEL_HOME from this process.
-    std::env::set_var("UNPEEL_HOME", &home);
-    std::env::set_var("UNPEEL_PTY_CORE", "0");
+    // The reaper reads SUPERCLI_HOME from this process.
+    std::env::set_var("SUPERCLI_HOME", &home);
+    std::env::set_var("SUPERCLI_PTY_CORE", "0");
 
     let filed_launch = write_launch(&home, "filed", "sleep 600");
     let mut filed_host = spawn_host(&home, &filed_launch);
@@ -155,7 +155,7 @@ fn reaps_a_filed_host_and_leaves_a_running_one() {
     )
     .unwrap();
 
-    let reaped = unpeel_core::session_host::reap_orphan_session_hosts();
+    let reaped = supercli_core::session_host::reap_orphan_session_hosts();
 
     assert!(
         reaped

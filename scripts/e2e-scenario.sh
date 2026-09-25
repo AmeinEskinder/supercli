@@ -2,7 +2,7 @@
 # Phase 8 S2 — real-binary end-to-end scenario.
 #
 # Runs the whole loop against real built binaries on a private short-path
-# SUPERCLI_HOME (never the real ~/.supercli, never /Applications/Unpeel.app):
+# SUPERCLI_HOME (never the real ~/.supercli, never /Applications/Supercli.app):
 #   1. start the Host (`supercli serve`)
 #   2. pair a client through the real pairing protocol
 #   3. run a scheduled session (`schedule add` + `schedule run-once`)

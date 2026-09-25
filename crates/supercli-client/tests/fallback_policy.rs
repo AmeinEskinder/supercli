@@ -9,7 +9,7 @@
 //! consults exactly this predicate plus the record's Link-enabled flag
 //! before touching the relay.
 
-use unpeel_client::{DirectFailure, HostClientError};
+use supercli_client::{DirectFailure, HostClientError};
 
 #[test]
 fn tls_pin_failure_is_never_relay_eligible() {

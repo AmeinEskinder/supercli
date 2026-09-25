@@ -96,7 +96,7 @@ provides = ["mail.search"]
 
     #[test]
     fn discovers_valid_and_reports_invalid() {
-        let root = std::env::temp_dir().join(format!("unpeel-conn-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("supercli-conn-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         write_manifest(&root, "gmail", GOOD);
@@ -114,7 +114,7 @@ provides = ["mail.search"]
 
     #[test]
     fn missing_root_is_not_an_error() {
-        let (found, errors) = discover(&[Path::new("/nonexistent-unpeel-root-xyz")]);
+        let (found, errors) = discover(&[Path::new("/nonexistent-supercli-root-xyz")]);
         assert!(found.is_empty());
         assert!(errors.is_empty());
     }

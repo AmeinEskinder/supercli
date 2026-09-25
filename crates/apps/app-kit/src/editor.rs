@@ -1,4 +1,4 @@
-//! Shared “Open in editor” bridge for standalone and Unpeel-hosted Apps.
+//! Shared “Open in editor” bridge for standalone and Supercli-hosted Apps.
 
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -27,7 +27,7 @@ impl fmt::Display for EditorError {
 
 impl std::error::Error for EditorError {}
 
-/// Opens files and folders in Unpeel's configured editor when hosted, with a
+/// Opens files and folders in Supercli's configured editor when hosted, with a
 /// platform opener fallback for the same App running standalone.
 pub struct EditorBridge;
 
@@ -39,12 +39,12 @@ impl EditorBridge {
 
 /// Open a filesystem item in the user's editor.
 ///
-/// Hosted Apps ask the owning local Unpeel instance first, which preserves
+/// Hosted Apps ask the owning local Supercli instance first, which preserves
 /// its Settings ▸ General editor choice. If no compatible desktop instance is
 /// reachable, the platform's ordinary opener is used instead.
 pub fn open_in_editor(path: impl AsRef<Path>) -> Result<(), EditorError> {
     let path = absolute_existing_path(path.as_ref())?;
-    if try_unpeel_editor(&path) {
+    if try_supercli_editor(&path) {
         return Ok(());
     }
     open_with_platform(&path)
@@ -62,14 +62,14 @@ fn absolute_existing_path(path: &Path) -> Result<PathBuf, EditorError> {
         .map_err(|error| EditorError::new(format!("cannot open {}: {error}", absolute.display())))
 }
 
-fn try_unpeel_editor(path: &Path) -> bool {
-    let Some(port) = std::env::var("UNPEEL_APP_PORT")
+fn try_supercli_editor(path: &Path) -> bool {
+    let Some(port) = std::env::var("SUPERCLI_APP_PORT")
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
     else {
         return false;
     };
-    let Ok(session_id) = std::env::var("UNPEEL_SESSION_ID") else {
+    let Ok(session_id) = std::env::var("SUPERCLI_SESSION_ID") else {
         return false;
     };
     if session_id.is_empty()
@@ -111,7 +111,7 @@ fn open_with_platform(path: &Path) -> Result<(), EditorError> {
     let mut command = Command::new("xdg-open");
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     return Err(EditorError::new(
-        "Unpeel is unavailable and this platform has no configured file opener",
+        "Supercli is unavailable and this platform has no configured file opener",
     ));
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]

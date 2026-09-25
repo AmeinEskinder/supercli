@@ -7,7 +7,7 @@
 all-features = false
 
 [licenses]
-# Unpeel itself is MIT. Dependencies must be under a permissive license the
+# Supercli itself is MIT. Dependencies must be under a permissive license the
 # project can redistribute; copyleft licenses are rejected.
 allow = [
   "MIT",
@@ -23,7 +23,7 @@ allow = [
   "OpenSSL",
   # MPL-2.0 (option-ext 0.2.0, via dirs): file-level copyleft, not viral.
   # The crate is a tiny path helper; we do not modify it, so the copyleft
-  # obligations do not propagate to Unpeel.
+  # obligations do not propagate to Supercli.
   "MPL-2.0",
   # CDLA-Permissive-2.0 (webpki-roots): permissive data license covering the
   # Mozilla CA certificate bundle. No code copyleft.
@@ -130,7 +130,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # with a reason.
 ignore = [
   # RUSTSEC-2017-0008: `serial` 0.4.0 is unmaintained. It is a transitive
-  # dep of portable-pty (used for serial-port enumeration, which Unpeel
+  # dep of portable-pty (used for serial-port enumeration, which Supercli
   # never calls). No safe upgrade exists; portable-pty 0.8.1 is the latest
   # 0.8.x and still requires it. Risk accepted: the crate is dead code in
   # our usage.

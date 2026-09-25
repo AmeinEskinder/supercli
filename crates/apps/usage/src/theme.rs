@@ -1,5 +1,5 @@
 //! Shared look & feel: light and dark semantic palettes, terminal theme
-//! detection. List navigation is owned by unpeel-app-kit.
+//! detection. List navigation is owned by supercli-app-kit.
 
 use ratatui::style::Color;
 use serde::Deserialize;
@@ -137,7 +137,7 @@ impl Palette {
 }
 
 pub fn resolve_with_hosted_accent(configured: ThemePreference, accent: Option<Color>) -> Palette {
-    let preference = std::env::var("UNPEEL_USAGE_THEME")
+    let preference = std::env::var("SUPERCLI_USAGE_THEME")
         .ok()
         .and_then(|value| ThemePreference::parse(&value))
         .unwrap_or(configured);
@@ -155,10 +155,10 @@ fn detect_terminal_mode() -> Option<ThemeMode> {
     if let Some(mode) = osc11_background_mode() {
         return Some(mode);
     }
-    // Unpeel stamps COLORFGBG when a shell starts, so it becomes stale when
+    // Supercli stamps COLORFGBG when a shell starts, so it becomes stale when
     // the app appearance changes around that running shell. Its terminal
     // defaults are reliable even when OSC 11 is unavailable.
-    if std::env::var("TERM_PROGRAM").is_ok_and(|program| program.eq_ignore_ascii_case("unpeel")) {
+    if std::env::var("TERM_PROGRAM").is_ok_and(|program| program.eq_ignore_ascii_case("supercli")) {
         return None;
     }
     colorfgbg_mode()

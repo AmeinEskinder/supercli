@@ -1,7 +1,7 @@
 //! Project tree + session filing rules, ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/SessionMoveRules.swift`
+//! `clients/native/SupercliNative/Sources/SupercliNative/SessionMoveRules.swift`
 //! and the project-grouping half of
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/Views/ProjectSidebarView.swift`.
+//! `clients/native/SupercliNative/Sources/SupercliNative/Views/ProjectSidebarView.swift`.
 //!
 //! Filing is display-only (the shared `project-override.json` marker): a
 //! session's shell runs in exactly one checkout, so the only legal filing

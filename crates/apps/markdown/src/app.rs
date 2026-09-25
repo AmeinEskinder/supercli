@@ -11,7 +11,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::Style;
 use ratatui::{DefaultTerminal, Frame};
 use tui_textarea::{CursorMove, Input, Key};
-use unpeel_app_kit::{
+use supercli_app_kit::{
     AgentBridge, AppReporter, DropTargetEvent, DropTargetSurface, FooterAction,
     MarkdownCommandHint, MarkdownEditorActions, MarkdownEditorConfig, MarkdownEditorEvent,
     MarkdownEditorSpec, MarkdownMenuTrigger, MarkdownPresentation, MarkdownTextArea,
@@ -1601,7 +1601,7 @@ impl App<'_> {
     }
 }
 
-fn ui_bridge_error(error: unpeel_app_kit::UiBridgeError) -> io::Error {
+fn ui_bridge_error(error: supercli_app_kit::UiBridgeError) -> io::Error {
     io::Error::other(error.to_string())
 }
 
@@ -1749,7 +1749,7 @@ fn markdown_text_area_style(theme: Theme) -> MarkdownTextAreaStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unpeel_app_kit::UiComponent;
+    use supercli_app_kit::UiComponent;
 
     fn render_app(theme: Theme, width: u16, height: u16) -> ratatui::buffer::Buffer {
         use ratatui::Terminal;
@@ -2001,16 +2001,16 @@ mod tests {
         app.set_selection((0, 1), (1, 2));
 
         let node = app.ui_node();
-        let unpeel_app_kit::UiComponent::MarkdownEditor(editor) = node.element else {
+        let supercli_app_kit::UiComponent::MarkdownEditor(editor) = node.element else {
             panic!("Markdown App must publish the MarkdownEditor component");
         };
         assert_eq!(
             editor.selection.anchor,
-            unpeel_app_kit::TextPosition::new(0, 1)
+            supercli_app_kit::TextPosition::new(0, 1)
         );
         assert_eq!(
             editor.selection.head,
-            unpeel_app_kit::TextPosition::new(1, 3),
+            supercli_app_kit::TextPosition::new(1, 3),
             "emoji occupies two UTF-16 code units"
         );
     }

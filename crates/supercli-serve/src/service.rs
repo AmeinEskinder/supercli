@@ -1,4 +1,4 @@
-//! Machine-wide Unpeel Host service.
+//! Machine-wide Supercli Host service.
 //!
 //! `HostRuntime` remains deliberately scoped to one `SUPERCLI_HOME`: a large
 //! part of the released on-disk contract resolves paths process-wide, and
@@ -9,7 +9,7 @@
 //!
 //! This is still one logical service to the app, CLI, and service managers.
 //! Worker processes are an isolation detail, just as every Session already
-//! has its own persistent `unpeel-host` process.
+//! has its own persistent `supercli-host` process.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -89,7 +89,7 @@ impl fmt::Display for ServiceEvent {
                 workspace_count,
             } => write!(
                 formatter,
-                "Unpeel Host service started (pid {pid}, {workspace_count} workspaces)"
+                "Supercli Host service started (pid {pid}, {workspace_count} workspaces)"
             ),
             Self::WorkspaceStarted { name, home, pid } => write!(
                 formatter,
@@ -107,7 +107,7 @@ impl fmt::Display for ServiceEvent {
                 home.display()
             ),
             Self::Warning(message) => write!(formatter, "warning: {message}"),
-            Self::Stopped => formatter.write_str("Unpeel Host service stopped"),
+            Self::Stopped => formatter.write_str("Supercli Host service stopped"),
         }
     }
 }
@@ -211,7 +211,7 @@ impl ServiceLease {
         if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
             let error = std::io::Error::last_os_error();
             if error.kind() == std::io::ErrorKind::WouldBlock {
-                return Err("the Unpeel Host service is already running".into());
+                return Err("the Supercli Host service is already running".into());
             }
             return Err(format!("could not lock {}: {error}", lock_path.display()));
         }
@@ -272,7 +272,7 @@ struct ServiceStatus {
     started_at_unix_ms: u64,
     executable: PathBuf,
     /// Additive (0.4.0): the supervising binary's version and build stamp,
-    /// so an app bundled with a different `unpeel-host` can restart a stale
+    /// so an app bundled with a different `supercli-host` can restart a stale
     /// service after an in-place update instead of driving it.
     host_version: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -595,7 +595,7 @@ pub fn run(mut report: impl FnMut(HostServiceEvent)) -> Result<(), String> {
     }
 }
 
-/// Internal worker entry point shared by the `unpeel` and `unpeel-host`
+/// Internal worker entry point shared by the `supercli` and `supercli-host`
 /// binaries. It is intentionally not a user-facing command.
 pub fn run_workspace_worker(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
     driver::run(|event| {
@@ -632,7 +632,7 @@ pub fn ensure_background(executable: &Path) -> Result<(), String> {
     command
         .spawn()
         .map(|_| ())
-        .map_err(|error| format!("start the Unpeel Host service: {error}"))
+        .map_err(|error| format!("start the Supercli Host service: {error}"))
 }
 
 fn now_ms() -> u64 {

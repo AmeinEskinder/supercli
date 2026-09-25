@@ -1,2 +1,2 @@
-/// Stable identity from Unpeel's central PATH-scanned App CLI catalog.
-pub const APP_ID: &str = "unpeel.app.filetree";
+/// Stable identity from Supercli's central PATH-scanned App CLI catalog.
+pub const APP_ID: &str = "supercli.app.filetree";

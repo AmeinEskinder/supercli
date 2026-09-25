@@ -69,10 +69,10 @@ fn write_caller_launch(home: &Path, session_id: &str) -> PathBuf {
 }
 
 fn spawn_caller(home: &Path, launch: &Path) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__session_host__")
         .arg(launch)
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_HOME", home)
         .env("HOME", home)
         .env("SHELL", "/bin/bash")
         .stdin(Stdio::null())
@@ -129,11 +129,11 @@ fn cancelled_wait_unblocks_without_response_while_reader_stays_live() {
     let caller_socket = home.join("app-sessions/caller/session.sock");
     assert!(wait_until(Duration::from_secs(10), || caller_socket.exists()));
 
-    let mut mcp = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let mut mcp = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__mcp__")
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("HOME", &home)
-        .env("UNPEEL_SESSION_ID", caller_id)
+        .env("SUPERCLI_SESSION_ID", caller_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -171,7 +171,7 @@ fn cancelled_wait_unblocks_without_response_while_reader_stays_live() {
             "arguments": {
                 "action": "wait_for_text",
                 "session_id": caller_id,
-                "text": "UNPEEL-CANCEL-NEVER-APPEARS",
+                "text": "SUPERCLI-CANCEL-NEVER-APPEARS",
                 "timeout_ms": 60000
             }
         }

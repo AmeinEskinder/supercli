@@ -1,4 +1,4 @@
-//! Runtime detection for installed Unpeel Apps. App identities come from the
+//! Runtime detection for installed Supercli Apps. App identities come from the
 //! central App CLI registry when their binary exists on resolved PATH. The
 //! Host recognizes one in a foreground job the same way it recognizes a
 //! built-in agent runtime.
@@ -64,8 +64,8 @@ const RESERVED_EXECUTABLE_NAMES: &[&str] = &[
     "make",
     "cargo",
     "supercli",
-    "unpeel-host",
-    "unpeel-attach",
+    "supercli-host",
+    "supercli-attach",
 ];
 
 /// One installed App projected into the runtime-detection layer. The id is
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn alias_validation_refuses_paths_and_whitespace() {
-        assert!(valid_alias("unpeel-design"));
+        assert!(valid_alias("supercli-design"));
         assert!(valid_alias("todo_v2"));
         assert!(!valid_alias(""));
         assert!(!valid_alias("bin/design"));
@@ -230,10 +230,10 @@ mod tests {
     fn index_maps_aliases_and_ids_with_builtins_reserved() {
         let app = crate::apps_mcp::InstalledApp {
             id: "supercli.app.design".into(),
-            name: "Unpeel Design".into(),
+            name: "Supercli Design".into(),
             version: Some("0.1.0".into()),
             description: String::new(),
-            command: Some("/opt/bin/unpeel-design --serve".into()),
+            command: Some("/opt/bin/supercli-design --serve".into()),
             media_types: Vec::new(),
             file_extensions: Default::default(),
             resource_kinds: Vec::new(),
@@ -251,7 +251,7 @@ mod tests {
         let index = build_index_from(&[app]);
         // Declared alias + implicit command basename resolve; reserved names
         // never do.
-        for alias in ["design", "unpeel-design"] {
+        for alias in ["design", "supercli-design"] {
             let identity = index.by_alias.get(alias).expect(alias);
             assert_eq!(identity.app_id, "supercli.app.design");
             assert_eq!(identity.tint.as_deref(), Some("#8B5CF6"));
@@ -270,6 +270,6 @@ mod tests {
         assert!(alias_reserved("claude"));
         assert!(alias_reserved("codex"));
         // An ordinary novel name is free.
-        assert!(!alias_reserved("unpeel-design"));
+        assert!(!alias_reserved("supercli-design"));
     }
 }

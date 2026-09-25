@@ -462,7 +462,7 @@ impl ScheduleLeases {
 
     /// R4: list stale leases — rows that expired but were never released
     /// (owner non-empty, expires_at_ms <= now). These indicate a crashed
-    /// worker. Used by `unpeel doctor`; unlike `list_holders` (active only)
+    /// worker. Used by `supercli doctor`; unlike `list_holders` (active only)
     /// this genuinely surfaces expired rows.
     pub fn list_stale(&self) -> Result<Vec<(String, String, u64)>, LeaseError> {
         let mut stmt = self.conn.prepare(&format!(
@@ -502,7 +502,7 @@ mod tests {
     use super::*;
 
     fn temp_home(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("unpeel-lease-test-{name}"));
+        let dir = std::env::temp_dir().join(format!("supercli-lease-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -738,7 +738,7 @@ mod model_tests {
     }
 
     fn model_home() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("unpeel-lease-model-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-lease-model-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

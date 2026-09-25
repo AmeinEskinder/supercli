@@ -1,9 +1,9 @@
 //! SSH Host records and the SSH transport boundary, ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/RemoteHosts.swift` and
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/NativeRemoteBackend.swift`.
+//! `clients/native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift` and
+//! `clients/native/SupercliNative/Sources/SupercliNative/NativeRemoteBackend.swift`.
 //!
 //! The actual SSH connection machinery already lives in Rust:
-//! `unpeel_core::{ssh_connection, remote_session_backend}` (the Swift
+//! `supercli_core::{ssh_connection, remote_session_backend}` (the Swift
 //! `NativeRemoteBackend` was only a thin ownership boundary over the Rust
 //! `RemoteSessionBackend` via the C bridge). This module ports the
 //! Controller-side record layer — `SSHHostRecord`, target validation, the
@@ -46,7 +46,7 @@ pub struct SshHostRecord {
     pub name: String,
     /// `ssh://` URI or bare `user@host` / config alias.
     pub target: String,
-    /// The Host's stable identity, learned when Unpeel is reached over SSH.
+    /// The Host's stable identity, learned when Supercli is reached over SSH.
     pub host_id: String,
     pub mode: RemoteSshConnectionMode,
     pub uses_stored_secret: bool,
@@ -82,12 +82,12 @@ impl SshHostSetupError {
     pub fn message(&self) -> String {
         match self {
             SshHostSetupError::InvalidTarget => "Enter an SSH config alias or user@host. Put ports, keys, and ProxyJump settings in ~/.ssh/config.".to_string(),
-            SshHostSetupError::MissingIdentity => "The remote Unpeel Host did not provide a stable identity. Update Unpeel on the Host and try again.".to_string(),
+            SshHostSetupError::MissingIdentity => "The remote Supercli Host did not provide a stable identity. Update Supercli on the Host and try again.".to_string(),
             SshHostSetupError::Connection { standard, interactive } => format!(
-                "Could not start Unpeel over SSH. Standard SSH: {standard} Interactive shell: {interactive}"
+                "Could not start Supercli over SSH. Standard SSH: {standard} Interactive shell: {interactive}"
             ),
             SshHostSetupError::Installation { standard, interactive } => format!(
-                "Could not install Unpeel over SSH. Standard SSH: {standard} Interactive shell: {interactive}"
+                "Could not install Supercli over SSH. Standard SSH: {standard} Interactive shell: {interactive}"
             ),
             SshHostSetupError::SelfPairing => {
                 "This is this machine. Use the local workspace instead.".to_string()
@@ -334,11 +334,11 @@ fn uuid_simple() -> String {
 }
 
 /// The SSH transport runner contract the desktop launcher implements on a
-/// background thread against `unpeel_core::remote_session_backend`.
+/// background thread against `supercli_core::remote_session_backend`.
 /// Kept as a trait so the UI layer never touches the backend directly.
 pub trait SshTransportRunner {
     type Error: std::fmt::Display;
-    /// Start Unpeel on the remote Host over SSH (installing first when
+    /// Start Supercli on the remote Host over SSH (installing first when
     /// needed) and return the Host's stable identity.
     fn ensure_remote_host(
         &self,

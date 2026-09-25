@@ -20,7 +20,7 @@ pub struct ResumeAdapter {
     pub resumed: fn(&str, Option<&str>) -> String,
     pub fresh: fn(&str) -> String,
     pub resume_failure_markers: Option<ResumeFailureMarkers>,
-    /// Recognize Unpeel-managed storage a command already pins (older Pi
+    /// Recognize Supercli-managed storage a command already pins (older Pi
     /// launches), so cleanup and relaunch keep honoring it.
     pub managed_session_dir: Option<fn(&str, &str) -> Option<String>>,
 }
@@ -120,7 +120,7 @@ pub fn resume_failure_markers(command: &str) -> Option<Vec<String>> {
         .and_then(|markers| markers(command))
 }
 
-/// Return an Unpeel-managed Pi storage directory, when the Pi adapter proves
+/// Return an Supercli-managed Pi storage directory, when the Pi adapter proves
 /// the command was pinned beneath `root`.
 pub fn supercli_managed_pi_session_dir(command: &str, root: &str) -> Option<String> {
     managed_storage_path(command, Path::new(root)).map(|path| path.to_string_lossy().to_string())
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn managed_storage_is_recognized_but_never_pinned_on_a_new_launch() {
-        // Older Pi launches recorded `--session-dir` beneath the Unpeel home;
+        // Older Pi launches recorded `--session-dir` beneath the Supercli home;
         // cleanup and relaunch keep honoring it, but nothing adds it now.
         assert_eq!(
             supercli_managed_pi_session_dir("pi --yolo --session-dir '/root/pi/s1'", "/root/pi"),

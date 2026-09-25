@@ -1,6 +1,6 @@
 //! Per-session connector attachments: which connectors a session may use.
 //!
-//! `unpeel connector enable <name> --session <id>` records the attachment;
+//! `supercli connector enable <name> --session <id>` records the attachment;
 //! the Host reads it when it assembles the session's MCP servers (spawned
 //! per session, token injected as `SUPERCLI_CONNECTOR_TOKEN`, tool list
 //! filtered to `tools.provides`, calls wrapped in the session's approval
@@ -211,7 +211,7 @@ mod tests {
 
     fn tmp_session() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-conn-session-test-{}-{}",
+            "supercli-conn-session-test-{}-{}",
             std::process::id(),
             now_ms()
         ));
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn not_a_session_dir_errors() {
-        let missing = std::env::temp_dir().join("unpeel-conn-session-test-no-such-dir");
+        let missing = std::env::temp_dir().join("supercli-conn-session-test-no-such-dir");
         let _ = std::fs::remove_dir_all(&missing);
         assert!(matches!(
             read_attachments(&missing),

@@ -1,4 +1,4 @@
-//! Agent-pane integration for Unpeel apps: detect an agent session in the
+//! Agent-pane integration for Supercli apps: detect an agent session in the
 //! app's own sidebar group and paste a reference into its input.
 //!
 //! Any app on Surface (the designer, a diff viewer, a markdown editor) can
@@ -10,10 +10,10 @@
 //!   and paste text into its input without submitting, so the user wraps
 //!   their instruction around it.
 //! - [`clipboard_sequence`] — the OSC 52 fallback for when no agent pane is
-//!   next door (or the app runs outside a hosted Unpeel session).
+//!   next door (or the app runs outside a hosted Supercli session).
 //!
-//! Everything rides `unpeel-host __mcp__`, the same unified MCP server
-//! agents use, so Unpeel enforces the user's write policy for the explicit
+//! Everything rides `supercli-host __mcp__`, the same unified MCP server
+//! agents use, so Supercli enforces the user's write policy for the explicit
 //! caller→target pair. The token an app sends is whatever reference format
 //! that app's skill documents.
 
@@ -33,12 +33,12 @@ pub fn clipboard_sequence(text: &str) -> String {
 /// applies, so the first send to that target may wait for user approval.
 /// Returns the receiving session's label.
 ///
-/// Requires running inside a hosted Unpeel session (`SUPERCLI_SESSION_ID`)
-/// with `unpeel-host` on PATH; callers fall back to [`clipboard_sequence`]
+/// Requires running inside a hosted Supercli session (`SUPERCLI_SESSION_ID`)
+/// with `supercli-host` on PATH; callers fall back to [`clipboard_sequence`]
 /// on Err.
 pub fn send_to_adjacent_agent(token: &str) -> Result<String, String> {
     if std::env::var("SUPERCLI_SESSION_ID").is_err() {
-        return Err("not inside an Unpeel session".into());
+        return Err("not inside an Supercli session".into());
     }
     let mut client = McpClient::spawn()?;
     let (target_id, label) = resolve_adjacent_agent(&mut client)?;
@@ -71,7 +71,7 @@ fn resolve_adjacent_agent(client: &mut McpClient) -> Result<(String, String), St
     // Preferred path: the agents domain reports which sessions contain a
     // recognized agent runtime *right now* — including one the user typed
     // into a plain shell — so the token cannot land in an agentless prompt.
-    // Older unpeel-host builds have no agents tool; the picker falls back
+    // Older supercli-host builds have no agents tool; the picker falls back
     // to the command-derived provider heuristic.
     let agents = client
         .call_tool("agents", &serde_json::json!({ "action": "list" }))
@@ -201,10 +201,10 @@ impl AdjacentAgent {
     }
 }
 
-/// A minimal JSON-RPC client over a spawned `unpeel-host __mcp__` child —
+/// A minimal JSON-RPC client over a spawned `supercli-host __mcp__` child —
 /// the same unified MCP server agents use, so group/write policy is
-/// enforced by Unpeel, not reimplemented per app. Public so apps can reach
-/// other Unpeel tools (sessions, agents, artifacts) with the same client.
+/// enforced by Supercli, not reimplemented per app. Public so apps can reach
+/// other Supercli tools (sessions, agents, artifacts) with the same client.
 pub struct McpClient {
     child: Child,
     reader: BufReader<std::process::ChildStdout>,
@@ -213,13 +213,13 @@ pub struct McpClient {
 
 impl McpClient {
     pub fn spawn() -> Result<Self, String> {
-        let mut child = Command::new("unpeel-host")
+        let mut child = Command::new("supercli-host")
             .arg("__mcp__")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|error| format!("unpeel-host not available: {error}"))?;
+            .map_err(|error| format!("supercli-host not available: {error}"))?;
         let stdout = child.stdout.take().expect("piped stdout");
         let mut client = Self {
             child,
@@ -278,7 +278,7 @@ impl McpClient {
         }
     }
 
-    /// tools/call, decoding the text content (Unpeel tools return JSON text)
+    /// tools/call, decoding the text content (Supercli tools return JSON text)
     /// and turning tool-level errors into Err.
     pub fn call_tool(
         &mut self,

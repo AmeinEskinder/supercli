@@ -1,4 +1,4 @@
-//! Worker-owned lifecycle of the shared `unpeel-host __pty_core__` process.
+//! Worker-owned lifecycle of the shared `supercli-host __pty_core__` process.
 //!
 //! The PTY core hosts N Sessions in one detached process (setsid, stdio null)
 //! so that terminals outlive both the app and this worker, exactly like the
@@ -35,7 +35,7 @@ use supercli_core::session_host::{recorded_pid_identity, PidIdentity};
 
 /// Environment gate shared with `session_host` routing.
 pub const ENV_GATE: &str = "SUPERCLI_PTY_CORE";
-/// `unpeel-host` argv mode of the core (owned by Lane A; contract name).
+/// `supercli-host` argv mode of the core (owned by Lane A; contract name).
 pub const PTY_CORE_ARG: &str = "__pty_core__";
 /// Delay before respawning an exited core.
 pub(crate) const RESTART_DELAY: Duration = Duration::from_secs(2);
@@ -238,7 +238,7 @@ pub fn adoptable(record: &CoreRecord) -> Option<PingReply> {
 }
 
 /// How the supervisor launches a core; injectable so unit tests never spawn
-/// a real `unpeel-host`.
+/// a real `supercli-host`.
 pub type Spawner = Box<dyn FnMut(bool) -> Result<Child, String> + Send>;
 
 /// How long a `--takeover` core may take to publish the record under its
@@ -253,7 +253,7 @@ pub fn expected_host_build_id() -> Option<String> {
     supercli_core::session_host::host_build_id_for(&binary)
 }
 
-/// Production spawner: `unpeel-host __pty_core__`, detached exactly like a
+/// Production spawner: `supercli-host __pty_core__`, detached exactly like a
 /// session host (setsid, stdio null, leaked `HERDR_*` env removed).
 pub fn detached_core_spawner() -> Spawner {
     Box::new(|takeover| {
@@ -268,7 +268,7 @@ pub fn detached_core_spawner() -> Spawner {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
         // A detached core is not an occupant of an outer Herdr pane; the
-        // core helper in unpeel-core is crate-private, so mirror it here.
+        // core helper in supercli-core is crate-private, so mirror it here.
         for (key, _) in std::env::vars_os() {
             if key.to_string_lossy().starts_with("HERDR_") {
                 command.env_remove(&key);

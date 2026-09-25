@@ -65,11 +65,11 @@ fn write_launch(home: &Path, session_id: &str, command: &str) -> PathBuf {
 }
 
 fn spawn_host(home: &Path, launch: &Path, path: Option<&str>) -> HostGuard {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_unpeel-host"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_supercli-host"));
     command
         .arg("__session_host__")
         .arg(launch)
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_HOME", home)
         .env("HOME", home)
         .env("SHELL", "/bin/bash")
         .stdin(Stdio::null())
@@ -314,10 +314,10 @@ fn initial_launch_runs_the_command_untouched_and_resumes_from_hook_captured_iden
         socket_command(&home, session_id, json!({ "type": "write", "data": "x" }))["ok"],
         true
     );
-    let early_plan = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let early_plan = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__resume__")
         .arg(session_id)
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("HOME", &home)
         .output()
         .unwrap();
@@ -337,10 +337,10 @@ fn initial_launch_runs_the_command_untouched_and_resumes_from_hook_captured_iden
     let transcript_dir = home.join(".claude").join("projects").join("fixture");
     fs::create_dir_all(&transcript_dir).unwrap();
     fs::write(transcript_dir.join(format!("{provider_id}.jsonl")), b"\n").unwrap();
-    let plan_output = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let plan_output = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__resume__")
         .arg(session_id)
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("HOME", &home)
         .output()
         .unwrap();
@@ -400,7 +400,7 @@ fn resume_agent_keeps_host_identity_and_relaunches_exactly_from_owned_shell() {
     fs::write(
         &fake_pi,
         format!(
-            "#!/bin/bash\nprintf '%s\\n' \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" >> '{}'\nprintf 'fixture runtime launch\\n'\nif [ \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 2; fi\nexec -a pi /bin/sleep 300\n",
+            "#!/bin/bash\nprintf '%s\\n' \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" >> '{}'\nprintf 'fixture runtime launch\\n'\nif [ \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 2; fi\nexec -a pi /bin/sleep 300\n",
             generations.display()
         ),
     )
@@ -477,10 +477,10 @@ fn resume_agent_keeps_host_identity_and_relaunches_exactly_from_owned_shell() {
         manifest(&home, session_id)["runtime"].is_null()
     }));
 
-    let output = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let output = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__resume_agent__")
         .arg(session_id)
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("PATH", &test_path)
         .output()
         .unwrap();
@@ -583,7 +583,7 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
             json!({
                 "type": "write",
                 "data": format!(
-                    "printf '%s' \"${{UNPEEL_RUNTIME_GENERATION-unset}}\" > '{}'\r",
+                    "printf '%s' \"${{SUPERCLI_RUNTIME_GENERATION-unset}}\" > '{}'\r",
                     inherited_generation.display()
                 )
             }),
@@ -597,10 +597,10 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
     // Automatic injection evidence stays false, but a provider the user
     // configured manually can start the same stdio server and receive only
     // the domains this blank Session was granted at launch.
-    let mut mcp = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let mut mcp = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__mcp__")
-        .env("UNPEEL_HOME", &home)
-        .env("UNPEEL_SESSION_ID", session_id)
+        .env("SUPERCLI_HOME", &home)
+        .env("SUPERCLI_SESSION_ID", session_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -647,12 +647,12 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
     // legacy argv. It answers as the unified gate: grants come from this
     // Session's manifest (the old Kiro env aliases are ignored), and the
     // retired Computer domain stays absent and uncallable.
-    let mut legacy_kiro_mcp = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let mut legacy_kiro_mcp = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg("__kiro_mcp__")
-        .env("UNPEEL_HOME", &home)
-        .env("UNPEEL_SESSION_ID", session_id)
-        .env("UNPEEL_KIRO_SESSIONS_MCP_ENABLED", "yes")
-        .env("UNPEEL_KIRO_BROWSER_MCP_ENABLED", "1")
+        .env("SUPERCLI_HOME", &home)
+        .env("SUPERCLI_SESSION_ID", session_id)
+        .env("SUPERCLI_KIRO_SESSIONS_MCP_ENABLED", "yes")
+        .env("SUPERCLI_KIRO_BROWSER_MCP_ENABLED", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -788,7 +788,7 @@ fn restart_agent_rejects_a_different_live_foreground_runtime() {
     fs::write(
         &fake_claude,
         format!(
-            "#!/bin/bash\nprintf '%s' \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" > '{}'\nexec -a claude /bin/sleep \"$@\"\n",
+            "#!/bin/bash\nprintf '%s' \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" > '{}'\nexec -a claude /bin/sleep \"$@\"\n",
             manual_generation.display()
         ),
     )
@@ -1112,7 +1112,7 @@ fn stopped_background_runtime_keeps_resume_unadvertised_and_is_never_injected_in
     write_executable(
         &bin.join("pi"),
         format!(
-            "#!/bin/bash\nprintf '%s\\n' \"$$\" >> '{}'\nif [ \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 1; fi\nexec -a pi /bin/sleep 300\n",
+            "#!/bin/bash\nprintf '%s\\n' \"$$\" >> '{}'\nif [ \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 1; fi\nexec -a pi /bin/sleep 300\n",
             runtime_pid_path.display()
         ),
     );
@@ -1240,7 +1240,7 @@ fn background_runtime_exec_rename_retains_exact_job_blocker() {
     write_executable(
         &bin.join("pi"),
         format!(
-            "#!/bin/bash\nprintf '%s\\n' \"$$\" >> '{}'\nif [ \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 1; fi\nexec -a pi /bin/bash -c \"trap '/bin/mkdir \\\"{}\\\"; exec -a mystery /bin/sleep 300' CONT; while :; do /bin/sleep 1; done\"\n",
+            "#!/bin/bash\nprintf '%s\\n' \"$$\" >> '{}'\nif [ \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" = 1 ]; then exec -a pi /bin/sleep 1; fi\nexec -a pi /bin/bash -c \"trap '/bin/mkdir \\\"{}\\\"; exec -a mystery /bin/sleep 300' CONT; while :; do /bin/sleep 1; done\"\n",
             runtime_pid_path.display(),
             renamed_marker.display()
         ),
@@ -1360,7 +1360,7 @@ fn same_pid_pgid_shell_exec_command_is_not_the_owned_interactive_shell() {
     write_executable(
         &bin.join("pi"),
         format!(
-            "#!/bin/bash\nprintf '%s\\n' \"${{UNPEEL_RUNTIME_GENERATION:-unset}}\" >> '{}'\nexec -a pi /bin/sleep 1\n",
+            "#!/bin/bash\nprintf '%s\\n' \"${{SUPERCLI_RUNTIME_GENERATION:-unset}}\" >> '{}'\nexec -a pi /bin/sleep 1\n",
             generations.display()
         ),
     );
@@ -1452,7 +1452,7 @@ fn launch_pending_rejects_duplicate_initial_and_post_resume_submissions() {
     write_executable(
         &bin.join("pi"),
         format!(
-            "#!/bin/bash\ngeneration=${{UNPEEL_RUNTIME_GENERATION:-unset}}\nprintf '%s\\n' \"$generation\" >> '{}'\nif [ \"$generation\" = 1 ]; then release='{}'; duration=1; else release='{}'; duration=300; fi\nwhile [ ! -e \"$release\" ]; do /bin/sleep 0.05; done\nexec -a pi /bin/sleep \"$duration\"\n",
+            "#!/bin/bash\ngeneration=${{SUPERCLI_RUNTIME_GENERATION:-unset}}\nprintf '%s\\n' \"$generation\" >> '{}'\nif [ \"$generation\" = 1 ]; then release='{}'; duration=1; else release='{}'; duration=300; fi\nwhile [ ! -e \"$release\" ]; do /bin/sleep 0.05; done\nexec -a pi /bin/sleep \"$duration\"\n",
             generations.display(),
             release_initial.display(),
             release_resume.display()

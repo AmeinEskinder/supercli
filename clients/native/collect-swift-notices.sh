@@ -9,14 +9,14 @@ output=${1:?usage: collect-swift-notices.sh OUTPUT}
 output_dir=$(dirname -- "$output")
 mkdir -p "$output_dir"
 
-tmp=$(mktemp "${TMPDIR:-/tmp}/unpeel-swift-notices.XXXXXX")
+tmp=$(mktemp "${TMPDIR:-/tmp}/supercli-swift-notices.XXXXXX")
 trap 'rm -f "$tmp"' EXIT INT TERM
 
 cat > "$tmp" <<'HEADER'
-UNPEEL THIRD-PARTY NOTICES — NATIVE APP / SWIFT
+SUPERCLI THIRD-PARTY NOTICES — NATIVE APP / SWIFT
 
 This file is generated deterministically from the checksum-pinned manifest
-shipped with Unpeel. These dependencies are specific to the native app and are
+shipped with Supercli. These dependencies are specific to the native app and are
 not included in CLI archives.
 HEADER
 

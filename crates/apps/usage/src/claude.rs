@@ -463,7 +463,7 @@ fn account_snapshot_path() -> Option<PathBuf> {
             home.join(".cache")
         }
     };
-    Some(base.join("unpeel-usage").join("claude-accounts.json"))
+    Some(base.join("supercli-usage").join("claude-accounts.json"))
 }
 
 fn load_account_snapshots(now: i64) -> Vec<SavedAccount> {

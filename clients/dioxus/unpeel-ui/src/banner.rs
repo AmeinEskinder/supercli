@@ -1,6 +1,6 @@
 //! Remote-content banner policy. Ported from
-//! `clients/native/UnpeelNative/Sources/UnpeelNative/RemoteContentBannerPolicy.swift`
-//! (mirroring `clients/ios/UnpeelIOS/Sources/UnpeelIOS/RemoteContentBannerPolicy.swift`).
+//! `clients/native/SupercliNative/Sources/SupercliNative/RemoteContentBannerPolicy.swift`
+//! (mirroring `clients/ios/SupercliIOS/Sources/SupercliIOS/RemoteContentBannerPolicy.swift`).
 //!
 //! Decides whether a session's terminal output should show the
 //! "Remote content" banner and, when `alwaysShow` is on, whether the

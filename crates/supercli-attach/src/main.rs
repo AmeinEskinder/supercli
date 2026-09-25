@@ -1,7 +1,7 @@
-//! unpeel-attach — tmux-style attach client for Unpeel hosted sessions.
+//! supercli-attach — tmux-style attach client for Supercli hosted sessions.
 //!
 //! Runs inside a real PTY owned by the rendering terminal (Ghostty surface)
-//! and adapts it to a detached Unpeel session host:
+//! and adapts it to a detached Supercli session host:
 //!
 //! - switches its own PTY into raw mode for the duration of the attach
 //!   (restored on exit) so keystrokes reach the workload byte-by-byte
@@ -75,7 +75,7 @@ struct Args {
 }
 
 fn default_sessions_dir() -> PathBuf {
-    // Honor SUPERCLI_HOME like the app and unpeel-host (app_paths::supercli_home),
+    // Honor SUPERCLI_HOME like the app and supercli-host (app_paths::supercli_home),
     // so a dev/blank instance's surfaces attach to its isolated state dir.
     if let Some(home) = std::env::var_os("SUPERCLI_HOME") {
         if !home.is_empty() {
@@ -119,7 +119,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--help" | "-h" => {
                 println!(
-                    "Usage: unpeel-attach [--sessions-dir <dir>] [--replay-bytes <n>] \
+                    "Usage: supercli-attach [--sessions-dir <dir>] [--replay-bytes <n>] \
                      [--mute-input-ms <n>] [--forward-focus-events] <session-id>"
                 );
                 std::process::exit(0);
@@ -137,7 +137,7 @@ fn parse_args() -> Result<Args, String> {
     }
 
     Ok(Args {
-        session_id: session_id.ok_or("Usage: unpeel-attach <session-id>")?,
+        session_id: session_id.ok_or("Usage: supercli-attach <session-id>")?,
         sessions_dir,
         replay_bytes,
         mute_input_ms,
@@ -149,7 +149,7 @@ fn main() {
     let code = match parse_args().and_then(run) {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("unpeel-attach: {error}");
+            eprintln!("supercli-attach: {error}");
             1
         }
     };
@@ -171,7 +171,7 @@ fn control_socket_path(session_dir: &Path, session_id: &str) -> PathBuf {
     }
     let uid = unsafe { libc::getuid() };
     PathBuf::from("/tmp")
-        .join(format!("unpeel-{uid}"))
+        .join(format!("supercli-{uid}"))
         .join(format!("{session_id}.sock"))
 }
 

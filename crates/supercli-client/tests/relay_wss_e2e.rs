@@ -20,8 +20,8 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig, ServerConnection};
 use tungstenite::http::{Request, Response};
 
-use unpeel_client::relay::RelayCredentials;
-use unpeel_client::{PerformParams, RelayConnection};
+use supercli_client::relay::RelayCredentials;
+use supercli_client::{PerformParams, RelayConnection};
 
 mod common;
 

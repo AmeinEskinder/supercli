@@ -2,7 +2,7 @@
 //!
 //! Paths are resolved on the authenticated user's Host, never on a Controller,
 //! and only inside an explicit scope: the registered project roots plus the
-//! user's home minus Unpeel's own storage and SSH material. Every walk opens
+//! user's home minus Supercli's own storage and SSH material. Every walk opens
 //! one component at a time with `O_NOFOLLOW` from an opened root, so a
 //! symlinked parent can never redirect a read outside the scope. Paired
 //! Controllers are owner-equivalent today, so this is defense in depth rather
@@ -41,7 +41,7 @@ pub struct ResourceScope {
 
 impl ResourceScope {
     /// The live scope: every registered project root from `app-state.json`
-    /// plus the Host user's home, minus Unpeel's own storage and SSH material.
+    /// plus the Host user's home, minus Supercli's own storage and SSH material.
     pub fn from_host() -> Self {
         let project_roots = crate::app_state::load()
             .ok()
@@ -109,7 +109,7 @@ impl ResourceScope {
         // but never re-exposes a denied folder from above: a project at `~`
         // or `/` does not make ~/.ssh readable. A worktree registered under
         // ~/.supercli/worktrees is inside the denied prefix itself, so it
-        // stays a project rather than Unpeel storage.
+        // stays a project rather than Supercli storage.
         let project_root = self
             .project_roots
             .iter()
@@ -125,7 +125,7 @@ impl ResourceScope {
                 if denied_prefix.is_some_and(|denied| !root.starts_with(denied)) {
                     return Err(fail(
                         403,
-                        "Unpeel's own storage and SSH material are never shared with Controllers",
+                        "Supercli's own storage and SSH material are never shared with Controllers",
                     ));
                 }
                 root
@@ -144,7 +144,7 @@ impl ResourceScope {
                 if denied_prefix.is_some() {
                     return Err(fail(
                         403,
-                        "Unpeel's own storage and SSH material are never shared with Controllers",
+                        "Supercli's own storage and SSH material are never shared with Controllers",
                     ));
                 }
                 home.clone()
@@ -486,8 +486,8 @@ mod tests {
     #[test]
     fn supercli_storage_and_ssh_material_are_denied_under_home() {
         let fixture = fixture();
-        let unpeel = fixture.home.join(".supercli/app-state.json");
-        assert_eq!(status(read(&fixture.scope, unpeel.to_str().unwrap())), 403);
+        let supercli = fixture.home.join(".supercli/app-state.json");
+        assert_eq!(status(read(&fixture.scope, supercli.to_str().unwrap())), 403);
         assert_eq!(status(read(&fixture.scope, "~/.ssh/id_ed25519")), 403);
         let listing = fixture
             .scope
@@ -545,15 +545,15 @@ mod tests {
     fn a_project_root_above_home_does_not_re_expose_denied_folders() {
         let fixture = fixture();
         // Registering the home itself (or any parent of it) as a project
-        // must not turn ~/.ssh or Unpeel's storage into project files.
+        // must not turn ~/.ssh or Supercli's storage into project files.
         let parent = fixture.home.parent().unwrap().to_path_buf();
         let scope = ResourceScope::new(
             Some(fixture.home.clone()),
             vec![parent, fixture.home.clone()],
         );
         assert_eq!(status(read(&scope, "~/.ssh/id_ed25519")), 403);
-        let unpeel = fixture.home.join(".supercli/app-state.json");
-        assert_eq!(status(read(&scope, unpeel.to_str().unwrap())), 403);
+        let supercli = fixture.home.join(".supercli/app-state.json");
+        assert_eq!(status(read(&scope, supercli.to_str().unwrap())), 403);
         // Ordinary home files stay readable through the project root.
         assert_eq!(status(read(&scope, "~/docs/notes.txt")), 200);
         // A worktree registered inside ~/.supercli is a project, not storage.
@@ -565,7 +565,7 @@ mod tests {
             status(read(&scope, worktree.join("README.md").to_str().unwrap())),
             200
         );
-        assert_eq!(status(read(&scope, unpeel.to_str().unwrap())), 403);
+        assert_eq!(status(read(&scope, supercli.to_str().unwrap())), 403);
     }
 
     #[test]

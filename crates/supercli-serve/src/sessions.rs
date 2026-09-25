@@ -42,7 +42,7 @@ pub enum Status {
 
 /// Where a running Session's busy/idle came from. Hooks are exact; the
 /// screen tier is a lower-confidence fallback for a recognized agent with
-/// no hook latch (its Unpeel integration is not installed, or has not
+/// no hook latch (its Supercli integration is not installed, or has not
 /// spoken yet). Controllers may hint at the upgrade; the worker never sends
 /// completion notifications from a screen-derived edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,7 +112,7 @@ pub struct SessionRow {
     /// Host-observed foreground runtime. Display may follow this value, but
     /// hook authority and lifecycle verbs continue to use `command`.
     pub active_runtime_id: Option<String>,
-    /// Host-resolved installed Unpeel App identity (manifest `active_app`):
+    /// Host-resolved installed Supercli App identity (manifest `active_app`):
     /// carries the App's name and tint as data, so App rows brand without a
     /// compiled catalog entry. Presence also marks the session hook-owned —
     /// an App reports its own lifecycle through the hook port — while
@@ -320,7 +320,7 @@ fn derive_status_with_source(
     // its live events latch (provider hook installs are global, and the
     // hosted shell exports the session's hook env, so a typed `claude`
     // reports like a launched one).
-    // An installed Unpeel App is hook-capable by construction: its status
+    // An installed Supercli App is hook-capable by construction: its status
     // reporter posts lifecycle events to the hook port, and the Host only
     // stamps `active_app` from its manifest. Detection alone still grants
     // nothing — with no reported events the session simply stays neutral.
@@ -578,7 +578,7 @@ fn local_manifest_urls(session_id: &str) -> Vec<String> {
 /// and the title/archived markers are re-parsed only when their stamp
 /// changes; a cached `None` records a decode failure (torn write) — the
 /// finishing write re-stamps the file. The desktop keeps the same caches
-/// (UnpeelStore.manifestCache): with hundreds of archived session dirs the
+/// (SupercliStore.manifestCache): with hundreds of archived session dirs the
 /// per-tick re-parses, not the stats, dominate the scan.
 #[derive(Default)]
 pub struct ScanCache {
@@ -955,7 +955,7 @@ pub fn scan_sidebar(
         // manual sibling order within either bucket.
         kids.sort_by_key(|(id, _, _)| !pinned_groups.contains(id));
         // A real project the user added stays visible even with no sessions
-        // yet — otherwise `unpeel add` looks like it did nothing. The
+        // yet — otherwise `supercli add` looks like it did nothing. The
         // cwd-derived buckets only exist because sessions exist, so an
         // empty one is just noise.
         let is_real_project = known.contains(&project_id);
@@ -1063,7 +1063,7 @@ impl GroupListing {
 
 /// The shared inactive-preview window (compatibility key
 /// `sidebar_stopped_limit` in app-state.json, desktop:
-/// `UnpeelStore.sidebarVisibleSessionLimit`).
+/// `SupercliStore.sidebarVisibleSessionLimit`).
 /// Junk never silently *files* extra rows — it reads as the default window.
 pub fn sidebar_stopped_window(raw: Option<u64>) -> usize {
     match raw {
@@ -2626,7 +2626,7 @@ mod tests {
                 }],
                 "worktrees": [{
                     "id": "wt-1",
-                    "name": "unpeel — fix-branch",
+                    "name": "supercli — fix-branch",
                     "archived_count": 0,
                     "sessions": [{
                         "id": "s2", "label": "worktree agent", "command": "claude",
@@ -2861,9 +2861,9 @@ mod tests {
         });
         let state: AppState = serde_json::from_value(serde_json::json!({
             "projects": [{
-                "id": "proj-1", "name": "supercli", "path": "/tmp/unpeel"
+                "id": "proj-1", "name": "supercli", "path": "/tmp/supercli"
             }, {
-                "id": "group-1", "name": "Research", "path": "/tmp/unpeel",
+                "id": "group-1", "name": "Research", "path": "/tmp/supercli",
                 "parent_project_id": "proj-1", "is_folder": true
             }]
         }))
@@ -2993,11 +2993,11 @@ mod tests {
             host_started_at: None,
             project_id: "project".into(),
             label: "Design".into(),
-            command: "/opt/bin/unpeel-design".into(),
+            command: "/opt/bin/supercli-design".into(),
             active_runtime_id: Some("supercli.app.design".into()),
             active_app: Some(supercli_core::session_host::ObservedAppIdentity {
                 id: "supercli.app.design".into(),
-                name: "Unpeel Design".into(),
+                name: "Supercli Design".into(),
                 tint: Some("#8B5CF6".into()),
                 spinner_tint: None,
             }),
@@ -3028,7 +3028,7 @@ mod tests {
         // exists for a third-party App — and the manifest tint wins the
         // spinner color over the (missing) catalog lookup.
         assert_eq!(summary["activeAppID"], "supercli.app.design");
-        assert_eq!(summary["activeAppName"], "Unpeel Design");
+        assert_eq!(summary["activeAppName"], "Supercli Design");
         assert_eq!(summary["activeAppTintHex"], 0x8B5CF6);
         assert_eq!(summary["spinnerColorHex"], 0x8B5CF6);
         // The launch cwd travels additively so a Controller pane can resolve
@@ -3052,7 +3052,7 @@ mod tests {
             archived_counts: HashMap::new(),
         };
         let directory =
-            std::env::temp_dir().join(format!("unpeel-mobile-alert-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("supercli-mobile-alert-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&directory).unwrap();
         let mut activity_log = supercli_core::activity_log::ActivityLogStore::load_from(
             directory.join("activity-log.jsonl"),
@@ -3181,7 +3181,7 @@ mod tests {
             }))
             .expect("manifest decodes")
         };
-        let directory = std::env::temp_dir().join("unpeel-screen-fallback-no-seed");
+        let directory = std::env::temp_dir().join("supercli-screen-fallback-no-seed");
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
 
         let mut engine = ActivityEngine::default();
@@ -3228,7 +3228,7 @@ mod tests {
             "menu_prompt_active": true
         }))
         .expect("manifest decodes");
-        let directory = std::env::temp_dir().join("unpeel-no-menu-attention-seed");
+        let directory = std::env::temp_dir().join("supercli-no-menu-attention-seed");
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
 
         assert_eq!(
@@ -3271,7 +3271,7 @@ mod tests {
             "screen_changed_at": 1
         }))
         .expect("manifest decodes");
-        let missing_session_dir = std::env::temp_dir().join("unpeel-no-hook-seed");
+        let missing_session_dir = std::env::temp_dir().join("supercli-no-hook-seed");
         let mut engine = ActivityEngine::default();
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
 
@@ -3437,7 +3437,7 @@ mod tests {
             "screen_changed_at": 1
         }))
         .expect("manifest decodes");
-        let missing_session_dir = std::env::temp_dir().join("unpeel-no-agent-activity");
+        let missing_session_dir = std::env::temp_dir().join("supercli-no-agent-activity");
         let mut engine = ActivityEngine::default();
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
 
@@ -3483,7 +3483,7 @@ mod tests {
             "screen_changed_at": 1
         }))
         .expect("manifest decodes");
-        let missing_session_dir = std::env::temp_dir().join("unpeel-fx-activity");
+        let missing_session_dir = std::env::temp_dir().join("supercli-fx-activity");
         let mut engine = ActivityEngine::default();
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
 

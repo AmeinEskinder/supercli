@@ -1,5 +1,5 @@
 //! The root `skills` MCP domain: progressive-disclosure guidance registered
-//! by Unpeel capabilities and installed Apps.
+//! by Supercli capabilities and installed Apps.
 //!
 //! Skills are read-only documentation. They never execute, grant access, or
 //! inherit the authority of the user. Future App package metadata may publish
@@ -214,7 +214,7 @@ mod tests {
             app(
                 PathBuf::from("/tmp/design"),
                 "supercli.app.design",
-                "Unpeel Design",
+                "Supercli Design",
                 "Design interfaces",
                 true,
             ),
@@ -241,7 +241,7 @@ mod tests {
         let app = app(
             temp.path().to_path_buf(),
             "supercli.app.design",
-            "Unpeel Design",
+            "Supercli Design",
             "Design interfaces",
             true,
         );
@@ -256,7 +256,7 @@ mod tests {
         let apps = vec![app(
             PathBuf::from("/tmp/design"),
             "supercli.app.design",
-            "Unpeel Design",
+            "Supercli Design",
             "Design interfaces",
             true,
         )];

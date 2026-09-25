@@ -3,21 +3,21 @@
 
 use std::sync::Arc;
 
-use unpeel_core::remote_session_backend::RemoteSessionBackend;
-use unpeel_core::ssh_connection::{
+use supercli_core::remote_session_backend::RemoteSessionBackend;
+use supercli_core::ssh_connection::{
     SshAskpass, SshConnectionOptions, SshHostConnection, SshLaunchMode, SshTarget,
 };
 
 #[test]
 #[ignore = "requires an explicitly configured real SSH Host"]
 fn native_automatic_modes_bootstrap_a_real_host() {
-    let target = std::env::var("UNPEEL_LIVE_SSH_TARGET")
-        .expect("set UNPEEL_LIVE_SSH_TARGET=ssh://user@host");
-    let secret = std::env::var("UNPEEL_LIVE_SSH_SECRET").ok();
+    let target = std::env::var("SUPERCLI_LIVE_SSH_TARGET")
+        .expect("set SUPERCLI_LIVE_SSH_TARGET=ssh://user@host");
+    let secret = std::env::var("SUPERCLI_LIVE_SSH_SECRET").ok();
     let backend = |mode| {
         let askpass = secret
             .clone()
-            .map(|secret| SshAskpass::new(env!("CARGO_BIN_EXE_unpeel-host"), secret).unwrap());
+            .map(|secret| SshAskpass::new(env!("CARGO_BIN_EXE_supercli-host"), secret).unwrap());
         let connection = SshHostConnection::with_options(
             SshTarget::parse(&target).unwrap(),
             SshConnectionOptions {

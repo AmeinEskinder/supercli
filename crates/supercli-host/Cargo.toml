@@ -1,6 +1,6 @@
 [package]
 name = "supercli-host"
-description = "Standalone Unpeel session host, Host-service launcher, and unified Unpeel MCP server"
+description = "Standalone Supercli session host, Host-service launcher, and unified Supercli MCP server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,6 +1,6 @@
 //! Client DTOs for the typed session-event stream (Phase 6 R4).
 //!
-//! Mirrors `unpeel-serve/src/session_events.rs`. The wire uses `kind` as the
+//! Mirrors `supercli-serve/src/session_events.rs`. The wire uses `kind` as the
 //! discriminant; [`SessionEventWire`] is internally tagged so unknown kinds
 //! from newer Hosts deserialize to [`SessionEventWire::Unknown`] instead of
 //! failing the whole poll.

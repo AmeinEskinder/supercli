@@ -10,8 +10,9 @@ license = "MIT"
 description = "LITE Android/iOS emulator control for supercli: shells out to adb/emulator and xcrun simctl; no bundled emulators, no heavy deps"
 
 [features]
-# Real backends (adb.rs, simctl.rs) compile only with this feature.
-# Without it the crate is just the trait + error types (a few KB).
+# Real backends (adb.rs, baguette.rs, scrcpy.rs, simctl.rs) compile only
+# with this feature. Without it the crate is just the trait + error types
+# (a few KB).
 device = []
 
 # Standalone during development: keeps cargo from treating this crate as a

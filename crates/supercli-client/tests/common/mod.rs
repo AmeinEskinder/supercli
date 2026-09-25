@@ -13,9 +13,9 @@ use base64::Engine;
 use tungstenite::http::{Request, Response};
 use tungstenite::{Message, WebSocket};
 
-use unpeel_client::crypto::handshake::transcript_mac;
-use unpeel_client::crypto::RelayCryptoSession;
-use unpeel_client::relay::{
+use supercli_client::crypto::handshake::transcript_mac;
+use supercli_client::crypto::RelayCryptoSession;
+use supercli_client::relay::{
     EphemeralKeyPair, RelayClientHello, RelayHostHello, RelayStreamPush, RelayTunnelRequest,
     RelayTunnelResponse, RELAY_PROTOCOL_VERSION,
 };
@@ -30,7 +30,7 @@ pub fn b64_decode(s: &str) -> Vec<u8> {
 }
 
 /// Assert the client offered the relay subprotocol with its token in the
-/// header (never the URL), and select `unpeel-relay` in the 101 response —
+/// header (never the URL), and select `supercli-relay` in the 101 response —
 /// what the real relay does.
 // `accept_hdr`'s `Callback` trait fixes the closure's error type to
 // `http::Response`, which trips `result_large_err`; the trait gives us
@@ -48,13 +48,13 @@ pub fn relay_handshake_response(
         .to_str()
         .unwrap();
     // The token rides the header, never the URL.
-    assert!(proto.contains("unpeel-relay"), "offers unpeel-relay");
+    assert!(proto.contains("supercli-relay"), "offers supercli-relay");
     assert!(
-        proto.contains(&format!("unpeel-relay-token.{relay_token}")),
+        proto.contains(&format!("supercli-relay-token.{relay_token}")),
         "carries the relay token"
     );
     resp.headers_mut()
-        .insert("Sec-WebSocket-Protocol", "unpeel-relay".parse().unwrap());
+        .insert("Sec-WebSocket-Protocol", "supercli-relay".parse().unwrap());
     Ok(resp)
 }
 

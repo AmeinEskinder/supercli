@@ -41,7 +41,7 @@ pub fn install() -> Result<(), String> {
     ensure_muse_plugin_registered(&plugin_dir, &manifest)
 }
 
-pub(crate) const MUSE_PLUGIN_ID: &str = "unpeel";
+pub(crate) const MUSE_PLUGIN_ID: &str = "supercli";
 
 pub(crate) const MUSE_HOOK_EVENT_FILES: &[(&str, &str)] = &[
     ("SessionStart", "session-start.sh"),
@@ -55,7 +55,7 @@ pub(crate) fn muse_plugin_manifest_json() -> Result<String, String> {
         .iter()
         .map(|(event, file)| {
             json!({
-                "id": format!("unpeel-{}", file.trim_end_matches(".sh")),
+                "id": format!("supercli-{}", file.trim_end_matches(".sh")),
                 "event": event,
                 "command": ["sh", format!("hooks/{file}")],
                 "timeoutMs": 5000,
@@ -70,15 +70,15 @@ pub(crate) fn muse_plugin_manifest_json() -> Result<String, String> {
     let manifest = json!({
         "schemaVersion": 1,
         "name": MUSE_PLUGIN_ID,
-        "displayName": "Unpeel",
+        "displayName": "Supercli",
         "version": "0.1.0",
-        "description": "Forwards Muse Code lifecycle events to the Unpeel app.",
+        "description": "Forwards Muse Code lifecycle events to the Supercli app.",
         "compat": { "source": "native", "manifestDir": ".muse-plugin" },
         "capabilities": {
             "skills": [],
             "commands": [],
             "hooks": hooks,
-            "mcpServers": [{ "id": "unpeel", "command": [shim.to_string_lossy()] }],
+            "mcpServers": [{ "id": "supercli", "command": [shim.to_string_lossy()] }],
             "reminders": []
         }
     });

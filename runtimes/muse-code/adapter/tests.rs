@@ -46,7 +46,7 @@ fn muse_plugin_manifest_registers_each_event_with_a_distinct_source() {
         .map(|hook| hook["command"][1].as_str().expect("source path"))
         .collect();
     assert_eq!(sources.len(), hooks.len());
-    assert_eq!(manifest["name"], "unpeel");
+    assert_eq!(manifest["name"], "supercli");
     assert_eq!(manifest["compat"]["manifestDir"], ".muse-plugin");
 }
 
@@ -59,7 +59,7 @@ fn muse_plugin_manifest_registers_unified_mcp_server() {
         .as_array()
         .expect("mcpServers array");
     assert_eq!(servers.len(), 1);
-    assert_eq!(servers[0]["id"], "unpeel");
+    assert_eq!(servers[0]["id"], "supercli");
     let command = servers[0]["command"]
         .as_array()
         .expect("command array");
@@ -210,7 +210,7 @@ fn muse_hook_script_drops_yolo_permission_requests() {
             .arg(&script)
             .env("HOME", hook_env_home(label))
             .env("SUPERCLI_APP_PORT", port.to_string())
-            .env("SUPERCLI_SESSION_ID", "unpeel-record-session")
+            .env("SUPERCLI_SESSION_ID", "supercli-record-session")
             .env("SUPERCLI_SESSION_DIR", &session_dir)
             .env("SUPERCLI_RUNTIME_GENERATION", "7")
             .env("SUPERCLI_MUSE_PARENT_COMMAND_OVERRIDE", parent_command)

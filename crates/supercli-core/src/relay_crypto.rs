@@ -1,4 +1,4 @@
-//! The Unpeel Remote relay protocol, host side — the Rust port of
+//! The Supercli Remote relay protocol, host side — the Rust port of
 //! `RelayProtocol.swift`, byte-for-byte. This is what lets a headless host
 //! serve a phone OFF the LAN: one outbound WSS to the relay, opaque
 //! end-to-end frames inside it. The relay never decrypts anything.

@@ -3,7 +3,7 @@
 //! Ported from the Swift client's `RemoteTerminalPredictionEngine`,
 //! `RemoteTerminalScrollPredictionEngine`, and
 //! `RemoteTerminalScrollShiftDetector`
-//! (`clients/ios/UnpeelIOS/Sources/UnpeelIOS/RemoteTerminalPrediction.swift`
+//! (`clients/ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalPrediction.swift`
 //! and `RemoteTerminalScrollPrediction.swift`). These are pure state
 //! machines: no I/O, no platform APIs, fully unit-testable.
 //!

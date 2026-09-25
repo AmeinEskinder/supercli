@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use unpeel_client::{HostClient, HostClientError};
+use supercli_client::{HostClient, HostClientError};
 
 /// Serve one canned `/mobile/output` body, then exit.
 fn mock_output_host(body: &'static [u8]) -> (thread::JoinHandle<()>, String) {
@@ -30,7 +30,7 @@ fn mock_output_host(body: &'static [u8]) -> (thread::JoinHandle<()>, String) {
     (handle, format!("http://{addr}/mobile"))
 }
 
-fn chunk(client: &HostClient) -> Result<unpeel_client::OutputChunk, HostClientError> {
+fn chunk(client: &HostClient) -> Result<supercli_client::OutputChunk, HostClientError> {
     client.output_chunk("session-1", None, 65536, 0)
 }
 

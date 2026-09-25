@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use unpeel_client::HostClient;
+use supercli_client::HostClient;
 
 const TOKEN: &str = "auth-token-1";
 
@@ -283,7 +283,7 @@ fn archived_sessions_non_2xx_is_status_not_reachability() {
 
     let client = HostClient::new(format!("http://127.0.0.1:{port}/mobile"), TOKEN).expect("client");
     match client.archived_sessions("p1") {
-        Err(unpeel_client::HostClientError::Status(500, _)) => {}
+        Err(supercli_client::HostClientError::Status(500, _)) => {}
         other => panic!("expected Status(500, _), got: {other:?}"),
     }
     handle.join().expect("mock host");
@@ -297,7 +297,7 @@ fn archived_sessions_bad_json_is_decode() {
 
     let client = HostClient::new(format!("http://127.0.0.1:{port}/mobile"), TOKEN).expect("client");
     match client.archived_sessions("p1") {
-        Err(unpeel_client::HostClientError::Decode(_)) => {}
+        Err(supercli_client::HostClientError::Decode(_)) => {}
         other => panic!("expected Decode, got: {other:?}"),
     }
     handle.join().expect("mock host");

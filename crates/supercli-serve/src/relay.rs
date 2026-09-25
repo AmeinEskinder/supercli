@@ -123,7 +123,7 @@ impl DispatchPool {
             )
             .into();
             let worker = std::thread::Builder::new()
-                .name(format!("unpeel-relay-dispatch-{index}"))
+                .name(format!("supercli-relay-dispatch-{index}"))
                 .spawn(move || loop {
                     let job = {
                         let receiver = job_receiver

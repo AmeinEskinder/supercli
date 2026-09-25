@@ -6,7 +6,7 @@
 //!
 //! Two feeds converge here, exactly like Swift:
 //!
-//! - File feed: the Rust Host writes `<unpeel-home>/remote/presence.json`
+//! - File feed: the Rust Host writes `<supercli-home>/remote/presence.json`
 //!   whenever remote viewers change:
 //!   `{"version":1,"updated_at":ms,"sessions":{"<id>":[{"ip",
 //!   "kind":"ws"|"poll","device":{t("presence.name_id")}|null,"last_seen":ms}]}}`.
@@ -48,8 +48,8 @@ pub struct ViewerInfo {
 }
 
 /// The two presence files beside each other under the Host's home dir.
-pub fn presence_file_paths(unpeel_home: &Path) -> (PathBuf, PathBuf) {
-    let remote = unpeel_home.join("remote");
+pub fn presence_file_paths(supercli_home: &Path) -> (PathBuf, PathBuf) {
+    let remote = supercli_home.join("remote");
     (
         remote.join("presence.json"),
         remote.join("mobile-presence.json"),

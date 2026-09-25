@@ -407,7 +407,7 @@ fn match_process(process: &ForegroundProcess) -> Option<RuntimeMatch> {
             });
         }
     }
-    // Installed Unpeel Apps are consulted only after every built-in attempt
+    // Installed Supercli Apps are consulted only after every built-in attempt
     // has failed: built-in identity is reserved, and `app_runtime` already
     // dropped colliding or shell/wrapper aliases at index build. An App match
     // is identity/presentation data — it grants no Busy authority, installs

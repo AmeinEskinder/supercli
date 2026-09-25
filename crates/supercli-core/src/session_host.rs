@@ -168,13 +168,13 @@ pub struct SessionHostLaunch {
     /// before any client exists.
     #[serde(default)]
     pub wait_for_attach: bool,
-    /// True when the provider CLI gets Unpeel's Sessions MCP registered
+    /// True when the provider CLI gets Supercli's Sessions MCP registered
     /// (`--mcp-config` / `SUPERCLI_MCP_BIN`). Defaults to true because Read is the
     /// default session role; a blocked project forces this false.
     #[serde(default = "default_mcp_enabled")]
     pub mcp_enabled: bool,
     /// True only for sessions granted Browser Access: the provider CLI gets
-    /// Unpeel's Browser MCP registered (second `--mcp-config` /
+    /// Supercli's Browser MCP registered (second `--mcp-config` /
     /// `SUPERCLI_BROWSER_MCP_BIN`). Defaults to false — browser automation can
     /// reach logged-in sites, so access is opt-in per session.
     #[serde(default)]
@@ -271,7 +271,7 @@ pub struct HostedSessionManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_transcript_path: Option<String>,
     /// Runtime-owned storage created for this managed Session. The Host only
-    /// accepts paths beneath its own Unpeel home and rejects symlink hops
+    /// accepts paths beneath its own Supercli home and rejects symlink hops
     /// before creating them. Kept provider-neutral so removal never needs to
     /// parse a particular CLI's flags in a frontend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -286,7 +286,7 @@ pub struct HostedSessionManifest {
     /// rewrites `session.command` or grants launch/resume capabilities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime: Option<HostedSessionRuntime>,
-    /// Installed Unpeel App identity for this session, Host-resolved so
+    /// Installed Supercli App identity for this session, Host-resolved so
     /// clients render App branding (name, tint, `kind: app`) as data without
     /// a compiled catalog entry. Stamped at spawn when the launch command is
     /// an installed App's binary, then maintained by foreground observation
@@ -337,7 +337,7 @@ pub struct HostedSessionManifest {
     /// Launch-time Computer MCP domain grant; see `mcp_enabled`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub computer_mcp_enabled: Option<bool>,
-    /// Whether Unpeel automatically registered the unified MCP client with the
+    /// Whether Supercli automatically registered the unified MCP client with the
     /// provider CLI for this runtime launch. This is evidence about provider
     /// setup, not the domain authorization bit: blank terminals keep this false
     /// while a manually configured CLI uses `mcp_enabled` above. Legacy
@@ -367,7 +367,7 @@ pub struct HostedSessionManifest {
     /// whose runtime declares `[screen]` rules, edge-written by the same
     /// viewport scan (`crate::screen_activity`). The worker uses it only
     /// while the Session has no hook latch — the Herdr-style fallback for an
-    /// agent whose Unpeel integration is not installed. Absent when no rules
+    /// agent whose Supercli integration is not installed. Absent when no rules
     /// apply or nothing matched yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screen_activity: Option<String>,
@@ -2231,7 +2231,7 @@ struct CachedManifestHealth {
 }
 
 const LEAKED_LAUNCHER_ENV_KEYS: &[&str] = &[
-    // Parent agent/dev shells often force a specific color tier. Unpeel owns
+    // Parent agent/dev shells often force a specific color tier. Supercli owns
     // the PTY and advertises its real xterm-256color/truecolor capabilities.
     "FORCE_COLOR",
     "CLICOLOR_FORCE",
@@ -3405,7 +3405,7 @@ pub fn socket_path(session_id: &str) -> PathBuf {
     // in the session dir.
     let uid = unsafe { libc::getuid() };
     PathBuf::from("/tmp")
-        .join(format!("unpeel-{uid}"))
+        .join(format!("supercli-{uid}"))
         .join(format!("{session_id}.sock"))
 }
 
@@ -3705,7 +3705,7 @@ fn process_argv_mentions(pid: u32, needle: &str) -> Option<bool> {
 
 /// Public because **every frontend must agree on whether a session is
 /// alive**. The desktop already refuses to call a session live when its pid
-/// was recycled (`manifestPidIdentity` in UnpeelStore.swift); a frontend that
+/// was recycled (`manifestPidIdentity` in SupercliStore.swift); a frontend that
 /// checks only `kill(pid, 0)` will show stopped sessions as running, because
 /// the pid counter wraps in under an hour under agent load.
 pub fn manifest_pid_identity(manifest: &HostedSessionManifest) -> PidIdentity {
@@ -4569,7 +4569,7 @@ pub struct ReapedHost {
 ///   - and only when the live argv actually contains `__session_host__`.
 ///
 /// Returns what it reaped, newest logic first, for the trace log and the
-/// `unpeel hosts prune` verb. Safe to run repeatedly.
+/// `supercli hosts prune` verb. Safe to run repeatedly.
 pub fn reap_orphan_session_hosts() -> Vec<ReapedHost> {
     let core_pid = crate::pty_core::load_record().map(|record| record.pid);
     let mut reaped = Vec::new();
@@ -4820,7 +4820,7 @@ pub fn spawn_host_process_from_launch_file(launch_file: impl AsRef<Path>) -> Res
     command.stderr(std::process::Stdio::null());
     // A detached session host is not an occupant of the outer Herdr pane.
     // Keeping that pane identity would let provider integrations race the
-    // Unpeel TUI's aggregate status authority.
+    // Supercli TUI's aggregate status authority.
     strip_leaked_herdr_process_env(&mut command);
 
     #[cfg(unix)]
@@ -5583,7 +5583,7 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
                 // Observation grants identity and presentation only. It never
                 // installs or rewrites provider configuration: a hand-typed
                 // agent reports through hooks exactly when the user has
-                // installed that runtime's Unpeel integration.
+                // installed that runtime's Supercli integration.
                 true
             },
         ))
@@ -5773,7 +5773,7 @@ pub(crate) fn start_host(
         // artifacts, so output logs / manifests / launch files aren't readable
         // by other local users on a multi-user machine.
         let supercli_home = crate::app_paths::ensure_supercli_home()
-            .map_err(|error| format!("Failed to initialize Unpeel home: {error}"))?;
+            .map_err(|error| format!("Failed to initialize Supercli home: {error}"))?;
         // Final ownership authority: every frontend eventually crosses this
         // boundary before a manifest becomes visible. Authenticated remote
         // adapters may already have stamped a future account principal; local
@@ -5809,7 +5809,7 @@ pub(crate) fn start_host(
         // The command launches exactly as the user wrote it. Provider
         // conversation ids are captured from the installed integration's
         // hooks once the agent runs, never minted here. A command that
-        // already pins Unpeel-managed storage (an older Pi launch, or a
+        // already pins Supercli-managed storage (an older Pi launch, or a
         // resumed one) still gets its directory created beneath the home.
         let managed_storage_path =
             crate::resume::managed_storage_path(&launch.session.command, &supercli_home);
@@ -5860,7 +5860,7 @@ pub(crate) fn start_host(
         prepare_runtime_launch_completion_marker(&initial_runtime_completion_path)?;
 
         // Write a preliminary manifest immediately, before the environment is
-        // assembled and the PTY spawn runs. A client (unpeel-attach) spawned in parallel
+        // assembled and the PTY spawn runs. A client (supercli-attach) spawned in parallel
         // only waits a couple seconds for the manifest to appear; slow
         // providers like codex could miss that window, leaving the surface on
         // the bare login shell ("No session manifest", plus the uncleared
@@ -5941,7 +5941,7 @@ pub(crate) fn start_host(
         // recorded as MCP registration evidence below. Nothing is installed,
         // wrapped, or rewritten on a launch: a preset runs its command in the
         // user's login shell as typed, and the user installs the runtime's
-        // Unpeel integration explicitly (`unpeel integrations install`).
+        // Supercli integration explicitly (`supercli integrations install`).
         let runtime_id = integrations::runtime_for_command(&launch.session.command)
             .map(|runtime| runtime.legacy_slug.as_str())
             .unwrap_or(command_head.as_str());
@@ -5963,17 +5963,17 @@ pub(crate) fn start_host(
         strip_leaked_launcher_env(&mut cmd);
         strip_runtime_inherited_env(&mut cmd);
         // Defense in depth for direct __session_host__ entry: providers run
-        // behind Unpeel's hosted PTY and must not report against a parent
+        // behind Supercli's hosted PTY and must not report against a parent
         // Herdr pane even when the detached-host boundary was bypassed.
         strip_leaked_herdr_pty_env(&mut cmd);
-        // A Host can itself be launched from inside another Unpeel Session.
+        // A Host can itself be launched from inside another Supercli Session.
         // Generation provenance belongs only to the managed provider child,
         // never to this persistent shell or a blank terminal.
         cmd.env_remove("SUPERCLI_RUNTIME_GENERATION");
         cmd.env_remove("NO_COLOR");
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "Unpeel");
+        cmd.env("TERM_PROGRAM", "Supercli");
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         if !trimmed_command.is_empty() {
             // The Amazon Q / Kiro CLI dotfile integration (pre blocks at the
@@ -6145,7 +6145,7 @@ pub(crate) fn start_host(
         });
 
         // The short-fallback socket lives outside the session dir (e.g.
-        // /tmp/unpeel-<uid>/), so make sure its parent exists and is private
+        // /tmp/supercli-<uid>/), so make sure its parent exists and is private
         // before bind. Idempotent for the normal in-session-dir case.
         if let Some(parent) = session_socket_path.parent() {
             let _ = fs::create_dir_all(parent);
@@ -6865,7 +6865,7 @@ exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
     fn managed_storage_creation_stays_beneath_supercli_home() {
         let temp = tempfile::tempdir().expect("managed storage root");
         let root = temp.path().join(".supercli");
-        std::fs::create_dir(&root).expect("create Unpeel root");
+        std::fs::create_dir(&root).expect("create Supercli root");
         let managed = root.join("runtime-storage").join("session-1");
         ensure_managed_storage_path(&root, &managed).expect("create managed storage");
         assert!(managed.is_dir());
@@ -6883,7 +6883,7 @@ exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
         let temp = tempfile::tempdir().expect("managed storage root");
         let root = temp.path().join(".supercli");
         let outside = temp.path().join("outside");
-        std::fs::create_dir(&root).expect("create Unpeel root");
+        std::fs::create_dir(&root).expect("create Supercli root");
         std::fs::create_dir(&outside).expect("create outside dir");
         symlink(&outside, root.join("runtime-storage")).expect("create symlink");
 
@@ -7345,7 +7345,7 @@ exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
     #[test]
     fn apply_manifest_auto_title_marks_blank_terminals_custom() {
         let session_id = unique_session_id("auto-title-blank");
-        let manifest = manifest_for_auto_title(&session_id, "", "~/Dev/unpeel");
+        let manifest = manifest_for_auto_title(&session_id, "", "~/Dev/supercli");
         save_manifest(&manifest).unwrap();
 
         assert!(apply_manifest_auto_title(&session_id, "ls -la"));
@@ -7487,14 +7487,14 @@ exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
         save_manifest(&manifest).unwrap();
 
         SESSION_TITLE_MODE_FOR_TEST.with(|cell| cell.set(crate::state::SessionTitleMode::Agent));
-        assert!(!apply_agent_terminal_title(&session_id, "~/Dev/unpeel"));
+        assert!(!apply_agent_terminal_title(&session_id, "~/Dev/supercli"));
         assert_eq!(load_manifest(&session_id).unwrap().session.label, "pi");
 
         // No observed runtime at all: same refusal.
         let _ = update_manifest_session(&session_id, |manifest| {
             manifest.runtime = None;
         });
-        assert!(!apply_agent_terminal_title(&session_id, "~/Dev/unpeel"));
+        assert!(!apply_agent_terminal_title(&session_id, "~/Dev/supercli"));
         assert_eq!(load_manifest(&session_id).unwrap().session.label, "pi");
 
         SESSION_TITLE_MODE_FOR_TEST.with(|cell| cell.set(crate::state::SessionTitleMode::Agent));

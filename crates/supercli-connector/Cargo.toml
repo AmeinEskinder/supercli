@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Connector (plugin) runtime for the Unpeel harness host: manifest loading, discovery, approval policy, and MCP process management"
+description = "Connector (plugin) runtime for the Supercli harness host: manifest loading, discovery, approval policy, and MCP process management"
 
 [dependencies]
 supercli-client = { version = "0.9.0", path = "../supercli-client" }

@@ -2,10 +2,10 @@
 umask 077
 SOURCE_EVENT="$1"
 INPUT="${2:-$(cat)}"
-# Global provider hooks must be inert outside a hosted Unpeel Session.
+# Global provider hooks must be inert outside a hosted Supercli Session.
 [ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
-SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/hooks/trace.log}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.supercli}/app-ports}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
 
 json_escape_string() {
@@ -28,7 +28,7 @@ record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
   [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
-  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_payload=$(printf '{"hook_event_name":"%s"' "$(json_escape_string "$_record_event_name")")
   if [ -n "$_record_tool_name" ]; then
@@ -144,7 +144,7 @@ case "$EVENT_TYPE" in
     ;;
 esac
 
-# Cline's hook files are global. Outside an Unpeel-hosted terminal they must be
+# Cline's hook files are global. Outside an Supercli-hosted terminal they must be
 # silent no-ops so ordinary Cline sessions keep their native behavior.
 _hook_post_results=""
 if [ -n "${SUPERCLI_SESSION_ID:-}" ]; then

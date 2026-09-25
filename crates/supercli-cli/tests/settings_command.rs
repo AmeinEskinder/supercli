@@ -8,7 +8,7 @@ struct TempHome(PathBuf);
 
 impl TempHome {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!("unpeel-settings-{}", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("supercli-settings-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).unwrap();
         Self(path)
     }
@@ -25,11 +25,11 @@ impl Drop for TempHome {
 }
 
 fn run(home: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_unpeel"))
+    Command::new(env!("CARGO_BIN_EXE_supercli"))
         .args(args)
-        .env("UNPEEL_HOME", home)
+        .env("SUPERCLI_HOME", home)
         .output()
-        .expect("run unpeel")
+        .expect("run supercli")
 }
 
 fn load_state(home: &Path) -> serde_json::Value {

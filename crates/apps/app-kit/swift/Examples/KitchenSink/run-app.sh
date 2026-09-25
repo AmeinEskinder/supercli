@@ -23,7 +23,7 @@ cp "$package_dir/Support/Info.plist" "$app_path/Contents/Info.plist"
 codesign --force --sign - "$app_path"
 
 open_args=(-n)
-if [[ -n "${UNPEEL_KITCHEN_SINK_SESSION:-}" ]]; then
-    open_args+=(--env "UNPEEL_KITCHEN_SINK_SESSION=$UNPEEL_KITCHEN_SINK_SESSION")
+if [[ -n "${SUPERCLI_KITCHEN_SINK_SESSION:-}" ]]; then
+    open_args+=(--env "SUPERCLI_KITCHEN_SINK_SESSION=$SUPERCLI_KITCHEN_SINK_SESSION")
 fi
 open "${open_args[@]}" "$app_path"

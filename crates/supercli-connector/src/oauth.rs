@@ -53,7 +53,7 @@ pub enum OAuthError {
     Dance(String),
     #[error("token endpoint: {0}")]
     Token(String),
-    #[error("no stored token (run `unpeel connector connect <name>` first)")]
+    #[error("no stored token (run `supercli connector connect <name>` first)")]
     NotConnected,
     #[error("stored token is corrupt: {0}")]
     Corrupt(String),

@@ -75,7 +75,7 @@ fn cursor_hook_script_uses_cursor_conversation_id_for_start_events() {
         .arg("Start")
         .env("HOME", hook_env_home("cursor-start-env"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("CURSOR_CONVERSATION_ID", "cursor-chat-123")
         .env(
             "SUPERCLI_HOOK_TRACE_FILE",
@@ -113,7 +113,7 @@ fn cursor_hook_script_ignores_all_grok_events() {
         .arg("Start")
         .env("HOME", hook_env_home("cursor-ignore-grok"))
         .env("SUPERCLI_APP_PORT", capture.port.to_string())
-        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_SESSION_ID", "supercli-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
         .env(
             "SUPERCLI_HOOK_TRACE_FILE",
@@ -172,18 +172,18 @@ fn cursor_mcp_config_merges_and_prunes_supercli_servers() {
     let home = hook_env_home("cursor-mcp-config");
     let mcp_path = home.join(".cursor").join("mcp.json");
     fs::create_dir_all(mcp_path.parent().unwrap()).expect("create cursor dir");
-    // Seed with a user server plus every legacy Unpeel entry generation
-    // (pre-rename unified `unpeel-mcp` and the per-domain pair): the merge
-    // must adopt/replace with one `unpeel` entry and prune all legacy
+    // Seed with a user server plus every legacy Supercli entry generation
+    // (pre-rename unified `supercli-mcp` and the per-domain pair): the merge
+    // must adopt/replace with one `supercli` entry and prune all legacy
     // names while leaving user servers alone.
     fs::write(
         &mcp_path,
         r#"{
   "mcpServers": {
 "GmailCompany": { "url": "https://example.com/mcp" },
-"unpeel-mcp": { "type": "stdio", "command": "/stale", "args": ["__mcp__"] },
-"unpeel-sessions": { "type": "stdio", "command": "/stale", "args": ["__mcp__"] },
-"unpeel-browser": { "type": "stdio", "command": "/stale", "args": ["__browser_mcp__"] }
+"supercli-mcp": { "type": "stdio", "command": "/stale", "args": ["__mcp__"] },
+"supercli-sessions": { "type": "stdio", "command": "/stale", "args": ["__mcp__"] },
+"supercli-browser": { "type": "stdio", "command": "/stale", "args": ["__browser_mcp__"] }
   }
 }
 "#,
@@ -194,16 +194,16 @@ fn cursor_mcp_config_merges_and_prunes_supercli_servers() {
         Some(&mcp_path),
         [
             (
-                "unpeel",
+                "supercli",
                 Some(json!({
                     "type": "stdio",
-                    "command": "/Applications/Unpeel.app/Contents/MacOS/unpeel-host",
+                    "command": "/Applications/Supercli.app/Contents/MacOS/supercli-host",
                     "args": ["__mcp__"],
                 })),
             ),
-            ("unpeel-mcp", None),
-            ("unpeel-sessions", None),
-            ("unpeel-browser", None),
+            ("supercli-mcp", None),
+            ("supercli-sessions", None),
+            ("supercli-browser", None),
         ],
     )
     .expect("merge cursor mcp.json");
@@ -213,8 +213,8 @@ fn cursor_mcp_config_merges_and_prunes_supercli_servers() {
             .expect("parse mcp.json");
     let servers = merged["mcpServers"].as_object().expect("mcpServers object");
     assert!(servers.contains_key("GmailCompany"));
-    assert_eq!(servers["unpeel"]["args"][0], "__mcp__");
-    assert!(!servers.contains_key("unpeel-mcp"));
-    assert!(!servers.contains_key("unpeel-sessions"));
-    assert!(!servers.contains_key("unpeel-browser"));
+    assert_eq!(servers["supercli"]["args"][0], "__mcp__");
+    assert!(!servers.contains_key("supercli-mcp"));
+    assert!(!servers.contains_key("supercli-sessions"));
+    assert!(!servers.contains_key("supercli-browser"));
 }

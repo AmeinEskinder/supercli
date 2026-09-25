@@ -2,7 +2,7 @@
 //! `RemotePairingCrypto` so the shipped iOS app pairs with the TUI unchanged.
 //!
 //! Wire shape (all of it load-bearing — see the four different encodings):
-//! - QR code text: `UNPEEL:1:<host>:<port>:<MACID-UPPER>:<token>:<expiresSec>`
+//! - QR code text: `SUPERCLI:1:<host>:<port>:<MACID-UPPER>:<token>:<expiresSec>`
 //!   with an optional final proxy id for controller-assisted pairing. The
 //!   phone rebuilds the endpoint byte-for-byte because it is authenticated
 //!   data; the sealed response then supplies the Host's Direct endpoint.
@@ -10,9 +10,9 @@
 //!   IKM is the UTF-8 **text** of that token, not the decoded bytes.
 //! - Envelope: `{"v":1,"saltB64","sealedB64"}`, standard padded base64;
 //!   `sealed` = nonce(12) ‖ ciphertext ‖ tag(16) (CryptoKit `combined`).
-//! - Key: HKDF-SHA256(ikm=token, salt=16 random, info="unpeel-pairing-v1:"
+//! - Key: HKDF-SHA256(ikm=token, salt=16 random, info="supercli-pairing-v1:"
 //!   + direction), 32 bytes; direction is `phone-to-mac` / `mac-to-phone`.
-//! - AAD: `unpeel-pairing-v1\0<direction>\0<macID>\0<endpoint>`.
+//! - AAD: `supercli-pairing-v1\0<direction>\0<macID>\0<endpoint>`.
 //! - Issued tokens: 32 CSPRNG bytes as unpadded base64url; stored only as
 //!   lowercase-hex SHA-256 in `devices.json`.
 
@@ -97,7 +97,7 @@ pub fn sha256_hex(value: &str) -> String {
 }
 
 fn derive_key(token: &str, salt: &[u8], direction: &str) -> [u8; 32] {
-    let info = format!("unpeel-pairing-v1:{direction}");
+    let info = format!("supercli-pairing-v1:{direction}");
     let hk = hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), token.as_bytes());
     let mut key = [0u8; 32];
     hk.expand(info.as_bytes(), &mut key)
@@ -107,7 +107,7 @@ fn derive_key(token: &str, salt: &[u8], direction: &str) -> [u8; 32] {
 
 fn associated_data(direction: &str, mac_id: &str, endpoint: &str) -> Vec<u8> {
     let mut aad = Vec::new();
-    aad.extend_from_slice(b"unpeel-pairing-v1");
+    aad.extend_from_slice(b"supercli-pairing-v1");
     aad.push(0);
     aad.extend_from_slice(direction.as_bytes());
     aad.push(0);
@@ -226,7 +226,7 @@ impl PairingWindow {
         let expires_at_ms = now_ms() + PAIRING_TTL.as_millis() as u64;
         let endpoint = format!("http://{host}:{port}/mobile");
         let code = format!(
-            "UNPEEL:1:{host}:{port}:{}:{token}:{}",
+            "SUPERCLI:1:{host}:{port}:{}:{token}:{}",
             mac_id.to_uppercase(),
             expires_at_ms / 1000
         );
@@ -854,7 +854,7 @@ mod tests {
             )
             .expect("opens");
         let parts: Vec<&str> = code.split(':').collect();
-        assert_eq!(parts[0], "UNPEEL");
+        assert_eq!(parts[0], "SUPERCLI");
         assert_eq!(parts[1], "1");
         assert_eq!(parts[2], "192.168.1.20");
         assert_eq!(parts[3], "49152");
@@ -935,7 +935,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-pairing-writer-{}-{}",
+            "supercli-pairing-writer-{}-{}",
             std::process::id(),
             uuid::Uuid::new_v4()
         ));

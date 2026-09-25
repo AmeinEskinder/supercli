@@ -14,7 +14,7 @@ tint = "#8B7CFF"
 spinner_tint = "#B88A2A"
 icon = "kimi"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -40,7 +40,7 @@ completion_reliable = true
 attention_reliable = true
 
 [integration]
-summary = "Adds a managed [[hooks]] block to Kimi's config.toml and the unpeel MCP server to ~/.kimi-code/mcp.json."
+summary = "Adds a managed [[hooks]] block to Kimi's config.toml and the supercli MCP server to ~/.kimi-code/mcp.json."
 legacy_evidence = ["hooks/kimi-hook.sh"]
 
 [[usage.stores]]

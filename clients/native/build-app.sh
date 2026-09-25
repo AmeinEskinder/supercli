@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# build-app.sh — assemble an installable Unpeel.app from release builds.
+# build-app.sh — assemble an installable Supercli.app from release builds.
 #
-# Produces clients/native/dist/Unpeel.app containing:
+# Produces clients/native/dist/Supercli.app containing:
 #   - the release SupercliNative binary (GhosttyKit is statically linked)
-#   - unpeel-host + unpeel-attach release binaries (embedded helpers the app
+#   - supercli-host + supercli-attach release binaries (embedded helpers the app
 #     spawns; LaunchConfig resolves them via Bundle.main auxiliary executables)
 #   - Sparkle.framework for Cloudflare/R2 appcast updates
 #   - the SwiftPM resource bundle (for Bundle.module: the dock icon)
@@ -14,13 +14,13 @@
 # Developer ID builds are signed with hardened runtime + timestamp so they can
 # be notarized before public distribution.
 #
-# The server binaries (unpeel-host, unpeel, unpeel-attach) are built FROM
+# The server binaries (supercli-host, supercli, supercli-attach) are built FROM
 # THIS TREE by default (`cargo build --release --locked` in crates/ and
-# crates/unpeel-attach), so the app can never skew from the server it
+# crates/supercli-attach), so the app can never skew from the server it
 # bundles: one workspace version (crates/Cargo.toml) names both. For a
 # reproducibility check against a published server release, bundle that
 # release's archive instead:
-#   UNPEEL_SERVER_ARCHIVE=<local .tar.gz>    a `unpeel-<version>-macos-universal`
+#   SUPERCLI_SERVER_ARCHIVE=<local .tar.gz>    a `supercli-<version>-macos-universal`
 #                                            CLI archive (from `release:cli`,
 #                                            or its `--dry-run`); its `.sha256`
 #                                            sidecar is verified when present
@@ -29,14 +29,14 @@
 #
 # Usage:
 #   clients/native/build-app.sh
-#   UNPEEL_BUILD=37 clients/native/build-app.sh
+#   SUPERCLI_BUILD=37 clients/native/build-app.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NATIVE_DIR="$REPO_ROOT/clients/native"
 SWIFT_DIR="$NATIVE_DIR/SupercliNative"
 DIST="$NATIVE_DIR/dist"
-APP="$DIST/Unpeel.app"
+APP="$DIST/Supercli.app"
 # One version number for the app, the bridge, and the server binaries: the
 # crates workspace version. Bump crates/Cargo.toml (then `cargo update
 # --workspace`) to release a new version; nothing here restates it.
@@ -48,8 +48,8 @@ SERVER_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$REPO_ROOT/crates/Cargo.
 case "$SERVER_VERSION" in
   *[!A-Za-z0-9._-]*) echo "FAIL: the workspace version may only contain [A-Za-z0-9._-]" >&2; exit 1 ;;
 esac
-VERSION="${UNPEEL_VERSION:-$SERVER_VERSION}"
-BUILD="${UNPEEL_BUILD:-5}"
+VERSION="${SUPERCLI_VERSION:-$SERVER_VERSION}"
+BUILD="${SUPERCLI_BUILD:-5}"
 # Empty by default on purpose: a dev build must not be a live Sparkle client
 # pointed at the production feed (it would background-check and could replace
 # itself with the published release). release.sh injects the channel feed URL.
@@ -57,21 +57,21 @@ SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-HbKIMOuEVJPtWViS7sbWhWOPj2qFRAiRG3Y4RP52PHg=}"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 CODESIGN_ENTITLEMENTS="${CODESIGN_ENTITLEMENTS:-}"
-UNPEEL_DEV_BUILD="${UNPEEL_DEV_BUILD:-0}"
+SUPERCLI_DEV_BUILD="${SUPERCLI_DEV_BUILD:-0}"
 
 # Keep checkout, Cargo registry, and toolchain source paths out of shipped
 # Rust panic/location strings. Caller-supplied Rust flags are retained.
 . "$REPO_ROOT/scripts/rust-release-env.sh"
-unpeel_enable_rust_path_remapping "$REPO_ROOT"
+supercli_enable_rust_path_remapping "$REPO_ROOT"
 
 # Remap both debug metadata and compile-time file literals (including
 # #filePath) in every Swift release object. -Xswiftc appends to any caller
 # environment flags SwiftPM already honors.
 SWIFT_PATH_REMAP_FLAGS=(
   -Xswiftc -debug-prefix-map
-  -Xswiftc "$REPO_ROOT=/unpeel/source"
+  -Xswiftc "$REPO_ROOT=/supercli/source"
   -Xswiftc -file-prefix-map
-  -Xswiftc "$REPO_ROOT=/unpeel/source"
+  -Xswiftc "$REPO_ROOT=/supercli/source"
 )
 
 step() { echo "==> $*"; }
@@ -117,7 +117,7 @@ verify_release_architectures() {
   # The native app's declared support floor is Apple silicon. A release may
   # become universal later, but it must never silently inherit an Intel build
   # host's architecture and publish without an arm64 slice.
-  for binary in SupercliNative unpeel-host unpeel unpeel-attach; do
+  for binary in SupercliNative supercli-host supercli supercli-attach; do
     if ! lipo "$APP/Contents/MacOS/$binary" -verify_arch arm64 >/dev/null 2>&1; then
       echo "FAIL: release binary does not contain the required arm64 slice: $binary" >&2
       lipo -info "$APP/Contents/MacOS/$binary" >&2 || true
@@ -130,7 +130,7 @@ verify_release_architectures() {
 # --- 1. Release builds ------------------------------------------------------
 
 step "building native Rust bridge (release)"
-# The bridge is a workspace member with path deps on unpeel-core/unpeel-serve,
+# The bridge is a workspace member with path deps on supercli-core/supercli-serve,
 # so it is always built from the same tree as the server binaries below.
 "$NATIVE_DIR/build-rust-bridge.sh" release
 
@@ -149,22 +149,22 @@ fi
 
 # --- 1b. Server binaries: built from this tree (default) or a CLI archive ----
 #
-# Default: cargo-build unpeel-host, unpeel, and unpeel-attach from this
-# checkout — the same commit as the bridge and the app. UNPEEL_SERVER_ARCHIVE
+# Default: cargo-build supercli-host, supercli, and supercli-attach from this
+# checkout — the same commit as the bridge and the app. SUPERCLI_SERVER_ARCHIVE
 # bundles a published CLI archive instead (reproducibility checks, upgrade
 # rehearsals); its provenance must name this workspace version.
-SERVER_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/unpeel-server-bins.XXXXXX")"
-SERVER_BINARIES=(unpeel-host unpeel unpeel-attach)
+SERVER_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/supercli-server-bins.XXXXXX")"
+SERVER_BINARIES=(supercli-host supercli supercli-attach)
 sha256_of() { shasum -a 256 "$1" | awk '{print $1}'; }
 
 stage_server_from_source() {
-  step "building unpeel-host + unpeel (release, from source)"
-  (cd "$REPO_ROOT/crates" && cargo build --release --locked --bin unpeel-host --bin unpeel)
-  step "building unpeel-attach (release, from source)"
-  (cd "$REPO_ROOT/crates/unpeel-attach" && cargo build --release --locked)
-  cp "$REPO_ROOT/crates/target/release/unpeel-host" "$SERVER_BIN_DIR/unpeel-host"
-  cp "$REPO_ROOT/crates/target/release/unpeel" "$SERVER_BIN_DIR/unpeel"
-  cp "$REPO_ROOT/crates/unpeel-attach/target/release/unpeel-attach" "$SERVER_BIN_DIR/unpeel-attach"
+  step "building supercli-host + supercli (release, from source)"
+  (cd "$REPO_ROOT/crates" && cargo build --release --locked --bin supercli-host --bin supercli)
+  step "building supercli-attach (release, from source)"
+  (cd "$REPO_ROOT/crates/supercli-attach" && cargo build --release --locked)
+  cp "$REPO_ROOT/crates/target/release/supercli-host" "$SERVER_BIN_DIR/supercli-host"
+  cp "$REPO_ROOT/crates/target/release/supercli" "$SERVER_BIN_DIR/supercli"
+  cp "$REPO_ROOT/crates/supercli-attach/target/release/supercli-attach" "$SERVER_BIN_DIR/supercli-attach"
   # The archive path ships THIRD_PARTY_NOTICES.txt for these three binaries;
   # a from-source build collects the same notices from the locked graphs.
   step "collecting server third-party notices"
@@ -173,12 +173,12 @@ stage_server_from_source() {
   [ -n "$notice_target" ] || { echo "FAIL: rustc did not report a host target" >&2; exit 1; }
   cargo run --quiet --locked \
     --manifest-path "$REPO_ROOT/crates/Cargo.toml" \
-    -p unpeel-license-notices -- \
+    -p supercli-license-notices -- \
     --manifest-path "$REPO_ROOT/crates/Cargo.toml" \
-    --package unpeel-cli \
-    --package unpeel-host \
-    --manifest-path "$REPO_ROOT/crates/unpeel-attach/Cargo.toml" \
-    --package unpeel-attach \
+    --package supercli-cli \
+    --package supercli-host \
+    --manifest-path "$REPO_ROOT/crates/supercli-attach/Cargo.toml" \
+    --package supercli-attach \
     --target "$notice_target" \
     --output "$SERVER_BIN_DIR/THIRD_PARTY_NOTICES.txt"
 }
@@ -200,7 +200,7 @@ verify_server_archive() { # verify_server_archive <archive> [<sha256 sidecar>]
     }
   fi
   tar -xzf "$archive" -C "$SERVER_BIN_DIR" "${SERVER_BINARIES[@]}" BUILD_PROVENANCE.json THIRD_PARTY_NOTICES.txt || {
-    echo "FAIL: server archive $archive does not carry unpeel-host, unpeel, unpeel-attach, and BUILD_PROVENANCE.json" >&2
+    echo "FAIL: server archive $archive does not carry supercli-host, supercli, supercli-attach, and BUILD_PROVENANCE.json" >&2
     echo "      (three-binary archives ship from CLI 0.4.5; earlier archives cannot feed the app build)" >&2
     exit 1
   }
@@ -224,20 +224,20 @@ verify_server_archive() { # verify_server_archive <archive> [<sha256 sidecar>]
   echo "    archive sha256 $(sha256_of "$archive")"
 }
 
-if [ -n "${UNPEEL_SERVER_ARCHIVE:-}" ]; then
-  if [ "${UNPEEL_BUILD_SERVER_FROM_SOURCE:-0}" = "1" ]; then
-    echo "FAIL: UNPEEL_SERVER_ARCHIVE and UNPEEL_BUILD_SERVER_FROM_SOURCE=1 contradict each other" >&2
+if [ -n "${SUPERCLI_SERVER_ARCHIVE:-}" ]; then
+  if [ "${SUPERCLI_BUILD_SERVER_FROM_SOURCE:-0}" = "1" ]; then
+    echo "FAIL: SUPERCLI_SERVER_ARCHIVE and SUPERCLI_BUILD_SERVER_FROM_SOURCE=1 contradict each other" >&2
     exit 1
   fi
-  step "using local server archive $UNPEEL_SERVER_ARCHIVE"
-  [ -s "$UNPEEL_SERVER_ARCHIVE" ] || { echo "FAIL: UNPEEL_SERVER_ARCHIVE not found: $UNPEEL_SERVER_ARCHIVE" >&2; exit 1; }
-  if [ -s "$UNPEEL_SERVER_ARCHIVE.sha256" ]; then
-    verify_server_archive "$UNPEEL_SERVER_ARCHIVE" "$UNPEEL_SERVER_ARCHIVE.sha256"
+  step "using local server archive $SUPERCLI_SERVER_ARCHIVE"
+  [ -s "$SUPERCLI_SERVER_ARCHIVE" ] || { echo "FAIL: SUPERCLI_SERVER_ARCHIVE not found: $SUPERCLI_SERVER_ARCHIVE" >&2; exit 1; }
+  if [ -s "$SUPERCLI_SERVER_ARCHIVE.sha256" ]; then
+    verify_server_archive "$SUPERCLI_SERVER_ARCHIVE" "$SUPERCLI_SERVER_ARCHIVE.sha256"
   else
-    verify_server_archive "$UNPEEL_SERVER_ARCHIVE"
+    verify_server_archive "$SUPERCLI_SERVER_ARCHIVE"
   fi
 else
-  # The default (UNPEEL_BUILD_SERVER_FROM_SOURCE=1 is accepted as the explicit
+  # The default (SUPERCLI_BUILD_SERVER_FROM_SOURCE=1 is accepted as the explicit
   # spelling of it): the server binaries come from this tree.
   stage_server_from_source
 fi
@@ -247,9 +247,9 @@ done
 
 SWIFT_BIN_DIR="$(cd "$SWIFT_DIR" && swift build -c release --show-bin-path "${SWIFT_PATH_REMAP_FLAGS[@]}")"
 APP_BIN="$SWIFT_BIN_DIR/SupercliNative"
-HOST_BIN="$SERVER_BIN_DIR/unpeel-host"
-CLI_BIN="$SERVER_BIN_DIR/unpeel"
-ATTACH_BIN="$SERVER_BIN_DIR/unpeel-attach"
+HOST_BIN="$SERVER_BIN_DIR/supercli-host"
+CLI_BIN="$SERVER_BIN_DIR/supercli"
+ATTACH_BIN="$SERVER_BIN_DIR/supercli-attach"
 RES_BUNDLE="$SWIFT_BIN_DIR/SupercliNative_SupercliNative.bundle"
 SPARKLE_FRAMEWORK="$SWIFT_DIR/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
@@ -280,12 +280,12 @@ mkdir -p "$ICON_DIR/Assets"
 cp "$SRC_PNG" "$ICON_DIR/Assets/AppIcon.png"
 # The icon art is transparent, so this fill is the visible background. Dev
 # builds get a burnt-orange base so dist and /Applications are tellable apart
-# in the Dock at a glance; UNPEEL_ICON_FILL overrides either.
+# in the Dock at a glance; SUPERCLI_ICON_FILL overrides either.
 # Release fill = the main dark background (#1A1A1F, Theme.swift), matching
 # the app frame while the lighter Surface now lifts above it.
 ICON_FILL="srgb:0.102,0.102,0.122,1.0"
-[ "$UNPEEL_DEV_BUILD" = "1" ] && ICON_FILL="srgb:0.55,0.25,0.02,1.0"
-ICON_FILL="${UNPEEL_ICON_FILL:-$ICON_FILL}"
+[ "$SUPERCLI_DEV_BUILD" = "1" ] && ICON_FILL="srgb:0.55,0.25,0.02,1.0"
+ICON_FILL="${SUPERCLI_ICON_FILL:-$ICON_FILL}"
 cat > "$ICON_DIR/icon.json" <<JSON
 {
   "fill" : { "solid" : "$ICON_FILL" },
@@ -303,26 +303,26 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
 cp "$APP_BIN"    "$APP/Contents/MacOS/SupercliNative"
-cp "$HOST_BIN"   "$APP/Contents/MacOS/unpeel-host"
-cp "$CLI_BIN"    "$APP/Contents/MacOS/unpeel"
-cp "$ATTACH_BIN" "$APP/Contents/MacOS/unpeel-attach"
+cp "$HOST_BIN"   "$APP/Contents/MacOS/supercli-host"
+cp "$CLI_BIN"    "$APP/Contents/MacOS/supercli"
+cp "$ATTACH_BIN" "$APP/Contents/MacOS/supercli-attach"
 
 # Swift's release linker retains local object/archive provenance (including
 # absolute checkout and Cargo paths) even when source locations are prefix-
 # mapped. Remove those debug symbols from the staged copy before the privacy
 # gate and final code signing. Compile-time #filePath strings remain covered
 # by SWIFT_PATH_REMAP_FLAGS above.
-if [ "$UNPEEL_DEV_BUILD" != "1" ]; then
+if [ "$SUPERCLI_DEV_BUILD" != "1" ]; then
   step "stripping native release debug symbols"
   strip -S "$APP/Contents/MacOS/SupercliNative"
 fi
 
 # Browser MCP engine: NOT bundled (since 0.5.0). The Host installs and
-# hash-verifies the pinned agent-browser into ~/.unpeel/browser/bin at start
-# (protocol/browser-engine-v1.json, unpeel_core::browser_engine; also
-# `unpeel browser install`) and writes the Apache-2.0 notice next to it, so
+# hash-verifies the pinned agent-browser into ~/.supercli/browser/bin at start
+# (protocol/browser-engine-v1.json, supercli_core::browser_engine; also
+# `supercli browser install`) and writes the Apache-2.0 notice next to it, so
 # the app carries no engine copy and no engine notice. A copy next to
-# unpeel-host is still honoured as a compatibility resolution candidate.
+# supercli-host is still honoured as a compatibility resolution candidate.
 
 # License payloads are part of the signed app. Rust notices follow the exact
 # locked dependency graphs for every embedded Rust component. Native-only
@@ -335,9 +335,9 @@ RUST_NOTICE_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 # the bundled server binaries ship inside the server archive itself.
 cargo run --quiet --locked \
   --manifest-path "$REPO_ROOT/crates/Cargo.toml" \
-  -p unpeel-license-notices -- \
+  -p supercli-license-notices -- \
   --manifest-path "$REPO_ROOT/crates/Cargo.toml" \
-  --package unpeel-native-bridge \
+  --package supercli-native-bridge \
   --target "$RUST_NOTICE_TARGET" \
   --output "$APP/Contents/Resources/THIRD_PARTY_NOTICES_RUST.txt"
 if [ -s "$SERVER_BIN_DIR/THIRD_PARTY_NOTICES.txt" ]; then
@@ -385,14 +385,14 @@ if [ -n "$SPARKLE_FEED_URL" ]; then
     <key>SUEnableAutomaticChecks</key> <true/>"
 fi
 DEV_BUILD_PLIST_KEYS=""
-# Dev builds are named "Unpeel Dev" (menu bar, Dock tooltip, force-quit list)
+# Dev builds are named "Supercli Dev" (menu bar, Dock tooltip, force-quit list)
 # so they're tellable from the installed release app; the bundle id stays
 # com.supercli.native either way. Quit them with `osascript -e 'quit app
-# "Unpeel Dev"'` — plain "Unpeel" targets the installed app.
-APP_NAME="Unpeel"
-if [ "$UNPEEL_DEV_BUILD" = "1" ]; then
-  DEV_BUILD_PLIST_KEYS="    <key>UnpeelDevelopmentBuild</key> <true/>"
-  APP_NAME="Unpeel Dev"
+# "Supercli Dev"'` — plain "Supercli" targets the installed app.
+APP_NAME="Supercli"
+if [ "$SUPERCLI_DEV_BUILD" = "1" ]; then
+  DEV_BUILD_PLIST_KEYS="    <key>SupercliDevelopmentBuild</key> <true/>"
+  APP_NAME="Supercli Dev"
 fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -415,9 +415,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key> <string>public.app-category.developer-tools</string>
 $DEV_BUILD_PLIST_KEYS
 $SPARKLE_PLIST_KEYS
-    <!-- Finder right-click ▸ Services ▸ "New Unpeel Session Here". Shows on
+    <!-- Finder right-click ▸ Services ▸ "New Supercli Session Here". Shows on
          folders (NSSendFileTypes = public.folder); AppKit routes the message
-         to AppDelegate.newUnpeelSession. After first install macOS may need a
+         to AppDelegate.newSupercliSession. After first install macOS may need a
          Launch Services refresh: /System/Library/CoreServices/pbs -update -->
     <key>NSServices</key>
     <array>
@@ -425,10 +425,10 @@ $SPARKLE_PLIST_KEYS
             <key>NSMenuItem</key>
             <dict>
                 <key>default</key>
-                <string>New Unpeel Session Here</string>
+                <string>New Supercli Session Here</string>
             </dict>
-            <key>NSMessage</key>      <string>newUnpeelSession</string>
-            <key>NSPortName</key>     <string>Unpeel</string>
+            <key>NSMessage</key>      <string>newSupercliSession</string>
+            <key>NSPortName</key>     <string>Supercli</string>
             <key>NSSendFileTypes</key>
             <array>
                 <string>public.folder</string>
@@ -439,7 +439,7 @@ $SPARKLE_PLIST_KEYS
 </plist>
 PLIST
 
-if [ "$UNPEEL_DEV_BUILD" != "1" ]; then
+if [ "$SUPERCLI_DEV_BUILD" != "1" ]; then
   step "checking release binary architectures"
   verify_release_architectures
   step "checking release binaries for private build paths"
@@ -463,9 +463,9 @@ codesign_sparkle() {
 
 step "code signing"
 # Sign the embedded helpers first, then the app bundle (inside-out).
-codesign_release "$APP/Contents/MacOS/unpeel-host"
-codesign_release "$APP/Contents/MacOS/unpeel"
-codesign_release "$APP/Contents/MacOS/unpeel-attach"
+codesign_release "$APP/Contents/MacOS/supercli-host"
+codesign_release "$APP/Contents/MacOS/supercli"
+codesign_release "$APP/Contents/MacOS/supercli-attach"
 if [ -f "$APP/Contents/MacOS/agent-browser" ]; then
   # Re-sign the third-party engines with our identity so notarization covers them.
   codesign_release "$APP/Contents/MacOS/agent-browser"

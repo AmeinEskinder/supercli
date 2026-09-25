@@ -6,8 +6,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use unpeel_client::pairing::PAIRING_PROTOCOL_VERSION;
-use unpeel_client::{
+use supercli_client::pairing::PAIRING_PROTOCOL_VERSION;
+use supercli_client::{
     decode_pairing_code, pair, PairedHostRecord, RemoteDeviceIdentity, RemotePairingPayload,
 };
 
@@ -153,7 +153,7 @@ fn pairing_key(token: &str, salt: &[u8], direction: &str) -> [u8; 32] {
     let hk = Hkdf::<Sha256>::new(Some(salt), token.as_bytes());
     let mut okm = [0u8; 32];
     hk.expand(
-        format!("unpeel-pairing-v1:{direction}").as_bytes(),
+        format!("supercli-pairing-v1:{direction}").as_bytes(),
         &mut okm,
     )
     .unwrap();
@@ -161,7 +161,7 @@ fn pairing_key(token: &str, salt: &[u8], direction: &str) -> [u8; 32] {
 }
 
 fn pairing_aad(mac_id: &str, endpoint: &str, direction: &str) -> Vec<u8> {
-    format!("unpeel-pairing-v1\0{direction}\0{mac_id}\0{endpoint}").into_bytes()
+    format!("supercli-pairing-v1\0{direction}\0{mac_id}\0{endpoint}").into_bytes()
 }
 
 fn aes_gcm_open(salt: &[u8], sealed: &[u8], token: &str, mac_id: &str, endpoint: &str) -> Vec<u8> {
@@ -212,7 +212,7 @@ fn pairing_e2e_sealed_exchange() {
     let server = mock_pairing_host(listener, &e2e_key_b64);
 
     // The QR code the user scans.
-    let code = format!("UNPEEL:1:127.0.0.1:{port}:HOST-ABC-123:{TOKEN}:1999999999");
+    let code = format!("SUPERCLI:1:127.0.0.1:{port}:HOST-ABC-123:{TOKEN}:1999999999");
     let payload: RemotePairingPayload = decode_pairing_code(&code).expect("decode QR");
     assert_eq!(payload.mac_id, MAC_ID);
 

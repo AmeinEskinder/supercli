@@ -1,13 +1,13 @@
-//! Remote attach client: `unpeel-host __remote_attach__`.
+//! Remote attach client: `supercli-host __remote_attach__`.
 //!
 //! Bridges the current terminal's stdio to a session hosted by ANOTHER
-//! Unpeel's `__remote__` server — the network twin of `unpeel-attach` (which
+//! Supercli's `__remote__` server — the network twin of `supercli-attach` (which
 //! bridges to a local session over its Unix socket). Because it is a plain
 //! stdio program, any terminal can run it, including a session pane inside
-//! a second Unpeel app: that is the "Unpeel controlling Unpeel" path, with
+//! a second Supercli app: that is the "Supercli controlling Supercli" path, with
 //! zero new rendering code on the client side.
 //!
-//!   unpeel-host __remote_attach__ --url https://mac:55280 --token T \
+//!   supercli-host __remote_attach__ --url https://mac:55280 --token T \
 //!       [--fingerprint SHA256HEX] <session-id>
 //!
 //! With --url omitted it reads `~/.supercli/remote.json` (attach through this
@@ -118,7 +118,7 @@ pub fn run_cli(args: &[String]) -> i32 {
 
     let Some(session_id) = session_id else {
         eprintln!(
-            "usage: unpeel-host {REMOTE_ATTACH_ARG} [--url https://host:port] \
+            "usage: supercli-host {REMOTE_ATTACH_ARG} [--url https://host:port] \
              [--token TOKEN] [--fingerprint SHA256HEX] <session-id>"
         );
         return 2;

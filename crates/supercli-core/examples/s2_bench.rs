@@ -13,7 +13,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};
 use std::time::Instant;
-use unpeel_core::grant_writer::{persist_grant_direct, persist_grant_grouped};
+use supercli_core::grant_writer::{persist_grant_direct, persist_grant_grouped};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -32,7 +32,7 @@ fn main() {
     // Use a temp home
     let home = std::env::temp_dir().join(format!("s2-bench-{}-{}", mode, std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
-    std::env::set_var("UNPEEL_HOME", &home);
+    std::env::set_var("SUPERCLI_HOME", &home);
 
     let persist: fn(&str, &str, Option<&str>, Option<&str>) -> Result<(), String> =
         if mode == "direct" {

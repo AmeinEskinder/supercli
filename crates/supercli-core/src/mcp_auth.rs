@@ -9,7 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-pub const MCP_AUTH_HEADER: &str = "x-unpeel-auth";
+pub const MCP_AUTH_HEADER: &str = "x-supercli-auth";
 
 pub fn auth_token_path() -> PathBuf {
     supercli_home().join("mcp").join("auth-token")
@@ -21,7 +21,7 @@ fn token_cache() -> &'static Mutex<Option<String>> {
 }
 
 /// Read the shared MCP auth token, creating it on first use. The token is
-/// shared across Unpeel instances (they all trust the same user) and cached
+/// shared across Supercli instances (they all trust the same user) and cached
 /// per process so concurrent callers cannot race the file into regeneration.
 pub fn ensure_auth_token() -> Result<String, String> {
     // R2: recover from a poisoned cache instead of dying. If a previous

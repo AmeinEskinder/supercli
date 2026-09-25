@@ -14,7 +14,7 @@ tint = "#F97316"
 spinner_tint = "#F97316"
 icon = "amp"
 icon_asset = "assets/icon.svg"
-icon_source = "internal:legacy-unpeel-tool-icons"
+icon_source = "internal:legacy-supercli-tool-icons"
 icon_license = "vendor-brand-asset"
 window_padding_x = 8
 
@@ -40,7 +40,7 @@ completion_reliable = true
 attention_reliable = false
 
 [integration]
-summary = "Installs the shared reporter; Amp reads plugins per project (unpeel integrations install amp --project DIR)."
+summary = "Installs the shared reporter; Amp reads plugins per project (supercli integrations install amp --project DIR)."
 
 [[suggested_presets]]
 id = "amp"

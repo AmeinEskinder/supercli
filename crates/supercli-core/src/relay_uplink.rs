@@ -347,7 +347,7 @@ pub fn connect_client_cancellable(
     connect_upgrade(
         url,
         &format!("/v1/client/{mac_id}"),
-        &format!("Sec-WebSocket-Protocol: unpeel-relay-token.{relay_token}\r\n"),
+        &format!("Sec-WebSocket-Protocol: supercli-relay-token.{relay_token}\r\n"),
         cancelled,
     )
 }
@@ -710,7 +710,7 @@ mod tests {
         use std::collections::HashSet;
         use std::os::unix::fs::PermissionsExt;
 
-        let root = std::env::temp_dir().join(format!("unpeel-host-id-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("supercli-host-id-{}", uuid::Uuid::new_v4()));
         let path = root.join("mobile").join("mac-id");
         let barrier = Arc::new(std::sync::Barrier::new(8));
         let mut workers = Vec::new();

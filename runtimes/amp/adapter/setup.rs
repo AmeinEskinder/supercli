@@ -21,9 +21,9 @@ pub fn prepare_amp_project_plugin(cwd: &str) -> Result<(), String> {
     );
     write_project_file_no_symlinks(
         Path::new(cwd),
-        Path::new(".amp/plugins/unpeel-notify.js"),
+        Path::new(".amp/plugins/supercli-notify.js"),
         plugin.as_bytes(),
     )?;
-    ensure_project_exclude_entry(cwd, ".amp/plugins/unpeel-notify.js");
+    ensure_project_exclude_entry(cwd, ".amp/plugins/supercli-notify.js");
     Ok(())
 }

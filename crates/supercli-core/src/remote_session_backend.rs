@@ -1,7 +1,7 @@
-//! Transport-neutral, Controller-side view of a remote Unpeel Host.
+//! Transport-neutral, Controller-side view of a remote Supercli Host.
 //!
 //! This module is deliberately a pure client of [`HostConnection`]. It does
-//! not read local Unpeel state, install assets, or call local session verbs.
+//! not read local Supercli state, install assets, or call local session verbs.
 //! Bootstrap is the only unconstrained call; every later operation is bound
 //! to the transport generation returned by the accepted bootstrap.
 
@@ -260,7 +260,7 @@ pub struct RemoteSessionSummary {
         skip_serializing_if = "Option::is_none"
     )]
     pub active_runtime_id: Option<String>,
-    /// Host-resolved installed Unpeel App identity: the Controller cannot
+    /// Host-resolved installed Supercli App identity: the Controller cannot
     /// know a third-party App's name/tint from a compiled catalog, so both
     /// arrive as data. Absent on older Hosts and on non-App sessions.
     #[serde(
@@ -1268,7 +1268,7 @@ pub struct RemoteWorkspaceSettings {
     pub plugin_activation: Option<HashMap<String, bool>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub available_agents: Option<Vec<RemoteAgentSummary>>,
-    /// `~/.supercli/bin/unpeel-mcp` on this Host: the one command every
+    /// `~/.supercli/bin/supercli-mcp` on this Host: the one command every
     /// provider's MCP config points at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_shim_path: Option<String>,
@@ -1306,7 +1306,7 @@ pub struct RemoteAgentSummary {
     pub install_command: Option<String>,
     #[serde(rename = "websiteURL")]
     pub website_url: Option<String>,
-    /// The runtime ships an Unpeel integration (hooks + MCP registration) a
+    /// The runtime ships an Supercli integration (hooks + MCP registration) a
     /// Controller may offer to install through `integrations.install`.
     /// Absent on Hosts that predate the field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2555,7 +2555,7 @@ impl RemoteSessionBackend {
         )
     }
 
-    /// Install one runtime's Unpeel integration (hooks + MCP registration)
+    /// Install one runtime's Supercli integration (hooks + MCP registration)
     /// on the Host. The Host resolves the runtime through its embedded
     /// catalog and edits only that CLI's own global configuration.
     pub fn install_integration(
@@ -6807,7 +6807,7 @@ mod tests {
                 "installed":true,"websiteURL":"https://openai.com/codex"}]
         });
         bootstrap["availableApps"] = json!([{"id":"supercli.app.markdown", "name":"Markdown",
-            "command":"supercli-markdown", "installCommand":"/remote/bin/unpeel apps install supercli.app.markdown --yes"}]);
+            "command":"supercli-markdown", "installCommand":"/remote/bin/supercli apps install supercli.app.markdown --yes"}]);
         add_bootstrap(&connection, generation, bootstrap);
         connection.push(reply_step(
             expected_effect(
@@ -6824,7 +6824,7 @@ mod tests {
         let wire = serde_json::to_value(&snapshot.snapshot).unwrap();
         assert_eq!(
             wire["availableApps"][0]["installCommand"],
-            "/remote/bin/unpeel apps install supercli.app.markdown --yes"
+            "/remote/bin/supercli apps install supercli.app.markdown --yes"
         );
         assert_eq!(
             wire["workspaceSettings"]["pluginActivation"]["com.openai.codex"],

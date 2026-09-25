@@ -1,7 +1,7 @@
 //! Pure, transport-neutral client types.
 //!
 //! This module is `wasm32`-safe: no sockets, no threads, no filesystem, no
-//! OS keychain. It is the subset of `unpeel-client` the Dioxus web target
+//! OS keychain. It is the subset of `supercli-client` the Dioxus web target
 //! builds against. Transport, pairing I/O, relay, TLS, credentials, and
 //! the multi-Host registry stay behind
 //! `#[cfg(not(target_arch = "wasm32"))]` in `lib.rs`.

@@ -485,7 +485,7 @@ mod tests {
         fn new(tag: &str) -> Self {
             let guard = APP_STATE_LOCK.lock().unwrap();
             let dir = std::env::temp_dir().join(format!(
-                "unpeel-approvals-test-{tag}-{}",
+                "supercli-approvals-test-{tag}-{}",
                 std::process::id()
             ));
             let _ = std::fs::remove_dir_all(&dir);

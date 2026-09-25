@@ -23,7 +23,7 @@ fuzz_target!(|plaintext: &[u8]| {
     let host_salt = [0x22u8; 16];
 
     // Create a crypto session (is_host=false = client side).
-    let mut session = match unpeel_core::relay_crypto::CryptoSession::new(
+    let mut session = match supercli_core::relay_crypto::CryptoSession::new(
         &e2e_key,
         &shared,
         &client_salt,
@@ -44,5 +44,5 @@ fuzz_target!(|plaintext: &[u8]| {
     // Now feed the VALID envelope to decode_incoming. This exercises the
     // post-decryption parsing (frame type dispatch, payload validation,
     // etc.) which the original target never reached.
-    let _ = unpeel_core::relay_crypto::decode_incoming(&envelope);
+    let _ = supercli_core::relay_crypto::decode_incoming(&envelope);
 });

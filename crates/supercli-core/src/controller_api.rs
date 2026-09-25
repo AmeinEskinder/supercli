@@ -764,7 +764,7 @@ pub fn execute_headless_session_create(
         };
         let delivery_session_id = session_id.clone();
         if let Err(error) = std::thread::Builder::new()
-            .name("unpeel-create-initial-text".into())
+            .name("supercli-create-initial-text".into())
             .spawn(move || {
                 if let Err(error) = session_host::wait_until_ready(
                     &delivery_session_id,

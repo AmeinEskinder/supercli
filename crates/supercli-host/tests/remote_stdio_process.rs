@@ -2,10 +2,10 @@ use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use unpeel_core::relay_crypto::{
+use supercli_core::relay_crypto::{
     encode_tunnel_request, parse_tunnel_response, TunnelRequest, TunnelResponse,
 };
-use unpeel_core::remote_stdio::{
+use supercli_core::remote_stdio::{
     read_frame, write_frame, FRAME_KIND_REQUEST, FRAME_KIND_RESPONSE, REMOTE_STDIO_ARG,
 };
 
@@ -91,9 +91,9 @@ fn real_gateway_bootstraps_pages_output_and_dispatches_concurrently() {
     .unwrap();
     std::fs::write(session_dir.join("output.bin"), b"hello").unwrap();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unpeel-host"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_supercli-host"))
         .arg(REMOTE_STDIO_ARG)
-        .env("UNPEEL_HOME", &home)
+        .env("SUPERCLI_HOME", &home)
         .env("USER", "spoofed-environment-user")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

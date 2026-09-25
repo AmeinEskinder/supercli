@@ -1,4 +1,4 @@
-//! `unpeel init` — first-run setup for a fresh machine.
+//! `supercli init` — first-run setup for a fresh machine.
 //!
 //! 1. Creates the workspace home with mode 0700 (via
 //!    `ensure_supercli_home`, which also repairs a wrong mode).
@@ -6,18 +6,18 @@
 //!    config is valid under the typed schema.
 //! 3. Ensures the Host is running and shows a pairing code + QR so a
 //!    Controller can pair. It does not block waiting for the pair;
-//!    `unpeel pair` does the blocking wait.
-//! 4. Ends by running `unpeel doctor`; init's exit code is doctor's.
+//!    `supercli pair` does the blocking wait.
+//! 4. Ends by running `supercli doctor`; init's exit code is doctor's.
 
 use supercli_core::{app_paths, app_state, config, first_run};
 
 pub const INIT_HELP: &str = "\
-unpeel init — first-run setup
+supercli init — first-run setup
 
-  unpeel init [--json]
+  supercli init [--json]
 
 Creates the workspace home (mode 0700), seeds defaults, shows a pairing
-code/QR for a Controller, then runs `unpeel doctor`. Safe to re-run: it
+code/QR for a Controller, then runs `supercli doctor`. Safe to re-run: it
 never overwrites an existing home's presets, projects, or settings.\
 ";
 
@@ -36,7 +36,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
         return 0;
     }
     if args.iter().any(|a| a != "--json" && a != "json") {
-        eprintln!("unpeel init: unexpected argument\n{INIT_HELP}");
+        eprintln!("supercli init: unexpected argument\n{INIT_HELP}");
         return 2;
     }
 
@@ -44,7 +44,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
     let home = match app_paths::ensure_supercli_home() {
         Ok(home) => home,
         Err(err) => {
-            eprintln!("unpeel init: cannot create workspace home: {err}");
+            eprintln!("supercli init: cannot create workspace home: {err}");
             return 1;
         }
     };
@@ -63,7 +63,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
                 true
             }
             Err(err) => {
-                eprintln!("unpeel init: seeding failed: {err}");
+                eprintln!("supercli init: seeding failed: {err}");
                 return 1;
             }
         },
@@ -74,7 +74,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
             false
         }
         Err(err) => {
-            eprintln!("unpeel init: cannot read app-state.json: {err}");
+            eprintln!("supercli init: cannot read app-state.json: {err}");
             return 1;
         }
     };
@@ -85,7 +85,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
             let report = config::check_document(&doc);
             if !report.is_valid() {
                 eprintln!(
-                    "unpeel init: seeded config failed validation:\n{}",
+                    "supercli init: seeded config failed validation:\n{}",
                     report.message()
                 );
                 return 1;
@@ -98,7 +98,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
             }
         }
         Err(err) => {
-            eprintln!("unpeel init: cannot load app-state.json: {err}");
+            eprintln!("supercli init: cannot load app-state.json: {err}");
             return 1;
         }
     }
@@ -107,7 +107,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
     let pairing_code = match begin_pairing_code() {
         Ok(code) => code,
         Err(err) => {
-            eprintln!("unpeel init: pairing setup failed: {err}");
+            eprintln!("supercli init: pairing setup failed: {err}");
             return 1;
         }
     };
@@ -116,8 +116,8 @@ pub fn run(args: &[String], json: bool) -> i32 {
             println!("{line}");
         }
         println!("\n{pairing_code}\n");
-        println!("paste or scan in an Unpeel Controller — expires in 5 minutes");
-        println!("(waiting for a pair is `unpeel pair`; init continues without blocking)");
+        println!("paste or scan in an Supercli Controller — expires in 5 minutes");
+        println!("(waiting for a pair is `supercli pair`; init continues without blocking)");
         println!();
     }
 
@@ -145,7 +145,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
             })
         );
     } else {
-        println!("unpeel doctor — home: {}", doctor_home.display());
+        println!("supercli doctor — home: {}", doctor_home.display());
         for (name, ok, detail) in &checks {
             let status = if *ok { "OK  " } else { "FAIL" };
             println!("  [{status}] {name}: {detail}");

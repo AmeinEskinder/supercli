@@ -197,11 +197,11 @@ fn current_workspace(overlay: Option<&NativeOverlay>) -> WorkspaceContext {
     let explicit_home = std::env::var_os("SUPERCLI_HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty());
-    let real_unpeel = std::env::var_os("HOME")
+    let real_supercli = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".supercli");
-    workspace_at(explicit_home.as_deref(), &real_unpeel, overlay)
+    workspace_at(explicit_home.as_deref(), &real_supercli, overlay)
 }
 
 /// The name Controllers should show for THIS Host when it serves an isolated
@@ -214,11 +214,11 @@ pub(crate) fn isolated_workspace_name() -> Option<String> {
     let explicit_home = std::env::var_os("SUPERCLI_HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())?;
-    let real_unpeel = std::env::var_os("HOME")
+    let real_supercli = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".supercli");
-    isolated_workspace_name_at(&explicit_home, &real_unpeel)
+    isolated_workspace_name_at(&explicit_home, &real_supercli)
 }
 
 /// The name this Host advertises to Controllers: pairing invitations,
@@ -236,16 +236,16 @@ pub(crate) fn advertised_host_name(overlay: Option<&NativeOverlay>) -> String {
         .unwrap_or_else(supercli_core::host_name::machine_display_name)
 }
 
-fn isolated_workspace_name_at(explicit_home: &Path, real_unpeel: &Path) -> Option<String> {
-    if normalized_path(explicit_home) == normalized_path(real_unpeel) {
+fn isolated_workspace_name_at(explicit_home: &Path, real_supercli: &Path) -> Option<String> {
+    if normalized_path(explicit_home) == normalized_path(real_supercli) {
         return None;
     }
-    Some(workspace_at(Some(explicit_home), real_unpeel, None).name)
+    Some(workspace_at(Some(explicit_home), real_supercli, None).name)
 }
 
 fn workspace_at(
     explicit_home: Option<&Path>,
-    real_unpeel: &Path,
+    real_supercli: &Path,
     overlay: Option<&NativeOverlay>,
 ) -> WorkspaceContext {
     let Some(explicit_home) = explicit_home else {
@@ -258,7 +258,7 @@ fn workspace_at(
         };
     };
     let target = normalized_path(explicit_home);
-    if let Some(record) = supercli_core::app_paths::read_workspace_registry(real_unpeel)
+    if let Some(record) = supercli_core::app_paths::read_workspace_registry(real_supercli)
         .into_iter()
         .find(|record| normalized_path(&record.home) == target)
     {
@@ -304,7 +304,7 @@ mod tests {
                 "base".to_string(),
                 ProjectRecord {
                     id: "base".into(),
-                    name: "Unpeel".into(),
+                    name: "Supercli".into(),
                     path: "/repo".into(),
                     parent_id: None,
                     worktree_branch: None,
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn workspace_resolution_uses_registry_and_default_overlay_names() {
         let root =
-            std::env::temp_dir().join(format!("unpeel-app-context-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("supercli-app-context-{}", uuid::Uuid::new_v4()));
         let scoped = root.join("profiles/work");
         std::fs::create_dir_all(&scoped).unwrap();
         std::fs::write(
@@ -387,13 +387,13 @@ mod tests {
     #[test]
     fn advertised_host_name_prefers_the_workspace_rename_over_the_machine() {
         let overlay = NativeOverlay {
-            default_workspace_name: Some("Unpeel".into()),
+            default_workspace_name: Some("Supercli".into()),
             ..NativeOverlay::default()
         };
         // A default-home worker (no SUPERCLI_HOME in this test process) names
         // itself after the renamed default workspace.
         if std::env::var_os("SUPERCLI_HOME").is_none_or(|home| home.is_empty()) {
-            assert_eq!(advertised_host_name(Some(&overlay)), "Unpeel");
+            assert_eq!(advertised_host_name(Some(&overlay)), "Supercli");
         }
         let machine = advertised_host_name(None);
         assert!(!machine.is_empty());

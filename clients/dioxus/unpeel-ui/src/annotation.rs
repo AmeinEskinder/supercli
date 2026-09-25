@@ -195,10 +195,10 @@ pub fn arrow_svg_d(start: (f64, f64), end: (f64, f64), head_length: f64) -> Stri
 /// unambiguous.
 const ANNOT_RECT_JS: &str = r#"
 (() => {
-  window.__unpeelAnnotGen = (window.__unpeelAnnotGen || 0) + 1;
-  const gen = window.__unpeelAnnotGen;
+  window.__supercliAnnotGen = (window.__supercliAnnotGen || 0) + 1;
+  const gen = window.__supercliAnnotGen;
   const onEvt = () => {
-    if (gen !== window.__unpeelAnnotGen) {
+    if (gen !== window.__supercliAnnotGen) {
       window.removeEventListener('resize', onEvt);
       window.removeEventListener('scroll', onEvt, true);
       return;
@@ -247,7 +247,7 @@ pub fn track_annot_rects() -> Signal<Option<AnnotRects>> {
     use_drop(|| {
         spawn(async move {
             let _ = dioxus::document::eval(
-                "window.__unpeelAnnotGen = (window.__unpeelAnnotGen || 0) + 1;",
+                "window.__supercliAnnotGen = (window.__supercliAnnotGen || 0) + 1;",
             )
             .join::<()>()
             .await;

@@ -1245,7 +1245,7 @@ impl SessionTeardown {
 /// Hand freed heap back to the OS. A long-lived core that hosted many busy
 /// Sessions otherwise keeps their freed pages dirty in malloc's free lists
 /// (the retention Superlogical criticised in Zellij), so its footprint never
-/// shrinks after `unpeel rm`. Cheap enough to run per Session exit.
+/// shrinks after `supercli rm`. Cheap enough to run per Session exit.
 pub(crate) fn release_freed_memory() {
     #[cfg(target_os = "macos")]
     {

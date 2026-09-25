@@ -1,6 +1,6 @@
-//! Shared, optional integration for a Ratatui App hosted by Unpeel.
+//! Shared, optional integration for a Ratatui App hosted by Supercli.
 //!
-//! This is a convenience implementation of Unpeel's public file + loopback
+//! This is a convenience implementation of Supercli's public file + loopback
 //! HTTP contract, not a requirement on standalone Apps. Every operation is a
 //! silent no-op outside a hosted Session.
 
@@ -24,24 +24,24 @@ pub(crate) struct HostedSession {
 
 impl HostedSession {
     pub(crate) fn detect() -> Option<Self> {
-        let session_id = std::env::var("UNPEEL_SESSION_ID").ok()?;
+        let session_id = std::env::var("SUPERCLI_SESSION_ID").ok()?;
         if session_id.trim().is_empty() {
             return None;
         }
         let home = std::env::var_os("HOME").map(PathBuf::from);
-        let unpeel_home = std::env::var_os("UNPEEL_HOME")
+        let supercli_home = std::env::var_os("SUPERCLI_HOME")
             .map(PathBuf::from)
-            .or_else(|| home.map(|home| home.join(".unpeel")))?;
-        let session_dir = std::env::var_os("UNPEEL_SESSION_DIR")
+            .or_else(|| home.map(|home| home.join(".supercli")))?;
+        let session_dir = std::env::var_os("SUPERCLI_SESSION_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| unpeel_home.join("app-sessions").join(&session_id));
-        let port_registry = std::env::var_os("UNPEEL_APP_PORT_REGISTRY_FILE")
+            .unwrap_or_else(|| supercli_home.join("app-sessions").join(&session_id));
+        let port_registry = std::env::var_os("SUPERCLI_APP_PORT_REGISTRY_FILE")
             .map(PathBuf::from)
-            .unwrap_or_else(|| unpeel_home.join("app-ports"));
+            .unwrap_or_else(|| supercli_home.join("app-ports"));
         Some(Self {
             session_id,
             session_dir,
-            app_port: std::env::var("UNPEEL_APP_PORT")
+            app_port: std::env::var("SUPERCLI_APP_PORT")
                 .ok()
                 .and_then(|port| port.parse().ok()),
             port_registry,
@@ -67,7 +67,7 @@ impl HostedSession {
     }
 }
 
-/// Shared App→Unpeel reporter for sidebar activity/status, agent-readable live
+/// Shared App→Supercli reporter for sidebar activity/status, agent-readable live
 /// context, automatic titles, and informational alerts.
 ///
 /// Construct one per process with the reverse-DNS App id and keep it alive for
@@ -84,7 +84,7 @@ pub struct AppReporter {
 }
 
 impl AppReporter {
-    /// Detects an Unpeel Host; returns an inert reporter when standalone.
+    /// Detects an Supercli Host; returns an inert reporter when standalone.
     #[must_use]
     pub fn detect(app_id: impl Into<String>) -> Self {
         Self {
@@ -97,7 +97,7 @@ impl AppReporter {
         }
     }
 
-    /// Whether this process is running inside an Unpeel hosted Session.
+    /// Whether this process is running inside an Supercli hosted Session.
     #[must_use]
     pub fn is_hosted(&self) -> bool {
         self.host.is_some()
@@ -109,7 +109,7 @@ impl AppReporter {
         self.host.as_ref().map(|host| host.session_id.as_str())
     }
 
-    /// Marks the App as working, using Unpeel's ordinary activity engine.
+    /// Marks the App as working, using Supercli's ordinary activity engine.
     pub fn busy(&self) {
         self.post_hook_event("UserPromptSubmit");
     }
@@ -150,7 +150,7 @@ impl AppReporter {
     }
 
     /// Publishes the App-owned live context surfaced verbatim to neighboring
-    /// agents through Unpeel MCP pane-context queries.
+    /// agents through Supercli MCP pane-context queries.
     pub fn set_context(&mut self, context: &Value) {
         if self.host.is_none() {
             return;
@@ -180,10 +180,10 @@ impl AppReporter {
     }
 
     /// Reports the current App document/resource as the terminal's title:
-    /// inside Unpeel through the `app-title.json` marker (the Host folds it
+    /// inside Supercli through the `app-title.json` marker (the Host folds it
     /// into the sidebar row until the user renames it); standalone through
     /// the ordinary OSC 2 window-title sequence, so iTerm, Terminal.app,
-    /// tmux, and friends show the same title an Unpeel row would.
+    /// tmux, and friends show the same title an Supercli row would.
     pub fn set_title(&self, text: &str) {
         let text = single_line(text);
         if text.is_empty() {
@@ -206,7 +206,7 @@ impl AppReporter {
         }
     }
 
-    /// Emits a bounded informational alert. This enters Unpeel's Recent and
+    /// Emits a bounded informational alert. This enters Supercli's Recent and
     /// notification surfaces without claiming that the App needs input.
     pub fn alert(&self, title: &str, body: &str) {
         let Some(host) = &self.host else { return };
@@ -356,7 +356,7 @@ mod tests {
 
     fn reporter_for(directory: &std::path::Path) -> AppReporter {
         AppReporter {
-            app_id: "unpeel.app.test".into(),
+            app_id: "supercli.app.test".into(),
             host: Some(HostedSession {
                 session_id: "test-session".into(),
                 session_dir: directory.to_path_buf(),
@@ -378,7 +378,7 @@ mod tests {
         let first = serde_json::json!({ "file": "hero.md", "line": 3 });
         reporter.set_context(&first);
         let written: Value = serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
-        assert_eq!(written["app"], "unpeel.app.test");
+        assert_eq!(written["app"], "supercli.app.test");
         assert_eq!(written["context"], first);
 
         std::fs::remove_file(&marker).unwrap();

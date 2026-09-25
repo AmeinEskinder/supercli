@@ -2,7 +2,7 @@
 //!
 //! Two launch flavors share one gateway protocol and all of the process
 //! plumbing: system SSH to a remote Host, and the loopback workspace gateway
-//! ([`LocalProcessConnection`]) that spawns `unpeel-host __remote_stdio__`
+//! ([`LocalProcessConnection`]) that spawns `supercli-host __remote_stdio__`
 //! directly against another local workspace home. Product callers always
 //! launch `/usr/bin/ssh` with structured arguments; no target or remote
 //! command is ever interpolated through a shell. A background reader
@@ -35,7 +35,7 @@ const INTERACTIVE_PREAMBLE_BYTES: usize = 64 * 1024;
 const INTERACTIVE_START_TIMEOUT: Duration = Duration::from_secs(20);
 const SSH_INSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 const SSH_INSTALL_OUTPUT_BYTES: usize = 64 * 1024;
-const SSH_INSTALL_COMMAND: &str = "install_path=\"${TMPDIR:-/tmp}/unpeel-install-$$.sh\"; curl -fsSL https://unpeel.com/install.sh -o \"$install_path\" && sh \"$install_path\"; install_status=$?; rm -f \"$install_path\"; exit \"$install_status\"";
+const SSH_INSTALL_COMMAND: &str = "install_path=\"${TMPDIR:-/tmp}/supercli-install-$$.sh\"; curl -fsSL https://supercli.com/install.sh -o \"$install_path\" && sh \"$install_path\"; install_status=$?; rm -f \"$install_path\"; exit \"$install_status\"";
 
 /// How system SSH starts the Host gateway. Ordinary SSH servers should use
 /// `Command`; `InteractiveShell` exists for managed shells (for example
@@ -421,7 +421,7 @@ impl ProcessGeneration {
         let weak = Arc::downgrade(self);
         let request_id = request.id;
         if let Err(error) = std::thread::Builder::new()
-            .name(format!("unpeel-ssh-timeout-{request_id}"))
+            .name(format!("supercli-ssh-timeout-{request_id}"))
             .spawn(move || {
                 if matches!(
                     watchdog_cancelled.recv_timeout(timeout),
@@ -585,7 +585,7 @@ enum ProcessLaunch {
         ssh_program: PathBuf,
         options: SshConnectionOptions,
     },
-    /// Loopback workspace gateway: `<unpeel-host> __remote_stdio__` spawned
+    /// Loopback workspace gateway: `<supercli-host> __remote_stdio__` spawned
     /// directly with `SUPERCLI_HOME=<workspace home>`. The Controller supplies
     /// both absolute paths; this layer never guesses install locations.
     LocalGateway {
@@ -616,7 +616,7 @@ impl SshHostConnection {
     }
 
     /// Loopback gateway to another LOCAL workspace: spawn the caller-supplied
-    /// `unpeel-host` binary in `__remote_stdio__` mode with the workspace's
+    /// `supercli-host` binary in `__remote_stdio__` mode with the workspace's
     /// `SUPERCLI_HOME`. Inherited `SUPERCLI_*`/`HERDR_*` env is stripped (same
     /// containment as hosted-child spawns) so the gateway serves exactly the
     /// selected home, never this process's own state dir.
@@ -628,7 +628,7 @@ impl SshHostConnection {
     }
 
     /// Local Controller transport that must reach the persistent workspace
-    /// worker owned by `unpeel serve`. Unlike [`Self::local_gateway`], this
+    /// worker owned by `supercli serve`. Unlike [`Self::local_gateway`], this
     /// never falls back to constructing a second semantic Host inside the
     /// compatibility child when `host.sock` is unavailable.
     pub fn local_host_service(
@@ -895,13 +895,13 @@ impl SshHostConnection {
                 // or other user input is interpolated into the remote shell.
                 command.arg(SSH_INSTALL_COMMAND);
             } else {
-                // Prefer the canonical persistent `unpeel serve` runtime on
+                // Prefer the canonical persistent `supercli serve` runtime on
                 // the Host. The gateway falls back to its disk adapter when
                 // no live local socket exists, preserving older installs.
                 command
                     .arg("env")
                     .arg("SUPERCLI_LOCAL_GATEWAY=1")
-                    .arg("unpeel-host")
+                    .arg("supercli-host")
                     .arg(REMOTE_STDIO_ARG);
             }
         }
@@ -909,7 +909,7 @@ impl SshHostConnection {
             command
                 .env("SSH_ASKPASS", &askpass.program)
                 .env("SSH_ASKPASS_REQUIRE", "force")
-                .env("DISPLAY", "unpeel-ssh")
+                .env("DISPLAY", "supercli-ssh")
                 .env("SUPERCLI_SSH_ASKPASS_SECRET", &askpass.secret);
         }
         command
@@ -962,7 +962,7 @@ impl SshHostConnection {
             let marker = format!("SUPERCLI_GATEWAY_READY_{}", uuid::Uuid::new_v4().simple());
             let command = format!(
                 "stty -echo; printf '\\n{marker}\\n'; stty raw -echo; exec env \
-SUPERCLI_LOCAL_GATEWAY=1 unpeel-host {REMOTE_STDIO_ARG}\n"
+SUPERCLI_LOCAL_GATEWAY=1 supercli-host {REMOTE_STDIO_ARG}\n"
             );
             if let Err(error) = stdin
                 .write_all(command.as_bytes())
@@ -988,7 +988,7 @@ SUPERCLI_LOCAL_GATEWAY=1 unpeel-host {REMOTE_STDIO_ARG}\n"
 
         let weak = Arc::downgrade(&generation);
         std::thread::Builder::new()
-            .name(format!("unpeel-ssh-read-{generation_id}"))
+            .name(format!("supercli-ssh-read-{generation_id}"))
             .spawn(move || read_responses(stdout, weak))
             .map_err(|error| {
                 generation.fail(format!("start {label} response reader: {error}"));
@@ -997,7 +997,7 @@ SUPERCLI_LOCAL_GATEWAY=1 unpeel-host {REMOTE_STDIO_ARG}\n"
 
         let diagnostics = Arc::clone(&generation.diagnostics);
         if let Err(error) = std::thread::Builder::new()
-            .name(format!("unpeel-ssh-stderr-{generation_id}"))
+            .name(format!("supercli-ssh-stderr-{generation_id}"))
             .spawn(move || drain_stderr(stderr, diagnostics))
         {
             generation.fail(format!("start {label} diagnostics reader: {error}"));
@@ -1147,9 +1147,9 @@ impl Drop for SshHostConnection {
     }
 }
 
-/// Install the released Unpeel CLI on an SSH destination using the same
+/// Install the released Supercli CLI on an SSH destination using the same
 /// system-SSH policy and optional askpass credential as Host connections.
-/// The remote script is fixed by Unpeel; callers cannot supply shell text.
+/// The remote script is fixed by Supercli; callers cannot supply shell text.
 pub fn install_supercli_over_ssh(
     target: SshTarget,
     options: SshConnectionOptions,
@@ -1195,11 +1195,11 @@ pub fn install_supercli_over_ssh_with_program(
         .take()
         .ok_or_else(|| "SSH installer stderr was unavailable".to_string())?;
     let stdout_reader = std::thread::Builder::new()
-        .name("unpeel-ssh-install-stdout".to_string())
+        .name("supercli-ssh-install-stdout".to_string())
         .spawn(move || read_bounded_tail(stdout, SSH_INSTALL_OUTPUT_BYTES))
         .map_err(|error| format!("read SSH installer output: {error}"))?;
     let stderr_reader = std::thread::Builder::new()
-        .name("unpeel-ssh-install-stderr".to_string())
+        .name("supercli-ssh-install-stderr".to_string())
         .spawn(move || read_bounded_tail(stderr, SSH_INSTALL_OUTPUT_BYTES))
         .map_err(|error| format!("read SSH installer diagnostics: {error}"))?;
 
@@ -1215,7 +1215,7 @@ pub fn install_supercli_over_ssh_with_program(
                 let _ = child.wait();
                 let _ = stdout_reader.join();
                 let _ = stderr_reader.join();
-                return Err("Installing Unpeel over SSH timed out after 3 minutes".to_string());
+                return Err("Installing Supercli over SSH timed out after 3 minutes".to_string());
             }
             Err(error) => {
                 let _ = child.kill();
@@ -1241,7 +1241,7 @@ pub fn install_supercli_over_ssh_with_program(
         } else {
             output
         };
-        return Err(format!("Could not install Unpeel: {detail}"));
+        return Err(format!("Could not install Supercli: {detail}"));
     }
     Ok(SshInstallResult {
         launch_mode,
@@ -1307,7 +1307,7 @@ fn wait_for_interactive_gateway(
     let marker = marker.as_bytes().to_vec();
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::Builder::new()
-        .name("unpeel-ssh-interactive-start".to_string())
+        .name("supercli-ssh-interactive-start".to_string())
         .spawn(move || {
             let mut stdout = stdout;
             let mut preamble = Vec::new();
@@ -1316,7 +1316,7 @@ fn wait_for_interactive_gateway(
                 match stdout.read(&mut buffer) {
                     Ok(0) => {
                         let _ = sender.send(Err(
-                            "interactive SSH shell closed before Unpeel started".to_string(),
+                            "interactive SSH shell closed before Supercli started".to_string(),
                         ));
                         return;
                     }
@@ -1329,7 +1329,7 @@ fn wait_for_interactive_gateway(
                         }
                         if preamble.len() > INTERACTIVE_PREAMBLE_BYTES {
                             let _ = sender.send(Err(
-                                "interactive SSH shell produced too much output before Unpeel started"
+                                "interactive SSH shell produced too much output before Supercli started"
                                     .to_string(),
                             ));
                             return;
@@ -1356,7 +1356,7 @@ fn wait_for_interactive_gateway(
         Err(RecvTimeoutError::Timeout) => {
             let _ = child.kill();
             let _ = child.wait();
-            Err("interactive SSH Host did not start Unpeel within 20 seconds".to_string())
+            Err("interactive SSH Host did not start Supercli within 20 seconds".to_string())
         }
         Err(RecvTimeoutError::Disconnected) => {
             let _ = child.kill();
@@ -1544,7 +1544,7 @@ mod tests {
                 "studio",
                 "env",
                 "SUPERCLI_LOCAL_GATEWAY=1",
-                "unpeel-host",
+                "supercli-host",
                 REMOTE_STDIO_ARG,
             ]
         );
@@ -1556,10 +1556,10 @@ mod tests {
         std::env::set_var("SUPERCLI_TEST_LEAK_PROBE", "leak");
         std::env::set_var("HERDR_TEST_LEAK_PROBE", "leak");
         let connection =
-            SshHostConnection::local_gateway("/bundle/unpeel-host", "/homes/writing").unwrap();
+            SshHostConnection::local_gateway("/bundle/supercli-host", "/homes/writing").unwrap();
         assert!(connection.target().is_none());
         let command = connection.command();
-        assert_eq!(command.get_program(), Path::new("/bundle/unpeel-host"));
+        assert_eq!(command.get_program(), Path::new("/bundle/supercli-host"));
         let arguments: Vec<String> = command
             .get_args()
             .map(|argument| argument.to_string_lossy().into_owned())
@@ -1587,7 +1587,7 @@ mod tests {
         assert_eq!(environment.get("HERDR_TEST_LEAK_PROBE"), Some(&None));
 
         let required =
-            SshHostConnection::local_host_service("/bundle/unpeel-host", "/homes/writing")
+            SshHostConnection::local_host_service("/bundle/supercli-host", "/homes/writing")
                 .unwrap()
                 .command();
         let required_environment: HashMap<String, Option<String>> = required
@@ -1607,8 +1607,8 @@ mod tests {
         std::env::remove_var("HERDR_TEST_LEAK_PROBE");
 
         for (program, home) in [
-            ("unpeel-host", "/homes/writing"),
-            ("/bundle/unpeel-host", "profiles/writing"),
+            ("supercli-host", "/homes/writing"),
+            ("/bundle/supercli-host", "profiles/writing"),
         ] {
             assert!(
                 SshHostConnection::local_gateway(program, home).is_err(),

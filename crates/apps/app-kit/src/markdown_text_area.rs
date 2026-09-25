@@ -374,7 +374,7 @@ impl<'a> MarkdownTextArea<'a> {
     /// Builds the owned component rendered by Swift or web clients.
     ///
     /// This is a second rendering path over the same `tui-textarea` state.
-    /// Calling it never changes terminal behavior or requires an Unpeel Host.
+    /// Calling it never changes terminal behavior or requires an Supercli Host.
     #[cfg(feature = "ui-bridge")]
     #[must_use]
     pub fn ui_node(&self, config: &MarkdownEditorConfig) -> UiNode {

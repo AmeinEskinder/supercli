@@ -204,7 +204,7 @@ pub const fn current_runtime_platform() -> Option<RuntimePlatform> {
 
 static BUILTIN_RUNTIME_CATALOG: LazyLock<RuntimeCatalog> = LazyLock::new(|| {
     RuntimeCatalog::from_embedded()
-        .expect("built-in runtime descriptors were validated by unpeel-core/build.rs")
+        .expect("built-in runtime descriptors were validated by supercli-core/build.rs")
 });
 
 pub fn builtin_runtime_catalog() -> &'static RuntimeCatalog {

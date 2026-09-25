@@ -3,7 +3,7 @@
 //! Shared state lives on disk (`app-state.json`, `session-order.json`,
 //! `project-order.json`, `pane-layouts.json`, the per-session markers). Every frontend already
 //! discovers the others through `~/.supercli/app-ports` — the registry the
-//! provider hook scripts broadcast to, precisely because several Unpeel
+//! provider hook scripts broadcast to, precisely because several Supercli
 //! instances can run at once. This reuses that bus for one more message:
 //! **"shared state changed, re-read it."**
 //!
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn announce_posts_to_every_registered_port_but_our_own() {
-        let dir = std::env::temp_dir().join(format!("unpeel-bus-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("supercli-bus-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
 
         // Two listeners stand in for two other frontends.
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn announce_is_silent_with_no_registry() {
-        let dir = std::env::temp_dir().join(format!("unpeel-bus-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("supercli-bus-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         // Must not panic or block when nobody is listening.
         announce_from(&dir.join("app-ports"), Change::AppState, None);

@@ -143,7 +143,7 @@ pub(crate) fn resume_unavailable_message(session: &SessionRow) -> &'static str {
     "Resume Agent is unavailable for this live Host"
 }
 
-const PRESETS_EDIT_USAGE: &str = "usage: unpeel presets edit <label|id> [--label L] [--command C]";
+const PRESETS_EDIT_USAGE: &str = "usage: supercli presets edit <label|id> [--label L] [--command C]";
 
 pub fn presets_cli(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
@@ -182,13 +182,13 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
                 }
             }
             if shown == 0 {
-                println!("no presets -- add one: unpeel presets add <label> <command>");
+                println!("no presets -- add one: supercli presets add <label> <command>");
             }
             Ok(())
         }
         Some("add") => {
             let (Some(label), Some(command)) = (args.get(1), args.get(2)) else {
-                return Err("usage: unpeel presets add <label> <command>".into());
+                return Err("usage: supercli presets add <label> <command>".into());
             };
             let preset = serde_json::json!({
                 "id": format!("tui-{}", uuid::Uuid::new_v4()),
@@ -207,7 +207,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
         }
         Some("remove") => {
             let Some(needle) = args.get(1) else {
-                return Err("usage: unpeel presets remove <label>".into());
+                return Err("usage: supercli presets remove <label>".into());
             };
             supercli_core::app_state::edit(|state| {
                 let presets = stored_presets_mut(state)?;
@@ -228,10 +228,10 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
         }
         Some(command @ ("star" | "unstar" | "enable" | "disable")) => {
             let Some(selector) = args.get(1) else {
-                return Err(format!("usage: unpeel presets {command} <label|id>"));
+                return Err(format!("usage: supercli presets {command} <label|id>"));
             };
             if args.len() != 2 {
-                return Err(format!("usage: unpeel presets {command} <label|id>"));
+                return Err(format!("usage: supercli presets {command} <label|id>"));
             }
             let (field, value) = match command {
                 "star" => ("quick_launch", true),
@@ -246,10 +246,10 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
         }
         Some("reorder") => {
             let (Some(selector), Some(position)) = (args.get(1), args.get(2)) else {
-                return Err("usage: unpeel presets reorder <label|id> <position>".into());
+                return Err("usage: supercli presets reorder <label|id> <position>".into());
             };
             if args.len() != 3 {
-                return Err("usage: unpeel presets reorder <label|id> <position>".into());
+                return Err("usage: supercli presets reorder <label|id> <position>".into());
             }
             let position = position
                 .parse::<usize>()

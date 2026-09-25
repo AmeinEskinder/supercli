@@ -133,7 +133,7 @@ fn blank_launch_resolves_provider_from_captured_or_observed_runtime() {
 
     // The marker records the runtime that captured the conversation, merges
     // with what is already there, and is quiet when nothing changes.
-    let dir = std::env::temp_dir().join(format!("unpeel-blank-provider-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("supercli-blank-provider-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     assert!(crate::session_ops::set_provider_session_at(&dir, Some("conv-1"), None, None).unwrap());
@@ -330,7 +330,7 @@ fn codex_transcript_entries_drop_bootstrap_noise_and_hide_tools_by_default() {
     let raw = r##"
 {"type":"event_msg","payload":{"type":"user_message","message":"# AGENTS.md instructions for /tmp/repo\nFollow these rules."}}
 {"type":"event_msg","payload":{"type":"user_message","message":"<environment_context>\n  <cwd>/tmp/repo</cwd>\n</environment_context>"}}
-{"type":"event_msg","payload":{"type":"user_message","message":"fix the broken prompt\n\n[sent from Unpeel session_id=\"caller-1\"]"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"fix the broken prompt\n\n[sent from Supercli session_id=\"caller-1\"]"}}
 {"type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"exec_command","arguments":"{\"cmd\":\"cargo test\"}"}}
 {"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"test output"}}
 {"type":"event_msg","payload":{"type":"agent_message","message":"Patched."}}
@@ -860,7 +860,7 @@ fn session_info_header_lists_id_cli_model_and_command() {
     let header = session_info_header(&session, &snapshot);
     assert!(header.starts_with("# Fix login flow\n"));
     assert!(header.contains("`sess-123`"));
-    assert!(header.contains("Unpeel MCP sessions tool"));
+    assert!(header.contains("Supercli MCP sessions tool"));
     assert!(header.contains("- CLI: claude\n"));
     assert!(header.contains("- Model: claude-opus-4-8\n"));
     assert!(header.contains("- Command: `claude --dangerously-skip-permissions`\n"));

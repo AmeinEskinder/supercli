@@ -143,7 +143,7 @@ pub struct Project {
     pub workspaces_enabled: bool,
 }
 
-/// Reach of an Unpeel Sessions MCP caller: how far a permitted caller can
+/// Reach of an Supercli Sessions MCP caller: how far a permitted caller can
 /// see and control other sessions. The user-facing model only exposes roles;
 /// reach stays project-bound for new writes, with `Global` retained so older
 /// state files and tests remain readable.
@@ -181,7 +181,7 @@ impl McpScope {
     }
 }
 
-/// The capability a session has on Unpeel Sessions MCP. The product exposes
+/// The capability a session has on Supercli Sessions MCP. The product exposes
 /// two roles: `Read` by default, and `Write` for creating/driving/closing
 /// sessions. `Off` is internal for unknown callers and old disabled state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -219,7 +219,7 @@ impl McpRole {
     }
 }
 
-/// A per-session Unpeel Sessions MCP grant: a `role` (capability) plus a `reach`
+/// A per-session Supercli Sessions MCP grant: a `role` (capability) plus a `reach`
 /// (how far it sees/controls). Stored in `AppState.mcp_orchestrators` keyed by
 /// session id; sessions absent from the map use the default ([`McpRole::Read`]
 /// at project reach). Persists as `{ "role": ..., "reach": ... }` and accepts
@@ -340,13 +340,13 @@ impl McpNonChildWriteAccess {
     }
 }
 
-/// A per-session Unpeel Browser MCP grant: whether the session's agent may use
-/// the Unpeel-managed browser automation engine. Deliberately a single on/off
+/// A per-session Supercli Browser MCP grant: whether the session's agent may use
+/// the Supercli-managed browser automation engine. Deliberately a single on/off
 /// axis: each Session owns one engine daemon and pinned tab even when its
 /// project shares the surrounding browser window/profile.
 ///
-/// Defaults to `On`: the engine uses only Unpeel-managed project profiles (no
-/// access to the user's own browser data), and Unpeel agents already run with
+/// Defaults to `On`: the engine uses only Supercli-managed project profiles (no
+/// access to the user's own browser data), and Supercli agents already run with
 /// full shell access. Settings ▸ Agent access ▸ Browser access ▸ Off is the master disable;
 /// personal-profile or live-user-browser modes would still require opt-in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -358,7 +358,7 @@ pub enum BrowserAccess {
     /// `browser_approvals`, same lifecycle as computer approvals).
     Ask,
     /// The session's agent gets the browser tools without prompting. The
-    /// default — browser data stays in Unpeel-managed project scope.
+    /// default — browser data stays in Supercli-managed project scope.
     /// Serialized as `"on"` for wire compatibility with pre-Ask builds.
     #[default]
     On,
@@ -385,7 +385,7 @@ impl BrowserAccess {
     }
 }
 
-/// App-wide Unpeel Browser MCP engine options (`AppState.browser_settings`),
+/// App-wide Supercli Browser MCP engine options (`AppState.browser_settings`),
 /// read per tool call by the `__browser_mcp__` server so changes apply live.
 /// All fields have conservative defaults so an absent object behaves like the
 /// shipped configuration.
@@ -441,7 +441,7 @@ impl Default for BrowserSettings {
     }
 }
 
-/// Computer Use access for the Unpeel Computer MCP domain (cua-driver engine).
+/// Computer Use access for the Supercli Computer MCP domain (cua-driver engine).
 /// Unlike the browser — isolated per session by construction — computer use
 /// sees the user's real screen and drives the real mouse/keyboard, so the
 /// default is `Ask`: each session needs a one-time user approval (remembered
@@ -519,7 +519,7 @@ pub struct TranscriptSettings {
     /// Include plan-update blocks.
     #[serde(default = "default_true")]
     pub include_plan_updates: bool,
-    /// Start the Markdown with a session-info header: title, Unpeel session
+    /// Start the Markdown with a session-info header: title, Supercli session
     /// id (usable as a Sessions MCP target), CLI, model, and command.
     #[serde(default = "default_true")]
     pub include_session_info: bool,
@@ -723,7 +723,7 @@ pub enum SessionTitleMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppState {
-    // Every field here defaults. This file is written by whichever Unpeel
+    // Every field here defaults. This file is written by whichever Supercli
     // is newest, read by whichever is oldest: a key that appears, vanishes,
     // or is renamed must cost the reader that field, never the document.
     #[serde(default)]
@@ -773,14 +773,14 @@ pub struct AppState {
     /// Whether the first-run setup wizard has been completed
     #[serde(default)]
     pub setup_completed: bool,
-    /// Per-session Unpeel Sessions MCP access overrides, keyed by session id.
+    /// Per-session Supercli Sessions MCP access overrides, keyed by session id.
     /// The value is an [`McpGrant`] (role + reach). Sessions not listed use
     /// `mcp_default_access`. The JSON key is kept as `mcp_orchestrators` for
     /// on-disk back-compat; legacy bare-string values still decode (to
     /// Write grants).
     #[serde(default)]
     pub mcp_orchestrators: HashMap<String, McpGrant>,
-    /// The default Unpeel Sessions MCP grant for any session without an explicit
+    /// The default Supercli Sessions MCP grant for any session without an explicit
     /// override in `mcp_orchestrators`. Defaults to [`McpGrant::default`]
     /// (Read at project reach). The user can raise this app-wide to the write
     /// role.
@@ -798,11 +798,11 @@ pub struct AppState {
     /// re-pointed across restarts.
     #[serde(default)]
     pub mcp_write_approvals: HashMap<String, Vec<String>>,
-    /// Per-session Unpeel Browser MCP access overrides, keyed by session id.
+    /// Per-session Supercli Browser MCP access overrides, keyed by session id.
     /// Deviations-only: sessions not listed use `browser_default_access`.
     #[serde(default)]
     pub browser_access: HashMap<String, BrowserAccess>,
-    /// The default Unpeel Browser MCP grant for any session without an explicit
+    /// The default Supercli Browser MCP grant for any session without an explicit
     /// override in `browser_access`. Defaults to [`BrowserAccess::On`]; setting
     /// it to Off in Settings ▸ Agent access is the master disable.
     #[serde(default)]
@@ -816,7 +816,7 @@ pub struct AppState {
     /// carried across restarts.
     #[serde(default)]
     pub browser_approvals: Vec<String>,
-    /// Whether sessions may create Unpeel-managed worktrees through the
+    /// Whether sessions may create Supercli-managed worktrees through the
     /// sessions tool (Settings ▸ Agent access). Default off; session
     /// creation stays user-only regardless — this grants git/project prep,
     /// not agent spawning.
@@ -1240,8 +1240,8 @@ mod tests {
     fn initial_session_label_uses_command_or_abbreviated_cwd() {
         assert_eq!(initial_session_label("claude", "/tmp/project"), "claude");
         assert_eq!(
-            abbreviate_home_path("/Users/test/Dev/unpeel", Some(Path::new("/Users/test"))),
-            "~/Dev/unpeel"
+            abbreviate_home_path("/Users/test/Dev/supercli", Some(Path::new("/Users/test"))),
+            "~/Dev/supercli"
         );
         assert_eq!(
             abbreviate_home_path("/Users/testing/project", Some(Path::new("/Users/test"))),

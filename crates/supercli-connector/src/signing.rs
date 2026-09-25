@@ -1,6 +1,6 @@
 //! Ed25519 signing for connector bundles.
 //!
-//! A publisher generates a keypair once (`unpeel connector keygen`); `pack`
+//! A publisher generates a keypair once (`supercli connector keygen`); `pack`
 //! signs the bundle bytes with the secret key and ships the signature in a
 //! `.sig` sidecar; `install` verifies the bundle against a trusted public
 //! key (from the registry index, `--pubkey`, or a pinned key) before it
@@ -9,8 +9,8 @@
 //! behavior documented in `docs/connectors.md`.
 //!
 //! Key file formats (deliberately simple, documented here):
-//! - `<id>.key`: `unpeel-ed25519-secret-v1:<base64 32-byte seed>`, mode 0600.
-//! - `<id>.pub`: `unpeel-ed25519-pub-v1:<base64 32-byte public key>`.
+//! - `<id>.key`: `supercli-ed25519-secret-v1:<base64 32-byte seed>`, mode 0600.
+//! - `<id>.pub`: `supercli-ed25519-pub-v1:<base64 32-byte public key>`.
 //! - `<bundle>.sig`: JSON `{"key_id": "...", "pubkey": "<base64 32 bytes>",
 //!   "signature": "<base64 64 bytes>"}` signing the raw bundle bytes.
 
@@ -33,8 +33,8 @@ pub enum SigningError {
     KeyExists(String),
 }
 
-const SECRET_PREFIX: &str = "unpeel-ed25519-secret-v1:";
-const PUB_PREFIX: &str = "unpeel-ed25519-pub-v1:";
+const SECRET_PREFIX: &str = "supercli-ed25519-secret-v1:";
+const PUB_PREFIX: &str = "supercli-ed25519-pub-v1:";
 
 /// Directory holding publisher keypairs: `~/.supercli/connector-keys/`
 /// (`SUPERCLI_CONNECTOR_KEYS_DIR` overrides for tests/dev).
@@ -99,7 +99,7 @@ pub fn keygen(key_id: &str) -> Result<(PathBuf, PathBuf), SigningError> {
 pub fn load_secret_key(key_id: &str) -> Result<SigningKey, SigningError> {
     let path = keys_dir().join(format!("{key_id}.key"));
     let text = std::fs::read_to_string(&path).map_err(|_| {
-        SigningError::BadKey(format!("no key {key_id:?} (run `unpeel connector keygen`)"))
+        SigningError::BadKey(format!("no key {key_id:?} (run `supercli connector keygen`)"))
     })?;
     let b64 = text
         .trim()
@@ -114,7 +114,7 @@ pub fn load_secret_key(key_id: &str) -> Result<SigningKey, SigningError> {
     Ok(SigningKey::from_bytes(&seed))
 }
 
-/// Parse a `.pub` file (or the bare `unpeel-ed25519-pub-v1:` line) into a
+/// Parse a `.pub` file (or the bare `supercli-ed25519-pub-v1:` line) into a
 /// verifying key.
 pub fn parse_public_key(text: &str) -> Result<VerifyingKey, SigningError> {
     let b64 = text
@@ -196,7 +196,7 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn test_keys_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("unpeel-sign-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("supercli-sign-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &dir);
         dir

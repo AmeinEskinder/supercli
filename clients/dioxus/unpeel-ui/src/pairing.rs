@@ -1,14 +1,14 @@
 //! Pairing screen: paste a pairing code from the Host to link this device.
 //!
 //! The view is deliberately dumb — it collects the code and reports it.
-//! The app shell owns the [`unpeel_client`] store, runs `pair()` on a
+//! The app shell owns the [`supercli_client`] store, runs `pair()` on a
 //! background thread, and feeds back [`PairingStatus`]. (QR scanning is a
 //! platform seam the mobile launchers add later; the paste field is the
 //! universal fallback and the desktop path.)
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use unpeel_client::PairedHostRecord;
+use supercli_client::PairedHostRecord;
 
 /// Status of the in-flight pairing exchange, owned by the app shell.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -41,7 +41,7 @@ pub fn PairingView(
 
     rsx! {
         div { class: "pairing", "data-testid": "pairing-view",
-            h2 { "data-testid": "pairing-title", {t("pairing.pair_with_an_unpeel_host")} }
+            h2 { "data-testid": "pairing-title", {t("pairing.pair_with_an_supercli_host")} }
             p { class: "hint",
                 "On the Host, show its pairing code, then paste it below. Codes are single-use and expire after a few minutes."
             }
@@ -51,7 +51,7 @@ pub fn PairingView(
             textarea {
                 class: "pairing-code",
                 "data-testid": "pairing-code-input",
-                placeholder: "UNPEEL:1:host:port:…",
+                placeholder: "SUPERCLI:1:host:port:…",
                 aria_label: {t("pairing.pairing_code_from_the_host")},
                 rows: 3,
                 spellcheck: false,

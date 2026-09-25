@@ -1,7 +1,7 @@
-//! Markdown-specific colors derived from the shared Unpeel App Kit palette.
+//! Markdown-specific colors derived from the shared Supercli App Kit palette.
 
 use ratatui::style::Color;
-use unpeel_app_kit::{ColorScheme, KitTheme};
+use supercli_app_kit::{ColorScheme, KitTheme};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {

@@ -1,4 +1,4 @@
-//! `unpeel connector` — Host-side connector (plugin) management.
+//! `supercli connector` — Host-side connector (plugin) management.
 //!
 //! Implements the connector lifecycle from `docs/connectors.md`:
 //! `discover` scans the registrar sources, `install` copies a connector
@@ -41,9 +41,9 @@ use supercli_connector::{
 };
 
 pub const HELP: &str = "\
-unpeel connector — Host-side connectors (plugins)
+supercli connector — Host-side connectors (plugins)
 
-  unpeel connector new <name> [--dir <path>] [--kind mcp-stdio|mcp-http]
+  supercli connector new <name> [--dir <path>] [--kind mcp-stdio|mcp-http]
                                   [--auth none|api-key|oauth2]
                                   [--tool <name>]... [--scope <scope>]...
                                   [--display-name <text>]
@@ -52,9 +52,9 @@ unpeel connector — Host-side connectors (plugins)
                                   (<dir>/<name>/connector.toml plus a stub
                                   `connector` MCP executable, or config.json
                                   for mcp-http); refuses to overwrite
-  unpeel connector discover [--json]
+  supercli connector discover [--json]
                                   scan for installed connector.toml manifests
-  unpeel connector install <name-or-path> [key=value ...] [--json]
+  supercli connector install <name-or-path> [key=value ...] [--json]
                                   copy a connector into the user's install dir
                                   (~/.supercli/connectors/<name>/); <name> is a
                                   discovered connector, <path> a directory
@@ -63,60 +63,60 @@ unpeel connector — Host-side connectors (plugins)
                                   pairs are written to config.json
                                   (non-secrets only, validated against the
                                   manifest's config_schema when present)
-  unpeel connector install --registry <dir> <name>[@version] [--json]
+  supercli connector install --registry <dir> <name>[@version] [--json]
                                   install the latest (or pinned) version from
                                   a registry; the bundle signature is always
                                   verified against the registry's pinned
                                   publisher key
-  unpeel connector install ... [--form]
+  supercli connector install ... [--form]
                                   render the manifest's config_schema as an
                                   interactive questionnaire instead of
                                   key=value pairs
-  unpeel connector install ... [--require-signature] [--pubkey <file>]
+  supercli connector install ... [--require-signature] [--pubkey <file>]
                                   refuse installs that cannot be signature-
                                   verified; --pubkey supplies the trusted key
                                   for a bundle file
-  unpeel connector config <name> [--form] [key=value ...] [--json]
+  supercli connector config <name> [--form] [key=value ...] [--json]
                                   show (or update) the installed connector's
                                   config.json; --form re-renders the schema
                                   questionnaire, key=value pairs are
                                   validated against it
-  unpeel connector keygen [--key-id <id>] [--json]
+  supercli connector keygen [--key-id <id>] [--json]
                                   generate an Ed25519 publisher keypair
                                   (~/.supercli/connector-keys/<id>.key/.pub)
-  unpeel connector pack <name> [--out <dir>] [--key-id <id>] [--json]
+  supercli connector pack <name> [--out <dir>] [--key-id <id>] [--json]
                                   build a signed .supercli-connector bundle
-  unpeel connector publish <name> --registry <dir> [--key-id <id>] [--json]
+  supercli connector publish <name> --registry <dir> [--key-id <id>] [--json]
                                   pack and publish to a registry (first
                                   publish pins the publisher key)
-  unpeel connector sync [--registry <dir>] [--json]
+  supercli connector sync [--registry <dir>] [--json]
                                   discover → resolve → install → verify →
                                   report; with --registry, install/update
                                   every registry connector to its latest
                                   version
-  unpeel connector audit --session <id> [--tool <name>] [--limit <n>] [--json]
+  supercli connector audit --session <id> [--tool <name>] [--limit <n>] [--json]
                                   query the session's connector-call audit log
-  unpeel connector connect <name> [--token <value>] [--json]
+  supercli connector connect <name> [--token <value>] [--json]
                                   run the auth flow once: API-key prompt (or
                                   --token) or the OAuth2 browser dance; the
                                   token is stored in the keychain under
-                                  unpeel/connector/<name> (omit --token to be
+                                  supercli/connector/<name> (omit --token to be
                                   prompted)
-  unpeel connector disconnect <name> [--json]
+  supercli connector disconnect <name> [--json]
                                   revoke: delete the keychain token (one verb)
                                   and detach the connector from every session
-  unpeel connector enable <name> --session <id> [--policy tool=ask ...] [--json]
+  supercli connector enable <name> --session <id> [--policy tool=ask ...] [--json]
                                   attach the connector's tools to a session
                                   (MCP registration); manifest policy is the
                                   ceiling, --policy can only tighten it
-  unpeel connector disable <name> --session <id> [--json]
+  supercli connector disable <name> --session <id> [--json]
                                   detach the connector from a session
-  unpeel connector doctor [--json]
+  supercli connector doctor [--json]
                                   check every connector: manifest valid,
                                   transport up, token present (OAuth2 tokens
                                   are refreshed when expiring), tools
                                   responding (exit 1 on any failure)
-  unpeel connector run <name> <tool> [key=value ...] [--json]
+  supercli connector run <name> <tool> [key=value ...] [--json]
                                   invoke one Allow tool end to end
                                   (discovery → policy → keychain → connector
                                   link)
@@ -195,7 +195,7 @@ fn find_connector(name: &str) -> Result<DiscoveredConnector, String> {
     found
         .into_iter()
         .find(|c| c.manifest.name == name)
-        .ok_or_else(|| format!("no connector named {name:?} (see `unpeel connector discover`)"))
+        .ok_or_else(|| format!("no connector named {name:?} (see `supercli connector discover`)"))
 }
 
 fn executable_for(connector: &DiscoveredConnector) -> PathBuf {
@@ -834,7 +834,7 @@ fn new_cmd(name: &str, opts: NewOptions, json: bool) -> i32 {
     } else {
         println!("scaffolded {name} → {}", dest.display());
         println!(
-            "next: `unpeel connector install {}` then `unpeel connector doctor`",
+            "next: `supercli connector install {}` then `supercli connector doctor`",
             dest.display()
         );
     }
@@ -946,7 +946,7 @@ fn doctor_one(store: &dyn CredentialStore, connector: &DiscoveredConnector) -> D
             String::new(),
             false,
             if matches!(e, supercli_connector::OAuthError::NotConnected) {
-                format!("not connected — run `unpeel connector connect {name}` first")
+                format!("not connected — run `supercli connector connect {name}` first")
             } else {
                 format!("token unavailable: {e}")
             },
@@ -1287,7 +1287,7 @@ fn sync_cmd(registry: Option<&str>, json: bool) -> i32 {
                 why.push("transport missing".to_string());
             }
             if !token_ok {
-                why.push(format!("not connected (`unpeel connector connect {name}`)"));
+                why.push(format!("not connected (`supercli connector connect {name}`)"));
             }
             failed.push((name.clone(), why.join(", ")));
         }
@@ -1373,7 +1373,7 @@ fn install_cmd(opts: &InstallOptions, json: bool) -> i32 {
     let source_path = PathBuf::from(&opts.source);
     if source_path
         .extension()
-        .is_some_and(|e| e == "unpeel-connector")
+        .is_some_and(|e| e == "supercli-connector")
     {
         return install_from_bundle(&source_path, opts, json);
     }
@@ -1563,16 +1563,16 @@ fn bundle_trust_key(opts: &InstallOptions) -> Result<String, String> {
         let text = std::fs::read_to_string(file)
             .map_err(|e| format!("could not read --pubkey {}: {e}", Path::new(file).display()))?;
         let text = text.trim();
-        let prefixed = if text.starts_with("unpeel-ed25519-pub-v1:") {
+        let prefixed = if text.starts_with("supercli-ed25519-pub-v1:") {
             text.to_string()
         } else {
-            format!("unpeel-ed25519-pub-v1:{text}")
+            format!("supercli-ed25519-pub-v1:{text}")
         };
         let key = parse_public_key(&prefixed).map_err(|e| format!("bad --pubkey: {e}"))?;
         return Ok(public_key_base64(&key));
     }
     let key = load_public_key(opts.key_id())
-        .map_err(|e| format!("no trusted key: {e} (pass --pubkey <file> or generate one with `unpeel connector keygen`)"))?;
+        .map_err(|e| format!("no trusted key: {e} (pass --pubkey <file> or generate one with `supercli connector keygen`)"))?;
     Ok(public_key_base64(&key))
 }
 
@@ -1583,7 +1583,7 @@ fn install_from_bundle(bundle_path: &Path, opts: &InstallOptions, json: bool) ->
         eprintln!("no bundle file at {}", bundle_path.display());
         return 1;
     }
-    let sig_path = bundle_path.with_extension("unpeel-connector.sig");
+    let sig_path = bundle_path.with_extension("supercli-connector.sig");
     let bundle = match std::fs::read(bundle_path) {
         Ok(b) => b,
         Err(e) => {
@@ -1818,7 +1818,7 @@ fn publish_cmd(name: &str, registry: &str, key_id: &str, json: bool) -> i32 {
             return 1;
         }
     };
-    let tmp = std::env::temp_dir().join(format!("unpeel-pack-{}-{}", name, std::process::id()));
+    let tmp = std::env::temp_dir().join(format!("supercli-pack-{}-{}", name, std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let (bundle_path, sig_path) = match pack(&connector.dir, &tmp, key_id) {
         Ok(p) => p,
@@ -2032,7 +2032,7 @@ fn connect_cmd(name: &str, token_flag: Option<String>, json: bool) -> i32 {
             if client_id.trim().is_empty() {
                 eprintln!(
                     "{name}: OAuth2 needs a client_id — put it in the installed config.json \
-                     (`unpeel connector config {name} --form` asks for it when the schema declares it)"
+                     (`supercli connector config {name} --form` asks for it when the schema declares it)"
                 );
                 return 1;
             }
@@ -2157,7 +2157,7 @@ fn require_connected(
         AuthFlow::ApiKey | AuthFlow::OAuth2 => match load_connector_token(store, name) {
             Ok(Some(t)) if !t.trim().is_empty() => Ok(()),
             Ok(_) => Err(format!(
-                "{name} is not connected — run `unpeel connector connect {name}` first"
+                "{name} is not connected — run `supercli connector connect {name}` first"
             )),
             Err(e) => Err(format!("could not read token for {name}: {e}")),
         },
@@ -2331,7 +2331,7 @@ fn run_cmd(name: &str, tool: &str, rest: &[&str], json: bool) -> i32 {
     if policy != ApprovalPolicy::Allow {
         eprintln!(
             "refusing: tool {tool:?} has effective policy {policy:?} (needs approval); \
-             `unpeel connector run` only invokes Allow tools"
+             `supercli connector run` only invokes Allow tools"
         );
         return 1;
     }
@@ -2423,7 +2423,7 @@ provides = ["allowy.echo"]
 "#;
 
     /// A stub MCP server (Python) implementing initialize, tools/list,
-    /// tools/call. Mirrors the stub in unpeel-connector's process tests.
+    /// tools/call. Mirrors the stub in supercli-connector's process tests.
     /// The served tool name comes from argv[1].
     const STUB: &str = r#"import json, sys
 TOOL = sys.argv[1]
@@ -2540,7 +2540,7 @@ provides = ["{tool}"]
             let env_guard = FIXTURE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let n = Self::next_id();
             let dir = std::env::temp_dir()
-                .join(format!("unpeel-conn-cli-test-{}-{n}", std::process::id()));
+                .join(format!("supercli-conn-cli-test-{}-{n}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             let install_dir = dir.join("installed");
@@ -2979,7 +2979,7 @@ provides = ["{tool}"]
     #[test]
     fn new_scaffolds_a_discoverable_connector() {
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-conn-new-test-{}-{}",
+            "supercli-conn-new-test-{}-{}",
             std::process::id(),
             Fixture::next_id()
         ));
@@ -3026,7 +3026,7 @@ provides = ["{tool}"]
     #[test]
     fn new_refuses_overwrite_and_bad_inputs() {
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-conn-new-test-{}-{}",
+            "supercli-conn-new-test-{}-{}",
             std::process::id(),
             Fixture::next_id()
         ));
@@ -3048,7 +3048,7 @@ provides = ["{tool}"]
     #[test]
     fn new_http_variant_writes_config_not_executable() {
         let dir = std::env::temp_dir().join(format!(
-            "unpeel-conn-new-test-{}-{}",
+            "supercli-conn-new-test-{}-{}",
             std::process::id(),
             Fixture::next_id()
         ));
@@ -3112,7 +3112,7 @@ provides = ["httpy.echo"]
 "#;
 
     /// Minimal MCP-over-HTTP stub (plain JSON, no SSE), mirroring the
-    /// one in unpeel-connector's http tests. Serves `n` requests, then
+    /// one in supercli-connector's http tests. Serves `n` requests, then
     /// the listener drops.
     fn serve_http_stub(n: usize) -> (String, std::thread::JoinHandle<()>) {
         use std::io::{Read, Write};
@@ -3273,7 +3273,7 @@ provides = ["httpy.echo"]
         let bundle = std::fs::read_dir(&out)
             .unwrap()
             .map(|e| e.unwrap().path())
-            .find(|p| p.extension().is_some_and(|e| e == "unpeel-connector"))
+            .find(|p| p.extension().is_some_and(|e| e == "supercli-connector"))
             .expect("packed bundle");
         let base_opts = || InstallOptions {
             source: bundle.to_str().unwrap().to_string(),

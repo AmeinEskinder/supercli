@@ -9,18 +9,18 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use unpeel_core::host_connection::{
+use supercli_core::host_connection::{
     DeliveryState, HostCall, HostConnection, HostConnectionError, RequestSemantics,
 };
-use unpeel_core::remote_session_backend::{
+use supercli_core::remote_session_backend::{
     RemoteDesktopResize, RemoteEffectFailureKind, RemoteOutputPollOptions, RemoteSessionBackend,
 };
-use unpeel_core::ssh_connection::{
+use supercli_core::ssh_connection::{
     SshConnectionOptions, SshHostConnection, SshLaunchMode, SshTarget,
 };
 
-const PURITY_CHILD_ENV: &str = "UNPEEL_REMOTE_PURITY_CHILD";
-const PURITY_SSH_ENV: &str = "UNPEEL_REMOTE_PURITY_SSH";
+const PURITY_CHILD_ENV: &str = "SUPERCLI_REMOTE_PURITY_CHILD";
+const PURITY_SSH_ENV: &str = "SUPERCLI_REMOTE_PURITY_SSH";
 const PURITY_TEST_NAME: &str = "remote_scope_process_uses_only_host_state";
 
 struct Fixture {
@@ -84,14 +84,14 @@ impl Fixture {
              printf '%s\\n' \"$count\" > \"$count_file\"\n\
              printf '%s\\n' \"$$\" > \"$pid_file\"\n\
              export HOME={}\n\
-             export UNPEEL_HOME={}\n\
+             export SUPERCLI_HOME={}\n\
              exec {} __remote_stdio__\n",
             shell_quote(&arguments),
             shell_quote(&invocation_count),
             shell_quote(&gateway_pid),
             shell_quote(&host_user),
             shell_quote(&host_home),
-            shell_quote(Path::new(env!("CARGO_BIN_EXE_unpeel-host"))),
+            shell_quote(Path::new(env!("CARGO_BIN_EXE_supercli-host"))),
         );
         std::fs::write(&ssh_program, script).unwrap();
         let mut permissions = std::fs::metadata(&ssh_program).unwrap().permissions();
@@ -175,17 +175,17 @@ fn wait_until(timeout: Duration, mut condition: impl FnMut() -> bool) -> bool {
 
 fn assert_controller_home_is_empty() {
     let home = PathBuf::from(std::env::var_os("HOME").expect("purity child HOME"));
-    let unpeel_home =
-        PathBuf::from(std::env::var_os("UNPEEL_HOME").expect("purity child UNPEEL_HOME"));
+    let supercli_home =
+        PathBuf::from(std::env::var_os("SUPERCLI_HOME").expect("purity child SUPERCLI_HOME"));
     let entries: Vec<_> = std::fs::read_dir(&home)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert!(entries.is_empty(), "Controller HOME changed: {entries:?}");
     assert!(
-        !unpeel_home.exists(),
-        "Controller UNPEEL_HOME was created: {}",
-        unpeel_home.display()
+        !supercli_home.exists(),
+        "Controller SUPERCLI_HOME was created: {}",
+        supercli_home.display()
     );
 }
 
@@ -193,7 +193,7 @@ fn request(
     connection: &SshHostConnection,
     call: HostCall,
     timeout: Duration,
-) -> Result<unpeel_core::host_connection::HostReply, HostConnectionError> {
+) -> Result<supercli_core::host_connection::HostReply, HostConnectionError> {
     let prepared = connection.prepare(call)?;
     connection.request(prepared, timeout)
 }
@@ -217,7 +217,7 @@ fn mark_read_call() -> HostCall {
         .with_body("application/json", br#"{"sessionID":"s1"}"#.to_vec())
 }
 
-fn body_json(reply: &unpeel_core::host_connection::HostReply) -> serde_json::Value {
+fn body_json(reply: &supercli_core::host_connection::HostReply) -> serde_json::Value {
     serde_json::from_slice(&reply.body).unwrap()
 }
 
@@ -310,7 +310,7 @@ fn remote_scope_process_uses_only_host_state() {
 
     let fixture = Fixture::new("purity");
     let controller_home = fixture.root.join("controller-user");
-    let controller_unpeel_home = controller_home.join(".unpeel");
+    let controller_supercli_home = controller_home.join(".supercli");
     let controller_tmp = fixture.root.join("controller-tmp");
     std::fs::create_dir_all(&controller_home).unwrap();
     std::fs::create_dir_all(&controller_tmp).unwrap();
@@ -373,7 +373,7 @@ fn remote_scope_process_uses_only_host_state() {
             std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into()),
         )
         .env("HOME", &controller_home)
-        .env("UNPEEL_HOME", &controller_unpeel_home)
+        .env("SUPERCLI_HOME", &controller_supercli_home)
         .env("TMPDIR", &controller_tmp)
         .env(PURITY_CHILD_ENV, "1")
         .env(PURITY_SSH_ENV, &fixture.ssh_program)
@@ -413,7 +413,7 @@ fn remote_scope_process_uses_only_host_state() {
             .is_none(),
         "Controller HOME was not left empty"
     );
-    assert!(!controller_unpeel_home.exists());
+    assert!(!controller_supercli_home.exists());
 
     fixture.cleanup();
 }
@@ -473,8 +473,8 @@ fn structured_ssh_argv_and_out_of_order_responses() {
             "--",
             "studio",
             "env",
-            "UNPEEL_LOCAL_GATEWAY=1",
-            "unpeel-host",
+            "SUPERCLI_LOCAL_GATEWAY=1",
+            "supercli-host",
             "__remote_stdio__",
         ]
     );
@@ -541,10 +541,10 @@ fn structured_ssh_argv_and_out_of_order_responses() {
 #[test]
 fn interactive_shell_compatibility_enters_the_same_gateway_protocol() {
     let fixture = Fixture::new("interactive");
-    let host_binary = Path::new(env!("CARGO_BIN_EXE_unpeel-host"));
+    let host_binary = Path::new(env!("CARGO_BIN_EXE_supercli-host"));
     let binary_dir = host_binary.parent().unwrap();
     fixture.replace_ssh_program(&format!(
-        "#!/bin/sh\nexport HOME={}\nexport UNPEEL_HOME={}\nexport PATH={}:\"$PATH\"\nexec /bin/sh\n",
+        "#!/bin/sh\nexport HOME={}\nexport SUPERCLI_HOME={}\nexport PATH={}:\"$PATH\"\nexec /bin/sh\n",
         shell_quote(&fixture.root.join("host-user")),
         shell_quote(&fixture.host_home),
         shell_quote(binary_dir),
