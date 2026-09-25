@@ -21,23 +21,25 @@ fn unpeel_home() -> PathBuf {
 
 /// Run all doctor checks. Returns exit code (0 = all passed).
 /// With `--json`, emits a JSON report.
-pub fn run(args: &[String]) -> i32 {
-    let json = args.iter().any(|a| a == "--json");
+/// Run the checks without printing. Shared by `run` and `unpeel init`
+/// (which merges the doctor report into its own JSON output).
+pub fn run_checks() -> (PathBuf, Vec<(&'static str, bool, String)>) {
     let home = unpeel_home();
 
-    let mut checks: Vec<(&str, bool, String)> = Vec::with_capacity(5);
+    // 1. Home-dir permissions. 2. Chain integrity. 3. Stale leases. 4. Clock skew.
+    let checks: Vec<(&str, bool, String)> = vec![
+        check_home_permissions(&home),
+        check_chain_integrity(&home),
+        check_stale_leases(&home),
+        check_clock_skew(&home),
+    ];
 
-    // 1. Home-dir permissions.
-    checks.push(check_home_permissions(&home));
+    (home, checks)
+}
 
-    // 2. Chain integrity for all sessions.
-    checks.push(check_chain_integrity(&home));
-
-    // 3. Stale leases.
-    checks.push(check_stale_leases(&home));
-
-    // 4. Clock skew.
-    checks.push(check_clock_skew(&home));
+pub fn run(args: &[String]) -> i32 {
+    let json = args.iter().any(|a| a == "--json");
+    let (home, checks) = run_checks();
 
     let passed = checks.iter().filter(|(_, ok, _)| *ok).count();
     let failed = checks.len() - passed;
@@ -132,8 +134,7 @@ fn check_chain_integrity(home: &std::path::Path) -> (&'static str, bool, String)
             continue;
         }
         // Only check if there's a review log.
-        // Note: the canonical review log is reviews.jsonl (not action-reviews.jsonl).
-        let review_log = session_dir.join("reviews.jsonl");
+        let review_log = session_dir.join(unpeel_core::action_reviews::REVIEWS_FILE);
         if !review_log.exists() {
             continue;
         }
