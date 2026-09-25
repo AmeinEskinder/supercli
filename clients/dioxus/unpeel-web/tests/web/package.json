@@ -1,1 +1,1 @@
-{"description":"Playwright headless-Chromium tests for the unpeel-web Dioxus component preview","devDependencies":{"@playwright/test":"1.63.0"},"name":"unpeel-web-tests","private":true,"scripts":{"test":"playwright test"},"version":"0.7.1"}
+{"description":"Playwright headless-Chromium tests for the unpeel-web Dioxus component preview","devDependencies":{"@axe-core/playwright":"^4.13.0","@playwright/test":"1.63.0"},"name":"unpeel-web-tests","private":true,"scripts":{"test":"playwright test"},"version":"0.7.1"}

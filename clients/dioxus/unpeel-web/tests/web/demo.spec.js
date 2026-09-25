@@ -35,14 +35,14 @@ test('pairing tab renders the demo hosts', async ({ page }) => {
 });
 
 test('sessions tab renders the demo session list', async ({ page }) => {
-  await page.getByRole('button', { name: 'Sessions' }).click();
+  await page.getByRole('tab', { name: 'Sessions' }).click();
   const list = page.locator('.session-list');
   await expect(list).toContainText('harness build');
   await expect(list).toContainText('docs pass');
 });
 
 test('terminal tab renders scripted output and echoes keys', async ({ page }) => {
-  await page.getByRole('button', { name: 'Terminal' }).click();
+  await page.getByRole('tab', { name: 'Terminal' }).click();
   const term = page.locator('.terminal-view');
   await expect(term).toContainText('unpeel status');
   await expect(term).toContainText('demo-mac-1');
@@ -53,7 +53,7 @@ test('terminal tab renders scripted output and echoes keys', async ({ page }) =>
 });
 
 test('extras tab: toast shows and dismisses on tap', async ({ page }) => {
-  await page.getByRole('button', { name: 'Toasts & Find' }).click();
+  await page.getByRole('tab', { name: 'Toasts & Find' }).click();
   await page.getByRole('button', { name: 'Show toast' }).click();
   const toast = page.locator('.toast-overlay');
   const capsule = page.locator('.toast-capsule');
@@ -65,7 +65,7 @@ test('extras tab: toast shows and dismisses on tap', async ({ page }) => {
 });
 
 test('extras tab: find bar searches the terminal snapshot', async ({ page }) => {
-  await page.getByRole('button', { name: 'Toasts & Find' }).click();
+  await page.getByRole('tab', { name: 'Toasts & Find' }).click();
   await page.locator('.find-field').fill('unpeel');
   // The counter reflects the shared FindState over the demo snapshot.
   await expect(page.locator('.find-count')).not.toHaveText('');

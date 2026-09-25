@@ -14,14 +14,45 @@
 //! the blocking transport layer rewritten against browser async APIs; that
 //! is future work, not this target.
 
+use dioxus::document::document;
 use dioxus::prelude::*;
-use unpeel_client::dto::{ActivityState, SessionCapabilities, SessionStatus, SessionSummary};
+use unpeel_client::dto::{
+    ActivityState, PendingApproval, SessionCapabilities, SessionStatus, SessionSummary,
+};
 use unpeel_client::types::PairedHostRecord;
 use unpeel_ui::{
-    AnnotationMode, AnnotationResult, BrowserGalleryPanel, Composer, DictationView, FindBar,
-    FindState, GalleryDetailView, PairingStatus, PairingView, SessionList, TerminalModel,
+    AnnotationMode, AnnotationResult, ApprovalCard, BrowserGalleryPanel, Composer, DictationView,
+    FindBar, FindState, GalleryDetailView, PairingStatus, PairingView, SessionList, TerminalModel,
     TerminalView, ToastCenter, ToastOverlay, APP_CSS,
 };
+
+/// Styles for the web component preview chrome itself (tab bar, demo
+/// wrappers, hints). All text meets WCAG AA contrast (≥ 4.5:1) on the
+/// dark demo background.
+const WEB_DEMO_CSS: &str = r#"
+.web-demo { min-height: 100vh; background: #0b0b0e; color: #eee; font-family: system-ui, -apple-system, sans-serif; }
+.demo-banner { background: #1f6feb; color: #fff; padding: 8px 16px; font-size: 13px; font-weight: 600; }
+.demo-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px; background: #141414; border-bottom: 1px solid #333; }
+.demo-tab { background: transparent; color: #ccc; border: 1px solid transparent; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+.demo-tab:hover { color: #fff; background: #2a2a2a; }
+.demo-tab.active { color: #fff; background: #2a2a2a; border-color: #4d9fff; }
+.demo-body { padding: 16px; max-width: 900px; }
+.demo-hint { color: #bbb; font-size: 13px; margin: 0 0 12px; }
+.demo-status { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #141414; border: 1px solid #333; color: #ddd; font-size: 13px; min-height: 20px; }
+.composer-demo-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+.composer-demo-controls button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+.composer-demo-log { margin-top: 12px; color: #bbb; font-size: 13px; }
+.sent-msg { color: #ddd; font-size: 13px; padding: 2px 0; }
+.approvals-demo h2 { color: #fff; font-size: 18px; margin: 0 0 8px; }
+.approvals-controls { display: flex; gap: 8px; margin-bottom: 4px; }
+.approvals-controls button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+.approvals-controls button:disabled { opacity: 0.45; cursor: default; }
+.turn-running { display: flex; align-items: center; gap: 12px; margin: 12px 0; padding: 10px 12px; background: #141414; border: 1px solid #333; border-radius: 8px; color: #ddd; font-size: 14px; }
+.turn-running button { background: #a00; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.terminal-demo .demo-hint { margin-bottom: 8px; }
+.extras-demo .extras-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.extras-demo .extras-row button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+"#;
 
 fn main() {
     dioxus::launch(App);
@@ -34,6 +65,7 @@ enum Tab {
     Sessions,
     Terminal,
     Composer,
+    Approvals,
     Gallery,
     Dictation,
     Extras,
@@ -46,6 +78,7 @@ impl Tab {
             Tab::Sessions => "Sessions",
             Tab::Terminal => "Terminal",
             Tab::Composer => "Composer",
+            Tab::Approvals => "Approvals",
             Tab::Gallery => "Gallery",
             Tab::Dictation => "Dictation",
             Tab::Extras => "Toasts & Find",
@@ -132,21 +165,24 @@ fn App() -> Element {
 
     rsx! {
         style { "{APP_CSS}" }
+        style { "{WEB_DEMO_CSS}" }
         div { class: "web-demo",
             div { class: "demo-banner",
                 "Web component preview — scripted demo data, no Host connection."
             }
-            nav { class: "demo-tabs",
-                for t in [Tab::Pairing, Tab::Sessions, Tab::Terminal, Tab::Composer, Tab::Gallery, Tab::Dictation, Tab::Extras] {
+            nav { class: "demo-tabs", role: "tablist", aria_label: "Component demos",
+                for t in [Tab::Pairing, Tab::Sessions, Tab::Terminal, Tab::Composer, Tab::Approvals, Tab::Gallery, Tab::Dictation, Tab::Extras] {
                     button {
                         key: "{t.label()}",
                         class: if *tab.read() == t { "demo-tab active" } else { "demo-tab" },
+                        role: "tab",
+                        aria_selected: *tab.read() == t,
                         onclick: move |_| tab.set(t),
                         "{t.label()}"
                     }
                 }
             }
-            div { class: "demo-body",
+            main { class: "demo-body",
                 match *tab.read() {
                     Tab::Pairing => rsx! {
                         PairingDemo {
@@ -169,6 +205,7 @@ fn App() -> Element {
                         }
                     },
                     Tab::Composer => rsx! { ComposerDemo {} },
+                    Tab::Approvals => rsx! { ApprovalsDemo {} },
                     Tab::Gallery => rsx! { GalleryDemo {} },
                     Tab::Dictation => rsx! { DictationDemo {} },
                     Tab::Extras => rsx! { ExtrasDemo {} },
@@ -388,6 +425,100 @@ fn ComposerDemo() -> Element {
                 for (i, msg) in sent_log.read().iter().enumerate() {
                     div { key: "{i}", class: "sent-msg", "{msg}" }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+fn ApprovalsDemo() -> Element {
+    // Scripted approval + turn state: the web preview has no Host, so the
+    // demo drives the flow deterministically. Every control is a native
+    // button in DOM order — fully keyboard operable with visible focus.
+    let mut pending = use_signal(|| None::<PendingApproval>);
+    let mut turn_running = use_signal(|| false);
+    let mut status = use_signal(String::new);
+    let mut seq = use_signal(|| 0u32);
+
+    // Move keyboard focus to Approve when a new approval card mounts. The
+    // `autofocus` attribute on the shared ApprovalCard covers real browsers,
+    // but the headless-shell Chromium in CI does not honor `autofocus` on
+    // dynamically inserted elements — and a keyboard user must land on the
+    // decision without tabbing through the whole page.
+    use_effect(move || {
+        if pending.read().is_some() {
+            let _ = document()
+                .eval("const b = document.querySelector('.approval-actions .approve'); if (b) b.focus();".to_string())
+                .send(());
+        }
+    });
+
+    rsx! {
+        div { class: "approvals-demo",
+            h2 { "Approvals" }
+            p { class: "demo-hint",
+                "Scripted approval flow — no Host. Tab moves between controls, Enter activates. "
+                "Requesting an approval moves keyboard focus straight to Approve."
+            }
+            div { class: "approvals-controls",
+                button {
+                    "data-testid": "simulate-approval",
+                    disabled: pending.read().is_some(),
+                    onclick: move |_| {
+                        let n = { let v = *seq.read(); seq.set(v + 1); v + 1 };
+                        pending.set(Some(PendingApproval {
+                            id: format!("demo-approval-{n}"),
+                            session_id: Some("sess-demo-1".to_string()),
+                            title: Some(format!("Run `rm -rf /tmp/demo-{n}`")),
+                            detail: Some("tool: shell.exec (ask)".to_string()),
+                        }));
+                    },
+                    "Simulate approval request"
+                }
+                button {
+                    "data-testid": "simulate-turn",
+                    disabled: *turn_running.read(),
+                    onclick: move |_| {
+                        turn_running.set(true);
+                        status.set("Turn started (simulated).".to_string());
+                    },
+                    "Start simulated turn"
+                }
+            }
+            if let Some(approval) = pending() {
+                ApprovalCard {
+                    key: "{approval.id}",
+                    approval: approval.clone(),
+                    on_answer: move |approved: bool| {
+                        let title = approval.title.clone().unwrap_or_default();
+                        status.set(if approved {
+                            format!("Approved: {title}")
+                        } else {
+                            format!("Denied: {title}")
+                        });
+                        pending.set(None);
+                    },
+                }
+            }
+            if *turn_running.read() {
+                div { class: "turn-running",
+                    span { "Turn running (simulated) — the agent is working." }
+                    button {
+                        "data-testid": "cancel-turn",
+                        onclick: move |_| {
+                            turn_running.set(false);
+                            status.set("Turn cancelled.".to_string());
+                        },
+                        "Cancel turn"
+                    }
+                }
+            }
+            div {
+                class: "demo-status",
+                "data-testid": "approval-status",
+                role: "status",
+                aria_live: "polite",
+                "{status}"
             }
         }
     }

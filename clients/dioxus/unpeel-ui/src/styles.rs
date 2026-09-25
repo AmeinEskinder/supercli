@@ -33,7 +33,7 @@ pub const APP_CSS: &str = r#"
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; padding: 12px; overflow-y: auto; }
 .gallery-thumb { position: relative; background: #222; border: 1px solid #333; border-radius: 8px; padding: 0; overflow: hidden; aspect-ratio: 1; }
 .gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gallery-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; font-size: 12px; }
+.gallery-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #8c8c8c; font-size: 12px; }
 .gallery-thumb-name { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.65); color: #ddd; font-size: 11px; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 .gallery-thumb-delete { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; font-size: 16px; line-height: 24px; text-align: center; cursor: pointer; }
 .gallery-detail { display: flex; flex-direction: column; height: 100%; background: #111; color: #eee; }
@@ -151,4 +151,44 @@ pub const APP_CSS: &str = r#"
 .toast-capsule { display: flex; align-items: center; gap: 8px; margin: 46px 14px 0 0; padding: 10px 16px; border-radius: 999px; background: rgba(40,40,46,0.92); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 6px 16px rgba(0,0,0,0.3); pointer-events: auto; cursor: pointer; max-width: 340px; }
 .toast-icon { font-size: 13px; }
 .toast-text { font-size: 13px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- accessibility: visible focus, reduced motion ---------- */
+/* A visible keyboard focus indicator on every interactive element. */
+button:focus-visible, input:focus-visible, textarea:focus-visible,
+select:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid #4d9fff;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* Honor the OS reduced-motion setting: no pulses, slides, or fades. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---------- approval card (components.rs ApprovalCard) ---------- */
+.approval-card { background: #1b1b1b; border: 1px solid #4d9fff; border-radius: 10px; padding: 14px 16px; margin: 12px 0; max-width: 560px; }
+.approval-title { color: #fff; font-size: 15px; font-weight: 600; }
+.approval-detail { color: #ddd; font-size: 13px; margin-top: 6px; font-family: monospace; word-break: break-all; }
+.approval-actions { display: flex; gap: 10px; margin-top: 12px; }
+.approval-actions .approve { background: #0a6cff; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.approval-actions .deny { background: #2a2a2a; color: #eee; border: 1px solid #666; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* ---------- composer (composer.rs Composer) ---------- */
+.composer { display: flex; gap: 8px; align-items: flex-end; background: #141414; border: 1px solid #444; border-radius: 12px; padding: 10px; max-width: 720px; }
+.composer textarea { flex: 1; min-height: 44px; background: #0b0b0e; color: #eee; border: 1px solid #555; border-radius: 8px; padding: 10px; font-size: 14px; resize: vertical; }
+.composer textarea::placeholder { color: #999; }
+.composer button.send { background: #0a6cff; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.composer button.stop { background: #a00; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.composer button.queue-add { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 8px; padding: 10px 14px; font-size: 14px; cursor: pointer; }
+.followup-queue { margin-top: 8px; border: 1px solid #444; border-radius: 8px; padding: 8px 10px; background: #141414; max-width: 720px; }
+.queue-label { color: #ddd; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.queued-item { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #2a2a2a; }
+.queued-item:first-of-type { border-top: none; }
+.queued-text { flex: 1; color: #eee; font-size: 13px; }
+.queued-item button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.queued-edit { flex: 1; background: #0b0b0e; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
 "#;

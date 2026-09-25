@@ -80,7 +80,7 @@ test('mobai mirror: terminal-type flow', async ({ page }) => {
 // Screenshot adds a demo entry; opening it shows the detail view with the
 // Draw editor; completing the annotation fires annotation-done.
 test('mobai mirror: gallery-annotate flow', async ({ page }) => {
-  await page.getByRole('button', { name: 'Gallery' }).click();
+  await page.getByRole('tab', { name: 'Gallery' }).click();
   const panel = page.getByTestId('gallery-panel');
   await expect(panel).toBeVisible();
   await expect(page.getByTestId('gallery-title')).toContainText('Browser Gallery');
@@ -154,7 +154,7 @@ test('mobai mirror: dictation-toggle flow', async ({ page }) => {
   await expect(page.locator('.demo-banner')).toContainText('Web component preview', {
     timeout: 30_000,
   });
-  await page.getByRole('button', { name: 'Dictation' }).click();
+  await page.getByRole('tab', { name: 'Dictation' }).click();
 
   const wrap = page.getByTestId('dictation-wrap');
   await expect(wrap).toBeVisible();

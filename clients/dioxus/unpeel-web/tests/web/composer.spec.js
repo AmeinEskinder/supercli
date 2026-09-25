@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.demo-banner')).toContainText('Web component preview', {
     timeout: 30_000,
   });
-  await page.getByRole('button', { name: 'Composer', exact: true }).click();
+  await page.getByRole('tab', { name: 'Composer', exact: true }).click();
   await expect(page.locator('.composer-demo')).toBeVisible({ timeout: 5000 });
 });
 

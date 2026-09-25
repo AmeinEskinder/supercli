@@ -51,6 +51,7 @@ pub fn PairingView(
                 class: "pairing-code",
                 "data-testid": "pairing-code-input",
                 placeholder: "UNPEEL:1:host:port:…",
+                aria_label: "Pairing code from the Host",
                 rows: 3,
                 spellcheck: false,
                 disabled: working,

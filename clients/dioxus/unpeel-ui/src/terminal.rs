@@ -714,6 +714,8 @@ pub fn TerminalView(
             // these, so inverse spans (which pin the same values) match.
             style: "color:{DEFAULT_FG_CSS};background-color:{DEFAULT_BG_CSS};",
             tabindex: 0,
+            role: "application",
+            aria_label: "Terminal. Type to send keys to the session.",
             // Keep focus so keystrokes reach the PTY without tapping first.
             autofocus: true,
             onkeydown: move |e| {

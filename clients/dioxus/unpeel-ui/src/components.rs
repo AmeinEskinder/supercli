@@ -216,24 +216,42 @@ pub fn TranscriptView(markdown: String) -> Element {
 
 /// Inline approval card: the single consent surface for MCP approvals.
 /// Approve / Deny map straight onto `POST /mobile/approvals/answer`.
+///
+/// Accessibility: rendered as an `alertdialog` with labelledby always
+/// pointing at the title, and describedby pointing at the detail only when
+/// a detail exists (a dangling describedby id is worse than none).
 #[component]
 pub fn ApprovalCard(approval: PendingApproval, on_answer: EventHandler<bool>) -> Element {
+    let title_id = format!("approval-title-{}", approval.id);
+    let detail_id = format!("approval-detail-{}", approval.id);
+    let title = approval
+        .title
+        .clone()
+        .unwrap_or_else(|| "Approval requested".to_string());
+    // Only reference the detail node when one is rendered.
+    let describedby: Option<String> = approval.detail.as_ref().map(|_| detail_id.clone());
     rsx! {
-        div { class: "approval-card",
-            div { class: "approval-title",
-                {approval.title.clone().unwrap_or_else(|| "Approval requested".to_string())}
-            }
+        div {
+            class: "approval-card",
+            role: "alertdialog",
+            aria_modal: "false",
+            aria_labelledby: "{title_id}",
+            aria_describedby: describedby,
+            div { class: "approval-title", id: "{title_id}", "{title}" }
             if let Some(detail) = approval.detail.clone() {
-                div { class: "approval-detail", "{detail}" }
+                div { class: "approval-detail", id: "{detail_id}", "{detail}" }
             }
             div { class: "approval-actions",
                 button {
                     class: "approve",
+                    autofocus: true,
+                    aria_label: "Approve: {title}",
                     onclick: move |_| on_answer.call(true),
                     "Approve"
                 }
                 button {
                     class: "deny",
+                    aria_label: "Deny: {title}",
                     onclick: move |_| on_answer.call(false),
                     "Deny"
                 }

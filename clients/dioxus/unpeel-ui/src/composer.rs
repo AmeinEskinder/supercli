@@ -12,6 +12,7 @@
 
 use std::collections::HashMap;
 
+use dioxus::html::Key;
 use dioxus::prelude::*;
 
 /// Pure composer state. Keyed by session id so drafts and queues survive
@@ -163,12 +164,58 @@ pub fn Composer(
 
     let queue: Vec<String> = state.read().queue().to_vec();
     let button_label = if turn_running { "Stop" } else { "Send" };
+    // Shared by the Send/Stop button and the Enter key: idle sends the
+    // draft, running stops the turn.
+    let primary_action = {
+        let sid = session_id.clone();
+        move || {
+            if turn_running {
+                on_stop.call(());
+            } else {
+                let msg = text.read().clone();
+                if !msg.trim().is_empty() {
+                    text.set(String::new());
+                    state.write().save_draft(&sid, String::new());
+                    on_send.call(msg);
+                }
+            }
+        }
+    };
+    // Shared by the Queue button and the Enter key while a turn runs.
+    let queue_action = {
+        let sid = session_id.clone();
+        move || {
+            let msg = text.read().clone();
+            if state.write().queue_followup(msg).is_some() {
+                text.set(String::new());
+                state.write().save_draft(&sid, String::new());
+            }
+        }
+    };
 
     rsx! {
         div { class: "composer",
             textarea {
                 value: "{text}",
+                aria_label: "Message the agent",
                 oninput: move |e| text.set(e.value()),
+                onkeydown: {
+                    let mut primary_action = primary_action.clone();
+                    let mut queue_action = queue_action.clone();
+                    move |e| {
+                        // Enter sends (idle) or queues (running); Shift+Enter
+                        // keeps the native newline. This is what the
+                        // placeholder text promises, so it must exist.
+                        if e.key() == Key::Enter && !e.modifiers().shift() {
+                            e.prevent_default();
+                            if turn_running {
+                                queue_action();
+                            } else {
+                                primary_action();
+                            }
+                        }
+                    }
+                },
                 placeholder: if turn_running {
                     "Turn running — type a follow-up… (Enter to queue)"
                 } else {
@@ -177,20 +224,12 @@ pub fn Composer(
             }
             button {
                 class: if turn_running { "stop" } else { "send" },
+                // No aria-label: the visible "Send"/"Stop" text is the
+                // accessible name (an override would break exact-name
+                // lookups and WCAG 2.5.3 label-in-name).
                 onclick: {
-                    let sid = session_id.clone();
-                    move |_| {
-                        if turn_running {
-                            on_stop.call(());
-                        } else {
-                            let msg = text.read().clone();
-                            if !msg.trim().is_empty() {
-                                text.set(String::new());
-                                state.write().save_draft(&sid, String::new());
-                                on_send.call(msg);
-                            }
-                        }
-                    }
+                    let mut primary_action = primary_action.clone();
+                    move |_| primary_action()
                 },
                 {button_label}
             }
@@ -199,15 +238,10 @@ pub fn Composer(
                 // the (now "Queue") control adds it instead of sending.
                 button {
                     class: "queue-add",
+                    // Visible "Queue" text is the accessible name.
                     onclick: {
-                        let sid = session_id.clone();
-                        move |_| {
-                            let msg = text.read().clone();
-                            if state.write().queue_followup(msg).is_some() {
-                                text.set(String::new());
-                                state.write().save_draft(&sid, String::new());
-                            }
-                        }
+                        let mut queue_action = queue_action.clone();
+                        move |_| queue_action()
                     },
                     "Queue"
                 }
@@ -223,6 +257,7 @@ pub fn Composer(
                                         input {
                                             class: "queued-edit",
                                             r#type: "text",
+                                            aria_label: "Edit queued follow-up",
                                             value: "{edit_text}",
                                             oninput: move |e| edit_text.set(e.value()),
                                         }

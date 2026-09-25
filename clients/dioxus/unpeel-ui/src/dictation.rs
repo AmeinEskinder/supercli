@@ -652,6 +652,7 @@ pub fn DictationView(settings: DictationSettings, on_commit: EventHandler<String
                 class: if phase == DictationPhase::Recording { "dictation-mic recording" } else { "dictation-mic" },
                 "data-testid": "dictation-toggle",
                 onclick: on_mic,
+                aria_label: if phase == DictationPhase::Recording { "Stop dictation" } else { "Start dictation" },
                 title: if phase == DictationPhase::Recording { "Stop dictation" } else { "Dictate" },
                 "🎤"
             }
@@ -672,7 +673,7 @@ pub fn DictationView(settings: DictationSettings, on_commit: EventHandler<String
                     } else if !session.read().transcript().is_empty() && error.is_some() {
                         button { class: "dictation-paste", onclick: on_paste_kept, "Paste" }
                     }
-                    button { class: "dictation-cancel", onclick: on_cancel, "✕" }
+                    button { class: "dictation-cancel", onclick: on_cancel, aria_label: "Dismiss dictation", "✕" }
                 }
             }
         }
