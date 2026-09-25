@@ -77,7 +77,12 @@ impl RateLimiter {
         //
         // These are NOT tuned for the soak script (which is a stress test, not
         // realistic use). The soak counts 429s as expected outcomes, not errors.
-        limits.insert("approve".to_string(), (30.0, 30.0 / 60.0));
+        // Phase 13 v3 (A): Increased approve from 30/min to 120/min (2/s).
+        // The P0 bug: with several agents running in parallel (the product's
+        // normal case), the phone could not answer approvals because the
+        // 0.5/s limit throttled legitimate concurrent answers. 2/s still
+        // prevents abuse while allowing a user to approve multiple agents.
+        limits.insert("approve".to_string(), (60.0, 120.0 / 60.0));
         limits.insert("cancel".to_string(), (20.0, 20.0 / 60.0));
         limits.insert("connector".to_string(), (120.0, 120.0 / 60.0));
 
@@ -113,7 +118,7 @@ impl RateLimiter {
     /// for one refill interval (1 / refill_per_sec) before a retry can
     /// succeed. We return the ceiling so the client doesn't retry early.
     ///
-    /// - approve (30/min = 0.5/sec): 2s
+    /// - approve (120/min = 2/sec): 1s (0.5 rounded up)
     /// - cancel (20/min = 0.333/sec): 3s
     /// - connector (120/min = 2/sec): 1s (0.5 rounded up)
     pub fn retry_after_secs(&self, endpoint: &str) -> u64 {
@@ -139,8 +144,8 @@ mod tests {
     #[test]
     fn allows_up_to_burst() {
         let rl = RateLimiter::new();
-        // Approve: burst 30.
-        for _ in 0..30 {
+        // Approve: burst 60.
+        for _ in 0..60 {
             assert!(rl.check("dev1", "approve"), "should allow within burst");
         }
         assert!(!rl.check("dev1", "approve"), "should reject over burst");
@@ -149,7 +154,7 @@ mod tests {
     #[test]
     fn per_device_isolation() {
         let rl = RateLimiter::new();
-        for _ in 0..30 {
+        for _ in 0..60 {
             assert!(rl.check("dev1", "approve"));
         }
         assert!(!rl.check("dev1", "approve"));
@@ -160,7 +165,7 @@ mod tests {
     #[test]
     fn per_endpoint_isolation() {
         let rl = RateLimiter::new();
-        for _ in 0..30 {
+        for _ in 0..60 {
             assert!(rl.check("dev1", "approve"));
         }
         assert!(!rl.check("dev1", "approve"));
@@ -173,7 +178,7 @@ mod tests {
         let rl = RateLimiter::new();
         // Use a tiny limit for the test by checking internal behavior.
         // Instead, verify that after reset, tokens are refilled.
-        for _ in 0..30 {
+        for _ in 0..60 {
             rl.check("dev1", "approve");
         }
         assert!(!rl.check("dev1", "approve"));
@@ -185,8 +190,8 @@ mod tests {
     fn retry_after_matches_token_bucket_refill() {
         let rl = RateLimiter::new();
         // Token-bucket: time for 1 token = ceil(1 / refill_per_sec).
-        // approve: 30/min = 0.5/sec -> 2s
-        assert_eq!(rl.retry_after_secs("approve"), 2);
+        // approve: 120/min = 2/sec -> 1s (0.5 rounded up)
+        assert_eq!(rl.retry_after_secs("approve"), 1);
         // cancel: 20/min = 0.333/sec -> 3s
         assert_eq!(rl.retry_after_secs("cancel"), 3);
         // connector: 120/min = 2/sec -> 0.5s, ceil to 1

@@ -73,6 +73,6 @@ pub use relay_conn::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use transport::{
-    connect_direct_classified, DirectFailure, HostClient, HostClientError, OutputChunk,
-    UploadChunkParams, UploadProgress,
+    connect_direct_classified, AnswerReport, AnswerUiState, DirectFailure, HostClient,
+    HostClientError, OutputChunk, UploadChunkParams, UploadProgress,
 };

@@ -47,6 +47,12 @@ fn english_catalog() -> &'static HashMap<&'static str, &'static str> {
         m.insert("approval.title", "Approval requested");
         m.insert("approval.approve", "Approve");
         m.insert("approval.deny", "Deny");
+        m.insert("approval.sending", "Sending answer…");
+        m.insert(
+            "approval.rate_limited",
+            "Rate limited — retrying in {secs}s…",
+        );
+        m.insert("approval.failed", "Answer failed — tap to retry.");
         // Composer
         m.insert("composer.placeholder", "Type a message…");
         m.insert("composer.send", "Send");

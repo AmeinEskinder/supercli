@@ -17,6 +17,7 @@ use super::presence::{ViewerAvatars, ViewerInfo};
 use super::i18n::t;
 
 use unpeel_client::TransportKind;
+use unpeel_client::AnswerUiState;
 
 /// Top bar: Host identity + connection state + transport + refresh.
 ///
@@ -218,11 +219,22 @@ pub fn TranscriptView(markdown: String) -> Element {
 /// Inline approval card: the single consent surface for MCP approvals.
 /// Approve / Deny map straight onto `POST /mobile/approvals/answer`.
 ///
+/// `answer_state` surfaces the client's answer progress: while the answer
+/// is being sent — or the Host rate-limited it (429) and the client is
+/// sleeping `Retry-After` before retrying — the card stays mounted and
+/// shows the state instead of the buttons. The approval is never removed
+/// from the list until the Host confirms the answer, so a rate-limited
+/// answer can never silently disappear.
+///
 /// Accessibility: rendered as an `alertdialog` with labelledby always
 /// pointing at the title, and describedby pointing at the detail only when
 /// a detail exists (a dangling describedby id is worse than none).
 #[component]
-pub fn ApprovalCard(approval: PendingApproval, on_answer: EventHandler<bool>) -> Element {
+pub fn ApprovalCard(
+    approval: PendingApproval,
+    on_answer: EventHandler<bool>,
+    #[props(default)] answer_state: Option<AnswerUiState>,
+) -> Element {
     let title_id = format!("approval-title-{}", approval.id);
     let detail_id = format!("approval-detail-{}", approval.id);
     let title = approval
@@ -231,6 +243,22 @@ pub fn ApprovalCard(approval: PendingApproval, on_answer: EventHandler<bool>) ->
         .unwrap_or_else(|| "Approval requested".to_string());
     // Only reference the detail node when one is rendered.
     let describedby: Option<String> = approval.detail.as_ref().map(|_| detail_id.clone());
+    // While an answer is in flight or being retried after a 429, the card
+    // stays visible with its state shown and the buttons disabled — the
+    // approval itself is never dropped.
+    let busy = matches!(
+        answer_state,
+        Some(AnswerUiState::Sending) | Some(AnswerUiState::RateLimited { .. })
+    );
+    let state_text: Option<String> = match answer_state {
+        Some(AnswerUiState::Sending) => Some(t("approval.sending").to_string()),
+        Some(AnswerUiState::RateLimited { retry_in_secs }) => Some(
+            t("approval.rate_limited")
+                .replace("{secs}", &retry_in_secs.to_string()),
+        ),
+        Some(AnswerUiState::Failed) => Some(t("approval.failed").to_string()),
+        None => None,
+    };
     rsx! {
         div {
             class: "approval-card",
@@ -242,16 +270,21 @@ pub fn ApprovalCard(approval: PendingApproval, on_answer: EventHandler<bool>) ->
             if let Some(detail) = approval.detail.clone() {
                 div { class: "approval-detail", id: "{detail_id}", "{detail}" }
             }
+            if let Some(text) = state_text {
+                div { class: "approval-state", role: "status", "{text}" }
+            }
             div { class: "approval-actions",
                 button {
                     class: "approve",
                     autofocus: true,
+                    disabled: busy,
                     aria_label: "Approve: {title}",
                     onclick: move |_| on_answer.call(true),
                     "{t(\"approval.approve\")}"
                 }
                 button {
                     class: "deny",
+                    disabled: busy,
                     aria_label: "Deny: {title}",
                     onclick: move |_| on_answer.call(false),
                     "{t(\"approval.deny\")}"

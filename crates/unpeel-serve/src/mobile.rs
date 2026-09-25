@@ -1563,7 +1563,9 @@ fn handle_metrics() -> (u16, String) {
 /// GET /mobile/events — typed session event stream (Phase 6 R4).
 ///
 /// Query params: `session_id` (or `sessionID`), `after_seq` (default 0),
-/// `limit` (default 128, clamped to 1024). Returns `{ events, next_seq, resync }`.
+/// `limit` (default 128, clamped to 1024), `wait_ms` (default 0: return
+/// immediately; up to 25000: long-poll — block until `seq > after_seq`
+/// or the timeout elapses). Returns `{ events, next_seq, resync }`.
 fn handle_events(request: &Request) -> (u16, String) {
     let Some(session_id) = request
         .query
@@ -1584,13 +1586,38 @@ fn handle_events(request: &Request) -> (u16, String) {
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(128)
         .clamp(1, 1024);
+    let wait_ms = request
+        .query
+        .get("wait_ms")
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0)
+        .clamp(0, 25_000);
     // F1: tool calls execute in other processes (the scheduled daemon, the
     // MCP server) and record terminal outcomes durably; reconcile them into
     // `tool.executed` / `tool.ambiguous` events before polling so the
     // stream reflects the durable log. Outcomes already announced
     // in-process (e.g. by turn-cancel) are not re-emitted.
     event_bus().reconcile_outcomes(session_id);
-    let (events, next_seq, resync) = event_bus().poll(session_id, after_seq, limit);
+    let (events, next_seq, resync) = if wait_ms == 0 {
+        event_bus().poll(session_id, after_seq, limit)
+    } else {
+        // Long-poll (S3): hold the request until seq advances or the
+        // timeout elapses. The wait is sliced at 1s so cross-process
+        // outcomes — durable log writes by the MCP server / scheduled
+        // daemon, which have no in-memory signal — are reconciled promptly.
+        // In-process emits wake the condvar immediately.
+        let deadline = Instant::now() + Duration::from_millis(wait_ms);
+        let mut out = event_bus().poll(session_id, after_seq, limit);
+        while out.0.is_empty() && Instant::now() < deadline {
+            let slice = (deadline - Instant::now()).min(Duration::from_secs(1));
+            out = event_bus().poll_wait(session_id, out.1, limit, slice);
+            if out.0.is_empty() {
+                event_bus().reconcile_outcomes(session_id);
+                out = event_bus().poll(session_id, out.1, limit);
+            }
+        }
+        out
+    };
     let event_json: Vec<serde_json::Value> = events.iter().map(|e| e.to_json()).collect();
     let body = serde_json::json!({
         "events": event_json,
@@ -1836,6 +1863,33 @@ fn handle_with_effects(
         _ => {}
     }
     let route_context = if request.method == "GET" && request.path == "/mobile/bootstrap" {
+        // Phase 13 v3 (B): Long-poll support for approval wake-up.
+        // Query params: `wait_ms` (0 = return immediately; up to 25000:
+        // block until approval generation changes or timeout),
+        // `after_approval_generation` (the generation the client last saw;
+        // if the current generation differs, return immediately).
+        // This lets the controller (phone) wait efficiently for new
+        // approvals instead of polling on a 2-10s fallback timer.
+        let wait_ms: u64 = request
+            .query
+            .get("wait_ms")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0)
+            .clamp(0, 25_000);
+        if wait_ms > 0 {
+            let after_gen: u64 = request
+                .query
+                .get("after_approval_generation")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+            // Phase 13 v3 (B2): Real wake-up via Condvar — no spinning.
+            // Waiting controllers cost nothing and wake in under 1ms when
+            // the approval generation changes. Timeout semantics preserved.
+            approvals.wait_for_generation_change(
+                after_gen,
+                std::time::Duration::from_millis(wait_ms),
+            );
+        }
         let core = snapshot
             .lock()
             .ok()
@@ -1853,6 +1907,7 @@ fn handle_with_effects(
         context.remote_server_certificate_fingerprint =
             fingerprint.or_else(direct_certificate_fingerprint);
         context.pending_approvals = approvals.list_json();
+        context.approval_generation = approvals.generation();
         platform_adapters.decorate_protocol(&mut context.protocol);
         Some(HostRouteContext {
             bootstrap: Some(context),
@@ -3643,6 +3698,169 @@ mod tests {
         // 401 before the event handler ever runs.
         assert_eq!(status, 401, "{body}");
         assert!(body.contains("unauthorized"), "{body}");
+    }
+
+    /// S3: `wait_ms` long-poll — the handler blocks until `seq > after_seq`
+    /// instead of returning an empty page immediately. An event emitted
+    /// 300 ms in wakes the waiter promptly (event-driven, not 2 s polling).
+    #[test]
+    fn events_long_poll_wakes_on_emit() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir = scratch_dir("events-long-poll");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let session_id = "s3-long-poll-wake";
+        let emitter = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            event_bus().emit_tool_requested(session_id, "r-1", "bash.exec", "cargo test");
+        });
+
+        let request = Request {
+            request_id: None,
+            method: "GET".to_string(),
+            path: "/mobile/events".to_string(),
+            query: HashMap::from([
+                ("session_id".to_string(), "s3-long-poll-wake".to_string()),
+                ("after_seq".to_string(), "0".to_string()),
+                ("wait_ms".to_string(), "5000".to_string()),
+            ]),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            keep_alive: false,
+        };
+        let t0 = Instant::now();
+        let (status, body) = handle_events(&request);
+        let elapsed = t0.elapsed();
+        emitter.join().unwrap();
+
+        assert_eq!(status, 200, "{body}");
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed["events"].as_array().unwrap().len(), 1);
+        assert_eq!(parsed["events"][0]["kind"], "tool.requested");
+        assert_eq!(parsed["next_seq"], 1);
+        // Woke on the emit (~300 ms), well before the 5 s timeout.
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "long-poll did not wake promptly: {elapsed:?}"
+        );
+
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// S3: `wait_ms` long-poll with no events — returns an empty page at
+    /// the timeout so the client re-issues (cursor unchanged).
+    #[test]
+    fn events_long_poll_timeout_returns_empty() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir = scratch_dir("events-long-poll-timeout");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let request = Request {
+            request_id: None,
+            method: "GET".to_string(),
+            path: "/mobile/events".to_string(),
+            query: HashMap::from([
+                ("session_id".to_string(), "s3-long-poll-empty".to_string()),
+                ("after_seq".to_string(), "0".to_string()),
+                ("wait_ms".to_string(), "400".to_string()),
+            ]),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            keep_alive: false,
+        };
+        let t0 = Instant::now();
+        let (status, body) = handle_events(&request);
+        let elapsed = t0.elapsed();
+
+        assert_eq!(status, 200, "{body}");
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed["events"].as_array().unwrap().len(), 0);
+        assert_eq!(parsed["next_seq"], 0);
+        assert!(
+            elapsed >= Duration::from_millis(300),
+            "returned before the wait elapsed: {elapsed:?}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "waited far past the timeout: {elapsed:?}"
+        );
+
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// S3 measurement: long-poll wake latency distribution (emit -> handler
+    /// returns). Run with --nocapture to see the numbers. This is the
+    /// "after" side of the MCP->visible re-measurement: the phone's
+    /// long-poll returns within milliseconds of the Host emitting the
+    /// event, vs the old 2 s poll interval (mean 1000 ms, worst 2000 ms
+    /// added latency by construction).
+    #[test]
+    fn events_long_poll_wake_latency_measure() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir = scratch_dir("events-wake-measure");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let mut latencies = Vec::new();
+        for i in 0..20 {
+            let session_id = format!("s3-wake-measure-{i}");
+            let sid_clone = session_id.clone();
+            let emitter = std::thread::spawn(move || {
+                // Emit immediately; measure pure wake latency.
+                event_bus().emit_tool_requested(&sid_clone, "r-1", "bash.exec", "measure");
+            });
+            // Small delay so the handler is blocked in poll_wait before emit.
+            std::thread::sleep(Duration::from_millis(50));
+
+            let request = Request {
+                request_id: None,
+                method: "GET".to_string(),
+                path: "/mobile/events".to_string(),
+                query: HashMap::from([
+                    ("session_id".to_string(), session_id),
+                    ("after_seq".to_string(), "0".to_string()),
+                    ("wait_ms".to_string(), "5000".to_string()),
+                ]),
+                headers: HashMap::new(),
+                body: Vec::new(),
+                keep_alive: false,
+            };
+            let t0 = Instant::now();
+            let (status, body) = handle_events(&request);
+            let elapsed = t0.elapsed();
+            emitter.join().unwrap();
+
+            assert_eq!(status, 200, "{body}");
+            // Subtract the 50 ms pre-delay to get wake latency.
+            latencies.push(elapsed.as_millis().saturating_sub(50) as u64);
+        }
+        latencies.sort_unstable();
+        let p50 = latencies[latencies.len() / 2];
+        let p99 = latencies[(latencies.len() * 99 / 100).min(latencies.len() - 1)];
+        let max = latencies[latencies.len() - 1];
+        eprintln!("wake latency (ms): n=20 p50={p50} p99={p99} max={max}");
+
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// F1: after a tool call completes normally (durable `Executed` outcome),

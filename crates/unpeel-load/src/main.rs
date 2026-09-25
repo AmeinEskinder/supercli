@@ -75,6 +75,9 @@ struct ApproveRequest {
 struct BootstrapResponse {
     #[serde(rename = "pendingApprovals", default)]
     pending_approvals: Vec<PendingApproval>,
+    // Phase 13 v3 (B): long-poll generation counter.
+    #[serde(rename = "approvalGeneration", default)]
+    approval_generation: u64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -402,12 +405,41 @@ async fn do_approve_cycle(
         Ok(())
     });
 
-    // Poll bootstrap until approval appears (GET, per working Python client)
+    // Poll bootstrap until approval appears (GET, per working Python client).
+    // Phase 13 v3 (A): Increased from 1s to 10s to handle server load.
+    // Also check if MCP completed early (already_granted fast-path).
+    // Phase 13 v3 (B): Use bootstrap long-poll (?wait_ms= +
+    // ?after_approval_generation=) instead of timer polling. The server
+    // blocks until the approval generation changes (new approval enqueued
+    // or answered) or the timeout elapses. This is the same mechanism the
+    // phone client uses — no 2-10s polling fallback.
     let mut pending_id: Option<String> = None;
-    for _ in 0..50 {
-        sleep(Duration::from_millis(20)).await;
+    let mut after_gen: u64 = 0;
+    // Initial fetch to get the current generation (no wait).
+    for _ in 0..20 {
+        // Check if MCP already completed (already_granted fast-path).
+        // If so, no approval was created and we should not poll.
+        if mcp_handle.is_finished() {
+            // MCP done; check result.
+            match mcp_handle.await {
+                Ok(Ok(())) => {
+                    // Already granted, success without approval.
+                    return Ok(t0.elapsed());
+                }
+                Ok(Err(e)) => {
+                    return Err(anyhow::anyhow!("MCP failed fast: {}", e));
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("MCP join failed: {}", e));
+                }
+            }
+        }
+        // Long-poll: wait up to 5s for the approval generation to change.
         let resp = client
-            .get(format!("{}/mobile/bootstrap", phone_base))
+            .get(format!(
+                "{}/mobile/bootstrap?wait_ms=5000&after_approval_generation={}",
+                phone_base, after_gen
+            ))
             .header("Authorization", format!("Bearer {}", mobile_token))
             .send()
             .await?;
@@ -420,6 +452,8 @@ async fn do_approve_cycle(
         let resp_text = resp.text().await?;
         let resp: BootstrapResponse = serde_json::from_str(&resp_text)
             .map_err(|e| anyhow::anyhow!("JSON parse failed: {} | body: {}", e, &resp_text[..resp_text.len().min(500)]))?;
+        // Track generation for the next long-poll iteration.
+        after_gen = resp.approval_generation;
         if let Some(a) = resp
             .pending_approvals
             .iter()
@@ -432,16 +466,70 @@ async fn do_approve_cycle(
 
     let pid = pending_id.ok_or_else(|| anyhow::anyhow!("approval not found"))?;
 
-    // Answer it
-    client
+    // Answer it. Phase 13 v3 (A): Check response status; 429 means rate
+    // limited and the approval was NOT answered.
+    let answer_resp = client
         .post(format!("{}/mobile/approvals/answer", phone_base))
         .header("Authorization", format!("Bearer {}", mobile_token))
         .json(&AnswerRequest {
-            id: pid,
+            id: pid.clone(),
             approved: true,
         })
         .send()
         .await?;
+    // Phase 13 v3 (1): 429 retry with Retry-After. The phone must show the
+    // rate limit, retry after the server's Retry-After, and never drop the
+    // approval silently. The approval stays visible in bootstrap until it
+    // is successfully answered.
+    let mut answer_resp = answer_resp;
+    for attempt in 0..5 {
+        if answer_resp.status().is_success() {
+            break;
+        }
+        if answer_resp.status().as_u16() == 429 {
+            // Extract Retry-After (seconds); default to 1s.
+            let retry_after: u64 = answer_resp
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1)
+                .clamp(1, 30);
+            eprintln!(
+                "answer rate-limited (429), retrying after {}s (attempt {}/5), approval {} stays pending",
+                retry_after,
+                attempt + 1,
+                pid
+            );
+            tokio::time::sleep(Duration::from_secs(retry_after)).await;
+            answer_resp = client
+                .post(format!("{}/mobile/approvals/answer", phone_base))
+                .header("Authorization", format!("Bearer {}", mobile_token))
+                .json(&AnswerRequest {
+                    id: pid.clone(),
+                    approved: true,
+                })
+                .send()
+                .await?;
+            continue;
+        }
+        let status = answer_resp.status();
+        let body = answer_resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!(
+            "answer failed: {} | {}",
+            status,
+            &body[..body.len().min(200)]
+        ));
+    }
+    if !answer_resp.status().is_success() {
+        let status = answer_resp.status();
+        let body = answer_resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!(
+            "answer failed after retries: {} | {}",
+            status,
+            &body[..body.len().min(200)]
+        ));
+    }
 
     // Wait for MCP to complete
     mcp_handle.await?.map_err(|e| anyhow::anyhow!("MCP task failed: {}", e))?;

@@ -37,6 +37,39 @@ pub struct PendingApproval {
 pub struct ApprovalHub {
     pending: Mutex<Vec<PendingApproval>>,
     generation: AtomicU64,
+    // Phase 13 v3 (B2): Condvar for real wake-up on generation change.
+    // The bootstrap long-poll waits here instead of spin-sleeping, so
+    // waiting controllers cost nothing and wake in under 1ms.
+    generation_cv: std::sync::Condvar,
+    generation_lock: Mutex<u64>,
+}
+
+impl ApprovalHub {
+    /// Bump the generation counter and wake all long-poll waiters.
+    fn bump_generation(&self) {
+        let new_gen = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Ok(mut guard) = self.generation_lock.lock() {
+            *guard = new_gen;
+            self.generation_cv.notify_all();
+        }
+    }
+
+    /// Block until the generation differs from `after_gen` or `timeout`
+    /// elapses. Returns the current generation. This is the wake-up
+    /// primitive for the bootstrap long-poll — no spinning.
+    pub fn wait_for_generation_change(&self, after_gen: u64, timeout: Duration) -> u64 {
+        let Ok(guard) = self.generation_lock.lock() else {
+            return self.generation();
+        };
+        if *guard != after_gen {
+            return *guard;
+        }
+        let _guard = match self.generation_cv.wait_timeout(guard, timeout) {
+            Ok((g, _)) => g,
+            Err(e) => e.into_inner().0,
+        };
+        self.generation()
+    }
 }
 
 fn now_ms() -> u64 {
@@ -76,7 +109,7 @@ impl ApprovalHub {
                 requested_at: now_ms(),
                 responder: tx,
             });
-            self.generation.fetch_add(1, Ordering::AcqRel);
+            self.bump_generation();
         }
         let (approved, answered_by) = rx.recv_timeout(timeout).unwrap_or((false, None));
         // Drop the entry if it's still queued (timeout path).
@@ -84,7 +117,7 @@ impl ApprovalHub {
             let before = guard.len();
             guard.retain(|p| p.id != id);
             if guard.len() != before {
-                self.generation.fetch_add(1, Ordering::AcqRel);
+                self.bump_generation();
             }
         }
         (approved, answered_by)
@@ -101,7 +134,7 @@ impl ApprovalHub {
             return false;
         };
         let entry = guard.remove(index);
-        self.generation.fetch_add(1, Ordering::AcqRel);
+        self.bump_generation();
         entry.responder.send((approved, answered_by)).is_ok()
     }
 
@@ -142,72 +175,25 @@ impl ApprovalHub {
     }
 }
 
-/// Persist a grant into the shared app-state.json exactly where the app
-/// keeps it, so the approval outlives this TUI run and the app honors it.
-pub fn persist_grant(kind: &str, caller: &str, target: Option<&str>) {
-    let _ = unpeel_core::app_state::edit(|root| {
-        match kind {
-            "write" => {
-                let Some(target) = target else { return Ok(()) };
-                let map = root
-                    .entry("mcp_write_approvals")
-                    .or_insert_with(|| serde_json::json!({}));
-                if let Some(list) = map
-                    .as_object_mut()
-                    .map(|m| {
-                        m.entry(caller.to_string())
-                            .or_insert_with(|| serde_json::json!([]))
-                    })
-                    .and_then(|v| v.as_array_mut())
-                {
-                    if !list.iter().any(|v| v.as_str() == Some(target)) {
-                        list.push(target.into());
-                    }
-                }
-            }
-            "browser" | "computer" => {
-                let key = if kind == "browser" {
-                    "browser_approvals"
-                } else {
-                    "computer_approvals"
-                };
-                let list = root.entry(key).or_insert_with(|| serde_json::json!([]));
-                if let Some(array) = list.as_array_mut() {
-                    if !array.iter().any(|v| v.as_str() == Some(caller)) {
-                        array.push(caller.into());
-                    }
-                }
-            }
-            "app-open" => {
-                let Some(app_id) = target else { return Ok(()) };
-                let map = root
-                    .entry("mcp_app_open_approvals")
-                    .or_insert_with(|| serde_json::json!({}));
-                if let Some(list) = map
-                    .as_object_mut()
-                    .map(|m| {
-                        m.entry(caller.to_string())
-                            .or_insert_with(|| serde_json::json!([]))
-                    })
-                    .and_then(|v| v.as_array_mut())
-                {
-                    if !list.iter().any(|v| v.as_str() == Some(app_id)) {
-                        list.push(app_id.into());
-                    }
-                }
-            }
-            "connector" => {
-                // Connector grants are namespaced by (connector, tool), not
-                // by tool alone: see `persist_connector_grant`. The generic
-                // single-target form cannot express the pair, so it is a
-                // no-op here by construction — use the dedicated function.
-                let _ = target;
-                return Ok(());
-            }
-            _ => {}
-        }
-        Ok(())
-    });
+/// Persist a grant into the sharded grants file (S2).
+///
+/// S2: Moved from app-state.json to grants.json with its own lock.
+/// The write-ahead and hash-chain guarantees live in the review log
+/// (action-reviews.jsonl), not here — grants have no chain semantics,
+/// so sharding is safe. The grant is durably written (temp + rename)
+/// before this returns, same durability as before.
+pub fn persist_grant(
+    kind: &str,
+    caller: &str,
+    target: Option<&str>,
+    answered_by: Option<&str>,
+) {
+    // Phase 13 v2: Use group commit for batched fsync.
+    // The audit entry is recorded BEFORE the grant (write-ahead), and the
+    // batch fsyncs once for N concurrent grants instead of N times.
+    if let Err(e) = unpeel_core::grant_writer::persist_grant_grouped(kind, caller, target, answered_by) {
+        eprintln!("Failed to persist grant: {e}");
+    }
 }
 
 /// A remembered connector-tool grant, namespaced by connector.
@@ -221,31 +207,40 @@ pub fn persist_grant(kind: &str, caller: &str, target: Option<&str>) {
 /// (fail closed — the user is re-prompted once, then the namespaced grant
 /// is persisted).
 pub fn persist_connector_grant(caller: &str, connector: &str, tool: &str) {
-    let _ = unpeel_core::app_state::edit(|root| {
-        let map = root
-            .entry("mcp_connector_approvals")
-            .or_insert_with(|| serde_json::json!({}));
-        if let Some(list) = map
-            .as_object_mut()
-            .map(|m| {
-                m.entry(caller.to_string())
-                    .or_insert_with(|| serde_json::json!([]))
-            })
-            .and_then(|v| v.as_array_mut())
-        {
-            let entry = serde_json::json!({"connector": connector, "tool": tool});
-            if !list.iter().any(|v| v == &entry) {
-                list.push(entry);
-            }
-        }
-        Ok(())
-    });
+    // Phase 13 v2: route through the grouped writer so connector grants get
+    // a write-ahead audit entry and share the batch fsync like all grants.
+    // (answered_by is not threaded through the connector approval path;
+    // the audit records policy:Allow — see grant_writer for the default.)
+    if let Err(e) =
+        unpeel_core::grant_writer::persist_connector_grant_grouped(caller, connector, tool, None)
+    {
+        eprintln!("Failed to persist connector grant: {e}");
+    }
 }
 
 /// Fast-path check for a remembered connector-tool grant. Only an exact
 /// (connector, tool) object matches; legacy bare-string entries are
 /// ignored (fail closed).
 pub fn connector_grant_exists(caller: &str, connector: &str, tool: &str) -> bool {
+    // S2: Check sharded grants.json first
+    if let Ok(raw) = std::fs::read(unpeel_core::app_paths::grants_path()) {
+        if let Ok(state) = serde_json::from_slice::<serde_json::Value>(&raw) {
+            if state
+                .get("mcp_connector_approvals")
+                .and_then(|m| m.get(caller))
+                .and_then(|l| l.as_array())
+                .is_some_and(|l| {
+                    l.iter().any(|v| {
+                        v.get("connector").and_then(|c| c.as_str()) == Some(connector)
+                            && v.get("tool").and_then(|t| t.as_str()) == Some(tool)
+                    })
+                })
+            {
+                return true;
+            }
+        }
+    }
+    // Legacy: check app-state.json
     let Some(state) = std::fs::read(unpeel_core::app_paths::app_state_path())
         .ok()
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
@@ -266,6 +261,38 @@ pub fn connector_grant_exists(caller: &str, connector: &str, tool: &str) -> bool
 
 /// Fast-path check against previously persisted grants.
 pub fn already_granted(kind: &str, caller: &str, target: Option<&str>) -> bool {
+    // S2: Grant storage migration precedence.
+    //
+    // If grants.json exists, the system is in migrated state: read ONLY from
+    // grants.json. The migrate command moves grants from app-state.json to
+    // grants.json and deletes them from app-state.json.
+    //
+    // If grants.json does NOT exist, the system is in pre-migration state:
+    // read from app-state.json (legacy location).
+    //
+    // Both-present case: grants.json wins. This happens if migrate ran but
+    // app-state.json still has stale grant keys (shouldn't happen after
+    // successful migrate, but we define the precedence explicitly).
+    let key = match kind {
+        "write" => "mcp_write_approvals",
+        "browser" => "browser_approvals",
+        "computer" => "computer_approvals",
+        "app-open" => "mcp_app_open_approvals",
+        _ => return false,
+    };
+    
+    // Check if migrated (grants.json exists)
+    let grants_path = unpeel_core::app_paths::grants_path();
+    if grants_path.exists() {
+        // Migrated: read ONLY from grants.json
+        return unpeel_core::grant_store::grant_exists(key, caller, target);
+    }
+    
+    // Pre-migration: read from app-state.json (legacy)
+    if unpeel_core::grant_store::grant_exists(key, caller, target) {
+        return true;
+    }
+    // Legacy: check app-state.json
     let Some(state) = std::fs::read(unpeel_core::app_paths::app_state_path())
         .ok()
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
@@ -393,9 +420,10 @@ mod tests {
         assert!(!connector_grant_exists("sess-2", "github", "db.query"));
         // Persisting twice stores the grant once.
         persist_connector_grant("sess-1", "github", "db.query");
+        // S2: Grants are now sharded to grants.json, not app-state.json
         let state: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(unpeel_core::app_paths::app_state_path())
-                .expect("app-state.json written"),
+            &std::fs::read(unpeel_core::app_paths::grants_path())
+                .expect("grants.json written"),
         )
         .unwrap();
         let grants = state["mcp_connector_approvals"]["sess-1"]
@@ -443,6 +471,246 @@ mod tests {
         assert!(
             !connector_grant_exists("sess-1", "anything", "search"),
             "legacy bare-string grant must not satisfy any connector"
+        );
+    }
+
+    #[test]
+    fn eight_concurrent_approvals_all_visible_and_answerable() {
+        // Phase 13 v3 (A): N=8 concurrent pending approvals across sessions.
+        // Every one must be visible to the phone (via list_json, which backs
+        // bootstrap pendingApprovals), and each must be answerable
+        // independently and correctly. Answering one must not clear the
+        // others. IDs must not collide.
+        use std::collections::HashSet;
+        use std::sync::{Arc, Barrier};
+        use std::time::Duration;
+
+        let hub = Arc::new(ApprovalHub::default());
+        const N: usize = 8;
+        let barrier = Arc::new(Barrier::new(N));
+
+        // Spawn N threads, each requesting an approval for a distinct session.
+        let mut handles = vec![];
+        for i in 0..N {
+            let hub_clone = Arc::clone(&hub);
+            let barrier_clone = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                barrier_clone.wait(); // All start together.
+                let caller = format!("session-{i}");
+                let target = format!("session-{i}-target");
+                // Request with a short timeout; we will answer from the main
+                // thread. Use a long timeout so the request doesn't expire
+                // before we answer.
+                hub_clone.request(
+                    "write",
+                    format!("Allow {caller} to write?"),
+                    format!("{caller} -> {target}"),
+                    caller,
+                    Some(target),
+                    Duration::from_secs(30),
+                )
+            }));
+        }
+
+        // Wait for all approvals to be queued.
+        // Poll list_json until we see N, with timeout.
+        let start = std::time::Instant::now();
+        let mut list = vec![];
+        while start.elapsed() < Duration::from_secs(10) {
+            list = hub.list_json();
+            if list.len() == N {
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(
+            list.len(),
+            N,
+            "all {N} approvals must be visible in bootstrap; got {}",
+            list.len()
+        );
+
+        // Verify IDs are unique (no collision).
+        let ids: HashSet<String> = list
+            .iter()
+            .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+            .collect();
+        assert_eq!(
+            ids.len(),
+            N,
+            "approval IDs must not collide; got {} unique out of {N}",
+            ids.len()
+        );
+
+        // Verify each session's approval is present.
+        for i in 0..N {
+            let caller = format!("session-{i}");
+            let found = list.iter().any(|v| {
+                v.get("callerSessionID")
+                    .and_then(|c| c.as_str())
+                    .map(|c| c == caller)
+                    .unwrap_or(false)
+            });
+            assert!(found, "approval for {caller} must be visible");
+        }
+
+        // Answer them one by one, verifying each answer only removes its own.
+        for (idx, id) in ids.iter().enumerate() {
+            let before = hub.list_json().len();
+            let ok = hub.answer(id, true, Some("test-device".to_string()));
+            assert!(ok, "answering approval {id} must succeed");
+            let after = hub.list_json().len();
+            assert_eq!(
+                after,
+                before - 1,
+                "answering one approval must remove exactly one (not clear others); before={before}, after={after}"
+            );
+            // Verify the answered ID is gone, others remain.
+            let remaining_ids: HashSet<String> = hub
+                .list_json()
+                .iter()
+                .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                .collect();
+            assert!(
+                !remaining_ids.contains(id),
+                "answered ID {id} must be removed"
+            );
+            assert_eq!(
+                remaining_ids.len(),
+                N - idx - 1,
+                "exactly {} should remain after answering {}",
+                N - idx - 1,
+                idx + 1
+            );
+        }
+
+        // All request threads should now complete with approved=true.
+        for (i, h) in handles.into_iter().enumerate() {
+            let (approved, answered_by) = h.join().expect("request thread panicked");
+            assert!(
+                approved,
+                "session-{i} request must be approved (not hang, not deny)"
+            );
+            assert_eq!(
+                answered_by.as_deref(),
+                Some("test-device"),
+                "answered_by must be propagated"
+            );
+        }
+
+        // No pending approvals remain.
+        assert!(
+            hub.list_json().is_empty(),
+            "all approvals should be answered"
+        );
+    }
+
+    #[test]
+    fn failed_answer_keeps_approval_visible() {
+        // Phase 13 v3 (1): If answering fails (e.g. 429 rate limit at the
+        // HTTP layer), the approval must stay visible in bootstrap until it
+        // is successfully answered — never dropped silently.
+        // Here we simulate the HTTP-layer rejection by answering with an
+        // unknown ID (returns false, like a 429 would at the HTTP layer:
+        // the pending entry is untouched).
+        use std::time::Duration;
+
+        let hub = Arc::new(ApprovalHub::default());
+        let hub_clone = Arc::clone(&hub);
+        let handle = thread::spawn(move || {
+            hub_clone.request(
+                "write",
+                "Allow s1 to write?".to_string(),
+                "s1 -> t1".to_string(),
+                "s1".to_string(),
+                Some("t1".to_string()),
+                Duration::from_secs(30),
+            )
+        });
+
+        // Wait for the approval to appear.
+        let start = std::time::Instant::now();
+        let mut id = String::new();
+        while start.elapsed() < Duration::from_secs(10) {
+            let list = hub.list_json();
+            if let Some(v) = list.first() {
+                id = v
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if !id.is_empty() {
+                    break;
+                }
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!id.is_empty(), "approval must become visible");
+
+        // Simulate a failed answer (unknown ID ~ HTTP 429: entry untouched).
+        assert!(
+            !hub.answer("wrong-id", true, Some("test-device".to_string())),
+            "answering unknown ID must fail"
+        );
+        // The real approval must still be visible.
+        let list = hub.list_json();
+        assert_eq!(list.len(), 1, "failed answer must not drop the approval");
+        assert_eq!(
+            list[0].get("id").and_then(|v| v.as_str()),
+            Some(id.as_str()),
+            "the same approval must stay visible"
+        );
+
+        // Now answer correctly — it succeeds.
+        assert!(
+            hub.answer(&id, true, Some("test-device".to_string())),
+            "retry with correct ID must succeed"
+        );
+        assert!(
+            hub.list_json().is_empty(),
+            "answered approval is removed"
+        );
+
+        let (approved, _) = handle.join().expect("request thread panicked");
+        assert!(approved, "requester must see approval");
+    }
+
+    #[test]
+    fn generation_wakeup_fires_without_spin() {
+        // Phase 13 v3 (B2): wait_for_generation_change must return
+        // promptly when the generation advances, without polling.
+        use std::time::Duration;
+
+        let hub = Arc::new(ApprovalHub::default());
+        let gen0 = hub.generation();
+
+        // Spawn a thread that bumps generation after 100ms.
+        let hub_clone = Arc::clone(&hub);
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(100));
+            hub_clone.bump_generation();
+        });
+
+        let start = std::time::Instant::now();
+        let gen1 = hub.wait_for_generation_change(gen0, Duration::from_secs(5));
+        let elapsed = start.elapsed();
+        assert!(
+            gen1 > gen0,
+            "generation must advance (got {gen1}, was {gen0})"
+        );
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "wake-up must be prompt, not wait the full timeout (took {elapsed:?})"
+        );
+
+        // Timeout path: no bump, must return after ~timeout with same gen.
+        let start = std::time::Instant::now();
+        let gen2 = hub.wait_for_generation_change(gen1, Duration::from_millis(200));
+        let elapsed = start.elapsed();
+        assert_eq!(gen2, gen1, "no change → same generation");
+        assert!(
+            elapsed >= Duration::from_millis(150),
+            "must wait the timeout when nothing changes (took {elapsed:?})"
         );
     }
 }

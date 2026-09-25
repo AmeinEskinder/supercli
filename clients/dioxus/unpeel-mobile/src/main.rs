@@ -40,8 +40,9 @@ use unpeel_client::{
     connect_direct_classified, decode_pairing_code, delete_host_secrets, device_identity,
     load_host_secrets, load_paired_host_records, open_controller_store, pair,
     relay_credentials_for_host, remove_paired_host, save_paired_host_records, store_host_secrets,
-    upsert_paired_host, ArtifactMeta, CredentialStore, DirectFailure, HostClient, HostRegistry,
-    HostSecrets, PairedHostRecord, RelayConnection, RemoteDeviceIdentity, TransportKind,
+    upsert_paired_host, AnswerUiState, ArtifactMeta, CredentialStore, DirectFailure, HostClient,
+    HostRegistry, HostSecrets, PairedHostRecord, RelayConnection, RemoteDeviceIdentity,
+    TransportKind,
 };
 use unpeel_ui::{
     detect_scroll_shift, fit_grid, flatten_annotation_png, flatten_spec, launchable_presets,
@@ -146,6 +147,13 @@ struct HostView {
     /// Preset id currently launching (row shows the spinner, like Swift's
     /// `launchingPresetID`).
     launching_preset_id: Option<String>,
+    /// Per-approval answer progress, keyed by approval id. While an answer
+    /// is in flight — or the Host rate-limited it (429) and the client is
+    /// sleeping `Retry-After` before retrying — the approval card stays
+    /// mounted showing this state. Entries are cleared when the answer
+    /// lands (or fails terminally); a fresh bootstrap then reflects the
+    /// decision.
+    answer_states: HashMap<String, AnswerUiState>,
 }
 
 impl Default for HostView {
@@ -176,6 +184,7 @@ impl Default for HostView {
             archive_sheet: None,
             preset_drawer_open: false,
             launching_preset_id: None,
+            answer_states: HashMap::new(),
         }
     }
 }
@@ -1031,28 +1040,78 @@ fn refresh(mut state: SyncSignal<MobileState>) {
 
 /// Answer a pending approval, then re-bootstrap so the approval list and
 /// session states reflect the decision.
+///
+/// A 429 from the Host never drops the approval: `unpeel_client` sleeps
+/// for the Host's `Retry-After` and retries automatically, and the card
+/// shows the retry state until the answer lands.
 fn answer_approval(mut state: SyncSignal<MobileState>, approval_id: String, approved: bool) {
     let Some((host_id, client)) = active_client(&state) else {
         return;
     };
+    // Mark the card as sending; the approval stays visible until the Host
+    // confirms the answer.
+    state
+        .write()
+        .views
+        .entry(host_id.clone())
+        .or_default()
+        .answer_states
+        .insert(approval_id.clone(), AnswerUiState::Sending);
+    let mut state2 = state.clone();
+    let host_id2 = host_id.clone();
+    let approval_id2 = approval_id.clone();
     std::thread::spawn(
-        move || match client.answer_approval(&approval_id, approved) {
-            Ok(_) => match client.bootstrap() {
-                Ok(snap) => {
-                    state.write().hosts.set_snapshot(&host_id, snap);
+        move || {
+            let result =
+                client.answer_approval_with_progress(&approval_id, approved, |retry_in_secs| {
+                    state2
+                        .write()
+                        .views
+                        .entry(host_id2.clone())
+                        .or_default()
+                        .answer_states
+                        .insert(
+                            approval_id2.clone(),
+                            AnswerUiState::RateLimited { retry_in_secs },
+                        );
+                });
+            // The card state is done — a fresh bootstrap decides whether the
+            // approval is still listed. On terminal failure the card shows
+            // the failed state so the user can tap to retry.
+            match result {
+                Ok(_) => {
+                    state2
+                        .write()
+                        .views
+                        .entry(host_id2.clone())
+                        .or_default()
+                        .answer_states
+                        .remove(&approval_id2);
+                    match client.bootstrap() {
+                        Ok(snap) => {
+                            state2.write().hosts.set_snapshot(&host_id, snap);
+                        }
+                        Err(e) => {
+                            state2
+                                .write()
+                                .hosts
+                                .set_error(&host_id, format!("Approval failed: {e}"));
+                        }
+                    }
                 }
                 Err(e) => {
-                    state
+                    state2
+                        .write()
+                        .views
+                        .entry(host_id2.clone())
+                        .or_default()
+                        .answer_states
+                        .insert(approval_id2.clone(), AnswerUiState::Failed);
+                    state2
                         .write()
                         .hosts
                         .set_error(&host_id, format!("Approval failed: {e}"));
                 }
-            },
-            Err(e) => {
-                state
-                    .write()
-                    .hosts
-                    .set_error(&host_id, format!("Approval failed: {e}"));
             }
         },
     );
@@ -2523,6 +2582,12 @@ fn MobileApp() -> Element {
     // `tool.ambiguous`, and the lease events are consumed for future UI
     // surfacing (currently they only feed the turn state, keeping the
     // stream drained so the cursor advances).
+    // Event-driven session updates (S3): long-poll `GET /mobile/events`
+    // instead of polling on a timer. The Host blocks up to 25 s until
+    // `seq > after_seq`, so the radio stays quiet and new approvals /
+    // turn changes arrive promptly. A `tool.requested` event means a new
+    // pending approval — trigger a bootstrap refresh so it appears.
+    // On transport errors, fall back to a 2 s retry (plain polling).
     let event_turn_running: SyncSignal<std::collections::HashMap<String, bool>> =
         use_signal_sync(std::collections::HashMap::<String, bool>::new);
     {
@@ -2531,11 +2596,15 @@ fn MobileApp() -> Element {
         std::thread::spawn(move || {
             let mut cursors: std::collections::HashMap<String, u64> =
                 std::collections::HashMap::new();
+            // Consecutive transport failures; after a few, back off longer.
+            let mut failures: u32 = 0;
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(2000));
                 let (host_id, client) = match active_client(&state) {
                     Some(pair) => pair,
-                    None => continue,
+                    None => {
+                        std::thread::sleep(std::time::Duration::from_millis(2000));
+                        continue;
+                    }
                 };
                 let session_id = {
                     let s = state.read();
@@ -2545,12 +2614,25 @@ fn MobileApp() -> Element {
                         .unwrap_or_default()
                 };
                 if session_id.is_empty() {
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
                     continue;
                 }
                 let after_seq = cursors.get(&session_id).copied().unwrap_or(0);
-                let response = match client.events(&session_id, after_seq, 128) {
-                    Ok(r) => r,
-                    Err(_) => continue,
+                // Long-poll: block up to 25 s for new events.
+                let response = match client.events(&session_id, after_seq, 128, 25_000) {
+                    Ok(r) => {
+                        failures = 0;
+                        r
+                    }
+                    Err(_) => {
+                        // Fallback: plain polling with backoff.
+                        failures = failures.saturating_add(1);
+                        let backoff = std::time::Duration::from_millis(
+                            (2000 * failures.min(5) as u64).min(10_000),
+                        );
+                        std::thread::sleep(backoff);
+                        continue;
+                    }
                 };
                 if response.resync {
                     cursors.insert(session_id.clone(), 0);
@@ -2558,6 +2640,7 @@ fn MobileApp() -> Element {
                     continue;
                 }
                 cursors.insert(session_id.clone(), response.next_seq);
+                let mut new_approval = false;
                 for event in &response.events {
                     use unpeel_client::events::SessionEventWire;
                     match event {
@@ -2568,8 +2651,16 @@ fn MobileApp() -> Element {
                         | SessionEventWire::TurnCancelled { .. } => {
                             event_turn_running.write().insert(session_id.clone(), false);
                         }
+                        SessionEventWire::ToolRequested { .. } => {
+                            new_approval = true;
+                        }
                         _ => {}
                     }
+                }
+                // A new approval request arrived: refresh the snapshot so
+                // the pending approval appears without manual refresh.
+                if new_approval {
+                    refresh(state);
                 }
             }
         });
@@ -2936,10 +3027,12 @@ fn MobileApp() -> Element {
                 for a in approvals {
                     {
                         let id = a.id.clone();
+                        let answer_state = view.answer_states.get(&id).copied();
                         rsx! {
                             ApprovalCard {
                                 key: "{id}",
                                 approval: a,
+                                answer_state: answer_state,
                                 on_answer: move |approved| answer_approval(state, id.clone(), approved),
                             }
                         }

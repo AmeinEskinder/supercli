@@ -129,6 +129,50 @@ impl std::fmt::Display for DirectFailure {
 
 impl std::error::Error for DirectFailure {}
 
+/// How many HTTP attempts [`HostClient::answer_approval`] needed, and how
+/// many of them were 429 rate-limit retries. A 429 never records the
+/// answer, so every retry is safe: nothing is acked until a non-429
+/// response arrives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnswerReport {
+    /// Total `POST /mobile/approvals/answer` attempts, including retries.
+    pub attempts: u32,
+    /// How many attempts hit a 429 and were retried after `Retry-After`.
+    pub rate_limited_retries: u32,
+}
+
+/// UI-facing answer state for an approval card. The card stays mounted —
+/// the approval stays visible — through every one of these states; it is
+/// removed only when a fresh bootstrap no longer lists the approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnswerUiState {
+    /// The answer POST is in flight.
+    Sending,
+    /// The Host returned 429; the client is sleeping `retry_in_secs`
+    /// seconds (from the Host's `Retry-After`) before retrying. The
+    /// approval remains visible and the card keeps its Approve/Deny
+    /// affordances disabled until the answer lands.
+    RateLimited { retry_in_secs: u64 },
+    /// The answer failed terminally (not a 429 — e.g. 500, network drop).
+    /// The approval is still visible; the user may try again.
+    Failed,
+}
+
+/// Maximum `POST /mobile/approvals/answer` attempts before giving up on a
+/// 429 storm. Other statuses never retry.
+const ANSWER_MAX_ATTEMPTS: u32 = 10;
+
+/// Parse a `Retry-After` header value (delta-seconds) into a [`Duration`],
+/// clamped to [0, 60] seconds. HTTP-date values and garbage fall back to
+/// 1 second — the answer is retried, never dropped.
+fn parse_retry_after(value: &str) -> Duration {
+    value
+        .trim()
+        .parse::<u64>()
+        .map(|secs| Duration::from_secs(secs.min(60)))
+        .unwrap_or(Duration::from_secs(1))
+}
+
 impl DirectFailure {
     /// Whether the relay fallback may be attempted for this failure.
     /// True only for classified reachability failures.
@@ -231,6 +275,21 @@ pub(crate) trait DirectTransport: Send + Sync {
         auth: &str,
         body: Option<(&str, &[u8])>,
     ) -> Result<(u16, String), HostClientError>;
+
+    /// Same as [`roundtrip`], but also returns the response headers as
+    /// (lowercased-name, value) pairs. The default implementation discards
+    /// headers; transports that parse them anyway should override so
+    /// callers can honor `Retry-After` on a 429.
+    fn roundtrip_with_headers(
+        &self,
+        method: &str,
+        url: &str,
+        auth: &str,
+        body: Option<(&str, &[u8])>,
+    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+        let (status, text) = self.roundtrip(method, url, auth, body)?;
+        Ok((status, Vec::new(), text))
+    }
 }
 
 /// Which path a [`HostClient`] talks to its Host over: see [`crate::types::TransportKind`].
@@ -396,7 +455,9 @@ impl HostClient {
     /// `GET /mobile/events` — poll the typed session-event stream (Phase 6 R4).
     ///
     /// `after_seq` is the cursor from the previous poll (0 = everything
-    /// buffered); `limit` is clamped by the Host to 1024. Returns the raw
+    /// buffered); `limit` is clamped by the Host to 1024; `wait_ms` (0 =
+    /// return immediately, up to 25000 = long-poll until `seq > after_seq`
+    /// or the timeout elapses). Returns the raw
     /// [`crate::events::EventsResponse`]; use [`crate::events::ClientEventCursor`]
     /// to track per-session cursors across polls.
     pub fn events(
@@ -404,12 +465,13 @@ impl HostClient {
         session_id: &str,
         after_seq: u64,
         limit: u64,
+        wait_ms: u64,
     ) -> Result<crate::events::EventsResponse, HostClientError> {
         // Query params are part of the path for this simple GET helper;
         // session ids are validated by the Host (`safe_session_id`).
         let path = format!(
-            "/events?session_id={}&after_seq={}&limit={}",
-            session_id, after_seq, limit
+            "/events?session_id={}&after_seq={}&limit={}&wait_ms={}",
+            session_id, after_seq, limit, wait_ms
         );
         let text = self.get_text(&path)?;
         serde_json::from_str(&text).map_err(|e| HostClientError::Decode(e.to_string()))
@@ -652,15 +714,76 @@ impl HostClient {
     }
 
     /// `POST /mobile/approvals/answer` — answer a pending approval.
+    ///
+    /// A 429 from the Host is NOT an answer failure: the request was never
+    /// recorded, so the call sleeps for the `Retry-After` seconds the Host
+    /// sent and retries automatically. The approval stays visible in the UI
+    /// until an answer is actually recorded — it is never silently dropped.
+    /// Any other non-2xx (including 500) surfaces immediately after exactly
+    /// one attempt: retrying those could double-execute the action.
     pub fn answer_approval(
         &self,
         approval_id: &str,
         approved: bool,
     ) -> Result<serde_json::Value, HostClientError> {
-        self.post_json(
-            "/approvals/answer",
-            serde_json::json!({"id": approval_id, "approved": approved}),
-        )
+        let (value, _) = self.answer_approval_with_progress(approval_id, approved, |_| {})?;
+        Ok(value)
+    }
+
+    /// Like [`HostClient::answer_approval`], but calls `on_rate_limited`
+    /// with the `Retry-After` seconds every time the Host rate-limits the
+    /// answer, and returns an [`AnswerReport`] alongside the answer so the
+    /// UI can surface "rate limited — retrying" state on the approval card
+    /// while the approval stays visible.
+    pub fn answer_approval_with_progress(
+        &self,
+        approval_id: &str,
+        approved: bool,
+        mut on_rate_limited: impl FnMut(u64),
+    ) -> Result<(serde_json::Value, AnswerReport), HostClientError> {
+        let url = format!("{}{}", self.base_url, "/approvals/answer");
+        let auth = format!("Bearer {}", self.token);
+        let body_bytes = serde_json::to_vec(&serde_json::json!({
+            "id": approval_id,
+            "approved": approved,
+        }))
+        .map_err(|e| HostClientError::Decode(e.to_string()))?;
+
+        let mut rate_limited_retries = 0u32;
+        for attempt in 1..=ANSWER_MAX_ATTEMPTS {
+            let (status, headers, text) = self.transport.roundtrip_with_headers(
+                "POST",
+                &url,
+                &auth,
+                Some(("application/json", &body_bytes)),
+            )?;
+            if status == 429 {
+                rate_limited_retries += 1;
+                let wait = headers
+                    .iter()
+                    .find(|(name, _)| name == "retry-after")
+                    .map(|(_, value)| parse_retry_after(value))
+                    .unwrap_or_else(|| Duration::from_secs(1));
+                on_rate_limited(wait.as_secs());
+                std::thread::sleep(wait);
+                continue;
+            }
+            if !(200..300).contains(&status) {
+                return Err(HostClientError::Status(status, text));
+            }
+            let value: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| HostClientError::Decode(e.to_string()))?;
+            return Ok((
+                value,
+                AnswerReport {
+                    attempts: attempt,
+                    rate_limited_retries,
+                },
+            ));
+        }
+        Err(HostClientError::Transport(format!(
+            "answer rate-limited {ANSWER_MAX_ATTEMPTS} times in a row; approval kept visible"
+        )))
     }
 
     /// `POST /mobile/mark-read` — clear a session's unread flag.
@@ -993,6 +1116,17 @@ impl DirectTransport for UreqTransport {
         auth: &str,
         body: Option<(&str, &[u8])>,
     ) -> Result<(u16, String), HostClientError> {
+        let (status, _, text) = self.roundtrip_with_headers(method, url, auth, body)?;
+        Ok((status, text))
+    }
+
+    fn roundtrip_with_headers(
+        &self,
+        method: &str,
+        url: &str,
+        auth: &str,
+        body: Option<(&str, &[u8])>,
+    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
         let mut response = if method == "GET" {
             self.agent
                 .get(url)
@@ -1014,11 +1148,21 @@ impl DirectTransport for UreqTransport {
             )));
         };
         let status = response.status().as_u16();
+        let headers: Vec<(String, String)> = response
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_lowercase(),
+                    value.to_str().unwrap_or("").to_string(),
+                )
+            })
+            .collect();
         let text = response
             .body_mut()
             .read_to_string()
             .map_err(|e| HostClientError::Decode(e.to_string()))?;
-        Ok((status, text))
+        Ok((status, headers, text))
     }
 }
 
@@ -1040,6 +1184,17 @@ impl DirectTransport for PinnedHttpsTransport {
         auth: &str,
         body: Option<(&str, &[u8])>,
     ) -> Result<(u16, String), HostClientError> {
+        let (status, _, text) = self.roundtrip_with_headers(method, url, auth, body)?;
+        Ok((status, text))
+    }
+
+    fn roundtrip_with_headers(
+        &self,
+        method: &str,
+        url: &str,
+        auth: &str,
+        body: Option<(&str, &[u8])>,
+    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
         let (host, port, path) = parse_https_url(url)?;
         let server_name = ServerName::try_from(host.clone())
             .map(|name| name.to_owned())
@@ -1093,10 +1248,13 @@ impl DirectTransport for PinnedHttpsTransport {
         // The pinning decision already happened in the explicit handshake
         // above; a failure there is HostClientError::Tls, never Transport,
         // so the relay fallback policy can't mistake it for reachability.
-        let _ = headers;
+        let headers: Vec<(String, String)> = headers
+            .into_iter()
+            .map(|(name, value)| (name.to_lowercase(), value))
+            .collect();
         let text =
             String::from_utf8(body_bytes).map_err(|e| HostClientError::Decode(e.to_string()))?;
-        Ok((status, text))
+        Ok((status, headers, text))
     }
 }
 
@@ -1399,6 +1557,95 @@ mod tests {
             transport.attempts.load(Ordering::SeqCst),
             1,
             "a 500 must produce exactly one attempt — never auto-retried"
+        );
+    }
+
+    /// A 429 on `POST /mobile/approvals/answer` is retried after the
+    /// `Retry-After` the Host sent — it is never an answer failure and the
+    /// approval stays visible until the answer is recorded.
+    #[test]
+    fn approval_answer_429_retries_after_retry_after_then_succeeds() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Mutex;
+
+        struct RateLimitedThenOkTransport {
+            attempts: AtomicUsize,
+            retry_afters_seen: Mutex<Vec<String>>,
+        }
+        impl DirectTransport for RateLimitedThenOkTransport {
+            fn roundtrip(
+                &self,
+                _method: &str,
+                _url: &str,
+                _auth: &str,
+                _body: Option<(&str, &[u8])>,
+            ) -> Result<(u16, String), HostClientError> {
+                let (status, headers, text) =
+                    self.roundtrip_with_headers(_method, _url, _auth, _body)?;
+                let _ = headers;
+                Ok((status, text))
+            }
+
+            fn roundtrip_with_headers(
+                &self,
+                _method: &str,
+                _url: &str,
+                _auth: &str,
+                _body: Option<(&str, &[u8])>,
+            ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+                let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
+                if attempt == 0 {
+                    // First attempt: rate-limited. The Host was never told.
+                    Ok((
+                        429,
+                        vec![("retry-after".to_string(), "0".to_string())],
+                        r#"{"error":"rate limited"}"#.to_string(),
+                    ))
+                } else {
+                    Ok((200, vec![], r#"{"ok":true}"#.to_string()))
+                }
+            }
+        }
+
+        let transport = Arc::new(RateLimitedThenOkTransport {
+            attempts: AtomicUsize::new(0),
+            retry_afters_seen: Mutex::new(Vec::new()),
+        });
+        let client = HostClient {
+            transport: transport.clone(),
+            base_url: "http://192.168.1.10:8321/mobile".to_string(),
+            token: "test-token".to_string(),
+            kind: TransportKind::Direct,
+        };
+
+        let mut callbacks = 0u32;
+        let (value, report) = client
+            .answer_approval_with_progress("approval-1", true, |retry_in_secs| {
+                callbacks += 1;
+                transport
+                    .retry_afters_seen
+                    .lock()
+                    .unwrap()
+                    .push(retry_in_secs.to_string());
+            })
+            .expect("a 429 must be retried, not surfaced as a failure");
+
+        assert_eq!(value, serde_json::json!({"ok": true}));
+        assert_eq!(report.attempts, 2, "one 429 + one success");
+        assert_eq!(
+            report.rate_limited_retries, 1,
+            "the 429 must be counted as a rate-limited retry"
+        );
+        assert_eq!(callbacks, 1, "the UI must be told about the 429 once");
+        assert_eq!(
+            transport.retry_afters_seen.lock().unwrap().as_slice(),
+            &["0"],
+            "the Retry-After value the Host sent must reach the UI"
+        );
+        assert_eq!(
+            transport.attempts.load(Ordering::SeqCst),
+            2,
+            "the answer is retried until it is recorded — never dropped"
         );
     }
 }
