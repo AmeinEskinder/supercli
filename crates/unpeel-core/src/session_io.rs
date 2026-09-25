@@ -1340,69 +1340,119 @@ pub(crate) fn dispatch_client_command(
                     ok: false,
                     error: Some(error.to_string()),
                     viewport: None,
+                    outcome_unknown: false,
                 },
                 Ok(write_id) => {
-                    // Serialize idempotency check → PTY write → history
-                    // commit. A failed write is deliberately not recorded, so
-                    // an HTTP retry can still deliver it; a racing retry waits
-                    // on this same lock and observes the committed id after
+                    // Serialize idempotency check → write-ahead record → PTY
+                    // write → history commit under one runtime lock. The
+                    // durable `delivering` record (fsync) precedes the PTY
+                    // write: a crash between delivery and `record_applied`
+                    // leaves `delivering` without `applied`, so the retry
+                    // resolves as OutcomeUnknown instead of re-delivering.
+                    // A failed write is deliberately not recorded, so a
+                    // retry can still deliver it; a racing retry waits on
+                    // this same lock and observes the committed id after
                     // the first successful write.
-                    let applied = {
+                    use super::write_deliveries::DeliveryCheck;
+                    let sdir = super::session_dir(session_id);
+                    enum WriteOutcome {
+                        Applied,
+                        Duplicate,
+                        Unknown,
+                    }
+                    let outcome = {
                         let _restart_guard = agent_restart_lock
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner());
                         let mut guard = runtime.lock().unwrap_or_else(|e| e.into_inner());
-                        if write_id.is_some_and(|id| guard.recent_write_ids.contains(id)) {
-                            false
-                        } else {
-                            let mut remaining = data.as_bytes();
-                            let menu_active = remaining.contains(&0x1b)
-                                && viewport_has_menu_prompt(
-                                    &shared
-                                        .viewport
-                                        .lock()
-                                        .unwrap_or_else(|e| e.into_inner())
-                                        .current_screen_text(),
-                                );
-                            while !remaining.is_empty() {
-                                let written = match guard.writer.write(remaining) {
-                                    Ok(0) => return Err("PTY input write returned zero".into()),
-                                    Ok(written) => written,
-                                    Err(error) if error.kind() == ErrorKind::Interrupted => {
-                                        continue
-                                    }
-                                    Err(error) => return Err(format!("Write error: {error}")),
-                                };
-                                guard.hook_input.feed(
-                                    &remaining[..written],
-                                    shared.runtime_generation.load(Ordering::Acquire),
-                                    current_timestamp_ms(),
-                                    menu_active,
-                                );
-                                remaining = &remaining[written..];
+                        let check = match write_id {
+                            Some(id) => super::write_deliveries::check_write_delivery(
+                                &mut guard.recent_write_ids,
+                                &sdir,
+                                id,
+                            )
+                            .map_err(|e| format!("write delivery log: {e}"))?,
+                            None => DeliveryCheck::Proceed,
+                        };
+                        match check {
+                            DeliveryCheck::AlreadyApplied => WriteOutcome::Duplicate,
+                            DeliveryCheck::OutcomeUnknown => WriteOutcome::Unknown,
+                            DeliveryCheck::Proceed => {
+                                let mut remaining = data.as_bytes();
+                                let menu_active = remaining.contains(&0x1b)
+                                    && viewport_has_menu_prompt(
+                                        &shared
+                                            .viewport
+                                            .lock()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .current_screen_text(),
+                                    );
+                                while !remaining.is_empty() {
+                                    let written = match guard.writer.write(remaining) {
+                                        Ok(0) => {
+                                            return Err("PTY input write returned zero".into())
+                                        }
+                                        Ok(written) => written,
+                                        Err(error)
+                                            if error.kind() == ErrorKind::Interrupted =>
+                                        {
+                                            continue
+                                        }
+                                        Err(error) => {
+                                            return Err(format!("Write error: {error}"))
+                                        }
+                                    };
+                                    guard.hook_input.feed(
+                                        &remaining[..written],
+                                        shared.runtime_generation.load(Ordering::Acquire),
+                                        current_timestamp_ms(),
+                                        menu_active,
+                                    );
+                                    remaining = &remaining[written..];
+                                }
+                                if let Some(id) = write_id {
+                                    super::write_deliveries::commit_write_applied(
+                                        &mut guard.recent_write_ids,
+                                        &sdir,
+                                        id,
+                                    )
+                                    .map_err(|e| format!("write delivery log: {e}"))?;
+                                }
+                                WriteOutcome::Applied
                             }
-                            if let Some(write_id) = write_id {
-                                guard.recent_write_ids.record_applied(write_id);
-                            }
-                            true
                         }
                     };
-                    if applied {
-                        mark_input_written(session_id, &shared.has_been_written_to);
-                        // Auto-title from the first submitted prompt for
-                        // clients that write straight to the control socket
-                        // (native attach, MCP).
-                        maybe_auto_title_from_input(
-                            session_id,
-                            data.as_bytes(),
-                            &shared.title_buffer,
-                            &shared.title_done,
-                        );
-                    }
-                    SessionHostResponse {
-                        ok: true,
-                        error: None,
-                        viewport: None,
+                    match outcome {
+                        WriteOutcome::Unknown => SessionHostResponse {
+                            ok: false,
+                            error: Some(
+                                "write may have been delivered before a crash; \
+                                 needs review, will not retry"
+                                    .to_string(),
+                            ),
+                            viewport: None,
+                            outcome_unknown: true,
+                        },
+                        WriteOutcome::Duplicate | WriteOutcome::Applied => {
+                            if matches!(outcome, WriteOutcome::Applied) {
+                                mark_input_written(session_id, &shared.has_been_written_to);
+                                // Auto-title from the first submitted prompt for
+                                // clients that write straight to the control socket
+                                // (native attach, MCP).
+                                maybe_auto_title_from_input(
+                                    session_id,
+                                    data.as_bytes(),
+                                    &shared.title_buffer,
+                                    &shared.title_done,
+                                );
+                            }
+                            SessionHostResponse {
+                                ok: true,
+                                error: None,
+                                viewport: None,
+                                outcome_unknown: false,
+                            }
+                        }
                     }
                 }
             }
@@ -1445,12 +1495,14 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: None,
+                    outcome_unknown: false,
             }
         }
         SessionHostCommand::Ping => SessionHostResponse {
             ok: true,
             error: None,
             viewport: None,
+                    outcome_unknown: false,
         },
         SessionHostCommand::RestartAgent {
             expected_generation,
@@ -1487,11 +1539,13 @@ pub(crate) fn dispatch_client_command(
                     ok: true,
                     error: None,
                     viewport: None,
+                    outcome_unknown: false,
                 },
                 Err(error) => SessionHostResponse {
                     ok: false,
                     error: Some(error),
                     viewport: None,
+                    outcome_unknown: false,
                 },
             }
         }
@@ -1516,6 +1570,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: Some(snapshot),
+                    outcome_unknown: false,
             }
         }
         SessionHostCommand::StreamOutput { .. } | SessionHostCommand::StreamInput => {
@@ -1544,6 +1599,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: None,
+                    outcome_unknown: false,
             }
         }
     };

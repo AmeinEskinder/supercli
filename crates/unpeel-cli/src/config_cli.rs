@@ -11,6 +11,7 @@ pub const CONFIG_HELP: &str = "\
 unpeel config — inspect the workspace configuration
 
   unpeel config check [--json]   validate settings in app-state.json
+  unpeel config reference        print the schema-generated config reference (Markdown)
 
 Unknown keys print as warnings; invalid values print as errors and exit 2.\
 ";
@@ -26,6 +27,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
     let mut rest = args.iter().peekable();
     match rest.next().map(String::as_str) {
         Some("check") => {}
+        Some("reference") => return print_reference(),
         Some("--help") | Some("-h") | Some("help") | None => {
             println!("{CONFIG_HELP}");
             return 0;
@@ -87,6 +89,39 @@ fn check_loaded(doc: &Result<serde_json::Value, String>, json: bool) -> i32 {
     } else {
         2
     }
+}
+
+/// Print the config reference as Markdown, generated from the P3 schema
+/// (`unpeel_core::config::SETTINGS`). Used by the mdBook docs build; not
+/// handwritten.
+fn print_reference() -> i32 {
+    use unpeel_core::config::{SettingType, SETTINGS};
+    println!("# Config reference");
+    println!();
+    println!("Generated from the typed config schema (`unpeel config reference`).");
+    println!("Every setting has a documented default applied by its reader;");
+    println!("missing keys are never an issue. Unknown keys produce warnings;");
+    println!("invalid values produce errors (exit 2 from `unpeel config check`).");
+    println!();
+    for def in SETTINGS {
+        let ty_desc = match def.ty {
+            SettingType::Bool => "boolean".to_string(),
+            SettingType::Enum(vals) => format!("string, one of: {}", vals.join(", ")),
+            SettingType::U64Enum(vals) => format!(
+                "integer, one of: {}",
+                vals.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+        println!("## `{}`", def.path);
+        println!();
+        println!("- **Type:** {ty_desc}");
+        println!("- **Allowed:** {}", def.allowed);
+        println!();
+    }
+    0
 }
 
 #[cfg(test)]

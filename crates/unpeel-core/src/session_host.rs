@@ -27,6 +27,9 @@ pub(crate) mod fd_pass;
 #[cfg(unix)]
 #[path = "session_io.rs"]
 pub(crate) mod session_io;
+#[cfg(unix)]
+#[path = "write_deliveries.rs"]
+pub(crate) mod write_deliveries;
 
 pub const SESSION_HOST_ARG: &str = "__session_host__";
 pub const COMPACT_OUTPUT_JOURNALS_ARG: &str = "__compact_output_journals__";
@@ -653,12 +656,22 @@ pub enum SessionHostCommand {
     Kill,
 }
 
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionHostResponse {
     pub ok: bool,
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewport: Option<TerminalViewportSnapshot>,
+    /// Set on a Write reply when the write_id has a durable `delivering`
+    /// record with no matching `applied`: the bytes may or may not have
+    /// reached the PTY (crash between delivery and commit). The caller must
+    /// NOT retry; surface for human review instead.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub outcome_unknown: bool,
 }
 
 /// Header line of a [`SessionHostCommand::Snapshot`] reply; the VT bytes
@@ -3448,13 +3461,13 @@ fn validate_write_id(write_id: Option<&str>) -> Result<Option<&str>, &'static st
 }
 
 #[derive(Default)]
-struct RecentWriteIds {
+pub(crate) struct RecentWriteIds {
     order: VecDeque<String>,
     seen: HashSet<String>,
 }
 
 impl RecentWriteIds {
-    fn contains(&self, write_id: &str) -> bool {
+    pub(crate) fn contains(&self, write_id: &str) -> bool {
         self.seen.contains(write_id)
     }
 
@@ -3462,7 +3475,12 @@ impl RecentWriteIds {
     /// `HostRuntime` lets the caller serialize check → write → record under
     /// the same runtime lock; a failed first delivery therefore remains
     /// retryable, and two racing transports cannot both apply the bytes.
-    fn record_applied(&mut self, write_id: &str) {
+    ///
+    /// Crash-safety note: this set is in-memory only. The durable half of
+    /// idempotency is `write_deliveries`: a write-ahead `delivering` record
+    /// (fsync) precedes the PTY write, so a crash between delivery and this
+    /// call resolves on retry as OutcomeUnknown, never as a re-delivery.
+    pub(crate) fn record_applied(&mut self, write_id: &str) {
         if !self.seen.insert(write_id.to_string()) {
             return;
         }

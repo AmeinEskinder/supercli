@@ -1,6 +1,23 @@
 # Changelog
 
-All notable changes to Unpeel (Track B + Phase 9) are documented here.
+All notable changes to Unpeel (Track B + Phases 9–12) are documented here.
+
+## [0.9.0] — 2026-09-25
+
+### Phase 11 — Accessibility, backup/restore, config, supply chain, init, poison audit
+
+**Added:**
+- Dioxus UI accessibility pass: keyboard-only approve/deny/cancel/composer, visible focus + sane focus order, ARIA roles/labels, contrast ≥ 4.5:1, `prefers-reduced-motion`. Playwright 17/17, axe 0 serious/critical violations.
+- `unpeel backup` / `unpeel restore`: consistent snapshot (LogLock + SQLite online-backup), SHA-256 manifest tar archive; restore verifies manifest + hash chain, refuses while Host runs.
+- Typed config schema + `unpeel config check` (unknown key → warning, bad value → error with path + reason, exit 2); Host refuses invalid config at startup.
+- Supply chain: `cargo-deny` + `cargo-audit` (exceptions documented), CI job.
+- `unpeel init`: first-run UX creating `~/.unpeel` with 0700, default valid config, pairing code/QR, ends with doctor. Fresh-HOME e2e 16/16.
+- Poison-recovery audit: 27 `into_inner` conversions reviewed, table in `docs/security/poison-recovery-audit.md`.
+
+### Phase 12 Q1 — Write-ahead delivery log (duplicate-write window closed)
+
+**Fixed:**
+- The P6 finding at `session_io.rs`: a crash/OOM/panic between PTY delivery and `record_applied` could duplicate a write on retry. Now a write-ahead `delivering` record (fsync) precedes the PTY write; the retry resolves as OutcomeUnknown (surface for review, never re-deliver). New per-session `write-deliveries.jsonl`, fault-injection hook, 3 new tests.
 
 ## [0.8.0] — 2026-09-25
 
