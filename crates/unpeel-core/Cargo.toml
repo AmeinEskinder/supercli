@@ -39,6 +39,7 @@ native-host = [
     "dep:webpki-roots",
     "dep:unpeel-connector",
     "dep:rusqlite",
+    "dep:tar",
 ]
 
 [dependencies]
@@ -61,8 +62,9 @@ webpki-roots = { version = "0.26", optional = true }
 sha2 = { version = "0.10", optional = true }
 md5 = { version = "0.7", optional = true }
 semver = { version = "1", optional = true }
-unpeel-connector = { path = "../unpeel-connector", optional = true }
-rusqlite = { version = "0.37", optional = true, features = ["bundled"] }
+unpeel-connector = { version = "0.8.0", path = "../unpeel-connector", optional = true }
+rusqlite = { version = "0.37", optional = true, features = ["bundled", "backup"] }
+tar = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

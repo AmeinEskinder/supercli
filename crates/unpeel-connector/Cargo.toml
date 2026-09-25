@@ -7,7 +7,7 @@ license.workspace = true
 description = "Connector (plugin) runtime for the Unpeel harness host: manifest loading, discovery, approval policy, and MCP process management"
 
 [dependencies]
-unpeel-client = { path = "../unpeel-client" }
+unpeel-client = { version = "0.8.0", path = "../unpeel-client" }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
