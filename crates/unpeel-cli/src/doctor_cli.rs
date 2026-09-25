@@ -39,6 +39,22 @@ pub fn run_checks() -> (PathBuf, Vec<(&'static str, bool, String)>) {
 
 pub fn run(args: &[String]) -> i32 {
     let json = args.iter().any(|a| a == "--json");
+    let bundle_idx = args.iter().position(|a| a == "--bundle");
+    if let Some(idx) = bundle_idx {
+        let output = args.get(idx + 1).map(|s| s.as_str()).unwrap_or("unpeel-doctor-bundle.tar.gz");
+        let output_path = std::path::PathBuf::from(output);
+        let (home, _) = run_checks();
+        match build_bundle(&home, &output_path) {
+            Ok(()) => {
+                println!("bundle written to {}", output_path.display());
+                return 0;
+            }
+            Err(e) => {
+                eprintln!("bundle failed: {e}");
+                return 1;
+            }
+        }
+    }
     let (home, checks) = run_checks();
 
     let passed = checks.iter().filter(|(_, ok, _)| *ok).count();
@@ -235,6 +251,260 @@ fn check_clock_skew(home: &PathBuf) -> (&'static str, bool, String) {
     }
 
     ("clock-skew", true, "no significant skew".to_string())
+}
+
+/// Keys whose values are secrets. Matched case-insensitively against the
+/// final path segment. Values for these keys are replaced with
+/// "[REDACTED]" in the bundle.
+const SECRET_KEYS: &[&str] = &[
+    "token",
+    "secret",
+    "password",
+    "api_key",
+    "apikey",
+    "private_key",
+    "privatekey",
+    "seed",
+    "mnemonic",
+    "pairing_code",
+    "pairing_secret",
+];
+
+fn is_secret_key(key: &str) -> bool {
+    let lower = key.to_lowercase();
+    SECRET_KEYS.iter().any(|s| lower.contains(s))
+}
+
+/// Recursively redact secret values from a JSON document.
+fn redact_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                if is_secret_key(k) {
+                    *v = serde_json::Value::String("[REDACTED]".to_string());
+                } else {
+                    redact_value(v);
+                }
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                redact_value(v);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Build the diagnostics bundle. Returns the path to the created archive.
+fn build_bundle(home: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
+    let staging = std::env::temp_dir().join(format!(
+        "unpeel-bundle-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging)
+        .map_err(|e| format!("create staging dir: {e}"))?;
+
+    // versions.json
+    let versions = serde_json::json!({
+        "unpeel": env!("CARGO_PKG_VERSION"),
+        "rustc": rustc_version(),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    });
+    std::fs::write(
+        staging.join("versions.json"),
+        serde_json::to_string_pretty(&versions).unwrap(),
+    )
+    .map_err(|e| format!("write versions.json: {e}"))?;
+
+    // config.redacted.json
+    let state_path = home.join("app-state.json");
+    let mut config = if state_path.exists() {
+        serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(&state_path)
+                .map_err(|e| format!("read app-state.json: {e}"))?,
+        )
+        .map_err(|e| format!("parse app-state.json: {e}"))?
+    } else {
+        serde_json::json!({})
+    };
+    redact_value(&mut config);
+    std::fs::write(
+        staging.join("config.redacted.json"),
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .map_err(|e| format!("write config.redacted.json: {e}"))?;
+
+    // doctor.json
+    let (_, checks) = run_checks();
+    let passed = checks.iter().filter(|(_, ok, _)| *ok).count();
+    let doctor_report = serde_json::json!({
+        "passed": passed,
+        "failed": checks.len() - passed,
+        "checks": checks
+            .iter()
+            .map(|(name, ok, detail)| {
+                serde_json::json!({"name": name, "ok": ok, "detail": detail})
+            })
+            .collect::<Vec<_>>(),
+    });
+    std::fs::write(
+        staging.join("doctor.json"),
+        serde_json::to_string_pretty(&doctor_report).unwrap(),
+    )
+    .map_err(|e| format!("write doctor.json: {e}"))?;
+
+    // stats.json: lease/chain statistics (no payload contents)
+    let stats = collect_stats(home)?;
+    std::fs::write(
+        staging.join("stats.json"),
+        serde_json::to_string_pretty(&stats).unwrap(),
+    )
+    .map_err(|e| format!("write stats.json: {e}"))?;
+
+    // logs.jsonl: recent JSON log lines, redacted
+    collect_logs(home, &staging.join("logs.jsonl"))?;
+
+    // Create the tar.gz archive
+    create_tar_gz(&staging, output)?;
+
+    let _ = std::fs::remove_dir_all(&staging);
+    Ok(())
+}
+
+fn rustc_version() -> String {
+    std::process::Command::new("rustc")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_else(|| "unknown".to_string())
+        .trim()
+        .to_string()
+}
+
+fn collect_stats(home: &std::path::Path) -> Result<serde_json::Value, String> {
+    let mut sessions = 0;
+    let mut total_reviews = 0;
+    let mut chains_ok = 0;
+    let mut chains_failed = 0;
+
+    let sessions_dir = home.join("app-sessions");
+    if sessions_dir.exists() {
+        for entry in std::fs::read_dir(&sessions_dir)
+            .map_err(|e| format!("read app-sessions: {e}"))?
+        {
+            let entry = entry.map_err(|e| format!("read dir entry: {e}"))?;
+            if !entry.file_type().map_err(|e| format!("file type: {e}"))?.is_dir() {
+                continue;
+            }
+            sessions += 1;
+            let log_path = entry.path().join("action-reviews.jsonl");
+            if log_path.exists() {
+                let content = std::fs::read_to_string(&log_path)
+                    .map_err(|e| format!("read review log: {e}"))?;
+                let count = content.lines().filter(|l| !l.trim().is_empty()).count();
+                total_reviews += count;
+                // Verify chain (metadata only, no payload)
+                match unpeel_core::action_reviews::verify_review_bytes(
+                    content.as_bytes(),
+                    "bundle",
+                ) {
+                    Ok(_) => chains_ok += 1,
+                    Err(_) => chains_failed += 1,
+                }
+            }
+        }
+    }
+
+    // Lease statistics
+    let (leases_total, leases_stale) = collect_lease_stats(home);
+
+    Ok(serde_json::json!({
+        "sessions": sessions,
+        "total_reviews": total_reviews,
+        "chains_verified": chains_ok,
+        "chains_failed": chains_failed,
+        "leases": {
+            "total": leases_total,
+            "stale": leases_stale,
+        },
+    }))
+}
+
+fn collect_lease_stats(home: &std::path::Path) -> (usize, usize) {
+    let db_path = home.join("schedule-leases.db");
+    if !db_path.exists() {
+        return (0, 0);
+    }
+    // Use the ScheduleLeases API if available; fall back to 0 on error.
+    match unpeel_core::schedule_leases::ScheduleLeases::open(home, "default") {
+        Ok(db) => {
+            let total = db.list_holders().map(|v| v.len()).unwrap_or(0);
+            let stale = db.list_stale().map(|v| v.len()).unwrap_or(0);
+            (total, stale)
+        }
+        Err(_) => (0, 0),
+    }
+}
+
+fn collect_logs(home: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
+    // Collect recent JSON log lines from known log locations, redacted.
+    // We take the last 100 lines from each log file found.
+    let log_dirs = [home.join("logs"), home.to_path_buf()];
+    let mut out = std::fs::File::create(output)
+        .map_err(|e| format!("create logs.jsonl: {e}"))?;
+    use std::io::Write;
+
+    for dir in &log_dirs {
+        if !dir.exists() {
+            continue;
+        }
+        let entries = std::fs::read_dir(dir)
+            .map_err(|e| format!("read log dir: {e}"))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("log dir entry: {e}"))?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read(&path) {
+                // Take last 100 lines
+                let lines: Vec<&[u8]> = content
+                    .split(|&b| b == b'\n')
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                let start = lines.len().saturating_sub(100);
+                for line in &lines[start..] {
+                    if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(line) {
+                        redact_value(&mut value);
+                        let redacted = serde_json::to_string(&value).unwrap();
+                        writeln!(out, "{redacted}")
+                            .map_err(|e| format!("write logs: {e}"))?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn create_tar_gz(staging: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
+    // Use the `tar` command for simplicity (available on all Unix).
+    let status = std::process::Command::new("tar")
+        .arg("-czf")
+        .arg(output)
+        .arg("-C")
+        .arg(staging)
+        .arg(".")
+        .status()
+        .map_err(|e| format!("run tar: {e}"))?;
+    if !status.success() {
+        return Err("tar failed".to_string());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
