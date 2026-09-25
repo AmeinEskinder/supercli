@@ -23,7 +23,10 @@ fn generate_test_cert() -> (Vec<u8>, Vec<u8>, String) {
         rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).expect("generate cert");
     let cert_der = certified.cert.der().to_vec();
     let key_der = certified.key_pair.serialize_der();
-    let fingerprint = hex::encode(Sha256::digest(&cert_der));
+    let fingerprint = Sha256::digest(&cert_der)
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
     (cert_der, key_der, fingerprint)
 }
 

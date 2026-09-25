@@ -142,3 +142,7 @@ ignore = [
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = []
+
+[[bans.skip]]
+name = "core-foundation"
+reason = "0.9.4 vs 0.10.1: macOS system bindings; 0.9.4 via system-configuration (hyper-util), 0.10.1 via security-framework (native-tls). Different majors, no shared state."
