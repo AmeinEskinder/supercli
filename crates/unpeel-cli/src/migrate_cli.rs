@@ -21,6 +21,10 @@
 //!   idempotent schema init/upgrade (adds a missing `lease_generation`
 //!   column). Existing lease rows are never modified — stale ownership is
 //!   not resurrected.
+//! * **Config** (settings subset of `app-state.json`): values that fail the
+//!   typed P3 schema are removed so the documented default applies (every
+//!   setting has one; missing keys are never an issue). Unknown keys are
+//!   warnings only and are left alone.
 //!
 //! Stop the Host before `--apply`: review-log and app-state writers take
 //! locks, but `schedules.json` has none and a live Host could interleave
@@ -50,6 +54,8 @@ Migrates: legacy bare-string connector grants (quarantined, re-approval
 required — the connector is never guessed), pre-chain review logs
 (deterministically re-chained, entries preserved), and the schedule lease
 database schema (initialized/upgraded; existing lease rows untouched).
+Config: settings failing the typed schema are reset to their documented
+defaults (unknown keys are warnings and are left alone).
 Logs that fail verification with chain metadata present are reported and
 left alone. Stop the Host before --apply.\
 ";
@@ -540,6 +546,119 @@ fn print_json(apply: bool, steps: &[StepOutcome]) {
     );
 }
 
+/// Remove a dotted path (e.g. `theme` or `experimental_features.foo`) from a
+/// JSON document. Returns true when something was removed.
+fn remove_dotted_path(doc: &mut serde_json::Value, path: &str) -> bool {
+    let mut parts: Vec<&str> = path.split('.').collect();
+    let last = match parts.pop() {
+        Some(l) => l,
+        None => return false,
+    };
+    let mut cur = doc;
+    for part in parts {
+        match cur.get_mut(part) {
+            Some(serde_json::Value::Object(_)) => {
+                cur = cur.get_mut(part).unwrap();
+            }
+            _ => return false,
+        }
+    }
+    match cur {
+        serde_json::Value::Object(map) => map.remove(last).is_some(),
+        _ => false,
+    }
+}
+
+fn step_config(apply: bool) -> StepOutcome {
+    let mut step = StepOutcome {
+        title: "config",
+        lines: Vec::new(),
+        changed: false,
+        error: None,
+    };
+    let path = app_paths::app_state_path();
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            step.lines.push("no app-state.json; nothing to check".to_string());
+            return step;
+        }
+        Err(e) => {
+            step.error = Some(format!("read {}: {e}", path.display()));
+            return step;
+        }
+    };
+    let mut doc: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(d) => d,
+        Err(e) => {
+            step.error = Some(format!("parse {}: {e}", path.display()));
+            return step;
+        }
+    };
+    let report = unpeel_core::config::check_document(&doc);
+    for w in &report.warnings {
+        step.lines
+            .push(format!("warning: {}: {}", w.path, w.message));
+    }
+    if report.errors.is_empty() {
+        step.lines.push("config valid".to_string());
+        return step;
+    }
+    for e in &report.errors {
+        step.lines.push(format!("invalid: {}: {}", e.path, e.message));
+    }
+    if !apply {
+        step.lines.push(format!(
+            "would reset {} invalid setting(s) to their defaults",
+            report.errors.len()
+        ));
+        return step;
+    }
+    match backup(&path) {
+        Ok(bak) => {
+            step.lines.push(format!(
+                "backed up {} to {}",
+                path.display(),
+                bak.display()
+            ));
+        }
+        Err(e) => {
+            step.error = Some(e);
+            return step;
+        }
+    }
+    let mut removed = 0;
+    for e in &report.errors {
+        if remove_dotted_path(&mut doc, &e.path) {
+            removed += 1;
+        }
+    }
+    // Re-check: the document must be valid after the reset.
+    let after = unpeel_core::config::check_document(&doc);
+    if !after.errors.is_empty() {
+        step.error = Some(format!(
+            "config still invalid after reset: {}",
+            after
+                .errors
+                .iter()
+                .map(|e| format!("{}: {}", e.path, e.message))
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+        return step;
+    }
+    match std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()) {
+        Ok(()) => {
+            step.changed = true;
+            step.lines.push(format!(
+                "reset {removed} invalid setting(s) to defaults"
+            ));
+        }
+        Err(e) => step.error = Some(format!("write {}: {e}", path.display())),
+    }
+    step
+}
+
 pub fn run(args: &[String]) -> i32 {
     if args
         .iter()
@@ -561,6 +680,7 @@ pub fn run(args: &[String]) -> i32 {
         step_grants(apply),
         step_review_logs(&home, apply),
         step_schedules(&home, apply),
+        step_config(apply),
     ];
     if json {
         print_json(apply, &steps);

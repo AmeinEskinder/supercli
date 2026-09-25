@@ -25,7 +25,7 @@ use std::fmt;
 
 /// The value shape a setting accepts.
 #[derive(Debug, Clone, Copy)]
-enum SettingType {
+pub enum SettingType {
     /// A real JSON boolean.
     Bool,
     /// A JSON string, one of the listed values (exact match).
@@ -34,19 +34,20 @@ enum SettingType {
     U64Enum(&'static [u64]),
 }
 
-struct SettingDef {
+#[derive(Debug, Clone, Copy)]
+pub struct SettingDef {
     /// Dotted path, e.g. `theme` or `experimental_features.sessions_mcp`.
-    path: &'static str,
-    ty: SettingType,
+    pub path: &'static str,
+    pub ty: SettingType,
     /// Human description of the allowed values, used in messages.
-    allowed: &'static str,
+    pub allowed: &'static str,
 }
 
 /// The schema. Mirrors `unpeel settings set`'s accepted keys and values;
 /// `computer_use` stays parseable as a legacy alias (it no longer enables
 /// the retired domain) and `computer_access` is the legacy read-fallback
 /// spelling of `computer_default_access`.
-static SETTINGS: &[SettingDef] = &[
+pub static SETTINGS: &[SettingDef] = &[
     SettingDef {
         path: "experimental_features.sessions_mcp",
         ty: SettingType::Bool,

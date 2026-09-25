@@ -1647,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-apps"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64 0.22.1",
  "serde_json",
@@ -1655,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-cli"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "libc",
  "semver",
@@ -1670,7 +1670,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-client"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-connector"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",
@@ -1714,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-core"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-host"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -1755,7 +1755,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-license-notices"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-native-bridge"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1773,7 +1773,7 @@ dependencies = [
 
 [[package]]
 name = "unpeel-serve"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
