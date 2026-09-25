@@ -8,6 +8,7 @@
 mod activity;
 mod annotation;
 mod app_lock;
+pub mod i18n;
 mod banner;
 mod clickable_path;
 mod command_palette;

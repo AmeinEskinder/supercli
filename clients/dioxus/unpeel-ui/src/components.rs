@@ -14,6 +14,7 @@ use unpeel_client::dto::{
 };
 
 use super::presence::{ViewerAvatars, ViewerInfo};
+use super::i18n::t;
 
 use unpeel_client::TransportKind;
 
@@ -247,13 +248,13 @@ pub fn ApprovalCard(approval: PendingApproval, on_answer: EventHandler<bool>) ->
                     autofocus: true,
                     aria_label: "Approve: {title}",
                     onclick: move |_| on_answer.call(true),
-                    "Approve"
+                    "{t(\"approval.approve\")}"
                 }
                 button {
                     class: "deny",
                     aria_label: "Deny: {title}",
                     onclick: move |_| on_answer.call(false),
-                    "Deny"
+                    "{t(\"approval.deny\")}"
                 }
             }
         }
