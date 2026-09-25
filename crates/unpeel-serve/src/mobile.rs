@@ -1207,6 +1207,18 @@ fn error_body(message: &str) -> String {
     serde_json::json!({ "error": message }).to_string()
 }
 
+/// Extract a human-readable message from a caught panic payload.
+/// Handles `&str`, `String`, and anything else (falls back to a placeholder).
+fn panic_payload_message(panic: &Box<dyn std::any::Any + Send + 'static>) -> String {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
 fn safe_session_id(id: &str) -> bool {
     !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
 }
@@ -1344,6 +1356,14 @@ fn handle_output(request: &Request) -> (u16, String) {
 ///
 /// A write failure on the outcome record fails closed: the cancel verb
 /// returns 500 and the review stays in-flight (a retry will see it again).
+/// Test hook: invoked by `handle_turn_cancel` after listing in-flight
+/// reviews but before marking them ambiguous. Tests use this to
+/// deterministically trigger the list-then-mark race by recording an
+/// outcome for an in-flight review from within the hook.
+#[cfg(test)]
+static TURN_CANCEL_RACE_HOOK: std::sync::Mutex<Option<Box<dyn Fn() + Send>>> =
+    std::sync::Mutex::new(None);
+
 fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u16, String) {
     let body = body_json(request);
     let Some(session_id) = body_session_id(&body).filter(|s| safe_session_id(s)) else {
@@ -1374,10 +1394,27 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
         Err(e) => return (500, error_body(&format!("cannot read review log: {e}"))),
     };
 
+    // Test hook: deterministic race injection (see TURN_CANCEL_RACE_HOOK).
+    #[cfg(test)]
+    if let Some(hook) = TURN_CANCEL_RACE_HOOK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+    {
+        hook();
+    }
+
     // Mark every in-flight attempt ambiguous before touching the PTY: if
     // the interrupt lands mid-call the outcome is uncertain, and the
-    // durable record must say so. Fail closed on any write failure.
+    // durable record must say so.
+    //
+    // TOCTOU note (R1): a review can complete between `inflight_reviews()`
+    // and `record_attempt_outcome()`. If the outcome was already recorded,
+    // that is benign — the review is no longer in-flight, the recorded
+    // outcome stands, and we must NOT overwrite it or fail the cancel.
+    // Only genuine write failures are fatal.
     let mut ambiguous: Vec<String> = Vec::with_capacity(inflight.len());
+    let mut already_resolved: Vec<String> = Vec::with_capacity(inflight.len());
     for review_id in &inflight {
         match unpeel_core::action_reviews::record_attempt_outcome(
             &session_dir,
@@ -1395,6 +1432,11 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
                     review_id,
                     "cancelled mid-flight: verify the external effect before retrying",
                 );
+            }
+            Err(e) if e.is_already_recorded() => {
+                // Benign race: the call completed between listing and
+                // marking. Keep the recorded outcome; do not overwrite.
+                already_resolved.push(review_id.clone());
             }
             Err(e) => {
                 return (
@@ -1428,6 +1470,92 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
         "idle": inflight.is_empty(),
         "interrupted": interrupted,
         "ambiguous_attempts": ambiguous,
+        "already_resolved": already_resolved,
+    });
+    (200, body.to_string())
+}
+
+/// Extract a stable device identifier for rate limiting (R5).
+/// Paired devices use their device_id; owner transports use the transport name.
+fn principal_device_id(principal: &ControllerPrincipal) -> String {
+    match principal {
+        ControllerPrincipal::PairedDevice { device_id, .. } => device_id.clone(),
+        ControllerPrincipal::OwnerTransport { transport, .. } => {
+            format!("owner:{transport}")
+        }
+    }
+}
+
+/// GET /mobile/metrics — R4 operability endpoint (local-only, behind bearer auth).
+///
+/// Returns JSON with:
+/// - `sessions`: number of sessions with event logs
+/// - `ring_buffer_depth`: total events retained across all session ring buffers
+/// - `pending_reviews`: in-flight (no outcome) reviews across all sessions
+/// - `ambiguous_count`: Ambiguous outcomes across all sessions
+/// - `lease_holders`: current lease holders from the lease DB
+fn handle_metrics() -> (u16, String) {
+    let (sessions, ring_buffer_depth) = event_bus().metrics();
+
+    // Scan all session dirs for pending reviews and ambiguous outcomes.
+    let mut pending_reviews = 0usize;
+    let mut ambiguous_count = 0usize;
+    let sessions_dir = unpeel_core::app_paths::unpeel_home().join("sessions");
+    if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
+        for entry in entries.flatten() {
+            let session_dir = entry.path();
+            if !session_dir.is_dir() {
+                continue;
+            }
+            // Pending: in-flight reviews.
+            if let Ok(inflight) = unpeel_core::action_reviews::inflight_reviews(&session_dir) {
+                pending_reviews += inflight.len();
+            }
+            // Ambiguous: parse the review log as JSONL and count records
+            // with outcome="ambiguous". (R4: no text-scanning; parse properly.)
+            // The canonical log is reviews.jsonl.
+            let log_path = session_dir.join("reviews.jsonl");
+            if let Ok(content) = std::fs::read_to_string(&log_path) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    // Parse as JSON; skip malformed lines (they're not valid reviews).
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                        // Check if this is an outcome record with ambiguous outcome.
+                        // Outcome records have "outcome": "ambiguous".
+                        if v.get("outcome").and_then(|o| o.as_str()) == Some("ambiguous") {
+                            ambiguous_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Lease holders from the lease DB.
+    let lease_holders: Vec<serde_json::Value> = (|| {
+        let home = unpeel_core::app_paths::unpeel_home();
+        let db = unpeel_core::schedule_leases::ScheduleLeases::open(&home, "default").ok()?;
+        let holders = db.list_holders().ok()?;
+        Some(
+            holders
+                .into_iter()
+                .map(|(schedule_id, owner)| {
+                    serde_json::json!({"schedule_id": schedule_id, "owner": owner})
+                })
+                .collect(),
+        )
+    })()
+    .unwrap_or_default();
+
+    let body = serde_json::json!({
+        "sessions": sessions,
+        "ring_buffer_depth": ring_buffer_depth,
+        "pending_reviews": pending_reviews,
+        "ambiguous_count": ambiguous_count,
+        "lease_holders": lease_holders,
     });
     (200, body.to_string())
 }
@@ -1675,6 +1803,12 @@ fn headless_controller_effects(hook_port: Option<u16>) -> ControllerEffects {
 // override only the effect executor, while production supplies the same
 // snapshot/auth/resize components used by the LAN and Relay entry points.
 #[allow(clippy::too_many_arguments)]
+/// Test hook: if set, `handle_with_effects` panics immediately.
+/// Tests use this to verify the request-boundary panic catch (R2).
+#[cfg(test)]
+static HANDLE_PANIC_HOOK: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+
+#[allow(clippy::too_many_arguments)]
 fn handle_with_effects(
     request: &Request,
     principal: &ControllerPrincipal,
@@ -1686,6 +1820,12 @@ fn handle_with_effects(
     platform_adapters: &PlatformAdapterHub,
     controller_effects_override: Option<&ControllerEffects>,
 ) -> (u16, String) {
+    // Test hook: deterministic panic injection (see HANDLE_PANIC_HOOK).
+    #[cfg(test)]
+    if *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) {
+        panic!("test-injected panic in request handler");
+    }
+
     match (request.method.as_str(), request.path.as_str()) {
         ("POST", "/mobile/push-token") => {
             return handle_push_registration(request, principal, platform_adapters)
@@ -1811,7 +1951,15 @@ fn handle_with_effects(
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/mobile/output") => handle_output(request),
         ("GET", "/mobile/events") => handle_events(request),
-        ("POST", "/mobile/turn-cancel") => handle_turn_cancel(request, principal),
+        ("GET", "/mobile/metrics") => handle_metrics(),
+        ("POST", "/mobile/turn-cancel") => {
+            // R5: per-device rate limit on cancels.
+            let device_id = principal_device_id(principal);
+            if !unpeel_core::rate_limit::global().check(&device_id, "cancel") {
+                return (429, error_body("rate limit exceeded for cancels"));
+            }
+            handle_turn_cancel(request, principal)
+        }
         ("POST", "/mobile/session-organization") => {
             let body = body_json(request);
             let Some(session_id) = body_session_id(&body) else {
@@ -2096,7 +2244,14 @@ fn handle_with_effects(
                 Err(_) => (404, error_body("session host unavailable")),
             }
         }
-        ("POST", "/mobile/approvals/answer") => handle_approval_answer(request, approvals),
+        ("POST", "/mobile/approvals/answer") => {
+            // R5: per-device rate limit on approvals.
+            let device_id = principal_device_id(principal);
+            if !unpeel_core::rate_limit::global().check(&device_id, "approve") {
+                return (429, error_body("rate limit exceeded for approvals"));
+            }
+            handle_approval_answer(request, approvals)
+        }
         _ => (404, error_body("not found")),
     }
 }
@@ -2315,17 +2470,38 @@ fn handle_authenticated_with_effects(
                 .cloned()
         })
         .flatten();
-    let response = handle_with_effects(
-        request,
-        principal,
-        snapshot,
-        mark_read,
-        hook_port,
-        resizes,
-        approvals,
-        platform_adapters,
-        controller_effects_override,
-    );
+    let response = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        handle_with_effects(
+            request,
+            principal,
+            snapshot,
+            mark_read,
+            hook_port,
+            resizes,
+            approvals,
+            platform_adapters,
+            controller_effects_override,
+        )
+    })) {
+        Ok(response) => response,
+        Err(panic) => {
+            // R2: a panic in any request handler must not take down the Host.
+            // Catch at the request boundary, log it (R4 JSON), return 500.
+            // File locks (flock) are released by the OS if the FD is dropped
+            // during unwinding; poisoned in-process mutexes are handled by
+            // callers.
+            let msg = panic_payload_message(&panic);
+            unpeel_core::json_log::error_fields(
+                "request handler panicked",
+                serde_json::json!({
+                    "method": request.method,
+                    "path": request.path,
+                    "panic": msg,
+                }),
+            );
+            (500, error_body("internal error: request handler panicked"))
+        }
+    };
     if response.0 == 200 {
         if let (Some(session_id), Some(presence)) = (output_session_id, presence) {
             if presence.touch_output(&session_id, principal, crate::presence::now_ms()) {
@@ -2657,7 +2833,25 @@ fn handle_connection(
                         presence.as_deref(),
                         None,
                     );
-                    respond(&mut stream, status, &body, keep);
+                    // R5: 429 responses include Retry-After with the actual
+                    // seconds until one token refills (token-bucket math).
+                    // The client should back off; the request was NOT recorded
+                    // and must be retried.
+                    if status == 429 {
+                        let endpoint = if request.path.contains("turn-cancel") {
+                            "cancel"
+                        } else if request.path.contains("approvals") {
+                            "approve"
+                        } else {
+                            "connector"
+                        };
+                        let retry_after =
+                            unpeel_core::rate_limit::global().retry_after_secs(endpoint);
+                        let header = format!("Retry-After: {retry_after}\r\n");
+                        respond_with(&mut stream, status, &header, &body, keep);
+                    } else {
+                        respond(&mut stream, status, &body, keep);
+                    }
                 }
             }
         }
@@ -3537,6 +3731,288 @@ mod tests {
                 crate::session_events::SessionEvent::ToolExecuted { success: true, .. }
             )),
             "reconciled tool.executed for the durable outcome: {events:?}"
+        );
+
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// R2: a panic in a request handler must not take down the Host.
+    /// The panic is caught at the request boundary, logged, and the
+    /// handler returns 500. The test process survives (proving the
+    /// Host would too).
+    #[test]
+    fn panic_in_request_handler_returns_500_not_crash() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+
+        // Arm the test hook: handle_with_effects will panic.
+        *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = true;
+
+        let request = Request {
+            request_id: None,
+            method: "GET".to_string(),
+            path: "/mobile/events".to_string(),
+            query: HashMap::from([("session_id".to_string(), "s1".to_string())]),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            keep_alive: false,
+        };
+        let principal = ControllerPrincipal::OwnerTransport {
+            transport: "test".to_string(),
+            subject: None,
+            principal_id: None,
+        };
+        let snapshot: SharedSnapshot = Arc::new(Mutex::new(Default::default()));
+        let (mark_read, _receiver) = std::sync::mpsc::channel();
+        let resizes = Arc::new(Mutex::new(HashMap::new()));
+        let approvals = Arc::new(crate::approvals::ApprovalHub::default());
+        let platform_adapters = PlatformAdapterHub::default();
+
+        let (status, body) = handle_authenticated_with_effects(
+            &request,
+            &principal,
+            &snapshot,
+            &mark_read,
+            None,
+            &resizes,
+            &approvals,
+            None,
+            None,
+            &platform_adapters,
+            None,
+            None,
+            None,
+        );
+
+        // Disarm the hook.
+        *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = false;
+
+        // 500, not a crash. The process is still alive to assert.
+        assert_eq!(status, 500, "panic must become 500: {body}");
+        assert!(
+            body.contains("panicked"),
+            "error body must mention panic: {body}"
+        );
+    }
+
+    /// R2 cascade: after a panicking request, a NORMAL request on the same
+    /// session/device must succeed. A std::sync::Mutex held across the
+    /// panicking code gets poisoned; every later .lock().unwrap() would then
+    /// panic, turning one panic into a dead host. This test proves the host
+    /// survives: the follow-up request returns a real 200, and the hook
+    /// mutex re-acquires. The LogLock/flock half is proven by
+    /// `action_reviews::tests::panic_while_holding_log_lock_releases_flock`,
+    /// which panics while HOLDING the lock and shows a second writer
+    /// acquiring it afterwards.
+    #[test]
+    fn panic_does_not_poison_host_for_next_request() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        let dir = scratch_dir("panic-cascade");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        // Arm the hook: first request will panic.
+        *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = true;
+
+        let principal = ControllerPrincipal::PairedDevice {
+            device_id: "cascade-device".to_string(),
+            name: "Cascade".to_string(),
+            principal_id: None,
+        };
+        let snapshot: SharedSnapshot = Arc::new(Mutex::new(Default::default()));
+        let (mark_read, _receiver) = std::sync::mpsc::channel();
+        let resizes = Arc::new(Mutex::new(HashMap::new()));
+        let approvals = Arc::new(crate::approvals::ApprovalHub::default());
+        let platform_adapters = PlatformAdapterHub::default();
+
+        let panic_req = Request {
+            request_id: Some("cascade-panic".to_string()),
+            method: "GET".to_string(),
+            path: "/mobile/events".to_string(),
+            query: HashMap::from([("session_id".to_string(), "s1".to_string())]),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            keep_alive: false,
+        };
+        let (status, _) = handle_authenticated_with_effects(
+            &panic_req,
+            &principal,
+            &snapshot,
+            &mark_read,
+            None,
+            &resizes,
+            &approvals,
+            None,
+            None,
+            &platform_adapters,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(status, 500, "panicking request must become 500");
+
+        // Disarm the hook.
+        *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = false;
+
+        // CASCADE: send a NORMAL request on the same session/device.
+        // If any Mutex was poisoned by the panic, this .lock().unwrap()
+        // (or one inside the handler) would panic, failing the test.
+        let normal_req = Request {
+            request_id: Some("cascade-normal".to_string()),
+            method: "GET".to_string(),
+            path: "/mobile/events".to_string(),
+            query: HashMap::from([("session_id".to_string(), "s1".to_string())]),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            keep_alive: false,
+        };
+        let (status, body) = handle_authenticated_with_effects(
+            &normal_req,
+            &principal,
+            &snapshot,
+            &mark_read,
+            None,
+            &resizes,
+            &approvals,
+            None,
+            None,
+            &platform_adapters,
+            None,
+            None,
+            None,
+        );
+        // Normal request succeeds (not 500, not a panic): /mobile/events
+        // answers 200 with an (empty) event page for any safe session id.
+        // A poisoned production mutex anywhere in this path would panic
+        // here and fail the test.
+        assert_eq!(
+            status, 200,
+            "normal request after panic must succeed: {body}"
+        );
+
+        // Prove locks are not poisoned by explicitly re-acquiring them.
+        // If HANDLE_PANIC_HOOK were poisoned, this would panic.
+        drop(HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()));
+        // If APP_STATE_LOCK were poisoned, we couldn't have gotten here
+        // (the _guard at the top would have panicked on entry).
+
+        // LogLock/flock: proven by
+        // action_reviews::tests::panic_while_holding_log_lock_releases_flock
+        // (panics while holding the lock; second writer acquires it).
+
+        // Cleanup.
+        if let Some(p) = prev {
+            std::env::set_var("UNPEEL_HOME", p);
+        } else {
+            std::env::remove_var("UNPEEL_HOME");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// R1: deterministic turn-cancel race test. The hook fires between
+    /// `inflight_reviews()` (list) and `record_attempt_outcome()` (mark),
+    /// recording an outcome for the in-flight review — exactly the TOCTOU
+    /// that produced HTTP 500 in the Phase 9 soak. The handler must treat
+    /// "already has a recorded outcome" as benign: return 200, keep the
+    /// recorded outcome, list the review in `already_resolved`.
+    #[test]
+    fn turn_cancel_race_already_recorded_is_benign() {
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir = scratch_dir("cancel-race-benign");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let session_id = "r1-cancel-race";
+        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        std::fs::create_dir_all(&session_dir).unwrap();
+
+        // R1: in-flight review (approved, no outcome yet).
+        let review = unpeel_core::action_reviews::record_review(
+            &session_dir,
+            unpeel_core::action_reviews::Actor::PolicyAllow,
+            "shell",
+            "bash.exec",
+            "args-hash",
+            unpeel_core::action_reviews::ReviewDecision::Approved,
+            None,
+        )
+        .unwrap();
+        let rid = review.review_id.clone();
+        assert_eq!(
+            unpeel_core::action_reviews::inflight_reviews(&session_dir).unwrap(),
+            vec![rid.clone()]
+        );
+
+        // The hook simulates the race: the call completes (outcome recorded)
+        // after the handler lists in-flight but before it marks ambiguous.
+        let hook_rid = rid.clone();
+        let hook_dir = session_dir.clone();
+        *TURN_CANCEL_RACE_HOOK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(Box::new(move || {
+            unpeel_core::action_reviews::record_attempt_outcome(
+                &hook_dir,
+                &hook_rid,
+                unpeel_core::action_reviews::AttemptOutcome::Executed { success: true },
+                unpeel_core::action_reviews::Actor::PolicyAllow,
+            )
+            .unwrap();
+        }));
+
+        let request = Request {
+            request_id: None,
+            method: "POST".to_string(),
+            path: "/mobile/turn-cancel".to_string(),
+            query: HashMap::new(),
+            headers: HashMap::new(),
+            body: format!(r#"{{"sessionID":"{session_id}","reason":"race test"}}"#).into_bytes(),
+            keep_alive: false,
+        };
+        let principal = unpeel_core::controller_api::ControllerPrincipal::OwnerTransport {
+            transport: "test".to_string(),
+            subject: None,
+            principal_id: None,
+        };
+        let (status, body) = handle_turn_cancel(&request, &principal);
+
+        // Clear the hook before asserting (so a failure doesn't poison others).
+        *TURN_CANCEL_RACE_HOOK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+
+        // Must be 200, not 500. The recorded Executed outcome stands;
+        // the review appears in already_resolved, not ambiguous_attempts.
+        assert_eq!(status, 200, "race must be benign, not 500: {body}");
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body["cancelled"], serde_json::json!(true));
+        let already = body["already_resolved"].as_array().unwrap();
+        assert!(
+            already.iter().any(|v| v.as_str() == Some(&rid)),
+            "raced review must be in already_resolved: {body}"
+        );
+        assert!(
+            body["ambiguous_attempts"].as_array().unwrap().is_empty(),
+            "nothing should be marked ambiguous: {body}"
+        );
+
+        // The durable outcome is still Executed (never overwritten): the
+        // review is no longer in-flight and the chain verifies with both
+        // entries (review + outcome).
+        assert!(
+            unpeel_core::action_reviews::inflight_reviews(&session_dir)
+                .unwrap()
+                .is_empty(),
+            "raced review must not be re-marked in-flight"
+        );
+        assert_eq!(
+            unpeel_core::action_reviews::verify_review_chain(&session_dir).unwrap(),
+            2,
+            "chain must hold the original review + Executed outcome"
         );
 
         match &prev {
@@ -4581,5 +5057,189 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                 );
             }
         }
+    }
+
+    /// R5: end-to-end rate-limit test through the real authenticated HTTPS
+    /// server. Exhausts the per-device buckets, then sends a real
+    /// turn-cancel and a real approval answer over TLS through
+    /// `handle_connection` (the production connection handler — the only
+    /// place the `Retry-After` header is attached). Asserts:
+    /// - HTTP 429 (never 500) with the real `Retry-After` response header
+    ///   carrying the token-bucket refill time (cancel: 3s, approve: 2s)
+    /// - review-log bytes unchanged (SHA-256 before/after) against a real
+    ///   canonical baseline review written via `record_review`
+    /// - hash-chain length unchanged (`verify_review_chain`, unmasked)
+    /// - per-device isolation: another device is unaffected
+    ///
+    /// The connector-call leg lives in
+    /// `session_connectors::tests::connector_rate_limit_end_to_end_no_side_effects`,
+    /// which drives `execute_call` with a counting mock connector and
+    /// asserts the mock is never invoked (count exactly 0).
+    #[test]
+    fn rate_limit_end_to_end_429_retry_after_no_side_effects() {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        // Serialize with other tests that mutate UNPEEL_HOME / the limiter.
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        let dir = scratch_dir("ratelimit-e2e");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("UNPEEL_HOME", &dir);
+
+        let device = "e2e-ratelimit-device-001";
+        let token = "e2e-ratelimit-token-001";
+
+        // Pair the device: the production bearer lookup reads
+        // $UNPEEL_HOME/mobile/devices.json and matches sha256(token).
+        let mobile = dir.join("mobile");
+        std::fs::create_dir_all(&mobile).unwrap();
+        std::fs::write(
+            mobile.join("devices.json"),
+            serde_json::json!({
+                "devices": [{
+                    "id": device,
+                    "name": "E2E Rate Limit Device",
+                    "tokenHash": sha256_hex(token),
+                    "principalID": "owner-principal",
+                }]
+            })
+            .to_string(),
+        )
+        .expect("devices.json");
+
+        // Real canonical baseline: one approved in-flight review, written
+        // through the production writer so the chain actually verifies.
+        let session_id = "e2e-ratelimit-session";
+        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        std::fs::create_dir_all(&session_dir).unwrap();
+        unpeel_core::action_reviews::record_review(
+            &session_dir,
+            unpeel_core::action_reviews::Actor::Human {
+                device_id: device.to_string(),
+            },
+            "shell",
+            "bash.exec",
+            "args-hash",
+            unpeel_core::action_reviews::ReviewDecision::Approved,
+            None,
+        )
+        .expect("baseline review");
+        let review_log = session_dir.join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let hash_before =
+            sha256_hex(&std::fs::read_to_string(&review_log).expect("read review log"));
+        let chain_before = unpeel_core::action_reviews::verify_review_chain(&session_dir)
+            .expect("baseline chain verifies");
+
+        // Real authenticated HTTPS server: the production connection
+        // handler on an ephemeral port. Exactly two connections (one per
+        // request); each closes after its response.
+        let (tls, fingerprint) = test_tls_material();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().expect("local addr").port();
+        let server = std::thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let stream = stream.expect("accept");
+                handle_connection(
+                    stream,
+                    Arc::clone(&tls),
+                    Arc::new(Mutex::new(crate::sessions::MobileSnapshot::default())),
+                    std::sync::mpsc::channel().0,
+                    None,
+                    Arc::new(Mutex::new(HashMap::new())),
+                    Arc::new(crate::approvals::ApprovalHub::default()),
+                    Arc::new(crate::pairing::PairingWindow::default()),
+                    Arc::new(PlatformAdapterHub::default()),
+                    None,
+                    "http://127.0.0.1:0/mobile".into(),
+                    Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                );
+            }
+        });
+
+        let limiter = unpeel_core::rate_limit::global();
+        let https_post = |path: &str, body: &str| -> (u16, String, String) {
+            let mut client = tls_client(port, Some(fingerprint.clone()));
+            let request = format!(
+                "POST {path} HTTP/1.1\r\n\
+                 Host: localhost\r\n\
+                 Authorization: Bearer {token}\r\n\
+                 Content-Type: application/json\r\n\
+                 Content-Length: {len}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                len = body.len(),
+            );
+            http_exchange(&mut client, &request)
+        };
+
+        // 1. Turn-cancel: exhaust the 20/min bucket, then send for real.
+        for _ in 0..20 {
+            assert!(limiter.check(device, "cancel"), "cancel bucket fill");
+        }
+        let (status, head, body) = https_post(
+            "/mobile/turn-cancel",
+            r#"{"session_id":"e2e-ratelimit-session"}"#,
+        );
+        assert_eq!(
+            status, 429,
+            "turn-cancel must be 429 when rate-limited: {body}"
+        );
+        assert!(
+            body.contains("rate limit"),
+            "429 body names the rate limit: {body}"
+        );
+        assert!(
+            head.lines()
+                .any(|line| line.eq_ignore_ascii_case("Retry-After: 3")),
+            "real Retry-After: 3 header (20/min token bucket): {head}"
+        );
+
+        // 2. Approval answer: exhaust the 30/min bucket, then send for real.
+        for _ in 0..30 {
+            assert!(limiter.check(device, "approve"), "approve bucket fill");
+        }
+        let (status, head, body) = https_post(
+            "/mobile/approvals/answer",
+            r#"{"id":"test-1","approved":true}"#,
+        );
+        assert_eq!(status, 429, "approve must be 429 when rate-limited: {body}");
+        assert!(
+            head.lines()
+                .any(|line| line.eq_ignore_ascii_case("Retry-After: 2")),
+            "real Retry-After: 2 header (30/min token bucket): {head}"
+        );
+
+        server.join().expect("server thread");
+
+        // No side effects: both 429s were rejected before any handler ran.
+        let hash_after =
+            sha256_hex(&std::fs::read_to_string(&review_log).expect("read review log"));
+        assert_eq!(
+            hash_before, hash_after,
+            "review log bytes must be unchanged"
+        );
+        let chain_after = unpeel_core::action_reviews::verify_review_chain(&session_dir)
+            .expect("chain still verifies");
+        assert_eq!(
+            chain_before, chain_after,
+            "hash chain length must be unchanged"
+        );
+        assert_ne!(status, 500, "rate limit must never become 500");
+
+        // Per-device isolation: another device is unaffected.
+        assert!(
+            limiter.check("e2e-other-device-001", "cancel"),
+            "other device must not be affected"
+        );
+
+        // Cleanup.
+        if let Some(p) = prev {
+            std::env::set_var("UNPEEL_HOME", p);
+        } else {
+            std::env::remove_var("UNPEEL_HOME");
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

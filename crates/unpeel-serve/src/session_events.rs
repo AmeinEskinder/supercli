@@ -408,6 +408,17 @@ impl EventBus {
         }
     }
 
+    /// R4: metrics for the /metrics endpoint.
+    /// Returns (session_count, total_ring_buffer_depth).
+    pub fn metrics(&self) -> (usize, usize) {
+        let Ok(guard) = self.inner.lock() else {
+            return (0, 0);
+        };
+        let sessions = guard.len();
+        let depth: usize = guard.values().map(|log| log.events.len()).sum();
+        (sessions, depth)
+    }
+
     fn emit(&self, session_id: &str, build: impl FnOnce(u64, u64) -> SessionEvent) {
         let Ok(mut guard) = self.inner.lock() else {
             return;
