@@ -69,3 +69,26 @@ root is the crate-level record.
 - [ ] Tag per the repo's tag convention after the push succeeds.
 - [ ] No SBOM generation path exists in this repo as of 2026-09-25 —
       nothing to run; revisit if release tooling adds one.
+
+## 6. v0.9.0 Phase 13 gates
+
+- [ ] S2: Before/after concurrency tables (1/4/8/16, n≥2000 each) show
+      throughput increasing through 16 and p99 <500ms at concurrency 8.
+- [ ] S2: Grant store uses optimistic concurrency (serialization outside
+      lock); crash safety preserved (temp+fsync+rename+dir fsync under lock).
+- [ ] S2: `unpeel migrate` moves grants from app-state.json to grants.json
+      (idempotent, fixture test passes).
+- [ ] S2: Backup includes grants.json; backup-during-active-writes test
+      covers concurrent grant writes.
+- [ ] S3: MCP→visible delay investigated; polling replaced with event-driven
+      if confirmed, or evidence reported if not.
+- [ ] S4: 50x kill -9/restart chaos at concurrency 8 passes (no lost grants,
+      no stuck locks, chains verify).
+- [ ] S5: cargo-fuzz 30min each on pairing/sealed-envelope and config parsers;
+      executions/crashes/fixes reported.
+- [ ] S6: STRIDE threat model refreshed for Phases 9-13.
+- [ ] S7: 2-hour release soak at concurrency 4 passes.
+- [ ] Doctor --bundle excludes review payloads and command text (planted
+      assertion passes).
+- [ ] Amein-dependent items: SSH push permission, CI, Apple credentials,
+      MobAI credentials (all BLOCKED pending Amein).

