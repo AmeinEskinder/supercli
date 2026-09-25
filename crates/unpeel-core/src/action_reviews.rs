@@ -240,6 +240,18 @@ pub enum ReviewError {
     WriteFailed(String),
 }
 
+impl ReviewError {
+    /// True if this error means the review already has a recorded outcome
+    /// (a benign race: the outcome landed between listing in-flight reviews
+    /// and attempting to mark them). Callers that sweep in-flight reviews
+    /// (e.g. turn-cancel) must treat this as benign, not a failure.
+    pub fn is_already_recorded(&self) -> bool {
+        match self {
+            ReviewError::WriteFailed(msg) => msg.contains("already has a recorded outcome"),
+        }
+    }
+}
+
 impl fmt::Display for ReviewError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1698,6 +1710,44 @@ mod tests {
             RechainNeed::Current(1) => {}
             other => panic!("expected Current(1), got {other:?}"),
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// R2: a panic that unwinds through the review-log lock holder must not
+    /// wedge the log. `flock` is tied to the open FD; Rust's RAII drops the
+    /// `File` during unwinding, the kernel releases the lock, and a second
+    /// writer must acquire it and append. (The lock acquire is
+    /// non-blocking with a 30s fail-closed bound, so this test fails
+    /// instead of hanging if the lock were ever left held.)
+    #[test]
+    fn panic_while_holding_log_lock_releases_flock() {
+        let dir = test_dir("panic-holds-lock");
+        let session_dir = dir.join("session-1");
+        std::fs::create_dir_all(&session_dir).unwrap();
+
+        // Panic while HOLDING the LogLock.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _held = LogLock::acquire(&session_dir).expect("first acquire");
+            panic!("test panic while holding the review LogLock");
+        }));
+        assert!(outcome.is_err(), "the hook must panic");
+
+        // Second writer: the flock must be free. A full production write
+        // exercises acquire + append + fsync + release.
+        record_review(
+            &session_dir,
+            Actor::Human {
+                device_id: "phone-1".into(),
+            },
+            "c1",
+            "t.search",
+            "aa",
+            ReviewDecision::Approved,
+            None,
+        )
+        .expect("second writer acquires the LogLock after a panic");
+        assert_eq!(verify_review_chain(&session_dir).expect("chain"), 1);
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

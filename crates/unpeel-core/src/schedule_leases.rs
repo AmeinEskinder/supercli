@@ -446,6 +446,40 @@ impl ScheduleLeases {
             .map_err(LeaseError::from)
     }
 
+    /// R4: list all lease holders (schedule_id -> owner) for the /metrics endpoint.
+    pub fn list_holders(&self) -> Result<Vec<(String, String)>, LeaseError> {
+        // R4: count only active/current lease holders (expires_at_ms > now),
+        // not indiscriminately all rows (including expired/lapsed).
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT schedule_id, owner FROM schedule_leases WHERE tenant = ?1 AND expires_at_ms > {DB_NOW_MS}"
+        ))?;
+        let rows = stmt.query_map(rusqlite::params![self.tenant], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(LeaseError::from)
+    }
+
+    /// R4: list stale leases — rows that expired but were never released
+    /// (owner non-empty, expires_at_ms <= now). These indicate a crashed
+    /// worker. Used by `unpeel doctor`; unlike `list_holders` (active only)
+    /// this genuinely surfaces expired rows.
+    pub fn list_stale(&self) -> Result<Vec<(String, String, u64)>, LeaseError> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT schedule_id, owner, expires_at_ms FROM schedule_leases
+             WHERE tenant = ?1 AND owner != '' AND expires_at_ms <= {DB_NOW_MS}"
+        ))?;
+        let rows = stmt.query_map(rusqlite::params![self.tenant], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, u64>(2)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(LeaseError::from)
+    }
+
     /// Test hook: force a lease to lapse without waiting for the TTL.
     /// Production time always comes from the database clock; this just
     /// backdates the row's expiry so tests stay deterministic.
@@ -643,6 +677,27 @@ mod tests {
         // this machine, but never *passed in* by it.
         assert!(row.claimed_at_ms.abs_diff(app_now) < 5_000);
         assert!(row.expires_at_ms > row.claimed_at_ms);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn list_stale_reports_expired_owned_rows_only() {
+        let home = temp_home("stale");
+        let db = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
+        // Active lease: not stale.
+        db.claim("active").unwrap().unwrap();
+        // Expired lease: stale.
+        db.claim("crashed").unwrap().unwrap();
+        db.force_expire("crashed").unwrap();
+        // Released lease: owner cleared, not stale.
+        db.claim("released").unwrap().unwrap();
+        db.release("released").unwrap();
+
+        let stale = db.list_stale().unwrap();
+        assert_eq!(stale.len(), 1, "exactly one stale lease: {stale:?}");
+        assert_eq!(stale[0].0, "crashed");
+        assert!(!stale[0].1.is_empty(), "stale row keeps its owner");
+
         let _ = std::fs::remove_dir_all(&home);
     }
 }

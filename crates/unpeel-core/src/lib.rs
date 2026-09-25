@@ -66,6 +66,7 @@ pub mod host_resources;
 pub mod http_fetch;
 #[cfg(feature = "native-host")]
 pub mod integrations;
+pub mod json_log;
 #[cfg(feature = "native-host")]
 pub mod license;
 #[cfg(feature = "native-host")]
@@ -94,6 +95,7 @@ mod portable_gating_tests;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
+pub mod rate_limit;
 #[cfg(feature = "native-host")]
 pub mod screen_activity;
 

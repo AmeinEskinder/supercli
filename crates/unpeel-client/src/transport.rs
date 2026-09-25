@@ -1304,4 +1304,101 @@ mod tests {
         assert!(id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'));
         assert_ne!(new_upload_id().expect("rng"), id, "unique per call");
     }
+
+    /// R2: 5xx from the Host (e.g. 500 on mid-approval panic) is a hard
+    /// error, not a reachability failure. The client classifier maps:
+    /// 5xx → Ambiguous (Host side) → never auto-retried, never relay fallback.
+    ///
+    /// This pins down the contract: a 500 means "the Host may have executed
+    /// the action before panicking" (Ambiguous), so the client must NOT treat
+    /// it as "the Host is unreachable" (which would trigger relay fallback)
+    /// and must NOT auto-retry (which could double-execute).
+    #[test]
+    fn host_500_is_hard_error_never_retried_nor_fallback() {
+        // 500 on mid-approval panic (R2).
+        let err = HostClientError::Status(500, "panicked in request handler".to_string());
+
+        // NOT a reachability failure: no relay fallback.
+        // Falling back would route around the Host's Ambiguous marking.
+        assert!(
+            !err.is_reachability_failure(),
+            "500 must not trigger relay fallback: {err:?}"
+        );
+
+        // The DirectFailure classifier maps non-reachability to Hard.
+        let classified = DirectFailure::classify(err);
+        assert!(
+            matches!(classified, DirectFailure::Hard(_)),
+            "500 must classify as Hard (not Unreachable): {classified:?}"
+        );
+        assert!(
+            !classified.relay_eligible(),
+            "500 must not be relay-eligible"
+        );
+
+        // 5xx (not just 500) follows the same rule.
+        for status in [500, 502, 503, 504] {
+            let err = HostClientError::Status(status, "error".to_string());
+            assert!(
+                !err.is_reachability_failure(),
+                "HTTP {status} must not be a reachability failure"
+            );
+        }
+
+        // 4xx is also hard (client error, not reachability).
+        let err404 = HostClientError::Status(404, "not found".to_string());
+        assert!(!err404.is_reachability_failure());
+
+        // Only transport-level errors are reachability (relay-eligible).
+        let transport_err = HostClientError::Transport("connection refused".to_string());
+        assert!(transport_err.is_reachability_failure());
+    }
+
+    /// R2: the client operation layer never auto-retries a 5xx. A 500 from
+    /// `POST /mobile/approvals/answer` (mid-approval panic on the Host, which
+    /// records Ambiguous) must surface to the caller after EXACTLY ONE
+    /// HTTP roundtrip — a retry could double-execute the approved action.
+    #[test]
+    fn approval_answer_500_sends_exactly_once_never_retried() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingPanicTransport {
+            attempts: AtomicUsize,
+        }
+        impl DirectTransport for CountingPanicTransport {
+            fn roundtrip(
+                &self,
+                _method: &str,
+                _url: &str,
+                _auth: &str,
+                _body: Option<(&str, &[u8])>,
+            ) -> Result<(u16, String), HostClientError> {
+                self.attempts.fetch_add(1, Ordering::SeqCst);
+                // The Host panicked mid-approval: 500, Ambiguous recorded.
+                Ok((500, "panicked in request handler".to_string()))
+            }
+        }
+
+        let transport = Arc::new(CountingPanicTransport {
+            attempts: AtomicUsize::new(0),
+        });
+        let client = HostClient {
+            transport: transport.clone(),
+            base_url: "http://192.168.1.10:8321/mobile".to_string(),
+            token: "test-token".to_string(),
+            kind: TransportKind::Direct,
+        };
+
+        let result = client.answer_approval("approval-1", true);
+        match result {
+            Err(HostClientError::Status(500, _)) => {}
+            other => panic!("expected a 500 Status error, got: {other:?}"),
+        }
+
+        assert_eq!(
+            transport.attempts.load(Ordering::SeqCst),
+            1,
+            "a 500 must produce exactly one attempt — never auto-retried"
+        );
+    }
 }

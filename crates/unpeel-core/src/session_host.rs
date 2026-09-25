@@ -727,7 +727,10 @@ fn maybe_auto_title_from_input(
     let Ok(text) = std::str::from_utf8(data) else {
         return;
     };
-    let candidate = extract_submitted_prompt(&mut title_buffer.lock().unwrap(), text);
+    let candidate = extract_submitted_prompt(
+        &mut title_buffer.lock().unwrap_or_else(|e| e.into_inner()),
+        text,
+    );
     if let Some(candidate) = candidate {
         if apply_manifest_auto_title(session_id, &candidate) {
             title_done.store(true, Ordering::Relaxed);
@@ -3474,7 +3477,9 @@ impl RecentWriteIds {
 
 fn cache_manifest_health(session_id: &str, manifest: Option<HostedSessionManifest>) {
     let now = current_timestamp_ms();
-    let mut cache = manifest_health_cache().lock().unwrap();
+    let mut cache = manifest_health_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Entries for dead sessions are never explicitly evicted, so drop stale
     // ones once the cache grows past the prune threshold to keep it bounded.
     if cache.len() >= MANIFEST_HEALTH_CACHE_PRUNE_LEN {
@@ -3492,7 +3497,10 @@ fn cache_manifest_health(session_id: &str, manifest: Option<HostedSessionManifes
 }
 
 fn clear_cached_manifest_health(session_id: &str) {
-    manifest_health_cache().lock().unwrap().remove(session_id);
+    manifest_health_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(session_id);
 }
 
 fn refresh_manifest_health_cached(
@@ -5335,7 +5343,10 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
             // authority. Read the current viewport, not a stale scan flag.
             if cancelled_at.is_some()
                 && viewport_has_menu_prompt(
-                    &cancellation_viewport.lock().unwrap().current_screen_text(),
+                    &cancellation_viewport
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .current_screen_text(),
                 )
             {
                 cancelled_at = None;
@@ -5393,7 +5404,9 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
                         .last_runtime_observation = None;
                 }
                 let (current_child_pid, foreground_process_group_id) = {
-                    let runtime = runtime_for_observer.lock().unwrap();
+                    let runtime = runtime_for_observer
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     (
                         runtime.child.process_id(),
                         runtime.master.process_group_leader(),
@@ -5586,7 +5599,7 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
             Duration::from_millis(SESSION_MENU_SCAN_INTERVAL_MS),
             move || {
                 let (screen, modes) = {
-                    let mut viewport = viewport_for_menu.lock().unwrap();
+                    let mut viewport = viewport_for_menu.lock().unwrap_or_else(|e| e.into_inner());
                     (
                         viewport.current_screen_text(),
                         viewport.terminal_mode_state(),

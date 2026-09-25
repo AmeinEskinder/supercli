@@ -28,6 +28,22 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
+
+/// Extract a human-readable message from a caught panic payload.
+fn panic_message(panic: &Box<dyn std::any::Any + Send + 'static>) -> String {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
+/// Test hook: if set, `execute_call` panics instead of calling the connector.
+/// Tests use this to verify the mid-call panic → Ambiguous path (R2).
+#[cfg(test)]
+static EXECUTE_CALL_PANIC_HOOK: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 use sha2::{Digest, Sha256};
 use unpeel_connector::{
     default_roots, discover, effective_policy,
@@ -800,6 +816,20 @@ impl SessionConnectors {
         replaces_attempt: Option<&str>,
         actor: &str,
     ) -> Result<String, ToolCallFailure> {
+        // R5: per-device rate limit on connector calls. Extract device_id
+        // from the actor (human:<device_id>); scheduled/policy actors get
+        // their own buckets.
+        let device_id = if let Some(id) = actor.strip_prefix("human:") {
+            id.to_string()
+        } else {
+            actor.to_string()
+        };
+        if !crate::rate_limit::global().check(&device_id, "connector") {
+            return Err(ToolCallFailure::failed(format!(
+                "rate limit exceeded for connector calls (device {device_id})"
+            )));
+        }
+
         // Fencing first: a worker that lost its lease refuses before the
         // review is written, so a stale run leaves no trace at all.
         let schedule_id = actor.strip_prefix("scheduled:").unwrap_or(actor);
@@ -838,8 +868,55 @@ impl SessionConnectors {
             );
             return Err(e);
         }
-        let live = self.live.get_mut(connector).expect("find_tool checked");
-        let (result, telemetry) = live.link.call_detailed(name, args);
+        let call_result = {
+            let live = self.live.get_mut(connector).expect("find_tool checked");
+            // R2: a panic in the connector call must not take down the Host
+            // or leave the review in-flight. Catch it, record Ambiguous
+            // (the external effect is unknown), and fail the call.
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // Test hook: deterministic panic injection (R2). Recover from
+                // poison so a panicking hook cannot wedge later calls.
+                #[cfg(test)]
+                if *EXECUTE_CALL_PANIC_HOOK
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                {
+                    panic!("test-injected panic in connector call");
+                }
+                live.link.call_detailed(name, args)
+            }))
+        };
+        let (result, telemetry) = match call_result {
+            Ok(output) => output,
+            Err(panic) => {
+                let msg = panic_message(&panic);
+                self.record_outcome(
+                    &review_id,
+                    crate::action_reviews::AttemptOutcome::Ambiguous {
+                        reason: format!("tool call panicked: {msg}"),
+                    },
+                    actor,
+                );
+                self.audit_attempt(&AttemptAudit {
+                    connector,
+                    tool: name,
+                    policy,
+                    approved,
+                    arguments,
+                    attempt_id,
+                    args_hash,
+                    review_id: Some(&review_id),
+                    request_sent_at: None,
+                    outcome: "panic",
+                    retryable: false,
+                    replaces_attempt,
+                    error: Some(&format!("tool call panicked: {msg}")),
+                });
+                return Err(ToolCallFailure::uncertain(format!(
+                    "connector tool {name:?} panicked: {msg}"
+                )));
+            }
+        };
         let request_sent_at = telemetry.request_sent_at;
         match result {
             Ok(value) => {
@@ -1313,6 +1390,51 @@ for line in sys.stdin:
         respond(mid, {"content": [{"type": "text", "text": "echo:" + json.dumps(msg["params"]["arguments"])}]})
 "#;
 
+    /// Counting stub: identical to STUB, but every `tools/call` appends one
+    /// line to the file named by the `UNPEEL_COUNT_FILE` env var. Lets a test
+    /// prove the mock connector was never invoked (count exactly 0).
+    const STUB_COUNTING: &str = r#"import json, sys, os
+TOOL = sys.argv[1]
+COUNT = os.environ.get("UNPEEL_COUNT_FILE", "")
+TOOLS = [{"name": TOOL, "description": "echo it", "inputSchema": {"type": "object"}}]
+def respond(mid, result):
+    sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}) + "\n")
+    sys.stdout.flush()
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    msg = json.loads(line)
+    method, mid = msg.get("method"), msg.get("id")
+    if method == "initialize":
+        respond(mid, {"protocolVersion": "2024-11-05", "capabilities": {}, "serverInfo": {"name": "stub", "version": "0"}})
+    elif method == "tools/list":
+        respond(mid, {"tools": TOOLS})
+    elif method == "tools/call":
+        if COUNT:
+            with open(COUNT, "a") as f:
+                f.write("called\n")
+        respond(mid, {"content": [{"type": "text", "text": "echo:" + json.dumps(msg["params"]["arguments"])}]})
+"#;
+
+    const MANIFEST_COUNT_ALLOW: &str = r#"
+[connector]
+name = "county"
+version = "0.1.0"
+display_name = "County"
+description = "counting allow-policy test connector"
+kind = "mcp-stdio"
+
+[auth]
+flow = "none"
+
+[tools]
+provides = ["county.echo"]
+
+[policy]
+"county.echo" = "allow"
+"#;
+
     struct Fixture {
         dir: PathBuf,
         session_dir: PathBuf,
@@ -1324,11 +1446,21 @@ for line in sys.stdin:
 
     impl Fixture {
         fn write_connector(dir: &Path, name: &str, manifest: &str, tool: &str) {
+            Self::write_connector_with_stub(dir, name, manifest, tool, STUB);
+        }
+
+        fn write_connector_with_stub(
+            dir: &Path,
+            name: &str,
+            manifest: &str,
+            tool: &str,
+            stub: &str,
+        ) {
             let conn = dir.join(name);
             std::fs::create_dir_all(&conn).unwrap();
             std::fs::write(conn.join("connector.toml"), manifest).unwrap();
             let script = conn.join("stub.py");
-            std::fs::write(&script, STUB).unwrap();
+            std::fs::write(&script, stub).unwrap();
             let exe = conn.join("connector");
             // Quote the script path: fixture dirs may contain characters
             // (spaces, parens) that would otherwise break the shell.
@@ -1416,6 +1548,140 @@ for line in sys.stdin:
         assert!(audit.contains("\"tool\":\"allowy.echo\""), "{audit}");
         assert!(audit.contains("\"ok\":true"), "{audit}");
         assert!(audit.contains("\"policy\":\"allow\""), "{audit}");
+    }
+
+    /// R2: a panic mid-tool-call must not take down the Host or leave the
+    /// review in-flight. The panic is caught, the attempt is recorded as
+    /// Ambiguous (external effect unknown), and the call fails.
+    #[test]
+    fn panic_mid_tool_call_records_ambiguous() {
+        let fx = Fixture::new();
+        fx.attach("allowy", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-1", &fx.session_dir);
+
+        // Arm the hook: the connector call will panic.
+        *EXECUTE_CALL_PANIC_HOOK.lock().unwrap() = true;
+        let result = set.call_tool("allowy.echo", &json!({"msg": "hi"}));
+        *EXECUTE_CALL_PANIC_HOOK.lock().unwrap() = false;
+
+        // The call fails (does not crash the test process).
+        let err = result.expect_err("panicking tool call must fail");
+        assert!(err.contains("panicked"), "{err:?}");
+
+        // The review is not left in-flight: an Ambiguous outcome was recorded.
+        let inflight = crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight");
+        assert!(
+            inflight.is_empty(),
+            "panic must not leave in-flight: {inflight:?}"
+        );
+
+        // The chain verifies: review + Ambiguous outcome.
+        let count =
+            crate::action_reviews::verify_review_chain(&fx.session_dir).expect("chain verifies");
+        assert_eq!(count, 2, "review + Ambiguous outcome");
+
+        // The audit log marks the panic.
+        let audit = std::fs::read_to_string(fx.session_dir.join(AUDIT_FILE)).unwrap();
+        assert!(audit.contains("\"outcome\":\"panic\""), "{audit}");
+
+        // R2 cascade: a NORMAL connector call on the same connector/session
+        // afterwards must succeed. If any lock in the call path were
+        // poisoned by the panic, this call would fail.
+        let out = set
+            .call_tool("allowy.echo", &json!({"msg": "after-panic"}))
+            .expect("normal connector call after panic must succeed");
+        assert!(out.contains("after-panic"), "{out}");
+    }
+
+    /// R5: end-to-end connector rate-limit test with a counting mock.
+    ///
+    /// Drives a real connector call through `call_tool_detailed` →
+    /// `execute_call` (the production path) with a counting mock connector
+    /// attached and the actor set to `human:<device>`. Exhausts the
+    /// 120/min per-device connector bucket, then asserts:
+    /// - the call fails with "rate limit exceeded" (never a tool result)
+    /// - the mock connector was never invoked (call count exactly 0)
+    /// - review-log bytes unchanged against a real canonical baseline
+    /// - hash-chain length unchanged (`verify_review_chain`, unmasked)
+    ///
+    /// This proves the rate-limit check in `execute_call` fires before the
+    /// review write and before the connector is invoked — and that the
+    /// limiter is keyed to the authenticated device identity.
+    #[test]
+    fn connector_rate_limit_end_to_end_no_side_effects() {
+        let fx = Fixture::new();
+        // Counting mock: every tools/call appends one line to this file.
+        let count_file = fx.dir.join("call-count.txt");
+        std::env::set_var("UNPEEL_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-conn-ratelimit", &fx.session_dir);
+        let device = "e2e-conn-device-001";
+        set.set_actor(format!("human:{device}"));
+
+        // Real canonical baseline: one approved review through the
+        // production writer, so the chain actually verifies.
+        crate::action_reviews::record_review(
+            &fx.session_dir,
+            crate::action_reviews::Actor::Human {
+                device_id: device.to_string(),
+            },
+            "county",
+            "county.echo",
+            "args-hash",
+            crate::action_reviews::ReviewDecision::Approved,
+            None,
+        )
+        .expect("baseline review");
+        let review_log = fx.session_dir.join(crate::action_reviews::REVIEWS_FILE);
+        let bytes_before = std::fs::read(&review_log).expect("read review log");
+        let chain_before = crate::action_reviews::verify_review_chain(&fx.session_dir)
+            .expect("baseline chain verifies");
+
+        // Exhaust the 120/min connector bucket for this device.
+        let limiter = crate::rate_limit::global();
+        for _ in 0..120 {
+            assert!(limiter.check(device, "connector"), "connector bucket fill");
+        }
+
+        // The real execution path: find_tool -> execute_call, whose FIRST
+        // check is the per-device rate limit (before review write, before
+        // the connector is invoked).
+        let err = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect_err("rate-limited connector call must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("rate limit exceeded"),
+            "must fail closed on the rate limit: {msg}"
+        );
+
+        // The mock connector was never invoked: count is exactly 0.
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 0, "mock connector must never be invoked");
+
+        // No side effects on the review log.
+        let bytes_after = std::fs::read(&review_log).expect("read review log");
+        assert_eq!(
+            bytes_before, bytes_after,
+            "review log bytes must be unchanged"
+        );
+        let chain_after = crate::action_reviews::verify_review_chain(&fx.session_dir)
+            .expect("chain still verifies");
+        assert_eq!(
+            chain_before, chain_after,
+            "hash chain length must be unchanged"
+        );
+
+        std::env::remove_var("UNPEEL_COUNT_FILE");
     }
 
     #[test]

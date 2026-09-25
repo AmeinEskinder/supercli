@@ -258,13 +258,19 @@ pub fn run_stdio_with_domains(domains: McpDomainMask) -> Result<(), String> {
         if method == Some("tools/call") && has_id {
             let key = request_token_key(&message["id"]);
             let token = crate::mcp_cancel::CancelToken::default();
-            tokens.lock().unwrap().insert(key.clone(), token.clone());
+            tokens
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(key.clone(), token.clone());
             let (calls, ready) = &*queue;
-            calls.lock().unwrap().push_back(QueuedToolCall {
-                message,
-                key,
-                token,
-            });
+            calls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push_back(QueuedToolCall {
+                    message,
+                    key,
+                    token,
+                });
             ready.notify_one();
             continue;
         }
@@ -292,7 +298,7 @@ fn tool_call_worker(
     let (calls, ready) = queue;
     loop {
         let call = {
-            let mut calls = calls.lock().unwrap();
+            let mut calls = calls.lock().unwrap_or_else(|e| e.into_inner());
             loop {
                 if let Some(call) = calls.pop_front() {
                     break Some(call);
@@ -313,7 +319,10 @@ fn tool_call_worker(
             let _guard = crate::mcp_cancel::install(call.token.clone());
             handle_message_with_domains(&call.message, domains)
         };
-        tokens.lock().unwrap().remove(&call.key);
+        tokens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&call.key);
         if call.token.is_cancelled() {
             // Per spec, a cancelled request gets no response.
             trace(&format!(
@@ -343,7 +352,7 @@ fn cancel_inflight_request(
         return;
     };
     let key = request_token_key(request_id);
-    match tokens.lock().unwrap().get(&key) {
+    match tokens.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
         Some(token) => {
             token.cancel();
             trace(&format!("cancelled in-flight request {key}"));
