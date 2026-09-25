@@ -9,11 +9,14 @@
 //! and the web Controller — all clients of `unpeel serve`.
 
 mod apps_cli;
+mod backup_cli;
 mod browser_cli;
 mod cli;
 mod computer_cli;
+mod config_cli;
 mod connectors_cli;
 mod doctor_cli;
+mod init_cli;
 mod integrations_cli;
 mod link_cli;
 mod mcp_cli;

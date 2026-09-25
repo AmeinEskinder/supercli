@@ -26,9 +26,19 @@
 
 set -u
 
+# Ensure cargo is on PATH for the pair_client build.
+export PATH="$HOME/.cargo/bin:$PATH"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-UNPEEL="$ROOT/crates/target/debug/unpeel"
-UNPEEL_HOST="$ROOT/crates/target/debug/unpeel-host"
+# R3: configurable profile (debug/release). Default: debug.
+# Usage: ./e2e-scenario.sh [debug|release]
+PROFILE="${1:-debug}"
+if [ "$PROFILE" != "debug" ] && [ "$PROFILE" != "release" ]; then
+    echo "Usage: $0 [debug|release]" >&2
+    exit 1
+fi
+UNPEEL="$ROOT/crates/target/$PROFILE/unpeel"
+UNPEEL_HOST="$ROOT/crates/target/$PROFILE/unpeel-host"
 HELPER="$ROOT/scripts/e2e-scenario-helpers.py"
 
 E2E_HOME="/home/hatch/e2e-unpeel-$$"
@@ -45,24 +55,103 @@ export E2E_TOKEN=""
 PASS=0
 FAIL=0
 
+# --- Process identity before any signal (repo invariant) ---
+# A bare pid can be reused by the kernel after the original process exits,
+# so every kill in this script verifies the recorded kernel start time
+# (ms since the epoch — the same definition as unpeel-core's
+# `process_start_time_ms`: /proc/<pid>/stat field 22 in clock ticks since
+# boot, plus /proc/stat btime) before signaling. Ambiguous ownership fails
+# closed: no signal is sent.
+proc_start_ms() {
+    # $1 = pid. Prints the kernel start time in ms since the epoch, or
+    # nothing (nonzero exit) if the process is gone or unreadable.
+    local pid="$1" stat rest
+    stat="$(cat "/proc/$pid/stat" 2>/dev/null)" || return 1
+    # stat field 22 is starttime; comm may contain spaces/parens, so parse
+    # from after the LAST ')'. The remaining fields start at stat field 3,
+    # making starttime the 20th.
+    rest="${stat##*)}"
+    local start_ticks ticks_per_sec btime
+    # shellcheck disable=SC2086
+    set -- $rest
+    start_ticks="${20:?}"
+    ticks_per_sec="$(getconf CLK_TCK)" || return 1
+    btime="$(awk '/^btime /{print $2}' /proc/stat)" || return 1
+    [ -n "$start_ticks" ] && [ -n "$btime" ] || return 1
+    echo $(( btime * 1000 + start_ticks * 1000 / ticks_per_sec ))
+}
+
+# record_pid <pid>: print "<pid> <start_ms>" for pidfiles.
+record_pid() {
+    local start
+    start="$(proc_start_ms "$1")" || start="unknown"
+    echo "$1 $start"
+}
+
+# safe_kill <pid> <recorded_start_ms> [signal]: signal only if the live
+# process <pid> still has the recorded kernel start time.
+safe_kill() {
+    local pid="$1" recorded="$2" sig="${3:--9}" now
+    now="$(proc_start_ms "$pid")" || {
+        echo "safe_kill: pid $pid already gone; not signaling"
+        return 0
+    }
+    if [ "$now" != "$recorded" ]; then
+        echo "safe_kill: pid $pid start time changed ($recorded -> $now); NOT signaling (possible pid reuse)"
+        return 0
+    fi
+    kill "$sig" "$pid" 2>/dev/null || true
+}
+
+# This script's own start time: pattern-based cleanup kills only processes
+# at least this young, so a stale pattern can never hit a pre-existing
+# system process.
+SCRIPT_START_MS="$(proc_start_ms $$)" || {
+    echo "FATAL: cannot read own kernel start time; refusing to run kills without identity" >&2
+    exit 1
+}
+
+# pkill_bounded <pattern> [signal]: like pkill -f, but only signals
+# processes whose kernel start time is >= this script's start.
+pkill_bounded() {
+    local pattern="$1" sig="${2:--9}" pid started
+    for pid in $(pgrep -f "$pattern" 2>/dev/null); do
+        [ "$pid" = "$$" ] && continue
+        started="$(proc_start_ms "$pid")" || continue
+        if [ "$started" -ge "$SCRIPT_START_MS" ]; then
+            kill "$sig" "$pid" 2>/dev/null || true
+        else
+            echo "pkill_bounded: skipping pid $pid (started $started, before this run $SCRIPT_START_MS)"
+        fi
+    done
+}
+
 pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1${2:+ -- $2}"; }
 die() { echo "FATAL: $1"; cleanup; exit 1; }
 
 cleanup() {
-    # Best-effort teardown of everything this script started.
+    # Best-effort teardown of everything this script started. Every signal
+    # verifies the recorded kernel start time first (see above).
     for pidfile in "$E2E_HOME"/pids/*.pid; do
         [ -f "$pidfile" ] || continue
-        kill -9 "$(cat "$pidfile")" 2>/dev/null || true
+        # Pidfiles hold "<pid> <start_ms>" (see record_pid).
+        read -r cpid cstart < "$pidfile"
+        if [ -z "${cstart:-}" ] || [ "$cstart" = "unknown" ]; then
+            echo "cleanup: $pidfile has no recorded start time; skipping (fail closed)"
+            continue
+        fi
+        safe_kill "$cpid" "$cstart" -9
     done
-    # Orphaned connector stubs can only belong to this run (unique home path).
-    pkill -9 -f "$CONN_DIR" 2>/dev/null || true
+    # Orphaned connector stubs can only belong to this run (unique home path),
+    # and only processes younger than this script are signaled.
+    pkill_bounded "$CONN_DIR" -9
     # The session host: stop the session properly, then reap its
     # __pty_core__/__remote__ children (orphaned when the host dies).
     if [ -n "${SID:-}" ]; then
         "$UNPEEL" stop "$SID" >/dev/null 2>&1 || true
     fi
-    pkill -9 -f "unpeel-host (__pty_core__|__remote__)" 2>/dev/null || true
+    pkill_bounded "unpeel-host (__pty_core__|__remote__)" -9
     sleep 1
 }
 trap cleanup EXIT
@@ -154,7 +243,7 @@ chmod 600 "$E2E_HOME/mcp/auth-token"
 echo "== S2 step 1: start the Host"
 "$UNPEEL" serve >"$LOG_DIR/serve.log" 2>&1 &
 SERVE_PID=$!
-echo "$SERVE_PID" > "$E2E_HOME/pids/serve.pid"
+record_pid "$SERVE_PID" > "$E2E_HOME/pids/serve.pid"
 
 READY=0
 for _ in $(seq 1 40); do
@@ -182,7 +271,7 @@ pass "Host started (pid from serve.json, hookPort present)"
 echo "== S2 step 2: pair a client (genuine sealed /mobile/pair exchange)"
 "$UNPEEL" pair --advertise-host 127.0.0.1 --advertise-port "$MOBILE_PORT" >"$LOG_DIR/pair.log" 2>&1 &
 PAIR_PID=$!
-echo "$PAIR_PID" > "$E2E_HOME/pids/pair.pid"
+record_pid "$PAIR_PID" > "$E2E_HOME/pids/pair.pid"
 # Wait for the QR code line, then extract it.
 QR=""
 for _ in $(seq 1 40); do
@@ -214,9 +303,9 @@ done
 [ "$READY" = 1 ] || die "mobile TLS listener never came up on $MOBILE_PORT"
 pass "mobile HTTPS listener up with certificate"
 # Build the pairing client if needed, then run the sealed exchange.
-PAIR_CLIENT_BIN="$ROOT/crates/target/debug/examples/pair_client"
+PAIR_CLIENT_BIN="$ROOT/crates/target/$PROFILE/examples/pair_client"
 if [ ! -x "$PAIR_CLIENT_BIN" ]; then
-    (cd "$ROOT/crates" && cargo build -p unpeel-client --example pair_client \
+    (cd "$ROOT/crates" && cargo build --profile "$PROFILE" -p unpeel-client --example pair_client \
         >"$LOG_DIR/pair-client-build.log" 2>&1) \
         || die "pair_client build failed (see $LOG_DIR/pair-client-build.log)"
 fi
@@ -340,7 +429,8 @@ grep -q '"outcome":"completed"' "$SESSION_DIR/scheduled-runs.jsonl" \
 echo "== S2 step 6: cancel during a genuine in-flight tool call"
 "$HELPER" mcp-slow "$SID" 20 >"$LOG_DIR/slow.out" 2>"$LOG_DIR/slow.log" &
 SLOW_PID=$!
-echo "$SLOW_PID" > "$E2E_HOME/pids/slow.pid"
+SLOW_START="$(proc_start_ms "$SLOW_PID")"
+record_pid "$SLOW_PID" > "$E2E_HOME/pids/slow.pid"
 SLOW_RID=""
 for _ in $(seq 1 60); do
     if grep -q "^INFLIGHT " "$LOG_DIR/slow.out" 2>/dev/null; then
@@ -366,8 +456,9 @@ else
     fail "turn-cancel response" "$CANCEL_RESP"
 fi
 # The sidecar is gone now: kill it before its 10s connector-link timeout can
-# write a competing late outcome for the same review.
-kill -9 "$SLOW_PID" 2>/dev/null || true
+# write a competing late outcome for the same review. Identity-verified:
+# only signal if the kernel start time still matches the spawn record.
+safe_kill "$SLOW_PID" "$SLOW_START" -9
 sleep 1
 AMBIG_REASON="$(python3 - "$SESSION_DIR" "$SLOW_RID" <<'EOF'
 import json,sys
@@ -409,12 +500,13 @@ echo "== S2 step 7: worker takeover across two real daemon processes"
 pass "takeover schedule armed; first schedule paused"
 "$UNPEEL" schedule daemon >"$LOG_DIR/daemon-a.log" 2>&1 &
 DAEMON_A=$!
-echo "$DAEMON_A" > "$E2E_HOME/pids/daemon-a.pid"
+DAEMON_A_START="$(proc_start_ms "$DAEMON_A")"
+record_pid "$DAEMON_A" > "$E2E_HOME/pids/daemon-a.pid"
 echo "daemon A pid $DAEMON_A; waiting for its first due trigger (~60s)..."
 A_RID="$("$HELPER" wait-inflight "$SID" "slowy.sleep" 150 "scheduled:e2e-takeover" 2>"$LOG_DIR/wait-a.log")"
 [ -n "$A_RID" ] || die "daemon A never ran slowy.sleep in-flight (see $LOG_DIR/daemon-a.log)"
 pass "daemon A picked up slowy.sleep (review $A_RID in-flight)"
-kill -9 "$DAEMON_A" 2>/dev/null || true
+safe_kill "$DAEMON_A" "$DAEMON_A_START" -9
 sleep 1
 # Simulate the 10-minute lease TTL elapsing after the SIGKILL crash: expire
 # worker A's row in the REAL lease database the daemon used. Everything else
@@ -425,13 +517,14 @@ sleep 1
 pass "worker A SIGKILLed; its lease forced to lapse (real lease DB row)"
 "$UNPEEL" schedule daemon >"$LOG_DIR/daemon-b.log" 2>&1 &
 DAEMON_B=$!
-echo "$DAEMON_B" > "$E2E_HOME/pids/daemon-b.pid"
+DAEMON_B_START="$(proc_start_ms "$DAEMON_B")"
+record_pid "$DAEMON_B" > "$E2E_HOME/pids/daemon-b.pid"
 TAKEOVER_REC="$("$HELPER" wait-scheduled-record "$SESSION_DIR" 180 2>"$LOG_DIR/wait-b.log")"
 [ -n "$TAKEOVER_REC" ] || die "daemon B never escalated (see $LOG_DIR/daemon-b.log)"
 echo "$TAKEOVER_REC" | grep -q "lapsed" \
     && pass "daemon B took over and escalated to NeedsReview" \
     || fail "takeover escalation record" "$TAKEOVER_REC"
-kill -9 "$DAEMON_B" 2>/dev/null || true
+safe_kill "$DAEMON_B" "$DAEMON_B_START" -9
 
 # ------------------------------------------------- 8. verify the hash chain
 echo "== S2 step 8: verify the action-review hash chain"

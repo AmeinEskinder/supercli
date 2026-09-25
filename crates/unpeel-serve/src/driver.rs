@@ -2053,6 +2053,7 @@ impl Drop for HostRuntime {
 pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
     SHUTDOWN_REQUESTED.store(false, Ordering::Release);
     install_shutdown_handlers();
+    refuse_invalid_config()?;
     let (mut driver, events) = HostRuntime::start()?;
     for event in events {
         report(event);
@@ -2069,6 +2070,36 @@ pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
     drop(driver);
     report(ServeEvent::Stopped);
     Ok(())
+}
+
+/// The Host refuses to serve an invalid config. Same schema and same
+/// message as `unpeel config check`: invalid values are errors, unknown
+/// keys are warnings and never block. A missing app-state file keeps its
+/// historical behavior (load() tolerates it; the seed path fills it in);
+/// a present-but-unreadable file is refused just like the CLI refuses it.
+fn refuse_invalid_config() -> Result<(), String> {
+    refuse_loaded(&unpeel_core::app_state::load())
+}
+
+/// The refusal logic against an already-attempted load, so tests can
+/// cover it without mutating process-global `UNPEEL_HOME`.
+fn refuse_loaded(doc: &Result<serde_json::Value, String>) -> Result<(), String> {
+    let doc = match doc {
+        Ok(doc) => doc,
+        // load() tolerates a missing file (first-run seed path); a
+        // present-but-unreadable file is refused, same as the CLI.
+        Err(err) => {
+            return Err(format!(
+                "invalid config:\n  error: cannot load app-state.json: {err}"
+            ))
+        }
+    };
+    let report = unpeel_core::config::check_document(doc);
+    if report.is_valid() {
+        Ok(())
+    } else {
+        Err(report.message())
+    }
 }
 
 /// A blank home gets the same builtin presets the Mac app seeds on its
@@ -2196,6 +2227,36 @@ fn project_name(model: &SidebarModel, row: &SessionRow) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuse_loaded_accepts_valid_config() {
+        let doc: Result<serde_json::Value, String> =
+            Ok(serde_json::json!({ "theme": "dark", "projects": [] }));
+        assert!(refuse_loaded(&doc).is_ok());
+    }
+
+    #[test]
+    fn refuse_loaded_rejects_invalid_values() {
+        let doc: Result<serde_json::Value, String> = Ok(serde_json::json!({ "theme": "neon" }));
+        let err = refuse_loaded(&doc).expect_err("invalid theme must refuse");
+        assert!(err.starts_with("invalid config:"), "{err}");
+        assert!(err.contains("'theme'"), "{err}");
+    }
+
+    #[test]
+    fn refuse_loaded_rejects_unreadable_state() {
+        // app_state::load() already tolerates a missing file; an Err here
+        // means a present-but-corrupt document, which must refuse.
+        let doc: Result<serde_json::Value, String> = Err("boom".to_string());
+        let err = refuse_loaded(&doc).expect_err("unreadable state must refuse");
+        assert!(err.contains("cannot load app-state.json"), "{err}");
+    }
+
+    #[test]
+    fn refuse_loaded_tolerates_unknown_keys() {
+        let doc: Result<serde_json::Value, String> = Ok(serde_json::json!({ "typo_key": 1 }));
+        assert!(refuse_loaded(&doc).is_ok());
+    }
 
     #[test]
     fn native_probe_distinguishes_client_only_app_from_compatibility_host() {

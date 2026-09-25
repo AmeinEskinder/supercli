@@ -85,6 +85,16 @@ unpeel — run and steer CLI agent sessions
                                   scheduled autonomous sessions (opt-in)
   unpeel migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
+  unpeel backup [--to <path>] [--json]
+                                  snapshot this home into a verifiable archive
+  unpeel restore --from <path> [--force] [--json]
+                                  verify and reinstall a backup archive
+                                  (bare `unpeel restore <session>` still
+                                  restores an archived session)
+  unpeel config check [--json]    validate workspace settings
+                                  (exit 2 when a value is invalid)
+  unpeel init [--json]            first-run setup: private home, defaults,
+                                  pairing code/QR, then doctor
   unpeel add [PATH] [--name N] [--here] [--json]
                                   add a folder (default: here) as a project
   unpeel projects [list | add <name> <path> | remove <name|path>]
@@ -604,11 +614,11 @@ fn pair_through_running_host(
 
 /// Pairing always rides the Host service so the paired device lands in the
 /// worker's live device list, not in a one-shot process that exits.
-fn ensure_host_running() -> Result<(), String> {
+pub(crate) fn ensure_host_running() -> Result<(), String> {
     if unpeel_serve::driver::is_running() {
         return Ok(());
     }
-    println!("{PAIR_STANDALONE_NOTICE}");
+    eprintln!("{PAIR_STANDALONE_NOTICE}");
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     unpeel_serve::service::ensure_background(&executable)?;
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -987,9 +997,17 @@ pub fn run(args: &[String]) -> i32 {
         "archive" => reference_arg()
             .and_then(|reference| resolve(&reference))
             .and_then(|row| unpeel_core::session_ops::archive_session(&row.id).map(|_| 0)),
-        "restore" => reference_arg()
-            .and_then(|reference| resolve(&reference))
-            .and_then(|row| unpeel_core::session_ops::restore_session(&row.id).map(|_| 0)),
+        "restore" => {
+            // Backup archives take `--from`; a bare session reference keeps
+            // the historical archived-session restore.
+            if args.iter().any(|a| a == "--from") {
+                Ok(crate::backup_cli::restore_cmd(&args[1..]))
+            } else {
+                reference_arg()
+                    .and_then(|reference| resolve(&reference))
+                    .and_then(|row| unpeel_core::session_ops::restore_session(&row.id).map(|_| 0))
+            }
+        }
         "rm" | "remove" | "close" => reference_arg()
             .and_then(|reference| resolve(&reference))
             .and_then(|row| unpeel_core::session_ops::remove_session(&row.id).map(|_| 0)),
@@ -1010,6 +1028,21 @@ pub fn run(args: &[String]) -> i32 {
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
         "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
+        "init" => Ok(crate::init_cli::run(
+            &parsed.positional[1..],
+            parsed.has("json"),
+        )),
+        "backup" => Ok(crate::backup_cli::backup_cmd(&args[1..])),
+        "config" => match args.get(1).map(String::as_str) {
+            Some("--help" | "-h" | "help") if args.len() == 2 => {
+                println!("{}", crate::config_cli::CONFIG_HELP);
+                Ok(0)
+            }
+            _ => Ok(crate::config_cli::run(
+                &parsed.positional[1..],
+                parsed.has("json"),
+            )),
+        },
         // The one unified registrar: `sync` delegates to the connector
         // sync pass (install/update from a registry + verify everything).
         "registrar" => match args.get(1).map(String::as_str) {

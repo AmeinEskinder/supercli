@@ -42,7 +42,7 @@ const GENESIS_PREV_HASH: &str = "genesis";
 /// The 30-second acquisition timeout is kept as the fail-closed bound for
 /// a genuinely contended lock; it no longer has to cover the stale-lock
 /// case, because the kernel makes that case impossible.
-struct LogLock {
+pub(crate) struct LogLock {
     /// The open lockfile. Dropping it closes the fd, which releases the
     /// `flock` — no explicit unlock or unlink step exists to be skipped by
     /// a crash.
@@ -57,7 +57,7 @@ struct LogLock {
 }
 
 impl LogLock {
-    fn acquire(session_dir: &Path) -> Result<Self, ReviewError> {
+    pub(crate) fn acquire(session_dir: &Path) -> Result<Self, ReviewError> {
         let lock_path = session_dir.join(format!("{REVIEWS_FILE}.lock"));
         #[cfg(unix)]
         return Self::acquire_flock(&lock_path);
@@ -685,12 +685,24 @@ pub fn verify_review_chain(session_dir: &Path) -> Result<usize, ChainError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
         Err(e) => return Err(ChainError::Io(format!("open {}: {e}", path.display()))),
     };
-    let reader = BufReader::new(file);
+    verify_review_reader(BufReader::new(file), &path.display().to_string())
+}
+
+/// Verify the exact bytes of a review log — e.g. a backup snapshot —
+/// without touching the live file. Reading the live log after capturing a
+/// snapshot races with concurrent writers (a torn mid-append read would
+/// report a false broken chain); verifying the captured bytes reports on
+/// exactly what was backed up.
+pub fn verify_review_bytes(bytes: &[u8], label: &str) -> Result<usize, ChainError> {
+    verify_review_reader(BufReader::new(bytes), label)
+}
+
+fn verify_review_reader(reader: impl std::io::BufRead, label: &str) -> Result<usize, ChainError> {
     let mut prev_hash = GENESIS_PREV_HASH.to_string();
     let mut count = 0usize;
     for (idx, line) in reader.lines().enumerate() {
         let line_no = idx + 1;
-        let line = line.map_err(|e| ChainError::Io(format!("read {}: {e}", path.display())))?;
+        let line = line.map_err(|e| ChainError::Io(format!("read {label}: {e}")))?;
         if line.trim().is_empty() {
             continue;
         }

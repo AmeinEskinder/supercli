@@ -29,9 +29,13 @@ pub mod app_state;
 #[cfg(feature = "native-host")]
 pub mod apps_mcp;
 #[cfg(feature = "native-host")]
+pub mod backup;
+#[cfg(feature = "native-host")]
 pub mod browser_engine;
 #[cfg(feature = "native-host")]
 pub mod browser_mcp;
+#[cfg(feature = "native-host")]
+pub mod config;
 #[cfg(feature = "native-host")]
 pub mod controller_api;
 #[cfg(feature = "native-host")]
