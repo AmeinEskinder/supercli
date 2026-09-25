@@ -2725,6 +2725,8 @@ impl From<NativeBootstrapContext> for HostBootstrapContext {
             // The bridge is linked only into the native Host. Capability
             // metadata remains Rust-owned and cannot be supplied by Swift.
             protocol: HostProtocolDescriptor::native_v1(),
+            // Phase 13 v3 (B): Swift side doesn't provide this; starts at 0.
+            approval_generation: 0,
         }
     }
 }
