@@ -114,6 +114,59 @@ await for (final msg in queue.rest) {
 // provide a helper (e.g. host.serialRebuild(fn)) so app code can't get it wrong.
 ```
 
+### P0-6. GPU texture/video surface widget
+supercli's device emulator UI needs a widget to display live device screen
+streams. The stream source varies by platform and transport: h264 via
+WebCodecs on the web target, a native GPU texture on desktop (GPUI Kit
+already owns a GPU context), and raw RGBA frames as a fallback. Today no
+widget can present a texture or accept pointer/key events on it — the
+closest is `UiTable`, which is string-cell based and wrong for video.
+
+Requirements:
+- GPU-accelerated texture upload (no CPU readback on the present path);
+  frame drops are acceptable, frame queueing is not.
+- Pointer events with device-pixel coordinates: click→tap, drag→swipe
+  (start/move/end), so `UiVideoSurface` can drive `adb`/`simctl` input.
+- Key events with modifiers (keyboard→type) while the surface has focus
+  (see P0-4 for the focus API this depends on).
+- Backpressure-safe frame push: `pushVideoFrame` must be fire-and-forget
+  from Dart; Rust drops stale frames instead of growing a queue.
+
+```dart
+// Sketch
+final surface = UiVideoSurface('device-screen',
+  onPointer: (x, y, type) => ...,  // 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end'
+  onKey: (key, modifiers) => ...,
+);
+await host.pushVideoFrame('device-screen', frameBytes);  // h264 or raw RGBA
+// events: {type:'pointer', id, x, y, pointerType, revision}
+//         {type:'key', id, key, modifiers, revision}
+```
+
+### P0-7. Device-frame container
+A container that renders a device bezel/frame around the video surface,
+with device-specific chrome (notch, home indicator, rounded corners) and
+orientation support. supercli's Devices panel shows a clean live device
+preview next to the conversation (like an in-chat app preview); the frame
+is what makes it read as a device rather than a bare rectangle.
+
+Requirements:
+- Configurable frame style per device (iPhone 16 notch/Dynamic Island,
+  Pixel 9 punch-hole camera, generic Android bezel).
+- Orientation: portrait/landscape, with the frame and surface rotating
+  together and pointer coordinates remapped accordingly.
+- Minimal chrome: the frame is decorative; all interaction goes through
+  the child `UiVideoSurface`.
+
+```dart
+// Sketch
+final frame = UiDeviceFrame('device-1',
+  device: DeviceKind.iPhone16,  // or DeviceKind.pixel9, etc.
+  orientation: Orientation.portrait,
+  child: UiVideoSurface('device-screen', ...),
+);
+```
+
 ## P1 — needed before ship
 
 - **Theming (dark/light + custom).** Today: 16 fixed `ThemeToken`s, no
@@ -146,5 +199,7 @@ await for (final msg in queue.rest) {
 3. P0-1 approval card (unblocks the core approve/deny loop)
 4. P0-2 list views (unblocks session/approval/file browsing)
 5. P0-5 event-push pattern + `serialRebuild` helper (unblocks Host wiring)
-6. P1 theming, i18n, a11y, mobile shells
-7. P2 charts, rich text, animations
+6. P0-6 video surface (unblocks device screen streaming; needs P0-4 focus)
+7. P0-7 device frame (decorative container over P0-6)
+8. P1 theming, i18n, a11y, mobile shells
+9. P2 charts, rich text, animations
