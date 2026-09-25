@@ -21,6 +21,7 @@ mod integrations_cli;
 mod link_cli;
 mod mcp_cli;
 mod migrate_cli;
+mod import_unpeel_cli;
 mod open_cli;
 mod schedule_cli;
 mod self_update_cli;
@@ -30,7 +31,7 @@ mod workspaces;
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    // `--workspace` re-homes the whole process (UNPEEL_HOME), so it must be
+    // `--workspace` re-homes the whole process (SUPERCLI_HOME), so it must be
     // claimed before any dispatch touches state — spawned hosts inherit it.
     match workspaces::claim_workspace_flag(&mut args) {
         Ok(Some(reference)) => {
@@ -47,14 +48,14 @@ fn main() {
     }
     // `--log-level LEVEL` (R4): set the JSON log level for this process.
     // Claimed early, before any log output. Takes precedence over
-    // UNPEEL_LOG_LEVEL env var.
+    // SUPERCLI_LOG_LEVEL env var.
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--log-level" && i + 1 < args.len() {
             let level_str = args[i + 1].clone();
-            match unpeel_core::json_log::Level::parse(&level_str) {
+            match supercli_core::json_log::Level::parse(&level_str) {
                 Some(level) => {
-                    unpeel_core::json_log::set_level(level);
+                    supercli_core::json_log::set_level(level);
                 }
                 None => {
                     eprintln!(
@@ -71,8 +72,8 @@ fn main() {
     }
     // The machine service and each workspace worker re-exec this executable
     // with these internal argv modes; they are not user-facing commands.
-    if args.as_slice() == [unpeel_serve::service::SERVICE_ARG] {
-        let result = unpeel_serve::service::run(|event| {
+    if args.as_slice() == [supercli_serve::service::SERVICE_ARG] {
+        let result = supercli_serve::service::run(|event| {
             println!("{event}");
             let _ = std::io::Write::flush(&mut std::io::stdout());
         });
@@ -82,8 +83,8 @@ fn main() {
         }
         return;
     }
-    if args.as_slice() == [unpeel_serve::service::WORKSPACE_WORKER_ARG] {
-        let result = unpeel_serve::service::run_workspace_worker(|event| {
+    if args.as_slice() == [supercli_serve::service::WORKSPACE_WORKER_ARG] {
+        let result = supercli_serve::service::run_workspace_worker(|event| {
             println!("{event}");
             let _ = std::io::Write::flush(&mut std::io::stdout());
         });
@@ -96,6 +97,6 @@ fn main() {
     let code = cli::run(&args);
     // One-shot verbs exit immediately; wait for their change pings to
     // actually reach the other frontends first.
-    unpeel_core::state_bus::flush();
+    supercli_core::state_bus::flush();
     std::process::exit(code);
 }

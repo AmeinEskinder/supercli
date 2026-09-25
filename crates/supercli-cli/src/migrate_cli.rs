@@ -33,12 +33,12 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use unpeel_core::action_reviews::{
+use supercli_core::action_reviews::{
     classify_review_log, rechain_review_log, RechainNeed, REVIEWS_FILE,
 };
-use unpeel_core::schedule_leases::{leases_db_path, ScheduleLeases};
-use unpeel_core::scheduled::schedules_path;
-use unpeel_core::{app_paths, app_state};
+use supercli_core::schedule_leases::{leases_db_path, ScheduleLeases};
+use supercli_core::scheduled::schedules_path;
+use supercli_core::{app_paths, app_state};
 
 pub const HELP: &str = "\
 unpeel migrate — upgrade on-disk state to the current schema
@@ -733,7 +733,7 @@ fn step_config(apply: bool) -> StepOutcome {
             return step;
         }
     };
-    let report = unpeel_core::config::check_document(&doc);
+    let report = supercli_core::config::check_document(&doc);
     for w in &report.warnings {
         step.lines
             .push(format!("warning: {}: {}", w.path, w.message));
@@ -770,7 +770,7 @@ fn step_config(apply: bool) -> StepOutcome {
         }
     }
     // Re-check: the document must be valid after the reset.
-    let after = unpeel_core::config::check_document(&doc);
+    let after = supercli_core::config::check_document(&doc);
     if !after.errors.is_empty() {
         step.error = Some(format!(
             "config still invalid after reset: {}",
@@ -810,7 +810,7 @@ pub fn run(args: &[String]) -> i32 {
             return 2;
         }
     }
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let steps = vec![
         step_grants(apply),
         step_grant_shard(apply),

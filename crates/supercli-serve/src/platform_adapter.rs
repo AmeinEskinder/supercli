@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::Value;
-use unpeel_core::controller_protocol::{HostProtocolDescriptor, NATIVE_HOST_CAPABILITIES};
+use supercli_core::controller_protocol::{HostProtocolDescriptor, NATIVE_HOST_CAPABILITIES};
 
 pub const PLATFORM_ADAPTER_CONTROL_PATH: &str = "/_unpeel/platform-adapter";
 pub const PLATFORM_ADAPTER_CALLBACK_PATH: &str = "/_unpeel/platform-adapter/call";

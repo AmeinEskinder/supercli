@@ -3,7 +3,7 @@
 #
 # Usage:
 #   source scripts/env-nix-gtk.sh
-#   cd clients/dioxus && cargo check --locked -p unpeel-desktop -p unpeel-mobile
+#   cd clients/dioxus && cargo check --locked -p supercli-desktop -p supercli-mobile
 #
 # What this does: the VM's apt is unusable (proxy 407), so GTK/WebKit system
 # libraries come from the Phase 4 W1 Nix store paths instead. PKG_CONFIG_PATH
@@ -12,7 +12,7 @@
 # the launchers link against.
 #
 # Verified 2026-09-23 (Phase 7 C1): cargo check AND cargo build for
-# unpeel-desktop and unpeel-mobile succeed under this environment.
+# supercli-desktop and supercli-mobile succeed under this environment.
 #
 # NOTE: /nix is a tmpfs and does not survive VM reboots. If the store is
 # missing, sourcing this file aborts with the re-provision command

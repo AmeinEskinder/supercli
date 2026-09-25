@@ -1,6 +1,6 @@
 //! Machine-wide Unpeel Host service.
 //!
-//! `HostRuntime` remains deliberately scoped to one `UNPEEL_HOME`: a large
+//! `HostRuntime` remains deliberately scoped to one `SUPERCLI_HOME`: a large
 //! part of the released on-disk contract resolves paths process-wide, and
 //! putting two homes in one address space would let one workspace leak into
 //! another. The service is the stable user-facing lifecycle above that
@@ -445,9 +445,9 @@ fn spawn_workspace(executable: &Path, target: &WorkspaceTarget) -> Result<Child,
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     if target.is_default {
-        command.env_remove("UNPEEL_HOME");
+        command.env_remove("SUPERCLI_HOME");
     } else {
-        command.env("UNPEEL_HOME", &target.home);
+        command.env("SUPERCLI_HOME", &target.home);
     }
     command
         .spawn()
@@ -473,7 +473,7 @@ fn machine_service_is_running_at(real_home: &Path) -> bool {
 }
 
 pub fn is_running() -> bool {
-    machine_service_is_running_at(&unpeel_core::app_paths::real_unpeel_home())
+    machine_service_is_running_at(&supercli_core::app_paths::real_supercli_home())
 }
 
 fn publish_status(
@@ -493,7 +493,7 @@ fn publish_status(
         started_at_unix_ms,
         executable: executable.to_path_buf(),
         host_version: env!("CARGO_PKG_VERSION"),
-        build_id: unpeel_core::session_host::current_host_build_id(),
+        build_id: supercli_core::session_host::current_host_build_id(),
         workspaces,
     })
 }
@@ -502,13 +502,13 @@ fn publish_status(
 pub fn run_service(mut report: impl FnMut(ServiceEvent)) -> Result<(), String> {
     SHUTDOWN_REQUESTED.store(false, Ordering::Release);
     install_shutdown_handlers();
-    let real_home = unpeel_core::app_paths::real_unpeel_home();
+    let real_home = supercli_core::app_paths::real_supercli_home();
     let lease = ServiceLease::acquire(&real_home)?;
 
     // Phase 13 v2 SECURITY: Reconcile grants on startup.
     // - Grant without audit entry → quarantine + error (tamper-evidence violation).
     // - Audit entry without grant → stays revoked (fail closed, do NOT re-create).
-    if let Err(e) = unpeel_core::grant_audit::reconcile_grants() {
+    if let Err(e) = supercli_core::grant_audit::reconcile_grants() {
         report(ServiceEvent::Warning(format!("Grant reconciliation: {e}")));
     }
 
@@ -578,11 +578,11 @@ fn reconcile_workers(targets: Vec<WorkspaceTarget>, workers: &mut HashMap<PathBu
     }
 }
 
-/// Public command behavior. An explicit/scoped `UNPEEL_HOME` remains a
+/// Public command behavior. An explicit/scoped `SUPERCLI_HOME` remains a
 /// one-workspace foreground Host (useful for containers and service-manager
 /// units); the ordinary unscoped command is the machine-wide service.
 pub fn run(mut report: impl FnMut(HostServiceEvent)) -> Result<(), String> {
-    if std::env::var_os("UNPEEL_HOME").is_some_and(|value| !value.is_empty()) {
+    if std::env::var_os("SUPERCLI_HOME").is_some_and(|value| !value.is_empty()) {
         driver::run(|event| {
             crate::tracelog::trace("host-worker", &event.to_string());
             report(HostServiceEvent::Workspace(event));
@@ -607,7 +607,7 @@ pub fn run_workspace_worker(mut report: impl FnMut(ServeEvent)) -> Result<(), St
 /// Start the appropriate Host lifecycle detached from a frontend. Races are
 /// harmless: leases choose one winner and every loser exits immediately.
 pub fn ensure_background(executable: &Path) -> Result<(), String> {
-    let scoped = std::env::var_os("UNPEEL_HOME").is_some_and(|value| !value.is_empty());
+    let scoped = std::env::var_os("SUPERCLI_HOME").is_some_and(|value| !value.is_empty());
     if (scoped && driver::is_running()) || (!scoped && is_running()) {
         return Ok(());
     }

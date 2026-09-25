@@ -4,7 +4,7 @@
 //!
 //! Deliberate boundaries:
 //! - per-user only (LaunchAgent / `systemctl --user`): the service owns
-//!   `~/.unpeel`, the user Keychain, and the per-user machine lease;
+//!   `~/.supercli`, the user Keychain, and the per-user machine lease;
 //! - `uninstall` stops the service and removes the unit file, nothing else —
 //!   workspace data and running Session PTYs are never touched (Sessions
 //!   survive a service stop by design);
@@ -15,19 +15,19 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const LAUNCHD_TEMPLATE: &str = include_str!("../../../packaging/service/com.unpeel.serve.plist");
-const SYSTEMD_TEMPLATE: &str = include_str!("../../../packaging/service/unpeel-serve.service");
+const LAUNCHD_TEMPLATE: &str = include_str!("../../../packaging/service/com.supercli.serve.plist");
+const SYSTEMD_TEMPLATE: &str = include_str!("../../../packaging/service/supercli-serve.service");
 /// `--graphical`: the same service bound to `graphical-session.target` so it
 /// runs inside the desktop session (Computer Use needs the display and the
 /// session bus). The template documents why the session, not the unit,
 /// imports DISPLAY into the user manager.
 const SYSTEMD_GRAPHICAL_TEMPLATE: &str =
-    include_str!("../../../packaging/service/unpeel-serve-graphical.service");
+    include_str!("../../../packaging/service/supercli-serve-graphical.service");
 /// The line that identifies an installed graphical unit on re-read.
 const GRAPHICAL_MARKER: &str = "PartOf=graphical-session.target";
 /// The path the verbatim templates ship with; rendering rewrites it.
 const TEMPLATE_BINARY: &str = "/usr/local/bin/unpeel";
-const LAUNCHD_LABEL: &str = "com.unpeel.serve";
+const LAUNCHD_LABEL: &str = "com.supercli.serve";
 const SYSTEMD_UNIT: &str = "unpeel-serve";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,13 +38,13 @@ pub enum ServiceManager {
 
 impl ServiceManager {
     /// Platform default, overridable for tests/conformance via
-    /// `UNPEEL_SERVICE_MANAGER=launchd|systemd`.
+    /// `SUPERCLI_SERVICE_MANAGER=launchd|systemd`.
     pub fn detect() -> Result<Self, String> {
-        if let Ok(value) = std::env::var("UNPEEL_SERVICE_MANAGER") {
+        if let Ok(value) = std::env::var("SUPERCLI_SERVICE_MANAGER") {
             return match value.trim() {
                 "launchd" => Ok(Self::Launchd),
                 "systemd" => Ok(Self::Systemd),
-                other => Err(format!("unknown UNPEEL_SERVICE_MANAGER {other:?}")),
+                other => Err(format!("unknown SUPERCLI_SERVICE_MANAGER {other:?}")),
             };
         }
         if cfg!(target_os = "macos") {
@@ -399,7 +399,7 @@ pub fn status(
         ServiceManager::Launchd => None,
     };
     let desktop_session =
-        unpeel_core::desktop_session::desktop_session().map(|session| session.display);
+        supercli_core::desktop_session::desktop_session().map(|session| session.display);
     Ok(ServiceStatusReport {
         unit_installed: path.exists(),
         unit_path: path,
@@ -427,11 +427,11 @@ mod tests {
         let unit = render_unit(
             ServiceManager::Launchd,
             &ServiceScope::Machine,
-            Path::new("/opt/unpeel/bin/unpeel"),
+            Path::new("/opt/supercli/bin/unpeel"),
             false,
         );
-        assert!(unit.contains("<string>com.unpeel.serve</string>"));
-        assert!(unit.contains("<string>/opt/unpeel/bin/unpeel</string>"));
+        assert!(unit.contains("<string>com.supercli.serve</string>"));
+        assert!(unit.contains("<string>/opt/supercli/bin/unpeel</string>"));
         assert!(unit.contains("<string>serve</string>"));
         assert!(!unit.contains(&format!("<string>{TEMPLATE_BINARY}</string>")));
         assert!(!unit.contains("<string>--workspace</string>"));
@@ -442,10 +442,10 @@ mod tests {
         let unit = render_unit(
             ServiceManager::Launchd,
             &workspace(),
-            Path::new("/opt/unpeel/bin/unpeel"),
+            Path::new("/opt/supercli/bin/unpeel"),
             false,
         );
-        assert!(unit.contains("<string>com.unpeel.serve.teama</string>"));
+        assert!(unit.contains("<string>com.supercli.serve.teama</string>"));
         assert!(unit.contains("<string>--workspace</string>"));
         assert!(unit.contains("<string>teama</string>"));
         assert!(unit.contains("<string>serve</string>"));
@@ -520,6 +520,6 @@ mod tests {
     fn unit_file_names_are_scoped() {
         assert_eq!(ServiceScope::Machine.systemd_unit(), "unpeel-serve.service");
         assert_eq!(workspace().systemd_unit(), "unpeel-serve-teama.service");
-        assert_eq!(workspace().launchd_label(), "com.unpeel.serve.teama");
+        assert_eq!(workspace().launchd_label(), "com.supercli.serve.teama");
     }
 }

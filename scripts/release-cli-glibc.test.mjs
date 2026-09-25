@@ -8,7 +8,7 @@ const helper = resolve('scripts/cli-glibc.sh')
 function versionAtMost(actual, ceiling) {
   return spawnSync(
     'sh',
-    ['-c', '. "$1"; unpeel_glibc_version_at_most "$2" "$3"', 'sh', helper, actual, ceiling],
+    ['-c', '. "$1"; supercli_glibc_version_at_most "$2" "$3"', 'sh', helper, actual, ceiling],
     { encoding: 'utf8' }
   )
 }
@@ -31,7 +31,7 @@ test('GLIBC ceiling rejects newer and malformed versions', () => {
 test('GLIBC symbol extraction compares every numeric component', () => {
   const result = spawnSync(
     'sh',
-    ['-c', '. "$1"; unpeel_highest_glibc_version', 'sh', helper],
+    ['-c', '. "$1"; supercli_highest_glibc_version', 'sh', helper],
     {
       encoding: 'utf8',
       input: [

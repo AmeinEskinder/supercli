@@ -11,8 +11,8 @@ added or changed.
 | `POST /mobile/turn-cancel` | mobile | Bearer; 401 pre-route |
 | `POST /mobile/session-organization` | mobile | Bearer; 401 pre-route |
 | `POST /mobile/approvals/answer` | mobile (+ relay live route) | Bearer on mobile; relay inherits tunnel auth |
-| `POST /mcp/approve-connector` (+ `/mcp/approve-write`, `/mcp/approve-browser`, `/mcp/approve-computer`, `/mcp/approve-app-open`) | hook listener, **127.0.0.1 only** | `x-unpeel-auth` shared token |
-| Scheduler / daemon | — | No HTTP listener. Schedules are local files driven by `unpeel schedule` CLI + in-process tick (`unpeel-core::scheduled`). No remote input reaches the scheduler except through the already-reviewed mobile routes. |
+| `POST /mcp/approve-connector` (+ `/mcp/approve-write`, `/mcp/approve-browser`, `/mcp/approve-computer`, `/mcp/approve-app-open`) | hook listener, **127.0.0.1 only** | `x-supercli-auth` shared token |
+| Scheduler / daemon | — | No HTTP listener. Schedules are local files driven by `supercli schedule` CLI + in-process tick (`supercli-core::scheduled`). No remote input reaches the scheduler except through the already-reviewed mobile routes. |
 
 ## Findings
 
@@ -26,7 +26,7 @@ advertises the name). Approving `search` for connector `github` therefore
 auto-approved `search` for connector `evil` with no further prompt — the
 persisted grant was broader than the approval the user gave.
 
-**Fix** (`crates/unpeel-serve/src/approvals.rs`, `hook_listener.rs`):
+**Fix** (`crates/supercli-serve/src/approvals.rs`, `hook_listener.rs`):
 new `persist_connector_grant(caller, connector, tool)` /
 `connector_grant_exists(caller, connector, tool)` storing
 `{"connector": c, "tool": t}` objects under `mcp_connector_approvals`.
@@ -54,7 +54,7 @@ the mobile routes already reject.
 lookup or grant write.
 
 **Negative tests:** `approve_connector_rejects_traversal_session_id`
-(400 over a real loopback TCP pair with a real `x-unpeel-auth` token),
+(400 over a real loopback TCP pair with a real `x-supercli-auth` token),
 `approve_connector_rejects_missing_auth` (401).
 
 ### Verified, no change: session-id path traversal on the mobile routes
@@ -87,7 +87,7 @@ Every session id that reaches a filesystem path is validated:
   application-layer pairing exchange by design.
 - Plaintext bearers are refused with 426 and the credential redacted
   (`Bearer <redacted>`); the token is never reflected.
-- `/mcp/*` requires the `x-unpeel-auth` token; the hook listener binds
+- `/mcp/*` requires the `x-supercli-auth` token; the hook listener binds
   127.0.0.1 only.
 
 ### Verified, no change: request size / connection limits
@@ -113,7 +113,7 @@ Every session id that reaches a filesystem path is validated:
 ### Verified, no change: error leakage
 
 - 500 bodies on the reviewed routes carry the review/attempt id plus the
-  underlying IO error text (paths under the private UNPEEL_HOME, never
+  underlying IO error text (paths under the private SUPERCLI_HOME, never
   tokens or credentials). Bearer tokens are hashed before comparison and
   never echoed. The 426 plaintext gate redacts the credential.
 
@@ -139,7 +139,7 @@ TCP stack is not a practical attack. Documented in code; left as is.
 ## Test summary (S1)
 
 New: 3 approvals tests, 4 mobile tests, 3 hook_listener tests — all pass.
-Full `unpeel-serve` lib suite: 172 passed, 3 failed — the 3 are the known
+Full `supercli-serve` lib suite: 172 passed, 3 failed — the 3 are the known
 environmental real-UDP punch timeouts in `direct_path.rs` (untouched by
 this change; same class as the Phase 7 closeout). `cargo clippy
 --all-targets -- -D warnings` clean; `cargo fmt --check` clean.

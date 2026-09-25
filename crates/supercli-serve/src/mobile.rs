@@ -2,7 +2,7 @@
 //! `MobileRemoteServer.swift`, so an already-paired phone keeps working when
 //! only the TUI runs. HTTP/1.1 over TLS with the Host certificate (the same
 //! pinned certificate the `__remote__` WSS streamer serves), Bearer auth
-//! against the shared `~/.unpeel/mobile/devices.json` token hashes, JSON keys
+//! against the shared `~/.supercli/mobile/devices.json` token hashes, JSON keys
 //! in the Swift dialect (camelCase with capital-ID suffixes, optionals
 //! omitted).
 //!
@@ -32,12 +32,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
-use unpeel_core::app_paths;
-use unpeel_core::controller_api::{
+use supercli_core::app_paths;
+use supercli_core::controller_api::{
     ControllerEffects, ControllerPrincipal, ControllerRequest, HostBootstrapContext,
     HostCreateContext, HostCreateProject, HostRouteContext,
 };
-use unpeel_core::rustls;
+use supercli_core::rustls;
 
 use crate::platform_adapter::{PlatformAdapterError, PlatformAdapterHub};
 
@@ -181,7 +181,7 @@ pub(crate) fn direct_certificate_fingerprint() -> Option<String> {
 /// closed here (no listener) beats a cleartext-only listener that would refuse
 /// every paired device anyway.
 fn direct_tls_config() -> Option<(Arc<rustls::ServerConfig>, String)> {
-    let material = match unpeel_core::remote_server::ensure_tls_material() {
+    let material = match supercli_core::remote_server::ensure_tls_material() {
         Ok(material) => material,
         Err(error) => {
             crate::tracelog::trace("mobile-tls", &format!("certificate unavailable: {error}"));
@@ -189,7 +189,7 @@ fn direct_tls_config() -> Option<(Arc<rustls::ServerConfig>, String)> {
         }
     };
     let fingerprint = material.fingerprint.clone();
-    match unpeel_core::remote_server::build_tls_config(material) {
+    match supercli_core::remote_server::build_tls_config(material) {
         Ok(config) => Some((config, fingerprint)),
         Err(error) => {
             crate::tracelog::trace("mobile-tls", &format!("tls config failed: {error}"));
@@ -274,10 +274,10 @@ fn valid_native_artifact_chunk(value: &serde_json::Value, query: &HashMap<String
     let max_bytes = query
         .get("limit")
         .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(unpeel_core::session_artifacts::ARTIFACT_READ_MAX_CHUNK_BYTES)
+        .unwrap_or(supercli_core::session_artifacts::ARTIFACT_READ_MAX_CHUNK_BYTES)
         .clamp(
             1,
-            unpeel_core::session_artifacts::ARTIFACT_READ_MAX_CHUNK_BYTES,
+            supercli_core::session_artifacts::ARTIFACT_READ_MAX_CHUNK_BYTES,
         );
     let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(encoded) else {
         return false;
@@ -797,7 +797,7 @@ fn now_ms() -> u64 {
 }
 
 fn mobile_dir() -> std::path::PathBuf {
-    app_paths::unpeel_home().join("mobile")
+    app_paths::supercli_home().join("mobile")
 }
 
 fn sha256_hex(token: &str) -> String {
@@ -915,8 +915,8 @@ pub(crate) fn principal_for_bearer(
 ) -> Option<ControllerPrincipal> {
     let token = bearer_token(headers.get("authorization")?)?;
     let hash = sha256_hex(token);
-    let host_id = unpeel_core::relay_uplink::ensure_host_id().ok()?;
-    let host_owner_principal_id = unpeel_core::state::host_owner_principal_id(&host_id);
+    let host_id = supercli_core::relay_uplink::ensure_host_id().ok()?;
+    let host_owner_principal_id = supercli_core::state::host_owner_principal_id(&host_id);
     std::fs::read(mobile_dir().join("devices.json"))
         .ok()
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
@@ -1230,7 +1230,7 @@ fn session_dir(id: &str) -> std::path::PathBuf {
 /// Live `__remote__` advertisement (port + TLS fingerprint) when that server
 /// runs — the app or a future TUI supervisor spawns it; we just relay state.
 pub(crate) fn remote_server_advertisement() -> (Option<u64>, Option<String>) {
-    remote_server_advertisement_at(&app_paths::unpeel_home())
+    remote_server_advertisement_at(&app_paths::supercli_home())
 }
 
 /// The record names its own pid and kernel start time (`pid_started_at`,
@@ -1251,8 +1251,8 @@ fn remote_server_advertisement_at(home: &std::path::Path) -> (Option<u64>, Optio
         .and_then(|pid| u32::try_from(pid).ok());
     let started_at = value.get("pid_started_at").and_then(|v| v.as_u64());
     let is_streamer = pid.is_some_and(|pid| {
-        unpeel_core::session_host::recorded_pid_identity(pid, started_at)
-            == unpeel_core::session_host::PidIdentity::Matches
+        supercli_core::session_host::recorded_pid_identity(pid, started_at)
+            == supercli_core::session_host::PidIdentity::Matches
     });
     if !is_streamer {
         return (None, None);
@@ -1309,7 +1309,7 @@ fn handle_output(request: &Request) -> (u16, String) {
         }
     }
 
-    let chunk = match unpeel_core::session_host::read_output_chunk(
+    let chunk = match supercli_core::session_host::read_output_chunk(
         session_id,
         offset,
         Some(limit as usize),
@@ -1379,17 +1379,17 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
     // cancels as policy:allow. The actor is never empty.
     let actor = match principal {
         ControllerPrincipal::PairedDevice { device_id, .. } => {
-            unpeel_core::action_reviews::Actor::Human {
+            supercli_core::action_reviews::Actor::Human {
                 device_id: device_id.clone(),
             }
         }
         ControllerPrincipal::OwnerTransport { .. } => {
-            unpeel_core::action_reviews::Actor::PolicyAllow
+            supercli_core::action_reviews::Actor::PolicyAllow
         }
     };
 
-    let session_dir = unpeel_core::session_host::session_dir(&session_id);
-    let inflight = match unpeel_core::action_reviews::inflight_reviews(&session_dir) {
+    let session_dir = supercli_core::session_host::session_dir(&session_id);
+    let inflight = match supercli_core::action_reviews::inflight_reviews(&session_dir) {
         Ok(ids) => ids,
         Err(e) => return (500, error_body(&format!("cannot read review log: {e}"))),
     };
@@ -1416,10 +1416,10 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
     let mut ambiguous: Vec<String> = Vec::with_capacity(inflight.len());
     let mut already_resolved: Vec<String> = Vec::with_capacity(inflight.len());
     for review_id in &inflight {
-        match unpeel_core::action_reviews::record_attempt_outcome(
+        match supercli_core::action_reviews::record_attempt_outcome(
             &session_dir,
             review_id,
-            unpeel_core::action_reviews::AttemptOutcome::Ambiguous {
+            supercli_core::action_reviews::AttemptOutcome::Ambiguous {
                 reason: format!("turn cancelled while tool call was in flight: {reason}"),
             },
             actor.clone(),
@@ -1452,9 +1452,9 @@ fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u1
     let interrupted = if inflight.is_empty() {
         false
     } else {
-        unpeel_core::session_host::send_command_with_timeout(
+        supercli_core::session_host::send_command_with_timeout(
             &session_id,
-            &unpeel_core::session_host::SessionHostCommand::Write {
+            &supercli_core::session_host::SessionHostCommand::Write {
                 data: "\x03".to_string(),
                 write_id: None,
             },
@@ -1500,7 +1500,7 @@ fn handle_metrics() -> (u16, String) {
     // Scan all session dirs for pending reviews and ambiguous outcomes.
     let mut pending_reviews = 0usize;
     let mut ambiguous_count = 0usize;
-    let sessions_dir = unpeel_core::app_paths::unpeel_home().join("sessions");
+    let sessions_dir = supercli_core::app_paths::supercli_home().join("sessions");
     if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
         for entry in entries.flatten() {
             let session_dir = entry.path();
@@ -1508,7 +1508,7 @@ fn handle_metrics() -> (u16, String) {
                 continue;
             }
             // Pending: in-flight reviews.
-            if let Ok(inflight) = unpeel_core::action_reviews::inflight_reviews(&session_dir) {
+            if let Ok(inflight) = supercli_core::action_reviews::inflight_reviews(&session_dir) {
                 pending_reviews += inflight.len();
             }
             // Ambiguous: parse the review log as JSONL and count records
@@ -1536,8 +1536,8 @@ fn handle_metrics() -> (u16, String) {
 
     // Lease holders from the lease DB.
     let lease_holders: Vec<serde_json::Value> = (|| {
-        let home = unpeel_core::app_paths::unpeel_home();
-        let db = unpeel_core::schedule_leases::ScheduleLeases::open(&home, "default").ok()?;
+        let home = supercli_core::app_paths::supercli_home();
+        let db = supercli_core::schedule_leases::ScheduleLeases::open(&home, "default").ok()?;
         let holders = db.list_holders().ok()?;
         Some(
             holders
@@ -1767,8 +1767,8 @@ fn headless_create_context(
     snapshot: &SharedSnapshot,
     hook_port: Option<u16>,
 ) -> Option<HostCreateContext> {
-    let host_id = unpeel_core::relay_uplink::ensure_host_id().ok()?;
-    let host_owner_principal_id = unpeel_core::state::host_owner_principal_id(&host_id);
+    let host_id = supercli_core::relay_uplink::ensure_host_id().ok()?;
+    let host_owner_principal_id = supercli_core::state::host_owner_principal_id(&host_id);
     let (bootstrap, presets) = {
         let snapshot = snapshot.lock().ok()?;
         (snapshot.bootstrap.clone(), snapshot.create_presets.clone())
@@ -1810,7 +1810,7 @@ fn headless_create_context(
         })
         .collect();
     let executor = Arc::new(move |resolved| {
-        unpeel_core::controller_api::execute_headless_session_create(resolved, hook_port)
+        supercli_core::controller_api::execute_headless_session_create(resolved, hook_port)
     });
     Some(HostCreateContext::new(
         host_owner_principal_id,
@@ -1822,7 +1822,7 @@ fn headless_create_context(
 
 fn headless_controller_effects(hook_port: Option<u16>) -> ControllerEffects {
     ControllerEffects::new(Arc::new(move |request| {
-        unpeel_core::controller_api::execute_headless_session_action(request, hook_port)
+        supercli_core::controller_api::execute_headless_session_action(request, hook_port)
     }))
 }
 
@@ -1939,7 +1939,7 @@ fn handle_with_effects(
     )
     .then(|| headless_controller_effects(hook_port));
     let controller_effects = controller_effects_override.or(owned_controller_effects.as_ref());
-    if let Some(response) = unpeel_core::controller_api::route_with_effects(
+    if let Some(response) = supercli_core::controller_api::route_with_effects(
         &controller_request,
         route_context.as_ref(),
         create_context.as_ref(),
@@ -2008,7 +2008,7 @@ fn handle_with_effects(
         ("POST", "/mobile/turn-cancel") => {
             // R5: per-device rate limit on cancels.
             let device_id = principal_device_id(principal);
-            if !unpeel_core::rate_limit::global().check(&device_id, "cancel") {
+            if !supercli_core::rate_limit::global().check(&device_id, "cancel") {
                 return (429, error_body("rate limit exceeded for cancels"));
             }
             handle_turn_cancel(request, principal)
@@ -2066,7 +2066,7 @@ fn handle_with_effects(
                             == Some(session_id.as_str())
                     })
                 });
-            if !published && unpeel_core::session_host::load_manifest(&session_id).is_none() {
+            if !published && supercli_core::session_host::load_manifest(&session_id).is_none() {
                 return (404, error_body("unknown session"));
             }
             // Preserve the shipped Host resource/effect ordering when no
@@ -2087,7 +2087,7 @@ fn handle_with_effects(
                 // Known target, and inside the Session's own checkout: the
                 // shared guard every Host kind applies. Clearing back to the
                 // manifest project is always legal.
-                let manifest_project = unpeel_core::session_host::load_manifest(&session_id)
+                let manifest_project = supercli_core::session_host::load_manifest(&session_id)
                     .map(|manifest| manifest.session.project_id)
                     .unwrap_or_default();
                 if target != manifest_project {
@@ -2098,7 +2098,7 @@ fn handle_with_effects(
                         .and_then(|projects| projects.as_array().cloned())
                         .unwrap_or_default();
                     if let Err(message) =
-                        unpeel_core::controller_host::validate_session_project_target(
+                        supercli_core::controller_host::validate_session_project_target(
                             &projects,
                             &manifest_project,
                             target,
@@ -2127,13 +2127,13 @@ fn handle_with_effects(
             // Controllers must refresh Host state before deciding whether to
             // retry and must not manufacture a fresh request id blindly.
             if let Some(target) = project_id.as_deref() {
-                let manifest_project = unpeel_core::session_host::load_manifest(&session_id)
+                let manifest_project = supercli_core::session_host::load_manifest(&session_id)
                     .map(|manifest| manifest.session.project_id)
                     .unwrap_or_default();
                 let result = if target == manifest_project {
-                    unpeel_core::session_ops::clear_project_override(&session_id)
+                    supercli_core::session_ops::clear_project_override(&session_id)
                 } else {
-                    unpeel_core::session_ops::set_project_override(&session_id, target)
+                    supercli_core::session_ops::set_project_override(&session_id, target)
                 };
                 if let Err(e) = result {
                     return (
@@ -2143,7 +2143,7 @@ fn handle_with_effects(
                 }
             }
             if let Some(pinned) = pinned {
-                if let Err(e) = unpeel_core::session_ops::set_pinned(&session_id, pinned) {
+                if let Err(e) = supercli_core::session_ops::set_pinned(&session_id, pinned) {
                     return (
                         500,
                         error_body(&format!("organization pin preflight failed: {e}")),
@@ -2151,7 +2151,7 @@ fn handle_with_effects(
                 }
             }
             if let Some(title) = title {
-                if let Err(e) = unpeel_core::session_ops::set_title(&session_id, &title) {
+                if let Err(e) = supercli_core::session_ops::set_title(&session_id, &title) {
                     return (
                         500,
                         error_body(&format!(
@@ -2162,7 +2162,7 @@ fn handle_with_effects(
             }
             match archived {
                 Some(true) => {
-                    if let Err(e) = unpeel_core::session_ops::archive_session(&session_id) {
+                    if let Err(e) = supercli_core::session_ops::archive_session(&session_id) {
                         return (
                             500,
                             error_body(&format!(
@@ -2172,7 +2172,7 @@ fn handle_with_effects(
                     }
                 }
                 Some(false) => {
-                    if let Err(e) = unpeel_core::session_ops::restore_session(&session_id) {
+                    if let Err(e) = supercli_core::session_ops::restore_session(&session_id) {
                         return (
                             500,
                             error_body(&format!(
@@ -2218,29 +2218,29 @@ fn handle_with_effects(
         // the same function the SSH gateway serves.
         ("POST", "/mobile/workspace-settings") => {
             let (status, body) =
-                unpeel_core::controller_host::workspace_settings_response(&body_json(request));
+                supercli_core::controller_host::workspace_settings_response(&body_json(request));
             (status, body.to_string())
         }
         ("GET", "/mobile/plugin-updates") => {
-            (200, unpeel_core::plugin_updates::request().to_string())
+            (200, supercli_core::plugin_updates::request().to_string())
         }
         ("POST", "/mobile/openers") => {
-            let (status, body) = unpeel_core::controller_host::opener_response(&body_json(request));
+            let (status, body) = supercli_core::controller_host::opener_response(&body_json(request));
             (status, body.to_string())
         }
         ("POST", "/mobile/integrations/install") => {
             let (status, body) =
-                unpeel_core::controller_host::integration_install_response(&body_json(request));
+                supercli_core::controller_host::integration_install_response(&body_json(request));
             (status, body.to_string())
         }
         ("POST", "/mobile/apps/install") => {
             let (status, body) =
-                unpeel_core::controller_host::app_install_response(&body_json(request));
+                supercli_core::controller_host::app_install_response(&body_json(request));
             (status, body.to_string())
         }
         ("POST", "/mobile/apps/open") => {
             let (status, body) =
-                unpeel_core::controller_host::app_open_response(&body_json(request), hook_port);
+                supercli_core::controller_host::app_open_response(&body_json(request), hook_port);
             (status, body.to_string())
         }
         ("POST", "/mobile/resize-desktop") => {
@@ -2263,7 +2263,7 @@ fn handle_with_effects(
                 if let Ok(mut guard) = resizes.lock() {
                     guard.remove(&session_id);
                 }
-                let _ = unpeel_core::session_ops::clear_phone_fit_marker_in(&dir);
+                let _ = supercli_core::session_ops::clear_phone_fit_marker_in(&dir);
                 return (200, r#"{"ok":true}"#.into());
             }
             let cols = body
@@ -2281,9 +2281,9 @@ fn handle_with_effects(
                     if let Ok(mut guard) = resizes.lock() {
                         guard.insert(session_id, Instant::now());
                     }
-                    let _ = unpeel_core::session_ops::write_phone_fit_marker_in(
+                    let _ = supercli_core::session_ops::write_phone_fit_marker_in(
                         &dir,
-                        &unpeel_core::session_ops::PhoneFitMarker {
+                        &supercli_core::session_ops::PhoneFitMarker {
                             columns: cols as u16,
                             rows: rows as u16,
                             since_unix_ms: std::time::SystemTime::now()
@@ -2300,7 +2300,7 @@ fn handle_with_effects(
         ("POST", "/mobile/approvals/answer") => {
             // R5: per-device rate limit on approvals.
             let device_id = principal_device_id(principal);
-            if !unpeel_core::rate_limit::global().check(&device_id, "approve") {
+            if !supercli_core::rate_limit::global().check(&device_id, "approve") {
                 return (429, error_body("rate limit exceeded for approvals"));
             }
             handle_approval_answer(request, approvals)
@@ -2345,7 +2345,7 @@ fn handle_approval_answer(
 /// and retain its generation-bound replay semantics, while pairing and
 /// approvals use the exact in-memory authorities shared with Direct/Link.
 pub(crate) fn handle_local_live_route(
-    request: &unpeel_core::relay_wire::TunnelRequest,
+    request: &supercli_core::relay_wire::TunnelRequest,
     approvals: &Arc<crate::approvals::ApprovalHub>,
     pairing: &crate::pairing::PairingWindow,
     snapshot: &SharedSnapshot,
@@ -2383,7 +2383,7 @@ pub(crate) fn handle_local_live_route(
 
 /// POST /mobile/project-organization (capability `project.organization.set`):
 /// shared disk-backed semantics live in
-/// `unpeel_core::controller_host::project_organization_response` (the SSH
+/// `supercli_core::controller_host::project_organization_response` (the SSH
 /// gateway serves the same function), resolved against the published
 /// bootstrap — display-ordered, so sibling indices mean exactly what the
 /// Controller saw. Folder colors go to the live native adapter (the desktop
@@ -2433,27 +2433,27 @@ fn handle_project_organization(
             // client-only gate flips.
             crate::overlay::write_project_folder_color(project_id, color)?;
         } else {
-            // No overlay reaches this workspace (isolated `UNPEEL_HOME`, or
+            // No overlay reaches this workspace (isolated `SUPERCLI_HOME`, or
             // not macOS): the file is the truth the bootstrap reads back.
-            unpeel_core::session_ops::set_project_folder_color(project_id, color)?;
+            supercli_core::session_ops::set_project_folder_color(project_id, color)?;
         }
         // Colors live in UserDefaults, outside the app-state choke point's
         // own announce — ping peers explicitly, like the local color menu.
-        unpeel_core::state_bus::announce(
-            unpeel_core::state_bus::Change::AppState,
-            unpeel_core::session_ops::own_listener_port_public(),
+        supercli_core::state_bus::announce(
+            supercli_core::state_bus::Change::AppState,
+            supercli_core::session_ops::own_listener_port_public(),
         );
         Ok(())
     };
     let color_writer: Option<ProjectColorWriter<'_>> = Some(&write_color);
     let (status, body) =
-        unpeel_core::controller_host::project_organization_response(body, &projects, color_writer);
+        supercli_core::controller_host::project_organization_response(body, &projects, color_writer);
     (status, body.to_string())
 }
 
 /// POST /mobile/presets (capability `settings.presets.set`): shared
 /// disk-backed semantics live in
-/// `unpeel_core::controller_host::preset_patch_response` (the SSH gateway
+/// `supercli_core::controller_host::preset_patch_response` (the SSH gateway
 /// serves the same function), resolved against the published bootstrap's
 /// preset list so ids and sort indices mean exactly what the Controller saw.
 /// The write itself goes through `app_state::edit` — flock + state-bus
@@ -2470,7 +2470,7 @@ fn handle_presets(body: &serde_json::Value, snapshot: &SharedSnapshot) -> (u16, 
                 .cloned()
         })
         .unwrap_or_default();
-    let (status, body) = unpeel_core::controller_host::preset_patch_response(body, &presets);
+    let (status, body) = supercli_core::controller_host::preset_patch_response(body, &presets);
     (status, body.to_string())
 }
 
@@ -2556,7 +2556,7 @@ fn handle_authenticated_with_effects(
             // during unwinding; poisoned in-process mutexes are handled by
             // callers.
             let msg = panic_payload_message(&panic);
-            unpeel_core::json_log::error_fields(
+            supercli_core::json_log::error_fields(
                 "request handler panicked",
                 serde_json::json!({
                     "method": request.method,
@@ -2911,7 +2911,7 @@ fn handle_connection(
                             "connector"
                         };
                         let retry_after =
-                            unpeel_core::rate_limit::global().retry_after_secs(endpoint);
+                            supercli_core::rate_limit::global().retry_after_secs(endpoint);
                         let header = format!("Retry-After: {retry_after}\r\n");
                         respond_with(&mut stream, status, &header, &body, keep);
                     } else {
@@ -3129,7 +3129,7 @@ fn start_impl(
         child: spawn_bonjour(&name, port, &mac_id),
     }));
     // The WSS terminal server: standalone, verifies paired-device tokens
-    // itself, writes its port + TLS fingerprint into ~/.unpeel/remote.json —
+    // itself, writes its port + TLS fingerprint into ~/.supercli/remote.json —
     // which /mobile/bootstrap relays so the phone gets its full terminal
     // (control bar, resize, live stream) instead of the long-poll fallback.
     // The worker supervises it (`remote_streamer.rs`): exit detection,
@@ -3268,7 +3268,7 @@ mod tests {
     fn remote_advertisement_requires_the_recorded_streamer_identity() {
         let mut stranger = unrelated_live_process();
         let pid = stranger.id();
-        let actual_start = unpeel_core::session_host::process_start_time_ms(pid)
+        let actual_start = supercli_core::session_host::process_start_time_ms(pid)
             .expect("start time of a live child");
         let home = scratch_dir("remote-advertisement");
         std::fs::create_dir_all(&home).unwrap();
@@ -3517,15 +3517,15 @@ mod tests {
     }
 
     /// A Host certificate generated into a scratch directory through the real
-    /// material loader — never this process's `~/.unpeel`. Returns the server
+    /// material loader — never this process's `~/.supercli`. Returns the server
     /// config and the fingerprint a Controller would pin.
     fn test_tls_material() -> (Arc<rustls::ServerConfig>, String) {
         let dir = scratch_dir("tls");
-        let material = unpeel_core::remote_server::ensure_tls_material_in(&dir)
+        let material = supercli_core::remote_server::ensure_tls_material_in(&dir)
             .expect("scratch Host certificate");
         let fingerprint = material.fingerprint.clone();
         let config =
-            unpeel_core::remote_server::build_tls_config(material).expect("scratch TLS config");
+            supercli_core::remote_server::build_tls_config(material).expect("scratch TLS config");
         let _ = std::fs::remove_dir_all(dir);
         (config, fingerprint)
     }
@@ -3567,7 +3567,7 @@ mod tests {
         port: u16,
         fingerprint: Option<String>,
     ) -> rustls::StreamOwned<rustls::ClientConnection, TcpStream> {
-        let config = Arc::new(unpeel_core::remote_attach::pinned_client_config(
+        let config = Arc::new(supercli_core::remote_attach::pinned_client_config(
             fingerprint,
         ));
         let name = rustls::pki_types::ServerName::try_from("localhost").unwrap();
@@ -3719,8 +3719,8 @@ mod tests {
         let dir = scratch_dir("events-long-poll");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let session_id = "s3-long-poll-wake";
         let emitter = std::thread::spawn(move || {
@@ -3758,8 +3758,8 @@ mod tests {
         );
 
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -3772,8 +3772,8 @@ mod tests {
         let dir = scratch_dir("events-long-poll-timeout");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let request = Request {
             request_id: None,
@@ -3806,8 +3806,8 @@ mod tests {
         );
 
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -3824,8 +3824,8 @@ mod tests {
         let dir = scratch_dir("events-wake-measure");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let mut latencies = Vec::new();
         for i in 0..20 {
@@ -3867,8 +3867,8 @@ mod tests {
         eprintln!("wake latency (ms): n=20 p50={p50} p99={p99} max={max}");
 
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -3884,31 +3884,31 @@ mod tests {
         let dir = scratch_dir("cancel-after-executed");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let session_id = "f1-cancel-after-executed";
-        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        let session_dir = supercli_core::session_host::session_dir(session_id);
         std::fs::create_dir_all(&session_dir).unwrap();
         // The scheduled daemon's write-ahead review + terminal outcome.
-        let review = unpeel_core::action_reviews::record_review(
+        let review = supercli_core::action_reviews::record_review(
             &session_dir,
-            unpeel_core::action_reviews::Actor::PolicyAllow,
+            supercli_core::action_reviews::Actor::PolicyAllow,
             "shell",
             "bash.exec",
             "args-hash",
-            unpeel_core::action_reviews::ReviewDecision::Approved,
+            supercli_core::action_reviews::ReviewDecision::Approved,
             None,
         )
         .unwrap();
-        unpeel_core::action_reviews::record_attempt_outcome(
+        supercli_core::action_reviews::record_attempt_outcome(
             &session_dir,
             &review.review_id,
-            unpeel_core::action_reviews::AttemptOutcome::Executed { success: true },
-            unpeel_core::action_reviews::Actor::PolicyAllow,
+            supercli_core::action_reviews::AttemptOutcome::Executed { success: true },
+            supercli_core::action_reviews::Actor::PolicyAllow,
         )
         .unwrap();
-        assert!(unpeel_core::action_reviews::inflight_reviews(&session_dir)
+        assert!(supercli_core::action_reviews::inflight_reviews(&session_dir)
             .unwrap()
             .is_empty());
 
@@ -3921,7 +3921,7 @@ mod tests {
             body: format!(r#"{{"sessionID":"{session_id}","reason":"test"}}"#).into_bytes(),
             keep_alive: false,
         };
-        let principal = unpeel_core::controller_api::ControllerPrincipal::OwnerTransport {
+        let principal = supercli_core::controller_api::ControllerPrincipal::OwnerTransport {
             transport: "test".to_string(),
             subject: None,
             principal_id: None,
@@ -3962,8 +3962,8 @@ mod tests {
         );
 
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -4038,9 +4038,9 @@ mod tests {
     #[test]
     fn panic_does_not_poison_host_for_next_request() {
         let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
+        let prev = std::env::var_os("SUPERCLI_HOME");
         let dir = scratch_dir("panic-cascade");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         // Arm the hook: first request will panic.
         *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = true;
@@ -4133,9 +4133,9 @@ mod tests {
 
         // Cleanup.
         if let Some(p) = prev {
-            std::env::set_var("UNPEEL_HOME", p);
+            std::env::set_var("SUPERCLI_HOME", p);
         } else {
-            std::env::remove_var("UNPEEL_HOME");
+            std::env::remove_var("SUPERCLI_HOME");
         }
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -4152,27 +4152,27 @@ mod tests {
         let dir = scratch_dir("cancel-race-benign");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let session_id = "r1-cancel-race";
-        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        let session_dir = supercli_core::session_host::session_dir(session_id);
         std::fs::create_dir_all(&session_dir).unwrap();
 
         // R1: in-flight review (approved, no outcome yet).
-        let review = unpeel_core::action_reviews::record_review(
+        let review = supercli_core::action_reviews::record_review(
             &session_dir,
-            unpeel_core::action_reviews::Actor::PolicyAllow,
+            supercli_core::action_reviews::Actor::PolicyAllow,
             "shell",
             "bash.exec",
             "args-hash",
-            unpeel_core::action_reviews::ReviewDecision::Approved,
+            supercli_core::action_reviews::ReviewDecision::Approved,
             None,
         )
         .unwrap();
         let rid = review.review_id.clone();
         assert_eq!(
-            unpeel_core::action_reviews::inflight_reviews(&session_dir).unwrap(),
+            supercli_core::action_reviews::inflight_reviews(&session_dir).unwrap(),
             vec![rid.clone()]
         );
 
@@ -4183,11 +4183,11 @@ mod tests {
         *TURN_CANCEL_RACE_HOOK
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(Box::new(move || {
-            unpeel_core::action_reviews::record_attempt_outcome(
+            supercli_core::action_reviews::record_attempt_outcome(
                 &hook_dir,
                 &hook_rid,
-                unpeel_core::action_reviews::AttemptOutcome::Executed { success: true },
-                unpeel_core::action_reviews::Actor::PolicyAllow,
+                supercli_core::action_reviews::AttemptOutcome::Executed { success: true },
+                supercli_core::action_reviews::Actor::PolicyAllow,
             )
             .unwrap();
         }));
@@ -4201,7 +4201,7 @@ mod tests {
             body: format!(r#"{{"sessionID":"{session_id}","reason":"race test"}}"#).into_bytes(),
             keep_alive: false,
         };
-        let principal = unpeel_core::controller_api::ControllerPrincipal::OwnerTransport {
+        let principal = supercli_core::controller_api::ControllerPrincipal::OwnerTransport {
             transport: "test".to_string(),
             subject: None,
             principal_id: None,
@@ -4232,20 +4232,20 @@ mod tests {
         // review is no longer in-flight and the chain verifies with both
         // entries (review + outcome).
         assert!(
-            unpeel_core::action_reviews::inflight_reviews(&session_dir)
+            supercli_core::action_reviews::inflight_reviews(&session_dir)
                 .unwrap()
                 .is_empty(),
             "raced review must not be re-marked in-flight"
         );
         assert_eq!(
-            unpeel_core::action_reviews::verify_review_chain(&session_dir).unwrap(),
+            supercli_core::action_reviews::verify_review_chain(&session_dir).unwrap(),
             2,
             "chain must hold the original review + Executed outcome"
         );
 
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -4366,7 +4366,7 @@ mod tests {
         // A non-/mobile path answers 404 only after the gate let the bearer
         // through; the same request in the clear ends in 426 above. (The
         // paired-token lookup itself is exercised by the process tests with
-        // a private UNPEEL_HOME.)
+        // a private SUPERCLI_HOME.)
         let mut client = tls_client(port, Some(fingerprint));
         let (status, head, body) = http_exchange(
             &mut client,
@@ -5175,7 +5175,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             principal_id: None,
         };
         let effects = ControllerEffects::new(Arc::new(|request| {
-            use unpeel_core::controller_api::{ControllerEffectError, ControllerSessionAction};
+            use supercli_core::controller_api::{ControllerEffectError, ControllerSessionAction};
             match (request.session_id.as_str(), request.action) {
                 ("conformance-restart", ControllerSessionAction::Restart)
                 | ("conformance-stop-live", ControllerSessionAction::Stop)
@@ -5238,7 +5238,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                     response.get("hostProtocol"),
                     Some(
                         &serde_json::to_value(
-                            unpeel_core::controller_protocol::HostProtocolDescriptor::headless_v1()
+                            supercli_core::controller_protocol::HostProtocolDescriptor::headless_v1()
                         )
                         .expect("descriptor json")
                     )
@@ -5308,19 +5308,19 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         use std::collections::HashMap;
         use std::sync::Arc;
 
-        // Serialize with other tests that mutate UNPEEL_HOME / the limiter.
+        // Serialize with other tests that mutate SUPERCLI_HOME / the limiter.
         let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
+        let prev = std::env::var_os("SUPERCLI_HOME");
         let dir = scratch_dir("ratelimit-e2e");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         let device = "e2e-ratelimit-device-001";
         let token = "e2e-ratelimit-token-001";
 
         // Pair the device: the production bearer lookup reads
-        // $UNPEEL_HOME/mobile/devices.json and matches sha256(token).
+        // $SUPERCLI_HOME/mobile/devices.json and matches sha256(token).
         let mobile = dir.join("mobile");
         std::fs::create_dir_all(&mobile).unwrap();
         std::fs::write(
@@ -5340,24 +5340,24 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         // Real canonical baseline: one approved in-flight review, written
         // through the production writer so the chain actually verifies.
         let session_id = "e2e-ratelimit-session";
-        let session_dir = unpeel_core::session_host::session_dir(session_id);
+        let session_dir = supercli_core::session_host::session_dir(session_id);
         std::fs::create_dir_all(&session_dir).unwrap();
-        unpeel_core::action_reviews::record_review(
+        supercli_core::action_reviews::record_review(
             &session_dir,
-            unpeel_core::action_reviews::Actor::Human {
+            supercli_core::action_reviews::Actor::Human {
                 device_id: device.to_string(),
             },
             "shell",
             "bash.exec",
             "args-hash",
-            unpeel_core::action_reviews::ReviewDecision::Approved,
+            supercli_core::action_reviews::ReviewDecision::Approved,
             None,
         )
         .expect("baseline review");
-        let review_log = session_dir.join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let review_log = session_dir.join(supercli_core::action_reviews::REVIEWS_FILE);
         let hash_before =
             sha256_hex(&std::fs::read_to_string(&review_log).expect("read review log"));
-        let chain_before = unpeel_core::action_reviews::verify_review_chain(&session_dir)
+        let chain_before = supercli_core::action_reviews::verify_review_chain(&session_dir)
             .expect("baseline chain verifies");
 
         // Real authenticated HTTPS server: the production connection
@@ -5387,7 +5387,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             }
         });
 
-        let limiter = unpeel_core::rate_limit::global();
+        let limiter = supercli_core::rate_limit::global();
         let https_post = |path: &str, body: &str| -> (u16, String, String) {
             let mut client = tls_client(port, Some(fingerprint.clone()));
             let request = format!(
@@ -5448,7 +5448,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             hash_before, hash_after,
             "review log bytes must be unchanged"
         );
-        let chain_after = unpeel_core::action_reviews::verify_review_chain(&session_dir)
+        let chain_after = supercli_core::action_reviews::verify_review_chain(&session_dir)
             .expect("chain still verifies");
         assert_eq!(
             chain_before, chain_after,
@@ -5464,9 +5464,9 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
 
         // Cleanup.
         if let Some(p) = prev {
-            std::env::set_var("UNPEEL_HOME", p);
+            std::env::set_var("SUPERCLI_HOME", p);
         } else {
-            std::env::remove_var("UNPEEL_HOME");
+            std::env::remove_var("SUPERCLI_HOME");
         }
         std::fs::remove_dir_all(&dir).ok();
     }

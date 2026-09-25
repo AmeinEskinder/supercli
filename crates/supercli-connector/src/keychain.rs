@@ -1,17 +1,17 @@
 //! Connector token storage. Tokens live in the OS keychain under the
 //! Host's service, account `connector:{name}` — the connector process
-//! itself only ever sees its token via the `UNPEEL_CONNECTOR_TOKEN` env
+//! itself only ever sees its token via the `SUPERCLI_CONNECTOR_TOKEN` env
 //! var. `disconnect` deletes the entry (revocation is one verb).
 
 use std::sync::{Arc, OnceLock};
-use unpeel_client::{CredentialError, CredentialStore, KeyringStore, MemoryStore};
+use supercli_client::{CredentialError, CredentialStore, KeyringStore, MemoryStore};
 
 /// Keychain service for Host-side connector tokens.
-pub const CONNECTOR_KEYCHAIN_SERVICE: &str = "com.unpeel.host";
+pub const CONNECTOR_KEYCHAIN_SERVICE: &str = "com.supercli.host";
 
 /// Env var forcing the in-memory connector token store. Used by tests and
 /// headless setups that must not touch the OS keychain.
-pub const CONNECTORS_KEYCHAIN_ENV: &str = "UNPEEL_CONNECTORS_KEYCHAIN";
+pub const CONNECTORS_KEYCHAIN_ENV: &str = "SUPERCLI_CONNECTORS_KEYCHAIN";
 
 fn account_for_connector(name: &str) -> String {
     format!("connector:{name}")
@@ -32,7 +32,7 @@ fn memory_fallback() -> Arc<MemoryStore> {
 /// is a user-facing notice set only when falling back — tokens will not
 /// survive a restart in that mode, and the CLI says so.
 ///
-/// `UNPEEL_CONNECTORS_KEYCHAIN=memory` forces the in-memory store; the
+/// `SUPERCLI_CONNECTORS_KEYCHAIN=memory` forces the in-memory store; the
 /// connector CLI tests use it so they never touch the real keychain.
 pub fn open_connector_store() -> (Arc<dyn CredentialStore>, Option<String>) {
     if std::env::var(CONNECTORS_KEYCHAIN_ENV).as_deref() == Ok("memory") {
@@ -87,7 +87,7 @@ pub fn delete_connector_token(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unpeel_client::MemoryStore;
+    use supercli_client::MemoryStore;
 
     #[test]
     fn token_lifecycle() {

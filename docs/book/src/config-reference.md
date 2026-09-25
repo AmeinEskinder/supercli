@@ -1,9 +1,9 @@
 # Config reference
 
-Generated from the typed config schema (`unpeel config reference`).
+Generated from the typed config schema (`supercli config reference`).
 Every setting has a documented default applied by its reader;
 missing keys are never an issue. Unknown keys produce warnings;
-invalid values produce errors (exit 2 from `unpeel config check`).
+invalid values produce errors (exit 2 from `supercli config check`).
 
 ## `experimental_features.sessions_mcp`
 

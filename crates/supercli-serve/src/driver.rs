@@ -257,14 +257,14 @@ struct ServeStatus<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     terminal_streamer: Option<crate::remote_streamer::StreamerStatus>,
     /// Shared PTY core managed by this worker (additive; absent while the
-    /// `UNPEEL_PTY_CORE` gate is off).
+    /// `SUPERCLI_PTY_CORE` gate is off).
     #[serde(skip_serializing_if = "Option::is_none")]
     pty_core: Option<crate::pty_core_supervisor::CoreStatus>,
     /// Host-owned Browser MCP engine install (additive, 2026-09-03):
     /// `{state: ready|installing|failed, version, path, error}`. Never a
     /// startup failure — the worker installs in a background thread.
     #[serde(skip_serializing_if = "Option::is_none")]
-    browser_engine: Option<unpeel_core::browser_engine::Status>,
+    browser_engine: Option<supercli_core::browser_engine::Status>,
     /// Legacy capability status, always unavailable after retirement.
     #[serde(skip_serializing_if = "Option::is_none")]
     computer_use: Option<serde_json::Value>,
@@ -288,7 +288,7 @@ struct ServeLease {
 
 impl ServeLease {
     fn acquire() -> Result<Self, String> {
-        let home = unpeel_core::app_paths::unpeel_home();
+        let home = supercli_core::app_paths::supercli_home();
         std::fs::create_dir_all(&home)
             .map_err(|error| format!("could not create {}: {error}", home.display()))?;
         let lock_path = home.join("serve.lock");
@@ -363,11 +363,11 @@ impl Drop for ServeLease {
 /// True only while another process holds the per-workspace serve lease.
 /// Stale status/lock files never count as a live Host.
 pub fn is_running() -> bool {
-    is_running_at(&unpeel_core::app_paths::unpeel_home())
+    is_running_at(&supercli_core::app_paths::supercli_home())
 }
 
 /// Path-addressed counterpart used by the machine Host-service supervisor.
-/// It cannot change `UNPEEL_HOME` inside the supervisor process just to
+/// It cannot change `SUPERCLI_HOME` inside the supervisor process just to
 /// inspect another workspace.
 pub fn is_running_at(home: &Path) -> bool {
     let path = home.join("serve.lock");
@@ -485,7 +485,7 @@ enum ProbeResult {
 
 fn candidate_frontend_ports() -> Vec<u16> {
     let mut ports =
-        std::fs::read_to_string(unpeel_core::app_paths::unpeel_home().join("app-ports"))
+        std::fs::read_to_string(supercli_core::app_paths::supercli_home().join("app-ports"))
             .unwrap_or_default()
             .lines()
             .rev()
@@ -552,7 +552,7 @@ fn response_is_non_owning_frontend(response: &ProbeResponse) -> bool {
 
 fn probe_native_authority(own_port: Option<u16>) -> ProbeObservation {
     let token = std::fs::read_to_string(
-        unpeel_core::app_paths::unpeel_home()
+        supercli_core::app_paths::supercli_home()
             .join("mcp")
             .join("auth-token"),
     )
@@ -594,8 +594,8 @@ enum LinkRefreshResult {
     StoredKey {
         key: String,
         result: Result<
-            unpeel_core::license::PendingRelayEntitlement,
-            unpeel_core::license::RelayEntitlementError,
+            supercli_core::license::PendingRelayEntitlement,
+            supercli_core::license::RelayEntitlementError,
         >,
     },
     NativeKeychain {
@@ -638,7 +638,7 @@ pub struct HostRuntime {
     overlay: crate::overlay::SharedNativeOverlay,
     overlay_refresh_rx: Option<mpsc::Receiver<OverlayRefreshResult>>,
     overlay_refresh_pending: bool,
-    activity_log: unpeel_core::activity_log::ActivityLogStore,
+    activity_log: supercli_core::activity_log::ActivityLogStore,
     unread_ids: HashSet<String>,
     /// Host-owned auto-stop-and-archive sweep (`auto_archive.rs`).
     auto_archive: crate::auto_archive::Sweeper,
@@ -671,7 +671,7 @@ pub struct HostRuntime {
     /// Post-upgrade refresh of user-installed integrations; joined never.
     #[allow(dead_code)]
     integrations_refresh: Option<std::thread::JoinHandle<()>>,
-    browser_engine_status: unpeel_core::browser_engine::Status,
+    browser_engine_status: supercli_core::browser_engine::Status,
     link_refresh_rx: Option<mpsc::Receiver<LinkRefreshResult>>,
     link_refresh_retry_at: Instant,
     last_scan: Instant,
@@ -685,9 +685,9 @@ pub struct HostRuntime {
 impl HostRuntime {
     pub fn start() -> Result<(Self, Vec<ServeEvent>), String> {
         let lease = ServeLease::acquire()?;
-        let home = unpeel_core::app_paths::unpeel_home();
+        let home = supercli_core::app_paths::supercli_home();
         let started_at_unix_ms = now_ms();
-        unpeel_core::relay_uplink::ensure_host_id()?;
+        supercli_core::relay_uplink::ensure_host_id()?;
         seed_blank_home();
 
         let platform_adapters = Arc::new(PlatformAdapterHub::default());
@@ -700,7 +700,7 @@ impl HostRuntime {
             overlay.clone(),
             Arc::clone(&platform_adapters),
         )?;
-        unpeel_core::session_ops::set_own_listener_port(port);
+        supercli_core::session_ops::set_own_listener_port(port);
         let computer = ComputerAdapter::default();
         let (local_control_tx, local_controls) = mpsc::channel();
         let native_probe = NativeProbe::start(port);
@@ -715,9 +715,9 @@ impl HostRuntime {
             &mut scan_cache,
         );
         let activity_log =
-            unpeel_core::activity_log::ActivityLogStore::load_default().unwrap_or_default();
+            supercli_core::activity_log::ActivityLogStore::load_default().unwrap_or_default();
         let persisted_unread =
-            crate::activity_snapshot::load_unread(&unpeel_core::app_paths::activity_state_path());
+            crate::activity_snapshot::load_unread(&supercli_core::app_paths::activity_state_path());
         let unread_ids = derive_unread(&model, &activity_log, &persisted_unread);
         let mut initial_snapshot = crate::sessions::mobile_snapshot(
             &model,
@@ -790,15 +790,15 @@ impl HostRuntime {
                 // The /mcp/* approval bridge needs the shared auth token; mint
                 // it for this home at start so the first agent write never
                 // races the file into existence.
-                if let Err(error) = unpeel_core::mcp_auth::ensure_auth_token() {
+                if let Err(error) = supercli_core::mcp_auth::ensure_auth_token() {
                     eprintln!("unpeel serve: MCP auth token: {error}");
                 }
                 spawn_integrations_refresh()
             },
             browser_engine_status: if browser_engine_install_enabled() {
-                unpeel_core::browser_engine::Status::installing()
+                supercli_core::browser_engine::Status::installing()
             } else {
-                unpeel_core::browser_engine::Status::disabled()
+                supercli_core::browser_engine::Status::disabled()
             },
             link_refresh_rx: None,
             link_refresh_retry_at: Instant::now(),
@@ -864,7 +864,7 @@ impl HostRuntime {
                     .observe_runtime_launch(&message.session_id, generation, runtime.1);
                 self.engine.sync_cancellation_from_disk(
                     &message.session_id,
-                    &unpeel_core::app_paths::app_sessions_root().join(&message.session_id),
+                    &supercli_core::app_paths::app_sessions_root().join(&message.session_id),
                     generation,
                 );
                 self.engine.apply_hook_event_for_runtime(
@@ -888,7 +888,7 @@ impl HostRuntime {
             dirty |= accepted;
         }
         while let Ok(session_id) = self.mark_read_rx.try_recv() {
-            let _ = unpeel_core::session_ops::mark_read(&session_id);
+            let _ = supercli_core::session_ops::mark_read(&session_id);
             self.unread_ids.remove(&session_id);
             dirty = true;
         }
@@ -1086,7 +1086,7 @@ impl HostRuntime {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_millis() as u64)
             .unwrap_or(0);
-        match unpeel_core::session_artifacts::sweep_incomplete_uploads(now_ms) {
+        match supercli_core::session_artifacts::sweep_incomplete_uploads(now_ms) {
             Ok(0) => {}
             Ok(expired) => crate::tracelog::trace(
                 "host-worker",
@@ -1122,9 +1122,9 @@ impl HostRuntime {
         for row in &self.model.rows {
             let old = previous.get(&row.id).copied();
             let kind = if old.is_none() && row.running {
-                Some(unpeel_core::activity_log::ActivityLogKind::Started)
+                Some(supercli_core::activity_log::ActivityLogKind::Started)
             } else if row.status == Status::Attention && old != Some(Status::Attention) {
-                Some(unpeel_core::activity_log::ActivityLogKind::NeedsInput)
+                Some(supercli_core::activity_log::ActivityLogKind::NeedsInput)
             } else if row.status == Status::Idle
                 // A screen-derived edge is not proof of completion: the
                 // fallback tier animates the sidebar but never notifies.
@@ -1135,9 +1135,9 @@ impl HostRuntime {
                     Some(Status::Starting | Status::Busy | Status::Attention)
                 )
             {
-                Some(unpeel_core::activity_log::ActivityLogKind::Finished)
+                Some(supercli_core::activity_log::ActivityLogKind::Finished)
             } else if row.status == Status::Exited && old.is_some_and(|old| old != Status::Exited) {
-                Some(unpeel_core::activity_log::ActivityLogKind::Exited)
+                Some(supercli_core::activity_log::ActivityLogKind::Exited)
             } else {
                 None
             };
@@ -1149,7 +1149,7 @@ impl HostRuntime {
             for (row, kind) in events {
                 self.append_activity(&row, kind, now, None);
                 let observed = match kind {
-                    unpeel_core::activity_log::ActivityLogKind::NeedsInput => self
+                    supercli_core::activity_log::ActivityLogKind::NeedsInput => self
                         .deliver_notification(
                             &row,
                             crate::notifications::NotificationKind::NeedsInput,
@@ -1157,7 +1157,7 @@ impl HostRuntime {
                             false,
                             now,
                         ),
-                    unpeel_core::activity_log::ActivityLogKind::Finished => self
+                    supercli_core::activity_log::ActivityLogKind::Finished => self
                         .deliver_notification(
                             &row,
                             crate::notifications::NotificationKind::Done,
@@ -1169,14 +1169,14 @@ impl HostRuntime {
                 };
                 if matches!(
                     kind,
-                    unpeel_core::activity_log::ActivityLogKind::NeedsInput
-                        | unpeel_core::activity_log::ActivityLogKind::Finished
+                    supercli_core::activity_log::ActivityLogKind::NeedsInput
+                        | supercli_core::activity_log::ActivityLogKind::Finished
                 ) {
                     if observed {
                         // A Controller rendering the terminal at the edge is
                         // observing it. Advance the shared receipt once so a
                         // later presence expiry cannot resurrect stale unread.
-                        let _ = unpeel_core::session_ops::mark_read(&row.id);
+                        let _ = supercli_core::session_ops::mark_read(&row.id);
                         self.unread_ids.remove(&row.id);
                     } else {
                         self.unread_ids.insert(row.id.clone());
@@ -1186,12 +1186,12 @@ impl HostRuntime {
         }
         let mut unread_claims = self.unread_ids.clone();
         unread_claims.extend(crate::activity_snapshot::load_unread(
-            &unpeel_core::app_paths::activity_state_path(),
+            &supercli_core::app_paths::activity_state_path(),
         ));
         self.unread_ids = derive_unread(&self.model, &self.activity_log, &unread_claims);
         if canonical_activity_owner {
             if let Err(error) = crate::activity_snapshot::publish(
-                &unpeel_core::app_paths::activity_state_path(),
+                &supercli_core::app_paths::activity_state_path(),
                 &self.model,
                 &self.unread_ids,
                 &self.engine,
@@ -1429,7 +1429,7 @@ impl HostRuntime {
         let spawned = std::thread::Builder::new()
             .name("unpeel-host-reaper".into())
             .spawn(move || {
-                for reaped in unpeel_core::session_host::reap_orphan_session_hosts() {
+                for reaped in supercli_core::session_host::reap_orphan_session_hosts() {
                     crate::tracelog::trace(
                         "reaper",
                         &format!(
@@ -1501,7 +1501,7 @@ impl HostRuntime {
             .filter(|host| !host.is_empty())
             .map(str::to_owned)
             .unwrap_or_else(crate::mobile::preferred_lan_address);
-        let mac_id = unpeel_core::relay_uplink::ensure_host_id()?;
+        let mac_id = supercli_core::relay_uplink::ensure_host_id()?;
         let (code, _) = self
             .pairing
             .begin(&host, pairing_port, &mac_id)
@@ -1531,10 +1531,10 @@ impl HostRuntime {
                 Ok(LinkRefreshResult::StoredKey { key, result }) => {
                     self.link_refresh_rx = None;
                     let request_is_current = self.owns_controller_serving()
-                        && unpeel_core::license::stored().is_some_and(|(stored, _)| stored == key);
+                        && supercli_core::license::stored().is_some_and(|(stored, _)| stored == key);
                     match result {
                         Ok(pending) if request_is_current => {
-                            match unpeel_core::license::commit_relay_entitlement_for_key(
+                            match supercli_core::license::commit_relay_entitlement_for_key(
                                 &key, &pending,
                             ) {
                                 Ok(()) => self.link_refresh_retry_at = Instant::now(),
@@ -1550,7 +1550,7 @@ impl HostRuntime {
                             if let Some(uplink) = self.relay_uplink.take() {
                                 uplink.stop();
                             }
-                            let _ = unpeel_core::license::reject_relay_entitlement();
+                            let _ = supercli_core::license::reject_relay_entitlement();
                             self.link_refresh_retry_at = Instant::now() + LINK_REJECTED_RETRY_DELAY;
                             emitted.push(ServeEvent::Warning(format!(
                                 "Link authorization rejected: {error}"
@@ -1588,10 +1588,10 @@ impl HostRuntime {
                             {
                                 let available = response.body["available"].as_bool() == Some(true);
                                 let cache_committed = matches!(
-                                    unpeel_core::relay_uplink::entitlement_cache_state(&mac_id),
-                                    unpeel_core::relay_uplink::EntitlementCacheState::Fresh
+                                    supercli_core::relay_uplink::entitlement_cache_state(&mac_id),
+                                    supercli_core::relay_uplink::EntitlementCacheState::Fresh
                                 ) && matches!(
-                                    unpeel_core::license::allowed_cached_relay_entitlement(),
+                                    supercli_core::license::allowed_cached_relay_entitlement(),
                                     Ok(Some(_))
                                 );
                                 self.link_refresh_retry_at = if !available || cache_committed {
@@ -1642,7 +1642,7 @@ impl HostRuntime {
             return;
         }
 
-        if unpeel_core::license::stored_file_exists() && unpeel_core::license::stored().is_none() {
+        if supercli_core::license::stored_file_exists() && supercli_core::license::stored().is_none() {
             if let Some(uplink) = self.relay_uplink.take() {
                 uplink.stop();
                 emitted.push(ServeEvent::LinkStopped {
@@ -1650,7 +1650,7 @@ impl HostRuntime {
                 });
                 self.status_dirty = true;
             }
-            match unpeel_core::license::reject_invalid_stored_key() {
+            match supercli_core::license::reject_invalid_stored_key() {
                 Ok(true) => emitted.push(ServeEvent::Warning(
                     "invalid Link key was quarantined".into(),
                 )),
@@ -1670,7 +1670,7 @@ impl HostRuntime {
             if let Some(uplink) = self.relay_uplink.take() {
                 uplink.stop();
             }
-            let _ = unpeel_core::license::reject_relay_entitlement();
+            let _ = supercli_core::license::reject_relay_entitlement();
             self.link_refresh_retry_at = Instant::now();
             emitted.push(ServeEvent::LinkStopped {
                 reason: "relay rejected authorization".into(),
@@ -1678,47 +1678,47 @@ impl HostRuntime {
             self.status_dirty = true;
         }
 
-        let mac_id = match unpeel_core::relay_uplink::ensure_host_id() {
+        let mac_id = match supercli_core::relay_uplink::ensure_host_id() {
             Ok(value) => value,
             Err(error) => {
                 emitted.push(ServeEvent::Warning(error));
                 return;
             }
         };
-        let tombstone = unpeel_core::license::link_tombstone_reason();
+        let tombstone = supercli_core::license::link_tombstone_reason();
         let native_keychain_refresh = self.platform_adapters.supports("link.entitlement.refresh")
-            && unpeel_core::license::stored().is_none();
+            && supercli_core::license::stored().is_none();
         let refresh_allowed = if native_keychain_refresh {
             tombstone.as_ref().is_ok_and(|reason| {
                 !matches!(
                     reason,
-                    Some(unpeel_core::license::LinkTombstoneReason::UserDisabled)
+                    Some(supercli_core::license::LinkTombstoneReason::UserDisabled)
                 )
             })
         } else {
             matches!(
-                unpeel_core::license::link_tombstone_allows_refresh(),
+                supercli_core::license::link_tombstone_allows_refresh(),
                 Ok(true)
             )
         };
-        let cache_state = unpeel_core::relay_uplink::entitlement_cache_state(&mac_id);
+        let cache_state = supercli_core::relay_uplink::entitlement_cache_state(&mac_id);
         let needs_refresh = tombstone.as_ref().is_ok_and(|reason| {
             reason.is_some()
-                || cache_state != unpeel_core::relay_uplink::EntitlementCacheState::Fresh
+                || cache_state != supercli_core::relay_uplink::EntitlementCacheState::Fresh
         });
         if self.link_refresh_rx.is_none()
             && Instant::now() >= self.link_refresh_retry_at
             && refresh_allowed
             && needs_refresh
         {
-            if let Some((key, _)) = unpeel_core::license::stored() {
+            if let Some((key, _)) = supercli_core::license::stored() {
                 let (sender, receiver) = mpsc::channel();
                 let refresh_mac_id = mac_id.clone();
                 let refresh_key = key.clone();
                 std::thread::Builder::new()
                     .name("unpeel-serve-link-refresh".into())
                     .spawn(move || {
-                        let result = unpeel_core::license::request_relay_entitlement_for_key(
+                        let result = supercli_core::license::request_relay_entitlement_for_key(
                             &refresh_mac_id,
                             &refresh_key,
                         );
@@ -1754,7 +1754,7 @@ impl HostRuntime {
 
         let should_run = crate::relay::has_registrations()
             && matches!(
-                unpeel_core::license::allowed_cached_relay_entitlement(),
+                supercli_core::license::allowed_cached_relay_entitlement(),
                 Ok(Some(_))
             );
         if should_run && self.relay_uplink.is_none() {
@@ -1801,7 +1801,7 @@ impl HostRuntime {
             .as_millis() as u64;
         self.append_activity(
             &row,
-            unpeel_core::activity_log::ActivityLogKind::Alert,
+            supercli_core::activity_log::ActivityLogKind::Alert,
             at,
             Some(body.clone()),
         );
@@ -1812,7 +1812,7 @@ impl HostRuntime {
             false,
             at,
         ) {
-            let _ = unpeel_core::session_ops::mark_read(session_id);
+            let _ = supercli_core::session_ops::mark_read(session_id);
             self.unread_ids.remove(session_id);
         } else {
             self.unread_ids.insert(session_id.to_string());
@@ -1881,12 +1881,12 @@ impl HostRuntime {
     fn append_activity(
         &mut self,
         row: &SessionRow,
-        kind: unpeel_core::activity_log::ActivityLogKind,
+        kind: supercli_core::activity_log::ActivityLogKind,
         at: u64,
         message: Option<String>,
     ) {
         let title = row.label.trim();
-        let entry = unpeel_core::activity_log::ActivityLogEntry {
+        let entry = supercli_core::activity_log::ActivityLogEntry {
             id: uuid::Uuid::new_v4().to_string(),
             session_id: row.id.clone(),
             kind,
@@ -1915,14 +1915,14 @@ impl HostRuntime {
         };
         match rx.try_recv() {
             Ok(Ok(path)) => {
-                self.browser_engine_status = unpeel_core::browser_engine::Status::ready(path);
+                self.browser_engine_status = supercli_core::browser_engine::Status::ready(path);
             }
             Ok(Err(error)) => {
-                self.browser_engine_status = unpeel_core::browser_engine::Status::failed(error);
+                self.browser_engine_status = supercli_core::browser_engine::Status::failed(error);
             }
             Err(mpsc::TryRecvError::Empty) => return,
             Err(mpsc::TryRecvError::Disconnected) => {
-                self.browser_engine_status = unpeel_core::browser_engine::Status::failed(
+                self.browser_engine_status = supercli_core::browser_engine::Status::failed(
                     "engine install thread exited without a result".into(),
                 );
             }
@@ -1956,7 +1956,7 @@ impl HostRuntime {
             platform_capabilities: self.platform_adapters.capabilities(),
             executable: std::env::current_exe().ok(),
             host_version: env!("CARGO_PKG_VERSION"),
-            build_id: unpeel_core::session_host::current_host_build_id(),
+            build_id: supercli_core::session_host::current_host_build_id(),
         })
     }
 }
@@ -1967,14 +1967,14 @@ impl HostRuntime {
 /// never a startup error. The install itself is flock-serialised, so a
 /// concurrent `unpeel browser install` or a sibling workspace worker simply
 /// waits and re-verifies.
-/// `UNPEEL_BROWSER_ENGINE_INSTALL=0` (or `false`/`off`/`no`) keeps the
+/// `SUPERCLI_BROWSER_ENGINE_INSTALL=0` (or `false`/`off`/`no`) keeps the
 /// worker from installing the Browser MCP engine at start: no thread, no
 /// network, `serve.json.browserEngine.state = "disabled"`. Benchmarks set it
 /// so the start-up footprint never includes a download; an operator who
 /// manages the engine by hand (or `unpeel browser install`) can too.
 fn browser_engine_install_enabled() -> bool {
     !matches!(
-        std::env::var("UNPEEL_BROWSER_ENGINE_INSTALL")
+        std::env::var("SUPERCLI_BROWSER_ENGINE_INSTALL")
             .unwrap_or_default()
             .trim()
             .to_ascii_lowercase()
@@ -1986,9 +1986,9 @@ fn browser_engine_install_enabled() -> bool {
 /// Keep user-installed integrations current: after an upgrade their hook
 /// scripts and MCP shim must point at this build. Only integrations the
 /// user installed are touched; nothing is ever installed on their behalf.
-/// `UNPEEL_TEST` skips it because provider config paths are global.
+/// `SUPERCLI_TEST` skips it because provider config paths are global.
 fn spawn_integrations_refresh() -> Option<std::thread::JoinHandle<()>> {
-    if std::env::var("UNPEEL_TEST").as_deref() == Ok("1") {
+    if std::env::var("SUPERCLI_TEST").as_deref() == Ok("1") {
         return None;
     }
     std::thread::Builder::new()
@@ -1997,13 +1997,13 @@ fn spawn_integrations_refresh() -> Option<std::thread::JoinHandle<()>> {
             // Upgrade from 0.6: hooks Unpeel installed at launch time become
             // installed integrations, then the refresh below re-runs their
             // installers so the MCP shim gets registered as well.
-            for runtime in unpeel_core::integrations::install::adopt_legacy_installs() {
+            for runtime in supercli_core::integrations::install::adopt_legacy_installs() {
                 crate::tracelog::trace(
                     "integrations",
                     &format!("adopted the {runtime} integration from a pre-0.7 install"),
                 );
             }
-            for (runtime, result) in unpeel_core::integrations::install::refresh_installed() {
+            for (runtime, result) in supercli_core::integrations::install::refresh_installed() {
                 match result {
                     Ok(()) => crate::tracelog::trace(
                         "integrations",
@@ -2025,7 +2025,7 @@ fn spawn_browser_engine_install(home: &Path) -> mpsc::Receiver<Result<PathBuf, S
     std::thread::Builder::new()
         .name("browser-engine-install".into())
         .spawn(move || {
-            let result = unpeel_core::browser_engine::ensure_installed(&home);
+            let result = supercli_core::browser_engine::ensure_installed(&home);
             if let Err(error) = &result {
                 crate::tracelog::trace("browser-engine", &format!("install failed: {error}"));
             }
@@ -2059,7 +2059,7 @@ pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
     // grant stays revoked. The supervisor (service::run_service) reconciles
     // too, but the worker is the process that persists grants, so it must
     // reconcile on its own startup path as well.
-    if let Err(e) = unpeel_core::grant_audit::reconcile_grants() {
+    if let Err(e) = supercli_core::grant_audit::reconcile_grants() {
         report(ServeEvent::Warning(format!("Grant reconciliation: {e}")));
     }
     let (mut driver, events) = HostRuntime::start()?;
@@ -2086,11 +2086,11 @@ pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
 /// historical behavior (load() tolerates it; the seed path fills it in);
 /// a present-but-unreadable file is refused just like the CLI refuses it.
 fn refuse_invalid_config() -> Result<(), String> {
-    refuse_loaded(&unpeel_core::app_state::load())
+    refuse_loaded(&supercli_core::app_state::load())
 }
 
 /// The refusal logic against an already-attempted load, so tests can
-/// cover it without mutating process-global `UNPEEL_HOME`.
+/// cover it without mutating process-global `SUPERCLI_HOME`.
 fn refuse_loaded(doc: &Result<serde_json::Value, String>) -> Result<(), String> {
     let doc = match doc {
         Ok(doc) => doc,
@@ -2102,7 +2102,7 @@ fn refuse_loaded(doc: &Result<serde_json::Value, String>) -> Result<(), String> 
             ))
         }
     };
-    let report = unpeel_core::config::check_document(doc);
+    let report = supercli_core::config::check_document(doc);
     if report.is_valid() {
         Ok(())
     } else {
@@ -2117,7 +2117,7 @@ fn refuse_loaded(doc: &Result<serde_json::Value, String>) -> Result<(), String> 
 /// an empty list once and announces on the state bus; never touches an
 /// existing or unparseable file.
 fn seed_blank_home() {
-    let state: serde_json::Value = match std::fs::read(unpeel_core::app_paths::app_state_path()) {
+    let state: serde_json::Value = match std::fs::read(supercli_core::app_paths::app_state_path()) {
         Ok(raw) => match serde_json::from_slice(&raw) {
             Ok(state) => state,
             // Unparseable: seeding over it would delete the user's presets
@@ -2126,10 +2126,10 @@ fn seed_blank_home() {
         },
         Err(_) => serde_json::Value::Null,
     };
-    if !unpeel_core::first_run::needs_seeding(&state) {
+    if !supercli_core::first_run::needs_seeding(&state) {
         return;
     }
-    match unpeel_core::first_run::seed_app_state(&[]) {
+    match supercli_core::first_run::seed_app_state(&[]) {
         Ok((presets, _)) => crate::tracelog::trace(
             "host-worker",
             &format!(
@@ -2152,7 +2152,7 @@ fn now_ms() -> u64 {
 }
 
 fn runtime_launch_metadata(session_id: &str) -> (Option<u64>, Option<u64>) {
-    let Some(manifest) = unpeel_core::session_host::load_manifest(session_id) else {
+    let Some(manifest) = supercli_core::session_host::load_manifest(session_id) else {
         return (None, None);
     };
     (
@@ -2163,16 +2163,16 @@ fn runtime_launch_metadata(session_id: &str) -> (Option<u64>, Option<u64>) {
 
 fn latest_activity_at(
     row: &SessionRow,
-    activity_log: &unpeel_core::activity_log::ActivityLogStore,
+    activity_log: &supercli_core::activity_log::ActivityLogStore,
 ) -> Option<u64> {
-    let lifecycle = unpeel_core::session_ops::last_activity_ms(&row.id, &row.command);
+    let lifecycle = supercli_core::session_ops::last_activity_ms(&row.id, &row.command);
     let alert = activity_log
         .entries()
         .iter()
         .rev()
         .find(|entry| {
             entry.session_id == row.id
-                && entry.kind == unpeel_core::activity_log::ActivityLogKind::Alert
+                && entry.kind == supercli_core::activity_log::ActivityLogKind::Alert
         })
         .map(|entry| entry.at);
     match (lifecycle, alert) {
@@ -2183,7 +2183,7 @@ fn latest_activity_at(
 
 fn derive_unread(
     model: &SidebarModel,
-    activity_log: &unpeel_core::activity_log::ActivityLogStore,
+    activity_log: &supercli_core::activity_log::ActivityLogStore,
     local_claims: &HashSet<String>,
 ) -> HashSet<String> {
     model
@@ -2194,7 +2194,7 @@ fn derive_unread(
             if !claimed {
                 return false;
             }
-            match unpeel_core::session_ops::read_marker(&row.id) {
+            match supercli_core::session_ops::read_marker(&row.id) {
                 Some(read_at) => latest_activity_at(row, activity_log)
                     .is_some_and(|activity_at| activity_at > read_at),
                 None => true,

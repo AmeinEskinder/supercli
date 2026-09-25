@@ -401,7 +401,7 @@ pub struct BrowserSettings {
     #[serde(default)]
     pub allowed_domains: String,
     /// "project" (default) = one persistent browser window/profile per
-    /// project tree under `~/.unpeel/browser/profiles/`; every Session owns a
+    /// project tree under `~/.supercli/browser/profiles/`; every Session owns a
     /// pinned tab in that window and shares its logins — never the user's own
     /// Chrome profile. "session" = a separate ephemeral browser per Session.
     #[serde(default = "default_browser_profile_mode")]
@@ -739,7 +739,7 @@ pub struct AppState {
     /// Set by the native app's one-time fold of its UserDefaults preset
     /// overlay into this file. Once true, `presets` — array order included —
     /// is the single preset truth for every UI, and the legacy overlay
-    /// presets (`com.unpeel.native` defaults) are stale copies that must be
+    /// presets (`com.supercli.native` defaults) are stale copies that must be
     /// ignored.
     #[serde(default)]
     pub native_preset_overlay_migrated: bool,
@@ -858,7 +858,7 @@ pub struct AppState {
     pub session_sort_modes: HashMap<String, String>,
     /// Project folder colors: project id → color id (`sky`, `blue`, …).
     /// The on-disk carrier for every workspace the desktop app's
-    /// UserDefaults overlay does not reach — isolated `UNPEEL_HOME`
+    /// UserDefaults overlay does not reach — isolated `SUPERCLI_HOME`
     /// workspaces driven through the loopback gateway, and Linux Hosts.
     /// Where the overlay is live it wins per project; a Host writes here
     /// only when no native adapter can persist the color.

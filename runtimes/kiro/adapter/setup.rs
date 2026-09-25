@@ -167,13 +167,13 @@ pub(crate) fn kiro_mcp_server_value(shim: &Path) -> Value {
         // own identity and home without rewriting the shared settings file;
         // the shim's gate reads the Session's grants from its manifest.
         "env": {
-            "UNPEEL_SESSION_ID": "${UNPEEL_SESSION_ID}",
-            "UNPEEL_SESSION_DIR": "${UNPEEL_SESSION_DIR}",
-            "UNPEEL_APP_PORT": "${UNPEEL_APP_PORT}",
-            "UNPEEL_HOME": "${UNPEEL_HOME}",
-            "UNPEEL_HOST_BIN": "${UNPEEL_HOST_BIN}",
-            "UNPEEL_APP_PORT_REGISTRY_FILE": "${UNPEEL_APP_PORT_REGISTRY_FILE}",
-            "UNPEEL_HOOK_TRACE_FILE": "${UNPEEL_HOOK_TRACE_FILE}",
+            "SUPERCLI_SESSION_ID": "${SUPERCLI_SESSION_ID}",
+            "SUPERCLI_SESSION_DIR": "${SUPERCLI_SESSION_DIR}",
+            "SUPERCLI_APP_PORT": "${SUPERCLI_APP_PORT}",
+            "SUPERCLI_HOME": "${SUPERCLI_HOME}",
+            "SUPERCLI_HOST_BIN": "${SUPERCLI_HOST_BIN}",
+            "SUPERCLI_APP_PORT_REGISTRY_FILE": "${SUPERCLI_APP_PORT_REGISTRY_FILE}",
+            "SUPERCLI_HOOK_TRACE_FILE": "${SUPERCLI_HOOK_TRACE_FILE}",
         },
     })
 }
@@ -202,7 +202,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn migration_recognizes_only_unpeel_owned_kiro_server_argv() {
+    fn migration_recognizes_only_supercli_owned_kiro_server_argv() {
         assert!(is_owned_kiro_mcp_entry(
             &json!({ "args": ["__kiro_mcp__"] })
         ));

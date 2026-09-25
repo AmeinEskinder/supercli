@@ -126,7 +126,7 @@ pub(crate) fn ensure_muse_plugin_registered(
     let install_args = ["plugins", "install", dir.as_str(), "--json"];
     if let Err(first) = run_muse_plugins_command(&muse_bin, &install_args) {
         // Muse refuses to re-install an id it already has (including "from a
-        // different source", which happens when another UNPEEL_HOME instance
+        // different source", which happens when another SUPERCLI_HOME instance
         // registered its staged copy — the content is byte-identical, only
         // the recorded source path differs). Re-point it by removing and
         // installing fresh.

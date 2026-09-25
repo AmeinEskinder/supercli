@@ -3,31 +3,31 @@
 <!--
   Unpeel Host service — macOS per-user LaunchAgent.
 
-  Usable verbatim when `unpeel` is installed at /usr/local/bin/unpeel
+  Usable verbatim when `supercli` is installed at /usr/local/bin/supercli
   (the install.sh default):
 
-    cp com.unpeel.serve.plist ~/Library/LaunchAgents/
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.unpeel.serve.plist
+    cp com.supercli.serve.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.supercli.serve.plist
 
-  `unpeel serve install` writes this same file with the resolved binary
-  path (it rewrites the /usr/local/bin/unpeel line, and for a scoped
+  `supercli serve install` writes this same file with the resolved binary
+  path (it rewrites the /usr/local/bin/supercli line, and for a scoped
   workspace unit the label plus the ProgramArguments serve line).
 
   This must stay a per-user LaunchAgent, never a root LaunchDaemon: the
-  service owns ~/.unpeel state, the user Keychain, and the per-user machine
+  service owns ~/.supercli state, the user Keychain, and the per-user machine
   lease. A headless Mac therefore needs automatic login for the hosting
   user so the gui/<uid> domain exists at boot.
 
   Stdout/stderr are intentionally not captured: durable diagnostics go to
-  ~/.unpeel/hooks/trace.log.
+  ~/.supercli/hooks/trace.log.
 -->
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.unpeel.serve</string>
+	<string>com.supercli.serve</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/local/bin/unpeel</string>
+		<string>/usr/local/bin/supercli</string>
 		<string>serve</string>
 	</array>
 	<key>RunAtLoad</key>

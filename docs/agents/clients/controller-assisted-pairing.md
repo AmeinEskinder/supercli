@@ -1,17 +1,17 @@
 # Controller-Assisted Pairing
 
 Controller-assisted pairing lets an already-authorized Mac Controller add an
-iPhone or iPad to a remote Unpeel Host without opening a screen on that Host.
+iPhone or iPad to a remote Supercli Host without opening a screen on that Host.
 It is provider-neutral once the assisting Mac already has a supported Direct
 or Link connection: the Host may be another Mac, a Linux server, a VPS, or a
 managed container. The provider is only where the Host runs; it does not
-participate in Unpeel's pairing protocol. This flow does not bootstrap the
+participate in Supercli's pairing protocol. This flow does not bootstrap the
 first Controller connection. Upstash Box currently accepts only interactive
 SSH, so it is validated as an in-shell Host/browser runtime but not yet as a
 Mac Host-picker or phone target.
 
 Status: implemented at Host protocol minor 7 through capability
-`pairing.invitation` for native and headless Hosts over Direct and Unpeel Link.
+`pairing.invitation` for native and headless Hosts over Direct and Supercli Link.
 The assisting Mac's proxy is a dedicated Controller-side one-shot listener in
 both client-only Dev and released compatibility paths; it is not part of a
 Swift or Rust Host server.
@@ -40,7 +40,7 @@ pairing.
 3. On the phone, open **Your Devices → Add a Device** and scan the QR.
 4. Keep the sheet open until **Controller paired** appears.
 5. After pairing, the phone connects to the Host itself: Direct when the saved
-   Host endpoint is reachable, otherwise through Unpeel Link when enabled.
+   Host endpoint is reachable, otherwise through Supercli Link when enabled.
 
 Closing the Mac sheet invalidates its local proxy immediately. Refreshing the
 QR replaces the previous invitation, and each invitation expires after five
@@ -117,7 +117,7 @@ The concrete sequence is:
   invitation invalidates the previous one.
 - The proxy transports only the sealed pairing exchange. It is not a general
   Controller-to-Host tunnel and never carries Session content.
-- Unpeel Link remains an opaque transport and does not store pairing or Session
+- Supercli Link remains an opaque transport and does not store pairing or Session
   content.
 
 Current Direct desktop transport is bearer-authenticated plaintext HTTP and is
@@ -128,7 +128,7 @@ boundary or expose the remote Host's HTTP port publicly.
 
 This is the same for any remote-host provider:
 
-1. Run a current native or headless Unpeel Host with durable `~/.unpeel`
+1. Run a current native or headless Supercli Host with durable `~/.supercli`
    storage. Container filesystems must persist this directory across restarts.
 2. Pair the Mac to that Host once and verify the Host picker reports Direct or
    Via Link.
@@ -146,7 +146,7 @@ by agents after the Controller connection exists.
 ## Troubleshooting
 
 - **Add iPhone or iPad to Host Name is disabled** — the selected Host did not
-  advertise `pairing.invitation`; update Unpeel on the Host and reconnect.
+  advertise `pairing.invitation`; update Supercli on the Host and reconnect.
 - **Creating invitation never produces a QR** — verify the Mac is still
   connected to the selected Host and that its short-lived Controller proxy
   can bind a local port.
@@ -179,18 +179,18 @@ the same Host; moving work to a different Host remains restart-with-resume.
   `protocol/host-capabilities-v1.json`,
   `protocol/host-conformance-v1.json`
 - Shared QR, pairing response, and validation:
-  `clients/shared/UnpeelShared/Sources/UnpeelShared/RemoteControlProtocol.swift`,
+  `clients/shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift`,
   `RemotePairingClient.swift`
 - Mac invitation UI and proxy lifecycle:
-  `clients/native/UnpeelNative/Sources/UnpeelNative/Views/HostPickerView.swift`,
-  `UnpeelStore.swift`, `ControllerPairingProxy.swift`
+  `clients/native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift`,
+  `SupercliStore.swift`, `ControllerPairingProxy.swift`
 - Generation-bound Controller backend:
-  `crates/unpeel-core/src/remote_session_backend.rs`,
-  `crates/unpeel-native-bridge/src/lib.rs`
+  `crates/supercli-core/src/remote_session_backend.rs`,
+  `crates/supercli-native-bridge/src/lib.rs`
 - Headless Direct and Link Host adapters:
-  `crates/unpeel-cli/src/mobile.rs`, `pairing.rs`, `relay.rs`
+  `crates/supercli-cli/src/mobile.rs`, `pairing.rs`, `relay.rs`
 - Phone persistence of the real Host endpoint:
-  `clients/ios/UnpeelIOS/Sources/UnpeelIOS/RemoteConnectionStore.swift`
+  `clients/ios/SupercliIOS/Sources/SupercliIOS/RemoteConnectionStore.swift`
 
 ## Rules for extensions
 

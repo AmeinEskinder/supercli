@@ -56,7 +56,7 @@ export UNPEEL_HOME
 echo "==> dev build, signing with: $CODESIGN_IDENTITY"
 UNPEEL_DEV_BUILD=1 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" "$HERE/build-app.sh"
 
-EXE="$HERE/dist/Unpeel.app/Contents/MacOS/UnpeelNative"
+EXE="$HERE/dist/Unpeel.app/Contents/MacOS/SupercliNative"
 echo "==> launching $EXE (UNPEEL_HOME=$UNPEEL_HOME)"
 echo "    quit the app to return to the shell; the app boots blank on first launch."
 exec "$EXE"

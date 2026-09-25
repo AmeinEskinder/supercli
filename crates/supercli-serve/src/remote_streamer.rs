@@ -13,8 +13,8 @@ use std::path::PathBuf;
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use unpeel_core::app_paths;
-use unpeel_core::session_host::{recorded_pid_identity, PidIdentity};
+use supercli_core::app_paths;
+use supercli_core::session_host::{recorded_pid_identity, PidIdentity};
 
 /// Delay before respawning an exited streamer.
 pub(crate) const RESTART_DELAY: Duration = Duration::from_secs(2);
@@ -249,7 +249,7 @@ impl RemoteStreamer {
         if let Some(pid) = reap_stale_streamer(self.pid()) {
             events.push(StreamerEvent::ReapedStale { pid });
         }
-        let binary = match unpeel_core::session_ops::resolve_host_binary() {
+        let binary = match supercli_core::session_ops::resolve_host_binary() {
             Ok(binary) => binary,
             Err(error) => {
                 self.unavailable = true;
@@ -293,7 +293,7 @@ impl Drop for RemoteStreamer {
 }
 
 fn remote_record_path() -> PathBuf {
-    app_paths::unpeel_home().join("remote.json")
+    app_paths::supercli_home().join("remote.json")
 }
 
 /// (pid, port, pid_started_at) from `remote.json`, if readable.

@@ -39,7 +39,7 @@ function binaryHeader(target) {
 }
 
 function fixture({ withProtocol = true } = {}) {
-  const root = mkdtempSync(resolve(tmpdir(), 'unpeel-cli-recovery-test-'))
+  const root = mkdtempSync(resolve(tmpdir(), 'supercli-cli-recovery-test-'))
   const archives = {}
   for (const target of targets) {
     const stage = resolve(root, `stage-${target}`)
@@ -54,7 +54,7 @@ function fixture({ withProtocol = true } = {}) {
       mkdirSync(resolve(stage, 'generated'))
       writeFileSync(resolve(stage, 'generated', 'GeneratedRuntimeCatalog.swift'), '// fixture\n')
     }
-    for (const binary of ['unpeel', 'unpeel-host', 'unpeel-attach']) {
+    for (const binary of ['supercli', 'supercli-host', 'supercli-attach']) {
       const path = resolve(stage, binary)
       writeFileSync(path, binaryHeader(target))
       chmodSync(path, 0o755)
@@ -68,10 +68,10 @@ function fixture({ withProtocol = true } = {}) {
       source_commit: head,
       source_dirty: false
     })}\n`)
-    const archive = resolve(root, `unpeel-${workspaceVersion}-${target}.tar.gz`)
+    const archive = resolve(root, `supercli-${workspaceVersion}-${target}.tar.gz`)
     const tar = spawnSync('tar', [
       '-czf', archive, '-C', stage,
-      'unpeel', 'unpeel-host', 'unpeel-attach', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'BUILD_PROVENANCE.json',
+      'supercli', 'supercli-host', 'supercli-attach', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'BUILD_PROVENANCE.json',
       ...(withProtocol ? ['protocol', 'generated'] : [])
     ], { encoding: 'utf8' })
     assert.equal(tar.status, 0, tar.stderr)
@@ -99,7 +99,7 @@ function runPublisher(state, extraArgs = []) {
 }
 
 function uploadKeys(stdout) {
-  return [...stdout.matchAll(/"unpeel-releases\/([^"\n]+)"/g)].map((match) => match[1])
+  return [...stdout.matchAll(/"supercli-releases\/([^"\n]+)"/g)].map((match) => match[1])
 }
 
 test('revision recovery uploads every immutable object before aliases and manifest', () => {
@@ -108,11 +108,11 @@ test('revision recovery uploads every immutable object before aliases and manife
     const result = runPublisher(state, ['--artifact-revision', revision])
     assert.equal(result.status, 0, result.stderr)
     const immutable = targets.flatMap((target) => {
-      const key = `beta/cli/unpeel-${workspaceVersion}-${revision}-${target}.tar.gz`
+      const key = `beta/cli/supercli-${workspaceVersion}-${revision}-${target}.tar.gz`
       return [key, `${key}.sha256`]
     })
     const mutable = targets.flatMap((target) => {
-      const key = `beta/cli/unpeel-latest-${target}.tar.gz`
+      const key = `beta/cli/supercli-latest-${target}.tar.gz`
       return [key, `${key}.sha256`]
     })
     assert.deepEqual(uploadKeys(result.stdout), [
@@ -128,12 +128,12 @@ test('revision recovery uploads every immutable object before aliases and manife
 
     const publishDir = resolve(
       state.root,
-      readdirSync(state.root).find((entry) => entry.startsWith('unpeel-cli-publish-'))
+      readdirSync(state.root).find((entry) => entry.startsWith('supercli-cli-publish-'))
     )
     const latest = JSON.parse(readFileSync(resolve(publishDir, 'latest.json'), 'utf8'))
     assert.equal(latest.artifact_revision, revision)
     for (const target of targets) {
-      const archiveName = `unpeel-${workspaceVersion}-${revision}-${target}.tar.gz`
+      const archiveName = `supercli-${workspaceVersion}-${revision}-${target}.tar.gz`
       assert.equal(latest.targets[target].key, `beta/cli/${archiveName}`)
       assert.equal(
         readFileSync(resolve(publishDir, `${target}-versioned.sha256`), 'utf8').trim().split(/\s+/)[1],
@@ -141,7 +141,7 @@ test('revision recovery uploads every immutable object before aliases and manife
       )
       assert.equal(
         readFileSync(resolve(publishDir, `${target}-latest.sha256`), 'utf8').trim().split(/\s+/)[1],
-        `unpeel-latest-${target}.tar.gz`
+        `supercli-latest-${target}.tar.gz`
       )
     }
   } finally {
@@ -156,19 +156,19 @@ test('normal publishing keeps the legacy immutable keys and manifest shape', () 
     assert.equal(result.status, 0, result.stderr)
     const keys = uploadKeys(result.stdout)
     for (const target of targets) {
-      assert.equal(keys.includes(`beta/cli/unpeel-${workspaceVersion}-${target}.tar.gz`), true)
+      assert.equal(keys.includes(`beta/cli/supercli-${workspaceVersion}-${target}.tar.gz`), true)
       // The plain versioned key now carries an immutable sidecar too (the Mac
       // app build verifies the versioned archive against it).
-      assert.equal(keys.includes(`beta/cli/unpeel-${workspaceVersion}-${target}.tar.gz.sha256`), true)
+      assert.equal(keys.includes(`beta/cli/supercli-${workspaceVersion}-${target}.tar.gz.sha256`), true)
     }
     const publishDir = resolve(
       state.root,
-      readdirSync(state.root).find((entry) => entry.startsWith('unpeel-cli-publish-'))
+      readdirSync(state.root).find((entry) => entry.startsWith('supercli-cli-publish-'))
     )
     const latest = JSON.parse(readFileSync(resolve(publishDir, 'latest.json'), 'utf8'))
     assert.equal(Object.hasOwn(latest, 'artifact_revision'), false)
     for (const target of targets) {
-      assert.equal(latest.targets[target].key, `beta/cli/unpeel-${workspaceVersion}-${target}.tar.gz`)
+      assert.equal(latest.targets[target].key, `beta/cli/supercli-${workspaceVersion}-${target}.tar.gz`)
       assert.equal(Object.hasOwn(latest.targets[target], 'sidecar_key'), false)
     }
   } finally {
@@ -195,7 +195,7 @@ test('every versioned archive publishes an immutable sha256 sidecar', () => {
     assert.equal(result.status, 0, result.stderr)
     const keys = uploadKeys(result.stdout)
     for (const target of targets) {
-      assert.equal(keys.includes(`beta/cli/unpeel-${workspaceVersion}-${target}.tar.gz.sha256`), true, target)
+      assert.equal(keys.includes(`beta/cli/supercli-${workspaceVersion}-${target}.tar.gz.sha256`), true, target)
     }
   } finally {
     rmSync(state.root, { recursive: true, force: true })

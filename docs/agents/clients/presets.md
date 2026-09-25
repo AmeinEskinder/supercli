@@ -2,7 +2,7 @@
 
 ## Presets and Quick Presets
 
-Preset model (`Preset` in `crates/unpeel-core/src/state.rs`):
+Preset model (`Preset` in `crates/supercli-core/src/state.rs`):
 
 - `id`, `label`, `command`, `project_id` (optional), `enabled`, `quick_launch`.
   `enabled` remains encoded for compatibility with older clients, but the
@@ -11,31 +11,31 @@ Preset model (`Preset` in `crates/unpeel-core/src/state.rs`):
 
 Where presets are stored (since the overlay migration, 2026-08-08):
 
-- **`~/.unpeel/app-state.json` `presets` is the single source of truth — the
+- **`~/.supercli/app-state.json` `presets` is the single source of truth — the
   array order defines command order within each plugin.** `plugin_order`
   defines the plugin rows. Both UIs read and write the shared file: the app
   edits it through `PresetStateFile.swift` (raw-JSON read-modify-write that
   preserves unmodelled keys, atomic temp+rename — the Swift twin of the Rust
-  `app_state::edit`), and the CLI (`unpeel presets`) through `app_state::edit`.
+  `app_state::edit`), and the CLI (`supercli presets`) through `app_state::edit`.
   The app notices CLI writes via its FSEvents watcher on the file.
-- The one-time fold: `migrateOverlayPresetsToSharedFile` (UnpeelStore) folds
-  the legacy UserDefaults overlay (`unpeel.native.presets` added/edited/
-  removedIDs + `unpeel.native.presetOrder`) into the file at launch and sets
+- The one-time fold: `migrateOverlayPresetsToSharedFile` (SupercliStore) folds
+  the legacy UserDefaults overlay (`supercli.native.presets` added/edited/
+  removedIDs + `supercli.native.presetOrder`) into the file at launch and sets
   the top-level marker `native_preset_overlay_migrated: true`. The overlay
   keys are left in place (defaults are shared by bundle id — an older build
   running side by side must keep its state) but are never read again once
   the marker is set; every reader (app `rebuildPresets`, the CLI's
-  `fallback_presets`, `unpeel presets list`) skips overlay presets when the
+  `fallback_presets`, `supercli presets list`) skips overlay presets when the
   marker is present. A file that exists but fails the typed decode is never
   folded over (`allowFold` guard). **Do not add new preset UserDefaults
   overlays or client-side preset caches — edit the file.**
-- Un-migrated installs (app not yet run since the change): `unpeel presets
+- Un-migrated installs (app not yet run since the change): `supercli presets
   list` shows overlay-held presets read-only, tagged "in the app — open it
   once to migrate".
 - The native app is **global-presets-only** by design: Tauri-era
   project-scoped rows (`project_id != null`) are dropped from its view on
   decode but preserved in the file across rewrites. It does not read the
-  Tauri-era per-project `<project>/.unpeel.json` presets.
+  Tauri-era per-project `<project>/.supercli.json` presets.
 
 Quick preset selection rules (`Presets.swift`):
 
@@ -50,7 +50,7 @@ Quick preset selection rules (`Presets.swift`):
 ### Agents and Plugins
 
 `PluginSettingsPanel` is one list implementation with two scopes: Settings ▸
-**Agents** (agent CLIs and custom commands) and Settings ▸ **Plugins** (Unpeel
+**Agents** (agent CLIs and custom commands) and Settings ▸ **Plugins** (Supercli
 Apps under their user-facing name). Both combine installation, activation, and
 launch command editing for the selected Host, including local loopback, over
 one shared `plugin_order` (reordering a page moves only its rows). Rows sit
@@ -70,8 +70,8 @@ additional commands expand only the command column and row height. The legacy
 Presets, Agents & Apps, and MCP Settings routes redirect to Agents; the
 Sessions use and Browser use routes redirect to Agent access.
 
-The Agents page owns the per-agent **Unpeel integration** (hooks + the
-`unpeel` MCP server registered in the CLI's own configuration, once per
+The Agents page owns the per-agent **Supercli integration** (hooks + the
+`supercli` MCP server registered in the CLI's own configuration, once per
 Host). A row-level **Install integration** runs the Host's `integrations.install`
 verb; an installed row shows a checkmark. The expanded row states the integration state,
 what the installer edits (the runtime package's `integrationSummary`), what
@@ -137,7 +137,7 @@ The installer is a regular background-created session; Settings and the current
 workspace selection stay open. A separate presentation owner keeps its terminal
 stream alive across workspace refreshes. Hiding it only unmounts the pane; the
 session remains available in the workspace. App actions run the Host's
-`unpeel apps install/update` command through that same terminal. The Host
+`supercli apps install/update` command through that same terminal. The Host
 publishes the absolute installer command in `availableApps[].installCommand`,
 using its bundled sibling CLI so shell PATH changes cannot select an older CLI.
 
@@ -145,6 +145,6 @@ The preset wire carries optional `projectID` for legacy rows. Controllers show
 only global rows; editing, removing, and reordering global commands preserve
 project overrides, including overrides that reuse a global preset ID.
 
-For a private-home UI snapshot, combine `UNPEEL_SNAPSHOT` and
-`UNPEEL_OPEN_SETTINGS=agentsApps` with `UNPEEL_TEST_SETTINGS_COMMAND=<command>`
+For a private-home UI snapshot, combine `SUPERCLI_SNAPSHOT` and
+`SUPERCLI_OPEN_SETTINGS=agentsApps` with `SUPERCLI_TEST_SETTINGS_COMMAND=<command>`
 to exercise the embedded terminal through the real Host session path.

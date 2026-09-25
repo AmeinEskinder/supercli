@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use unpeel_core::terminal_viewport::TerminalViewportSnapshot;
+use supercli_core::terminal_viewport::TerminalViewportSnapshot;
 
 const SOCKET_IO_TIMEOUT: Duration = Duration::from_millis(1_000);
 const INPUT_STREAM_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(250);

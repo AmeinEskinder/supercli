@@ -3,7 +3,7 @@
 //! Ed25519 over the encoded-payload string), same endpoints
 //! (`/api/activate`, `/api/deactivate`, `/api/remote/entitlement`), same
 //! entitlement cache file the relay uplink already reads. The key is stored
-//! in `~/.unpeel/link-license.json` (0600) — headless boxes have no
+//! in `~/.supercli/link-license.json` (0600) — headless boxes have no
 //! Keychain; the file lives with the rest of the Host state.
 
 use base64::Engine;
@@ -72,7 +72,7 @@ pub fn verify(raw: &str) -> Option<LicensePayload> {
     let (payload_b64, sig_b64) = body.split_once('.')?;
     let sig = b64url(sig_b64)?;
     let payload = b64url(payload_b64)?;
-    let pubkey_env = std::env::var("UNPEEL_LICENSE_PUBLIC_KEY").ok();
+    let pubkey_env = std::env::var("SUPERCLI_LICENSE_PUBLIC_KEY").ok();
     let pubkey_b64 = pubkey_env
         .as_deref()
         .map(str::trim)
@@ -88,11 +88,11 @@ pub fn verify(raw: &str) -> Option<LicensePayload> {
 }
 
 fn license_path() -> std::path::PathBuf {
-    crate::app_paths::unpeel_home().join("link-license.json")
+    crate::app_paths::supercli_home().join("link-license.json")
 }
 
 fn link_tombstone_path() -> std::path::PathBuf {
-    crate::app_paths::unpeel_home().join("link-disabled.json")
+    crate::app_paths::supercli_home().join("link-disabled.json")
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -147,7 +147,7 @@ pub fn allowed_cached_relay_entitlement() -> Result<Option<(String, String)>, St
         if link_tombstone_unlocked()?.is_some() {
             return Ok(None);
         }
-        let path = crate::app_paths::unpeel_home()
+        let path = crate::app_paths::supercli_home()
             .join("mobile")
             .join("mac-id");
         let mac_id = match std::fs::read_to_string(&path) {
@@ -186,7 +186,7 @@ fn with_license_lock<T>(operation: impl FnOnce() -> Result<T, String>) -> Result
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let home = crate::app_paths::unpeel_home();
+    let home = crate::app_paths::supercli_home();
     std::fs::create_dir_all(&home).map_err(|error| error.to_string())?;
     let lock = std::fs::OpenOptions::new()
         .create(true)
@@ -329,7 +329,7 @@ fn forget_key_unlocked() -> Result<(), String> {
 
 fn remove_relay_entitlement_unlocked() -> Result<(), String> {
     remove_file_if_present(
-        &crate::app_paths::unpeel_home()
+        &crate::app_paths::supercli_home()
             .join("mobile")
             .join("relay-entitlement.json"),
     )
@@ -459,12 +459,12 @@ fn clear_link_tombstone_unlocked() -> Result<(), String> {
 }
 
 /// Stable per-machine id (headless equivalent of the app's hashed hardware
-/// UUID): a random id minted once and kept in `~/.unpeel/device-id`.
+/// UUID): a random id minted once and kept in `~/.supercli/device-id`.
 pub fn device_id() -> Result<String, String> {
     with_license_lock(|| {
         use std::os::unix::fs::PermissionsExt;
 
-        let path = crate::app_paths::unpeel_home().join("device-id");
+        let path = crate::app_paths::supercli_home().join("device-id");
         match std::fs::read_to_string(&path) {
             Ok(existing) if !existing.trim().is_empty() => {
                 let trimmed = existing.trim().to_string();
@@ -488,7 +488,7 @@ pub fn device_id() -> Result<String, String> {
 }
 
 fn api_base() -> String {
-    std::env::var("UNPEEL_LICENSE_API_BASE_URL")
+    std::env::var("SUPERCLI_LICENSE_API_BASE_URL")
         .ok()
         .map(|s| s.trim().trim_end_matches('/').to_string())
         .filter(|s| !s.is_empty())
@@ -505,7 +505,7 @@ fn post_json(path: &str, body: &serde_json::Value) -> Result<(u16, serde_json::V
     } else if let Some(rest) = base.strip_prefix("http://") {
         (false, rest)
     } else {
-        return Err("bad UNPEEL_LICENSE_API_BASE_URL".into());
+        return Err("bad SUPERCLI_LICENSE_API_BASE_URL".into());
     };
     let host = rest.split('/').next().unwrap_or(rest).to_string();
     let (host_name, port) = match host.rsplit_once(':') {
@@ -911,7 +911,7 @@ fn commit_relay_entitlement(
                 return Err("Link is disabled until it is activated again".into());
             }
         };
-        let dir = crate::app_paths::unpeel_home().join("mobile");
+        let dir = crate::app_paths::supercli_home().join("mobile");
         std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
         let path = dir.join("relay-entitlement.json");
         let temporary = dir.join(format!(".relay-entitlement.{}.tmp", uuid::Uuid::new_v4()));
@@ -939,7 +939,7 @@ fn commit_relay_entitlement(
 /// The macID this Host is known by to its paired devices: the cached
 /// entitlement's, else the one in the paired-device E2E key registry.
 pub fn known_mac_id() -> Option<String> {
-    let mobile = crate::app_paths::unpeel_home().join("mobile");
+    let mobile = crate::app_paths::supercli_home().join("mobile");
     if let Some(mac_id) = std::fs::read_to_string(mobile.join("mac-id"))
         .ok()
         .map(|value| value.trim().to_string())

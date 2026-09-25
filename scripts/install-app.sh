@@ -1,9 +1,9 @@
 #!/bin/sh
-# __BIN__ installer — served at https://unpeel.com/install/__APP__/install.sh by
-# the unpeel-release-updates worker (which substitutes __DEFAULT_CHANNEL__
+# __BIN__ installer — served at https://supercli.com/install/__APP__/install.sh by
+# the supercli-release-updates worker (which substitutes __DEFAULT_CHANNEL__
 # and the app placeholders).
 #
-#   curl -fsSL https://unpeel.com/install/__APP__/install.sh | sh
+#   curl -fsSL https://supercli.com/install/__APP__/install.sh | sh
 #
 # Installs `__BIN__`, an Unpeel App (a standalone terminal tool that lights
 # up inside Unpeel). Tarballs live in the same R2 release bucket as the Mac
@@ -11,17 +11,17 @@
 # scripts/release-app.mjs.
 #
 # Overrides:
-#   UNPEEL_CHANNEL      alpha | beta | stable   (default: __DEFAULT_CHANNEL__)
-#   UNPEEL_INSTALL_DIR  target directory        (default: /usr/local/bin if
+#   SUPERCLI_CHANNEL      alpha | beta | stable   (default: __DEFAULT_CHANNEL__)
+#   SUPERCLI_INSTALL_DIR  target directory        (default: /usr/local/bin if
 #                       writable, else ~/.local/bin)
 set -eu
 
-CHANNEL="${UNPEEL_CHANNEL:-__DEFAULT_CHANNEL__}"
-BASE="${UNPEEL_INSTALL_BASE:-__BASE_URL__}"
+CHANNEL="${SUPERCLI_CHANNEL:-__DEFAULT_CHANNEL__}"
+BASE="${SUPERCLI_INSTALL_BASE:-__BASE_URL__}"
 
 case "$CHANNEL" in
   alpha|beta|stable) ;;
-  *) echo "error: UNPEEL_CHANNEL must be alpha, beta, or stable (got: $CHANNEL)" >&2; exit 1 ;;
+  *) echo "error: SUPERCLI_CHANNEL must be alpha, beta, or stable (got: $CHANNEL)" >&2; exit 1 ;;
 esac
 
 os="$(uname -s)"
@@ -88,8 +88,8 @@ fi
 tar -xzf "$tmp/__BIN__.tar.gz" -C "$tmp"
 [ -f "$tmp/__BIN__" ] || { echo "error: __BIN__ missing from archive" >&2; exit 1; }
 
-if [ -n "${UNPEEL_INSTALL_DIR:-}" ]; then
-  dir="$UNPEEL_INSTALL_DIR"
+if [ -n "${SUPERCLI_INSTALL_DIR:-}" ]; then
+  dir="$SUPERCLI_INSTALL_DIR"
   mkdir -p "$dir"
 elif [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
   dir=/usr/local/bin

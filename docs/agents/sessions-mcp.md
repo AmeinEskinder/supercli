@@ -1,8 +1,8 @@
 <!-- Split out of the repo-root AGENTS.md (2026-08-05). The root AGENTS.md holds the map, hard rules, and invariants; this file is the full detail for its topic. -->
 
-## Built-in Unpeel MCP server
+## Built-in Supercli MCP server
 
-`unpeel-host __mcp__` is one MCP server named **`unpeel`**. Do not call the
+`supercli-host __mcp__` is one MCP server named **`supercli`**. Do not call the
 whole server “Sessions MCP” or rename it “Agents MCP”: `sessions` and `agents`
 are sibling domains with different identities. A Session is the Host-owned
 terminal container; an agent is a recognized runtime occurrence currently
@@ -10,7 +10,7 @@ occupying one. The other domains are `workspace`, `artifacts`, `browser`,
 preview `apps`, and the root `skills` registry.
 
 **Compatibility gate:** Settings ▸ Features ▸ Sessions use
-(`AppFeature.sessionsMcp`, `UNPEEL_DEV_SESSIONS_MCP=1`; shipped, no longer
+(`AppFeature.sessionsMcp`, `SUPERCLI_DEV_SESSIONS_MCP=1`; shipped, no longer
 listed as experimental since 2026-09-08) still owns
 the saved `mcp_enabled` bit. For compatibility that one bit enables
 `sessions`, `agents`, `workspace`, and `artifacts`; do not rename the persisted
@@ -25,9 +25,9 @@ Route inter-session text through
 `deliver_text_to_terminal`; do not bake “the other end is a PTY” into future
 channel semantics.
 
-> **Unified surface (2026-07-18, renamed 2026-07-25):** `unpeel-host __mcp__`
+> **Unified surface (2026-07-18, renamed 2026-07-25):** `supercli-host __mcp__`
 > is now the single
-> **`unpeel`** MCP server for all built-in capabilities (named `unpeel-mcp`
+> **`supercli`** MCP server for all built-in capabilities (named `supercli-mcp`
 > until 2026-07-25; the old name lives on only as pruned legacy config
 > entries and in the pre-rename config *file names*, which are kept so
 > restart commands recorded by older sessions keep resolving): **one action-enum
@@ -41,33 +41,33 @@ channel semantics.
 > per-call gates still apply live. Legacy per-tool names and the standalone
 > `__browser_mcp__` argv keep working for sessions launched pre-unification.
 > The separate `*_client_registered` fields are setup evidence: the user has
-> installed that runtime's Unpeel integration on this Host
-> (`~/.unpeel/integrations/<runtime>.json`), the runtime declares the domain,
+> installed that runtime's Supercli integration on this Host
+> (`~/.supercli/integrations/<runtime>.json`), the runtime declares the domain,
 > and the launch granted it. They stay false for a blank shell and for a
 > runtime whose integration was never installed; a CLI configured by hand
-> with `unpeel-host __mcp__` still receives only the saved grants.
+> with `supercli-host __mcp__` still receives only the saved grants.
 > Registration is **one persistent entry per provider**, written only by the
 > explicit integration install (never by a launch): every provider points at
-> the same shim `~/.unpeel/bin/unpeel-mcp` (claude user-scope `~/.claude.json`,
-> codex `[mcp_servers.unpeel]` in `config.toml`, Kimi Code `~/.kimi-code/
+> the same shim `~/.supercli/bin/supercli-mcp` (claude user-scope `~/.claude.json`,
+> codex `[mcp_servers.supercli]` in `config.toml`, Kimi Code `~/.kimi-code/
 > mcp.json`, cursor `~/.cursor/mcp.json`, cline's user MCP settings, kiro
 > `settings/mcp.json`, fx `~/.fx/mcp.json`, muse's plugin manifest). The shim
 > runs `__mcp_gate__ unified`; the gate reads the calling Session's manifest
 > grants and serves no tools outside a hosted Session, which is what makes a
-> global registration safe. Persistent configs prune the Unpeel-owned
-> pre-rename `unpeel-mcp`/`unpeel-sessions`/`unpeel-browser` entries.
+> global registration safe. Persistent configs prune the Supercli-owned
+> pre-rename `supercli-mcp`/`supercli-sessions`/`supercli-browser` entries.
 >
 
-- Server: `crates/unpeel-core/src/mcp_host.rs`, run as `unpeel-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency. The `unpeel` CLI is a second client of the same dispatcher (`mcp_host::call_tool`, `unpeel mcp …` and the family verbs in `docs/agents/cli.md`), so an agent working from the shell gets identical identity, grants, and write approvals — including `unpeel send` from inside a Session.
-- It talks directly to per-session artifacts (`manifest.json`, `output.bin`, `session.sock`) under `~/.unpeel/app-sessions/`; it does not need the app running, only the session hosts.
+- Server: `crates/supercli-core/src/mcp_host.rs`, run as `supercli-host __mcp__`. Speaks MCP JSON-RPC over stdio; hand-rolled, no SDK dependency. The `supercli` CLI is a second client of the same dispatcher (`mcp_host::call_tool`, `supercli mcp …` and the family verbs in `docs/agents/cli.md`), so an agent working from the shell gets identical identity, grants, and write approvals — including `supercli send` from inside a Session.
+- It talks directly to per-session artifacts (`manifest.json`, `output.bin`, `session.sock`) under `~/.supercli/app-sessions/`; it does not need the app running, only the session hosts.
 - Each provider/client starts its own stdio sidecar process. This is
-  intentionally not embedded in the long-lived `unpeel serve` worker: MCP
+  intentionally not embedded in the long-lived `supercli serve` worker: MCP
   connection lifetime follows the agent client, while Host authority follows
-  the workspace. Reusable implementation stays in `unpeel-core`; workspace
+  the workspace. Reusable implementation stays in `supercli-core`; workspace
   policy, approvals, and semantic effects converge on the worker/capability
   adapters, while terminal data operations may remain direct to Session
   artifacts and `session.sock`.
-- Caller identity comes from `UNPEEL_SESSION_ID` in the inherited env; when a
+- Caller identity comes from `SUPERCLI_SESSION_ID` in the inherited env; when a
   launcher strips the environment from its MCP children (cursor-agent does),
   `self_session_id` falls back to walking the server's process ancestry against
   the running manifests — the hosted login shell (`manifest.pid`) is an
@@ -76,7 +76,7 @@ channel semantics.
   closed on recycled pids and unverifiable legacy manifests). Writing into the
   calling session's own terminal is refused.
 - `agents.read_transcript` uses the shared provider transcript API in
-  `crates/unpeel-core/src/transcripts/mod.rs`, so adapter/parser changes affect
+  `crates/supercli-core/src/transcripts/mod.rs`, so adapter/parser changes affect
   MCP and remote clients together. It refuses a transcript when the observed
   runtime occupant is not bound to the saved launch runtime.
 
@@ -111,21 +111,21 @@ over the Host approval verb). The native `MCPBridge.swift` compatibility
 adapter was retired 2026-09-03; the historical route contract below is the
 worker's.
 
-- Bridge: `crates/unpeel-serve` hook port, authenticated `POST /mcp/*`
+- Bridge: `crates/supercli-serve` hook port, authenticated `POST /mcp/*`
   calls. Public effects use `list-presets`,
   `create-worktree`, `list-worktrees`, and `approve-write`
   (`approve-app-open` is still served for MCP binaries older than
   2026-09-06, but current App opens need no approval and never call it);
   `start-session` remains reserved for user/controller launches. Approval routes reply asynchronously (150s bridge ceiling, ~130s
-  MCP client timeout). The MCP host tries launch-time `UNPEEL_APP_PORT`, then
-  `~/.unpeel/app-ports` newest-first. App-less `unpeel serve` Hosts serve the
+  MCP client timeout). The MCP host tries launch-time `SUPERCLI_APP_PORT`, then
+  `~/.supercli/app-ports` newest-first. App-less `supercli serve` Hosts serve the
   same routes and the same shared approval queue.
-- Auth: unlike hook routes, `/mcp/*` requires the `x-unpeel-auth` header matching `<UNPEEL_HOME>/mcp/auth-token` (0600; the workspace worker mints it at start and the MCP host mints it on first use via `mcp_auth::ensure_auth_token`, so a fresh workspace home never reaches its first approval prompt without one — that gap broke every agent write in a new workspace until 2026-09-16) — the endpoints can launch arbitrary commands, and localhost is reachable by browser CSRF.
+- Auth: unlike hook routes, `/mcp/*` requires the `x-supercli-auth` header matching `<SUPERCLI_HOME>/mcp/auth-token` (0600; the workspace worker mints it at start and the MCP host mints it on first use via `mcp_auth::ensure_auth_token`, so a fresh workspace home never reaches its first approval prompt without one — that gap broke every agent write in a new workspace until 2026-09-16) — the endpoints can launch arbitrary commands, and localhost is reachable by browser CSRF.
 - Worktree creation maps onto the same native path as its UI verb. The MCP host defaults `project_id` to the calling session's project.
 
 > **Security scope (2026-08-14): these are cooperative controls, not
 > same-UID isolation.** Hosted commands run as the user's account and are not
-> sandboxed by Unpeel. The `0700` Unpeel home and `0600` MCP token protect
+> sandboxed by Supercli. The `0700` Supercli home and `0600` MCP token protect
 > against other local users and browser-origin CSRF; they do not stop code in
 > a hosted session from reading same-user state or discovering local sockets.
 > Consequently the Ask/Deny rules below govern agents that use
@@ -153,7 +153,7 @@ other session** (reworked 2026-08-31):
   (caller Session → App ids) is a pre-2026-09-06 grant map: still decoded,
   pruned/carried with caller replacement like other Session-keyed grants, but
   no current open consults it.
-- **Approval lifecycle:** pairs live in `~/.unpeel/app-state.json`; an in-place Resume Agent after the managed runtime returns to its shell keeps the same Session id and therefore needs no migration. Replacement Resume/handoff paths snapshot the map before `pruneNativeState` and re-add every pair under the new Session id (both directions), using the same read-before-prune discipline as the carried access grant.
+- **Approval lifecycle:** pairs live in `~/.supercli/app-state.json`; an in-place Resume Agent after the managed runtime returns to its shell keeps the same Session id and therefore needs no migration. Replacement Resume/handoff paths snapshot the map before `pruneNativeState` and re-add every pair under the new Session id (both directions), using the same read-before-prune discipline as the carried access grant.
 - **No launch injection (0.7):** a launch runs the preset command as typed; `SessionHostLaunch.mcp_enabled` only records the saved Sessions-domain grant in the manifest. The MCP server reaches an agent solely through its installed integration (the shim registered in the provider's own global config) — never through a flag, an environment gate, or a per-session config file. The manifest still records `mcp_enabled` and `mcp_client_registered` as distinct facts; the latter now means "the provider's config points at the shim".
 - **Native UI:** Settings ▸ Agent access (Sessions section) explains open reads and per-target
   write approval, offers the app-wide write policy and gallery toggle, and lists both approved
@@ -167,23 +167,23 @@ Registration per provider (all through the explicitly installed integration,
 
 - The shim (`integrations::install::write_mcp_shim`) is rewritten by every
   integration install and by the worker's post-upgrade refresh, so it always
-  execs the current `unpeel-host`; inside a hosted shell it prefers the
-  exported `UNPEEL_HOST_BIN`.
+  execs the current `supercli-host`; inside a hosted shell it prefers the
+  exported `SUPERCLI_HOST_BIN`.
 - Launchers that strip their MCP children's environment (codex, cursor-agent,
   muse) get identity from `self_session_id`'s process-ancestry fallback; Kiro
   v3 passes only a declared env block, so its entry forwards the generic
-  `UNPEEL_*` variables; fx and Claude inherit the hosted environment.
+  `SUPERCLI_*` variables; fx and Claude inherit the hosted environment.
 - Per-Session grants never appear in any config file: the gate reads
   `sessions_mcp_enabled()`/`browser_mcp_enabled()` from the calling Session's
-  manifest per call. The older `UNPEEL_*_MCP_ENABLED` environment grants and
+  manifest per call. The older `SUPERCLI_*_MCP_ENABLED` environment grants and
   the runtime-local aliases remain readable for configurations older builds
   wrote around a launch.
 
 ## The `apps` and root `skills` domains (2026-08-24)
 
-`apps_mcp.rs` is the first landed piece of the Unpeel Apps agent contract
-(the private "unpeel-apps" design record "Agent access" is authoritative). An installed
-Unpeel App is an entry in `protocol/app-registry.json` whose declared
+`apps_mcp.rs` is the first landed piece of the Supercli Apps agent contract
+(the private "supercli-apps" design record "Agent access" is authoritative). An installed
+Supercli App is an entry in `protocol/app-registry.json` whose declared
 CLI resolves through the Host's search path (including its managed App bin
 directory). This catalog plus search-path check is the entire
 current discovery contract; **no app ever runs its own MCP server**. The `apps`
@@ -195,7 +195,7 @@ command. Agents cannot install software through MCP.
 caller-relative direct-neighbor snapshot as `sessions.current`. A neighboring
 App includes its ordinary readable companion Session id so “check Design on
 the left” resolves to an explicit target. Each neighbor entry is a one-call
-identity card (2026-08-26): kind (terminal/agent/unpeel_app), label, `cwd`,
+identity card (2026-08-26): kind (terminal/agent/supercli_app), label, `cwd`,
 state, activity, and for agent panes the catalog `runtime_id` plus resolved
 `runtime_name`; an App entry inlines the central catalog description. Future
 package tool summaries and skill references remain reserved for the declared
@@ -247,8 +247,8 @@ action and may additionally install a missing App first.
 
 The install boundary is enforced on the supported MCP adapter, not as an
 OS sandbox around arbitrary commands. A hosted process runs as the user's
-account and can invoke the ordinary `unpeel` CLI; noninteractive
-`unpeel apps install` requires an explicit `--yes`, but the cooperative-policy
+account and can invoke the ordinary `supercli` CLI; noninteractive
+`supercli apps install` requires an explicit `--yes`, but the cooperative-policy
 contract still depends on agents using the MCP surface for App actions.
 
 Presentation state is the versioned `app_presentations` envelope in
@@ -274,13 +274,13 @@ absent until RoomFS/the Host worker exist — `describe` says so and points
 agents at the app's standalone command and root skill reference.
 
 Reference convention: an app can hand agents a token like
-`[mcp:unpeel.app.markdown README.md LOC:12:32]`; the tool description and
+`[mcp:supercli.app.markdown README.md LOC:12:32]`; the tool description and
 server instructions teach agents to resolve it by fetching that app's
 skill through `skills.get`. "Send to agent" in the shipped Apps is
-`unpeel-app-kit`'s handoff: it types the reference into the neighboring
-agent through `unpeel-host __mcp__` sessions `send_keys` (and therefore the
+`supercli-app-kit`'s handoff: it types the reference into the neighboring
+agent through `supercli-host __mcp__` sessions `send_keys` (and therefore the
 same policy as any other inter-session write), resolving the Host through
-`UNPEEL_HOST_BIN`. (The earlier Unpeel Design App and its `.presence/`
+`SUPERCLI_HOST_BIN`. (The earlier Supercli Design App and its `.presence/`
 bridge were removed from the catalog on 2026-09-07; nothing in core refers
 to them.)
 
@@ -299,7 +299,7 @@ the 2026-07-28 discovery protocol described in Cloudflare's MCP v2 review:
 - discovery/tool-list caching is `ttlMs:0`, `cacheScope:"private"`, because
   authorization, installed Apps, and skills are caller/Host-specific.
 
-Do **not** advertise `io.modelcontextprotocol/ui`: Unpeel Apps are standalone
+Do **not** advertise `io.modelcontextprotocol/ui`: Supercli Apps are standalone
 Host Apps, not MCP Apps iframe resources. Streamable-HTTP method headers and
 OAuth are irrelevant to this local stdio transport. In-flight cancellation is
 implemented (2026-08-23) as a reader/worker split, deliberately **not** full
@@ -315,12 +315,12 @@ a blocking approval-bridge read, but the approved effect is suppressed at
 the post-approval boundary — an approval answered after cancellation never
 types into the target or commits App state. EOF still drains the queue
 completely, so piped batch callers keep exact sequential behavior. Process
-proof: `crates/unpeel-host/tests/mcp_cancel_process.rs`.
+proof: `crates/supercli-host/tests/mcp_cancel_process.rs`.
 MRTR/input-required should be added only for actual MCP-client elicitation,
-not as a replacement for Unpeel's Host/Controller approval UI.
+not as a replacement for Supercli's Host/Controller approval UI.
 
 References: `https://blog.cloudflare.com/mcp-v2/` and the official
 `https://modelcontextprotocol.io/specification/2026-07-28/server/discover` /
 `basic/versioning` / `server/utilities/caching` sections.
 
-Debugging: `mcp-host` lines in `~/.unpeel/hooks/trace.log`. Test with `printf '...' | unpeel-host __mcp__`.
+Debugging: `mcp-host` lines in `~/.supercli/hooks/trace.log`. Test with `printf '...' | supercli-host __mcp__`.

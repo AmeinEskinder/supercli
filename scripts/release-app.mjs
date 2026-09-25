@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // Build and publish an Unpeel App's tarballs that back
-// `curl -fsSL https://unpeel.com/install/<app>/install.sh | sh`.
+// `curl -fsSL https://supercli.com/install/<app>/install.sh | sh`.
 //
 // Operator script, same transport as release-cli.mjs (wrangler r2 object put
-// into the unpeel-releases bucket). R2 key layout under the channel roots:
-//   <channel>/<app>/unpeel-<app>-<version>-<target>.tar.gz   (immutable)
-//   <channel>/<app>/unpeel-<app>-latest-<target>.tar.gz      (5-min cache)
-//   <channel>/<app>/unpeel-<app>-latest-<target>.tar.gz.sha256
+// into the supercli-releases bucket). R2 key layout under the channel roots:
+//   <channel>/<app>/supercli-<app>-<version>-<target>.tar.gz   (immutable)
+//   <channel>/<app>/supercli-<app>-latest-<target>.tar.gz      (5-min cache)
+//   <channel>/<app>/supercli-<app>-latest-<target>.tar.gz.sha256
 //
 // First-party App crates live in this repo under crates/apps/<app> (their own
 // Cargo workspace); an App not yet moved in is built from the sibling repo
-// ~/Dev/unpeel-app-<app>. Either way the binary is unpeel-<app>.
+// ~/Dev/supercli-app-<app>. Either way the binary is supercli-<app>.
 // `protocol/app-registry.json` is the one serving/publishing allowlist; the
 // Worker route itself is shared.
 //
@@ -18,7 +18,7 @@
 //   node scripts/release-app.mjs --app usage --channel beta [--dry-run]
 // Linux tarballs are built elsewhere and attached:
 //   node scripts/release-app.mjs --app usage --channel beta \
-//     --linux-aarch64 path/to/unpeel-usage-linux-aarch64.tar.gz
+//     --linux-aarch64 path/to/supercli-usage-linux-aarch64.tar.gz
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -59,17 +59,17 @@ const app = String(args.app ?? '')
 if (!KNOWN_APPS.includes(app)) {
   throw new Error(`--app must be one of: ${KNOWN_APPS.join(', ')}`)
 }
-const bin = `unpeel-${app}`
+const bin = `supercli-${app}`
 const inRepoDir = resolve(repoRoot, 'crates/apps', app)
 const designDir = existsSync(resolve(inRepoDir, 'Cargo.toml'))
   ? inRepoDir
-  : resolve(repoRoot, `../unpeel-app-${app}`)
+  : resolve(repoRoot, `../supercli-app-${app}`)
 
 const channel = String(args.channel ?? '')
 if (!['alpha', 'beta', 'stable'].includes(channel)) {
   throw new Error('--channel must be alpha, beta, or stable')
 }
-const bucket = String(args.bucket ?? configBucket ?? 'unpeel-releases')
+const bucket = String(args.bucket ?? configBucket ?? 'supercli-releases')
 const dryRun = Boolean(args['dry-run'])
 const allowDirty = Boolean(args['allow-dirty'])
 

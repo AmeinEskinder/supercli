@@ -16,11 +16,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use unpeel_core::direct_path::{
+use supercli_core::direct_path::{
     encode_path_offer, parse_path_offer_strict, parse_path_result_strict, CandidateKind,
     PathCandidate, PathOffer, PathRole, MAX_CANDIDATES,
 };
-use unpeel_core::direct_path_punch::{
+use supercli_core::direct_path_punch::{
     local_candidate_addresses, now_unix_ms, path_session_bytes, probe_key, stun_reflexive_address,
     ProbeDirection, PunchSession, PunchState, PATH_SESSION_LIFETIME, STUN_SERVER,
 };
@@ -304,8 +304,8 @@ pub fn relay_conn_id(request_id: Option<&str>) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unpeel_core::direct_path::PathResult;
-    use unpeel_core::direct_path_punch::random_path_session;
+    use supercli_core::direct_path::PathResult;
+    use supercli_core::direct_path_punch::random_path_session;
 
     fn hub_with_conn(conn_id: u32) -> Arc<DirectPathHub> {
         let hub = Arc::new(DirectPathHub::default());
@@ -413,9 +413,9 @@ mod tests {
         // Result reporting round-trips.
         let result = PathResult {
             path_session: session.clone(),
-            outcome: unpeel_core::direct_path::PathOutcome::Established(host_offer.candidates[0]),
+            outcome: supercli_core::direct_path::PathOutcome::Established(host_offer.candidates[0]),
         };
-        let body = unpeel_core::direct_path::encode_path_result(&result);
+        let body = supercli_core::direct_path::encode_path_result(&result);
         let (status, response) = hub.result(1, &body);
         assert_eq!(status, 200, "{response}");
         let (status, _) = hub.result(2, &body);
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn controller_negotiator_punches_the_host_through_the_live_handlers() {
-        // The full composition: unpeel_core::direct_path_client (the
+        // The full composition: supercli_core::direct_path_client (the
         // Controller half) against this hub's handlers (the Host half),
         // candidates gathered from the machine's real interfaces, probes
         // over real UDP. Requires at least one non-loopback interface,
@@ -440,17 +440,17 @@ mod tests {
             statuses.push((path.to_string(), status));
             Ok((status, value.to_string().into_bytes()))
         };
-        let material = unpeel_core::direct_path_client::ProbeMaterial {
+        let material = supercli_core::direct_path_client::ProbeMaterial {
             shared_secret: vec![7u8; 32],
             client_salt: vec![1u8; 16],
             host_salt: vec![2u8; 16],
         };
-        let options = unpeel_core::direct_path_client::NegotiateOptions {
+        let options = supercli_core::direct_path_client::NegotiateOptions {
             use_stun: false,
             punch_timeout: Duration::from_secs(8),
         };
         let cancelled = std::sync::atomic::AtomicBool::new(false);
-        let path = unpeel_core::direct_path_client::negotiate_and_punch(
+        let path = supercli_core::direct_path_client::negotiate_and_punch(
             &mut post, &material, &options, &cancelled,
         )
         .expect("controller negotiates and punches the host");
@@ -476,7 +476,7 @@ mod tests {
         // real interface candidates.
         use std::io::{Read, Write};
         use std::net::{TcpListener, TcpStream};
-        use unpeel_core::relay_crypto as proto;
+        use supercli_core::relay_crypto as proto;
 
         let e2e = proto::random_bytes(32);
         let e2e_host = e2e.clone();
@@ -574,7 +574,7 @@ mod tests {
             loop {
                 let sealed = receive_payload(&mut stream, &mut buffer);
                 let plaintext = session.open(&sealed).expect("open request");
-                let request = unpeel_core::relay_wire::parse_tunnel_request_strict(&plaintext)
+                let request = supercli_core::relay_wire::parse_tunnel_request_strict(&plaintext)
                     .expect("tunnel request");
                 let (status, value) = match request.path.as_str() {
                     "/mobile/direct-path" => host_hub.negotiate(1, &request.body),
@@ -582,7 +582,7 @@ mod tests {
                     other => panic!("unexpected path {other}"),
                 };
                 let response = session
-                    .seal(&unpeel_core::relay_wire::encode_bounded_tunnel_response(
+                    .seal(&supercli_core::relay_wire::encode_bounded_tunnel_response(
                         request.id,
                         status,
                         value.to_string().as_bytes(),
@@ -595,11 +595,11 @@ mod tests {
             }
         });
 
-        let socket = unpeel_core::relay_uplink::RelaySocket::plain_for_tests(client);
+        let socket = supercli_core::relay_uplink::RelaySocket::plain_for_tests(client);
         let mut downlink =
-            unpeel_core::relay_downlink::RelayDownlink::handshake(socket, "probe-device", &e2e)
+            supercli_core::relay_downlink::RelayDownlink::handshake(socket, "probe-device", &e2e)
                 .expect("downlink handshake");
-        let options = unpeel_core::direct_path_client::NegotiateOptions {
+        let options = supercli_core::direct_path_client::NegotiateOptions {
             use_stun: false,
             punch_timeout: Duration::from_secs(8),
         };
@@ -628,11 +628,11 @@ mod tests {
         // Result for the replaced session no longer matches.
         let stale = PathResult {
             path_session: first,
-            outcome: unpeel_core::direct_path::PathOutcome::Failed(
-                unpeel_core::direct_path::FailureReason::PunchTimeout,
+            outcome: supercli_core::direct_path::PathOutcome::Failed(
+                supercli_core::direct_path::FailureReason::PunchTimeout,
             ),
         };
-        let (status, _) = hub.result(1, &unpeel_core::direct_path::encode_path_result(&stale));
+        let (status, _) = hub.result(1, &supercli_core::direct_path::encode_path_result(&stale));
         assert_eq!(status, 409);
     }
 }

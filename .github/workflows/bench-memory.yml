@@ -1,15 +1,15 @@
 # Memory benchmark gate — the phys_footprint chart numbers must never
 # regress. Runs scripts/bench-memory.sh on a blank home with release
 # binaries, once with per-process hosts (core off) and once with the shared
-# PTY core (UNPEEL_PTY_CORE=1), writes each Markdown table to the job
+# PTY core (SUPERCLI_PTY_CORE=1), writes each Markdown table to the job
 # summary, and fails when reclamation is not total (leftover hosts or session
-# dirs after `unpeel rm`) or a row exceeds its ceiling in
+# dirs after `supercli rm`) or a row exceeds its ceiling in
 # scripts/bench-thresholds.json.
 #
 # macOS is the chart platform (footprint(1)). Ubuntu runs the same script
 # headless with PSS from /proc/<pid>/smaps_rollup; it enforces reclamation
 # with its own ceilings (linux_core_off / linux_core_on in the thresholds
-# file). `unpeel-attach` waits with epoll + inotify on Linux, so the
+# file). `supercli-attach` waits with epoll + inotify on Linux, so the
 # per-client row runs there too.
 name: Memory benchmark
 
@@ -19,16 +19,16 @@ on:
     branches: ['track-b*', main]
     paths:
       - 'crates/**'
-      - 'crates/unpeel-attach/**'
+      - 'crates/supercli-attach/**'
       - 'scripts/bench-memory.sh'
       - 'scripts/bench-thresholds.json'
       - '.github/workflows/bench-memory.yml'
   pull_request:
     paths:
-      - 'crates/unpeel-core/src/terminal_viewport.rs'
-      - 'crates/unpeel-core/src/ghostty_vt.rs'
-      - 'crates/unpeel-core/src/session_host.rs'
-      - 'crates/unpeel-core/src/pty_core.rs'
+      - 'crates/supercli-core/src/terminal_viewport.rs'
+      - 'crates/supercli-core/src/ghostty_vt.rs'
+      - 'crates/supercli-core/src/session_host.rs'
+      - 'crates/supercli-core/src/pty_core.rs'
       - 'scripts/bench-memory.sh'
       - 'scripts/bench-thresholds.json'
       - '.github/workflows/bench-memory.yml'
@@ -69,17 +69,17 @@ jobs:
         with:
           workspaces: |
             crates
-            crates/unpeel-attach
+            crates/supercli-attach
       - name: Build release binaries
         run: |
-          cargo build --release --locked --manifest-path crates/Cargo.toml -p unpeel-cli -p unpeel-host
+          cargo build --release --locked --manifest-path crates/Cargo.toml -p supercli-cli -p supercli-host
           if [ "${{ matrix.clients }}" != "0" ]; then
-            cargo build --release --locked --manifest-path crates/unpeel-attach/Cargo.toml
+            cargo build --release --locked --manifest-path crates/supercli-attach/Cargo.toml
           fi
       - name: Run benchmark
         id: bench
         env:
-          UNPEEL_PTY_CORE: ${{ matrix.pty_core }}
+          SUPERCLI_PTY_CORE: ${{ matrix.pty_core }}
           BENCH_PROFILE: ${{ matrix.profile }}
           BENCH_CLIENTS: ${{ matrix.clients }}
           BENCH_THRESHOLDS: ${{ github.workspace }}/scripts/bench-thresholds.json

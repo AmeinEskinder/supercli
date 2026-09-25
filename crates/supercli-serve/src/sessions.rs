@@ -10,10 +10,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use unpeel_core::app_paths;
-use unpeel_core::controller_api::HostCreatePreset;
-use unpeel_core::session_host::{HostedSessionManifest, HostedSessionState};
-use unpeel_core::state::AppState;
+use supercli_core::app_paths;
+use supercli_core::controller_api::HostCreatePreset;
+use supercli_core::session_host::{HostedSessionManifest, HostedSessionState};
+use supercli_core::state::AppState;
 
 use crate::activity::{ActivityEngine, HookState};
 use crate::overlay::NativeOverlay;
@@ -27,7 +27,7 @@ pub const DEFAULT_SIDEBAR_STOPPED_LIMIT: u64 = 5;
 fn session_host_supports_resume_agent(version: Option<u64>) -> bool {
     version
         >= Some(u64::from(
-            unpeel_core::session_host::SESSION_HOST_RESUME_AGENT_PROTOCOL_VERSION,
+            supercli_core::session_host::SESSION_HOST_RESUME_AGENT_PROTOCOL_VERSION,
         ))
 }
 
@@ -96,7 +96,7 @@ fn manifest_resume_agent_available(
         && !manifest.runtime_launch_pending
         && status != Status::Starting
         && session_host_supports_resume_agent(manifest.host_protocol_version.map(u64::from))
-        && unpeel_core::resume::can_resume_agent(&manifest.session.command, active_runtime_id)
+        && supercli_core::resume::can_resume_agent(&manifest.session.command, active_runtime_id)
 }
 
 #[derive(Clone, Debug)]
@@ -117,7 +117,7 @@ pub struct SessionRow {
     /// compiled catalog entry. Presence also marks the session hook-owned —
     /// an App reports its own lifecycle through the hook port — while
     /// launch/resume verbs continue to use `command`.
-    pub active_app: Option<unpeel_core::session_host::ObservedAppIdentity>,
+    pub active_app: Option<supercli_core::session_host::ObservedAppIdentity>,
     /// Legacy terminal-replacing Resume, offered only after the hosted PTY
     /// has stopped and this exact agent conversation has durable resume state.
     pub resume_available: bool,
@@ -287,12 +287,12 @@ fn derive_status(
 /// `[screen]` rules and whose Session has no hook latch takes the Host's
 /// screen-derived verdict. Hooks win the moment they latch.
 fn screen_fallback_status(manifest: &HostedSessionManifest) -> Option<Status> {
-    let runtime = unpeel_core::session_host::active_runtime_id(manifest)?;
-    unpeel_core::screen_activity::rules_for_runtime(runtime)?;
+    let runtime = supercli_core::session_host::active_runtime_id(manifest)?;
+    supercli_core::screen_activity::rules_for_runtime(runtime)?;
     let verdict = manifest.screen_activity.as_deref()?;
-    match unpeel_core::screen_activity::ScreenActivity::parse(verdict)? {
-        unpeel_core::screen_activity::ScreenActivity::Working => Some(Status::Busy),
-        unpeel_core::screen_activity::ScreenActivity::Idle => Some(Status::Idle),
+    match supercli_core::screen_activity::ScreenActivity::parse(verdict)? {
+        supercli_core::screen_activity::ScreenActivity::Working => Some(Status::Busy),
+        supercli_core::screen_activity::ScreenActivity::Idle => Some(Status::Idle),
     }
 }
 
@@ -308,7 +308,7 @@ fn derive_status_with_source(
         return (Status::Exited, StatusSource::None);
     }
     let lifecycle = crate::runtime_presentation::lifecycle(&manifest.session.command);
-    let observed_runtime_command = unpeel_core::session_host::active_runtime_id(manifest)
+    let observed_runtime_command = supercli_core::session_host::active_runtime_id(manifest)
         .and_then(crate::runtime_presentation::presentation_command);
     let observed_lifecycle =
         observed_runtime_command.and_then(crate::runtime_presentation::lifecycle);
@@ -416,7 +416,7 @@ fn derive_status_with_source(
             let mut allow_attention_clear = attention_clears_on_output;
             if allow_attention_clear && engine.attention_has_new_output(id, activity_signal) {
                 let Ok(viewport) =
-                    unpeel_core::session_host::request_current_viewport_snapshot_with_timeout(
+                    supercli_core::session_host::request_current_viewport_snapshot_with_timeout(
                         id,
                         0,
                         None,
@@ -434,7 +434,7 @@ fn derive_status_with_source(
                     .collect::<Vec<_>>()
                     .join("\n");
                 allow_attention_clear =
-                    !unpeel_core::menu_prompt::viewport_has_menu_prompt(&screen);
+                    !supercli_core::menu_prompt::viewport_has_menu_prompt(&screen);
             }
             // Hook-owned lifecycle: sweep timeouts against output growth,
             // then report the latch. Runtime-specific output semantics are
@@ -496,7 +496,7 @@ pub fn load_app_state() -> Option<AppState> {
     // the user every project — the sidebar falls back to `cwd:` buckets and
     // looks like their setup vanished. Salvage the projects at least; the
     // fields we couldn't read stay empty rather than taking the rest down.
-    let projects: Vec<unpeel_core::state::Project> =
+    let projects: Vec<supercli_core::state::Project> =
         serde_json::from_slice::<serde_json::Value>(&raw)
             .ok()
             .and_then(|value| value.get("projects").cloned())
@@ -683,16 +683,16 @@ pub fn scan_sidebar(
                 && match manifest.pid {
                     Some(pid) => {
                         pid_alive(pid)
-                            && unpeel_core::session_host::manifest_pid_identity(manifest)
-                                != unpeel_core::session_host::PidIdentity::NotOurs
+                            && supercli_core::session_host::manifest_pid_identity(manifest)
+                                != supercli_core::session_host::PidIdentity::NotOurs
                     }
-                    None => unpeel_core::session_host::manifest_launching_host_is_alive(manifest),
+                    None => supercli_core::session_host::manifest_launching_host_is_alive(manifest),
                 };
             let marker_at = ScanCache::marker(
                 &mut cache.archived,
                 &manifest.session.id,
-                &dir.join(unpeel_core::session_ops::ARCHIVE_MARKER),
-                || unpeel_core::session_ops::archived_marker(&manifest.session.id),
+                &dir.join(supercli_core::session_ops::ARCHIVE_MARKER),
+                || supercli_core::session_ops::archived_marker(&manifest.session.id),
             );
             let (status, status_source) = derive_status_with_source(
                 engine,
@@ -706,28 +706,28 @@ pub fn scan_sidebar(
                 &mut cache.titles,
                 &manifest.session.id,
                 &dir.join("title.json"),
-                || unpeel_core::session_ops::title_marker(&manifest.session.id),
+                || supercli_core::session_ops::title_marker(&manifest.session.id),
             )
             .or_else(|| overlay.and_then(|o| o.titles.get(&manifest.session.id).cloned()))
             .unwrap_or_else(|| manifest.session.label.clone());
             if let Some(target) = ScanCache::marker(
                 &mut cache.overrides,
                 &manifest.session.id,
-                &dir.join(unpeel_core::session_ops::PROJECT_OVERRIDE_MARKER),
-                || unpeel_core::session_ops::project_override_marker(&manifest.session.id),
+                &dir.join(supercli_core::session_ops::PROJECT_OVERRIDE_MARKER),
+                || supercli_core::session_ops::project_override_marker(&manifest.session.id),
             ) {
                 overrides.insert(manifest.session.id.clone(), target);
             }
             let exited_at =
                 (manifest.state == HostedSessionState::Exited).then_some(manifest.updated_at);
-            let activity_at = unpeel_core::session_ops::latest_lifecycle_ms(
+            let activity_at = supercli_core::session_ops::latest_lifecycle_ms(
                 &manifest.session.id,
                 &manifest.session.command,
                 manifest.session.created_at,
                 exited_at,
             );
             let active_runtime_id = running
-                .then(|| unpeel_core::session_host::active_runtime_id(manifest).map(str::to_owned))
+                .then(|| supercli_core::session_host::active_runtime_id(manifest).map(str::to_owned))
                 .flatten();
             // Evidence-based surfaces: `can_archive_manifest` proves a real
             // resumable conversation (managed storage or provider markers).
@@ -737,7 +737,7 @@ pub fn scan_sidebar(
             // archive/resume execution layer stays compatible for explicit
             // requests. A stopped blank terminal keeps terminal-replacing
             // Resume: there is no conversation to demand evidence for.
-            let resume_evidence = unpeel_core::session_ops::can_archive_manifest(manifest);
+            let resume_evidence = supercli_core::session_ops::can_archive_manifest(manifest);
             let archive_available = resume_evidence;
             let resume_available =
                 !running && (manifest.session.command.trim().is_empty() || resume_evidence);
@@ -819,7 +819,7 @@ pub fn scan_sidebar(
     // A drag in ANY frontend lands here, and wins over the desktop's own
     // overlay for the same reason session order does: the app writes this
     // file too, so it is never the staler of the two.
-    let shared_projects = unpeel_core::session_ops::project_order();
+    let shared_projects = supercli_core::session_ops::project_order();
     if !shared_projects.is_empty() {
         project_order.sort_by_key(|(pid, _)| {
             shared_projects
@@ -1089,7 +1089,7 @@ fn group_listing(
     // app's own overlay. Date sort ignores it for regular rows, but pins stay
     // their explicit manually ordered section. The stored order survives for
     // a switch back to custom.
-    let shared_order = unpeel_core::session_ops::session_order(project_id);
+    let shared_order = supercli_core::session_ops::session_order(project_id);
     let persisted_manual = if shared_order.is_empty() {
         overlay.and_then(|o| o.session_order.get(project_id))
     } else {
@@ -1173,7 +1173,7 @@ fn group_listing(
     // stamp puts that row first inside the archive section; legacy/overlay
     // rows fall back to their last lifecycle event.
     let stamped_at = |id: &str| -> Option<u64> {
-        unpeel_core::session_ops::archive_stamp(id)
+        supercli_core::session_ops::archive_stamp(id)
             .or_else(|| overlay.and_then(|o| o.archived_at.get(id).copied()))
     };
     archived.sort_by(|&left, &right| {
@@ -1280,7 +1280,7 @@ pub fn model_from_bridge(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
             let exited_at = if status == Status::Exited {
-                unpeel_core::session_host::load_manifest(&id)
+                supercli_core::session_host::load_manifest(&id)
                     .filter(|manifest| manifest.state == HostedSessionState::Exited)
                     .map(|manifest| manifest.updated_at)
             } else {
@@ -1316,7 +1316,7 @@ pub fn model_from_bridge(
                 // evidence the app-less path uses, so bridge rows offer
                 // exactly what local rows would.
                 .unwrap_or_else(|| {
-                    command.trim().is_empty() || unpeel_core::session_ops::can_archive_session(&id)
+                    command.trim().is_empty() || supercli_core::session_ops::can_archive_session(&id)
                 });
             rows.push(SessionRow {
                 host_started_at: None,
@@ -1330,7 +1330,7 @@ pub fn model_from_bridge(
                     && !runtime_launch_pending
                     && status != Status::Starting
                     && session_host_supports_resume_agent(host_protocol_version)
-                    && unpeel_core::resume::can_resume_agent(
+                    && supercli_core::resume::can_resume_agent(
                         &command,
                         active_runtime_id.as_deref(),
                     ),
@@ -1339,7 +1339,7 @@ pub fn model_from_bridge(
                 // sidebar IS the local app's — read it from the same on-disk
                 // manifest the detected-URLs field uses.
                 active_app: if running {
-                    unpeel_core::session_host::load_manifest(&id)
+                    supercli_core::session_host::load_manifest(&id)
                         .and_then(|manifest| manifest.active_app)
                 } else {
                     None
@@ -1365,7 +1365,7 @@ pub fn model_from_bridge(
                     .and_then(|value| value.as_str())
                     .map(str::to_owned),
                 cwd: String::new(),
-                activity_at: unpeel_core::session_ops::latest_lifecycle_ms(
+                activity_at: supercli_core::session_ops::latest_lifecycle_ms(
                     &id, &command, created_at, exited_at,
                 ),
                 group_id: project_id.to_string(),
@@ -1528,7 +1528,7 @@ fn apply_shared_order(model: &mut SidebarModel) {
     let end = model.items.len();
     close(&mut groups, &mut start, end, &model.items);
 
-    let shared_projects = unpeel_core::session_ops::project_order();
+    let shared_projects = supercli_core::session_ops::project_order();
 
     // Inline group/worktree blocks use the same flat project rank list as
     // top-level projects. Reapply it even to an app-fed model so a TUI drag
@@ -1605,7 +1605,7 @@ fn apply_shared_order(model: &mut SidebarModel) {
         if row.group_id.is_empty() || session_orders.contains_key(&row.group_id) {
             continue;
         }
-        let order = unpeel_core::session_ops::session_order(&row.group_id);
+        let order = supercli_core::session_ops::session_order(&row.group_id);
         if !order.is_empty() {
             session_orders.insert(row.group_id.clone(), order);
         }
@@ -1821,7 +1821,7 @@ pub fn mobile_snapshot(
     model: &SidebarModel,
     overlay: Option<&NativeOverlay>,
     extra_unread: &std::collections::HashSet<String>,
-    activity_log: Option<&unpeel_core::activity_log::ActivityLogStore>,
+    activity_log: Option<&supercli_core::activity_log::ActivityLogStore>,
 ) -> MobileSnapshot {
     fn provider_id(command: &str) -> Option<&'static str> {
         crate::runtime_presentation::legacy_slug(command)
@@ -1855,7 +1855,7 @@ pub fn mobile_snapshot(
         row: &SessionRow,
         unread: bool,
         archived_at: u64,
-        latest_alert: Option<&unpeel_core::activity_log::ActivityLogEntry>,
+        latest_alert: Option<&supercli_core::activity_log::ActivityLogEntry>,
     ) -> serde_json::Value {
         let (status, activity) = match (row.status, unread) {
             (Status::Starting, _) => ("running", "starting"),
@@ -1928,7 +1928,7 @@ pub fn mobile_snapshot(
                 // Additive: a desktop Controller letterboxes its surface to
                 // the same grid and offers "fit to desktop". Same field
                 // shape as the native Host's summary.
-                if let Some(fit) = unpeel_core::session_ops::phone_fit_marker(&row.id) {
+                if let Some(fit) = supercli_core::session_ops::phone_fit_marker(&row.id) {
                     obj.insert("phoneFitColumns".into(), fit.columns.into());
                     obj.insert("phoneFitRows".into(), fit.rows.into());
                     obj.insert("phoneFitSinceUnixMs".into(), fit.since_unix_ms.into());
@@ -1963,7 +1963,7 @@ pub fn mobile_snapshot(
         if !row.archived {
             return 0;
         }
-        unpeel_core::session_ops::archive_stamp(&row.id)
+        supercli_core::session_ops::archive_stamp(&row.id)
             .or_else(|| overlay.and_then(|value| value.archived_at.get(&row.id).copied()))
             .unwrap_or(0)
     };
@@ -1982,7 +1982,7 @@ pub fn mobile_snapshot(
                     .rev()
                     .find(|entry| entry.session_id == row.id)
             })
-            .filter(|entry| entry.kind == unpeel_core::activity_log::ActivityLogKind::Alert);
+            .filter(|entry| entry.kind == supercli_core::activity_log::ActivityLogKind::Alert);
         sessions.push(session_summary(
             row,
             unread,
@@ -2160,7 +2160,7 @@ pub fn mobile_snapshot(
             object.insert("sortOrder".into(), index.into());
         }
     }
-    unpeel_core::session_ops::attach_mixed_session_order_fields(&mut projects);
+    supercli_core::session_ops::attach_mixed_session_order_fields(&mut projects);
 
     let (mut presets, mut create_presets) = mobile_presets(app_state.as_ref(), overlay);
 
@@ -2207,17 +2207,17 @@ pub fn mobile_snapshot(
                             .find(|entry| entry.session_id == row.id)
                     })
                     .filter(|entry| {
-                        entry.kind == unpeel_core::activity_log::ActivityLogKind::Alert
+                        entry.kind == supercli_core::activity_log::ActivityLogKind::Alert
                     }),
             ));
     }
 
-    let workspace_state = unpeel_core::app_state::load().unwrap_or_else(|_| serde_json::json!({}));
+    let workspace_state = supercli_core::app_state::load().unwrap_or_else(|_| serde_json::json!({}));
     let mut workspace_settings =
-        unpeel_core::controller_host::wire_workspace_settings(&workspace_state);
-    let agents = unpeel_core::plugins::agents_wire();
-    let apps = unpeel_core::app_installer::catalog_wire();
-    unpeel_core::plugins::project_presets(
+        supercli_core::controller_host::wire_workspace_settings(&workspace_state);
+    let agents = supercli_core::plugins::agents_wire();
+    let apps = supercli_core::app_installer::catalog_wire();
+    supercli_core::plugins::project_presets(
         &workspace_state,
         &agents,
         &apps,
@@ -2226,9 +2226,9 @@ pub fn mobile_snapshot(
     );
     workspace_settings["availableAgents"] = agents;
     workspace_settings["mcpShimPath"] =
-        serde_json::json!(unpeel_core::integrations::install::mcp_shim_path().to_string_lossy());
-    let openers = unpeel_core::controller_host::wire_openers(&workspace_state);
-    let app_presentations = unpeel_core::app_presentations::controller_app_presentations_wire()
+        serde_json::json!(supercli_core::integrations::install::mcp_shim_path().to_string_lossy());
+    let openers = supercli_core::controller_host::wire_openers(&workspace_state);
+    let app_presentations = supercli_core::app_presentations::controller_app_presentations_wire()
         .unwrap_or_else(
             |_| serde_json::json!({ "version": 1, "instances": [], "presentations": [] }),
         );
@@ -2268,7 +2268,7 @@ pub fn mobile_snapshot(
             // before editing through `settings.workspace.set`.
             "workspaceSettings": workspace_settings,
             "availableApps": apps,
-            "installedApps": unpeel_core::app_installer::installed_wire(),
+            "installedApps": supercli_core::app_installer::installed_wire(),
             "openers": openers,
             "appPresentations": app_presentations,
             "experimentalWorktreesEnabled": experimental_worktrees_enabled,
@@ -2525,7 +2525,7 @@ mod tests {
     #[test]
     fn mobile_create_catalog_preserves_duplicate_preset_scopes_and_precedence() {
         use std::sync::{Arc, Mutex};
-        use unpeel_core::controller_api::{
+        use supercli_core::controller_api::{
             route_with_create_context, ControllerPrincipal, ControllerRequest, HostCreateContext,
             HostCreateOutcome, HostCreateProject, ResolvedHostCreate,
         };
@@ -2617,7 +2617,7 @@ mod tests {
         let payload = serde_json::json!({
             "projects": [{
                 "id": "proj-1",
-                "name": "unpeel",
+                "name": "supercli",
                 "archived_count": 0,
                 "sessions": [{
                     "id": "s1", "label": "main work", "command": "claude",
@@ -2649,7 +2649,7 @@ mod tests {
             .collect();
         assert_eq!(
             headers,
-            [&"unpeel".to_string()],
+            [&"supercli".to_string()],
             "worktree must not become a top-level project"
         );
 
@@ -2820,7 +2820,7 @@ mod tests {
         let payload = serde_json::json!({
             "projects": [{
                 "id": "proj-1",
-                "name": "unpeel",
+                "name": "supercli",
                 "archived_count": 0,
                 "sessions": [],
                 "worktrees": [{
@@ -2847,7 +2847,7 @@ mod tests {
         let payload = serde_json::json!({
             "projects": [{
                 "id": "proj-1",
-                "name": "unpeel",
+                "name": "supercli",
                 "archived_count": 0,
                 "sessions": [],
                 "worktrees": [{
@@ -2861,7 +2861,7 @@ mod tests {
         });
         let state: AppState = serde_json::from_value(serde_json::json!({
             "projects": [{
-                "id": "proj-1", "name": "unpeel", "path": "/tmp/unpeel"
+                "id": "proj-1", "name": "supercli", "path": "/tmp/unpeel"
             }, {
                 "id": "group-1", "name": "Research", "path": "/tmp/unpeel",
                 "parent_project_id": "proj-1", "is_folder": true
@@ -2994,9 +2994,9 @@ mod tests {
             project_id: "project".into(),
             label: "Design".into(),
             command: "/opt/bin/unpeel-design".into(),
-            active_runtime_id: Some("unpeel.app.design".into()),
-            active_app: Some(unpeel_core::session_host::ObservedAppIdentity {
-                id: "unpeel.app.design".into(),
+            active_runtime_id: Some("supercli.app.design".into()),
+            active_app: Some(supercli_core::session_host::ObservedAppIdentity {
+                id: "supercli.app.design".into(),
                 name: "Unpeel Design".into(),
                 tint: Some("#8B5CF6".into()),
                 spinner_tint: None,
@@ -3027,7 +3027,7 @@ mod tests {
         // Identity and tint travel resolved — no Controller catalog entry
         // exists for a third-party App — and the manifest tint wins the
         // spinner color over the (missing) catalog lookup.
-        assert_eq!(summary["activeAppID"], "unpeel.app.design");
+        assert_eq!(summary["activeAppID"], "supercli.app.design");
         assert_eq!(summary["activeAppName"], "Unpeel Design");
         assert_eq!(summary["activeAppTintHex"], 0x8B5CF6);
         assert_eq!(summary["spinnerColorHex"], 0x8B5CF6);
@@ -3039,8 +3039,8 @@ mod tests {
     #[test]
     fn mobile_summary_projects_latest_app_alert_copy_and_recency() {
         let mut row = recent_test_row("usage", Status::Idle, true, 20, false);
-        row.active_app = Some(unpeel_core::session_host::ObservedAppIdentity {
-            id: "unpeel.app.usage".into(),
+        row.active_app = Some(supercli_core::session_host::ObservedAppIdentity {
+            id: "supercli.app.usage".into(),
             name: "Usage".into(),
             tint: None,
             spinner_tint: None,
@@ -3054,18 +3054,18 @@ mod tests {
         let directory =
             std::env::temp_dir().join(format!("unpeel-mobile-alert-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&directory).unwrap();
-        let mut activity_log = unpeel_core::activity_log::ActivityLogStore::load_from(
+        let mut activity_log = supercli_core::activity_log::ActivityLogStore::load_from(
             directory.join("activity-log.jsonl"),
         )
         .unwrap();
         activity_log
-            .append(unpeel_core::activity_log::ActivityLogEntry {
+            .append(supercli_core::activity_log::ActivityLogEntry {
                 id: "alert-1".into(),
                 session_id,
-                kind: unpeel_core::activity_log::ActivityLogKind::Alert,
+                kind: supercli_core::activity_log::ActivityLogKind::Alert,
                 at: 500,
                 title: "Usage".into(),
-                command: "unpeel-usage".into(),
+                command: "supercli-usage".into(),
                 project_id: "project".into(),
                 project_name: "Project".into(),
                 message: Some("Close to the weekly limit".into()),

@@ -1,5 +1,5 @@
 [package]
-name = "unpeel-load"
+name = "supercli-load"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ authors.workspace = true
 description = "Load testing client for Unpeel Host (pooled TLS, open-loop, configurable concurrency)"
 
 [[bin]]
-name = "unpeel-load"
+name = "supercli-load"
 path = "src/main.rs"
 
 [dependencies]

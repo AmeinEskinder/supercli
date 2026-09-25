@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the three-binary Linux CLI archive (unpeel, unpeel-host, unpeel-attach)
+# Build the three-binary Linux CLI archive (supercli, supercli-host, supercli-attach)
 # consumed by release-cli.mjs.
 # Run on the architecture being packaged; this deliberately does not pretend
 # a cross-compiled binary has passed the runtime proof for that architecture.
@@ -8,9 +8,9 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 manifest="$repo_root/crates/Cargo.toml"
-# unpeel-attach is a standalone crate (own [workspace]; never a crates/ member).
-attach_manifest="$repo_root/crates/unpeel-attach/Cargo.toml"
-output_dir=${UNPEEL_CLI_OUTPUT_DIR:-"$repo_root/dist/cli"}
+# supercli-attach is a standalone crate (own [workspace]; never a crates/ member).
+attach_manifest="$repo_root/crates/supercli-attach/Cargo.toml"
+output_dir=${SUPERCLI_CLI_OUTPUT_DIR:-"$repo_root/dist/cli"}
 
 if [ "$(uname -s)" != Linux ]; then
   echo "error: build-cli-linux.sh must run on Linux" >&2
@@ -31,7 +31,7 @@ command -v sha256sum >/dev/null 2>&1 || { echo "error: sha256sum is required" >&
 
 . "$repo_root/scripts/rust-release-env.sh"
 . "$repo_root/scripts/cli-glibc.sh"
-unpeel_enable_rust_path_remapping "$repo_root"
+supercli_enable_rust_path_remapping "$repo_root"
 
 version=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)"/\1/p' "$manifest" | head -1)
 if [ -z "$version" ]; then
@@ -39,18 +39,18 @@ if [ -z "$version" ]; then
   exit 1
 fi
 
-cargo build --release --locked --manifest-path "$manifest" -p unpeel-cli -p unpeel-host
+cargo build --release --locked --manifest-path "$manifest" -p supercli-cli -p supercli-host
 cargo build --release --locked --manifest-path "$attach_manifest"
 
 target_dir=${CARGO_TARGET_DIR:-"$repo_root/crates/target"}
 # With CARGO_TARGET_DIR unset the standalone crate builds into its own target/.
-attach_target_dir=${CARGO_TARGET_DIR:-"$repo_root/crates/unpeel-attach/target"}
-stage=$(mktemp -d "${TMPDIR:-/tmp}/unpeel-cli-linux.XXXXXX")
+attach_target_dir=${CARGO_TARGET_DIR:-"$repo_root/crates/supercli-attach/target"}
+stage=$(mktemp -d "${TMPDIR:-/tmp}/supercli-cli-linux.XXXXXX")
 trap 'rm -rf "$stage"' EXIT INT TERM
 glibc_ceiling=2.31
-for bin in unpeel unpeel-host unpeel-attach; do
+for bin in supercli supercli-host supercli-attach; do
   source_path="$target_dir/release/$bin"
-  [ "$bin" = unpeel-attach ] && source_path="$attach_target_dir/release/$bin"
+  [ "$bin" = supercli-attach ] && source_path="$attach_target_dir/release/$bin"
   if [ ! -x "$source_path" ]; then
     echo "error: expected executable missing: $source_path" >&2
     exit 1
@@ -63,9 +63,9 @@ for bin in unpeel unpeel-host unpeel-attach; do
     echo "error: could not inspect GLIBC symbols in $source_path" >&2
     exit 1
   }
-  required_glibc=$(printf '%s\n' "$objdump_symbols" | unpeel_highest_glibc_version)
+  required_glibc=$(printf '%s\n' "$objdump_symbols" | supercli_highest_glibc_version)
   if [ -n "$required_glibc" ]; then
-    if ! unpeel_glibc_version_at_most "$required_glibc" "$glibc_ceiling"; then
+    if ! supercli_glibc_version_at_most "$required_glibc" "$glibc_ceiling"; then
       echo "error: $bin requires GLIBC_$required_glibc (release ceiling is GLIBC_$glibc_ceiling)" >&2
       echo "       build the release archive in the pinned Bullseye container" >&2
       exit 1
@@ -96,12 +96,12 @@ if [ -z "$rust_notice_target" ]; then
   echo "error: rustc did not report a host target" >&2
   exit 1
 fi
-cargo run --quiet --locked --manifest-path "$manifest" -p unpeel-license-notices -- \
+cargo run --quiet --locked --manifest-path "$manifest" -p supercli-license-notices -- \
   --manifest-path "$manifest" \
-  --package unpeel-cli \
-  --package unpeel-host \
+  --package supercli-cli \
+  --package supercli-host \
   --manifest-path "$attach_manifest" \
-  --package unpeel-attach \
+  --package supercli-attach \
   --target "$rust_notice_target" \
   --output "$stage/THIRD_PARTY_NOTICES.txt"
 
@@ -115,12 +115,12 @@ printf '{\n  "schema": 1,\n  "version": "%s",\n  "target": "%s",\n  "source_comm
   > "$stage/BUILD_PROVENANCE.json"
 
 mkdir -p "$output_dir"
-archive="$output_dir/unpeel-$version-$target.tar.gz"
+archive="$output_dir/supercli-$version-$target.tar.gz"
 tar -czf "$archive" -C "$stage" \
-  unpeel unpeel-host unpeel-attach LICENSE THIRD_PARTY_NOTICES.txt BUILD_PROVENANCE.json protocol generated
+  supercli supercli-host supercli-attach LICENSE THIRD_PARTY_NOTICES.txt BUILD_PROVENANCE.json protocol generated
 digest=$(sha256sum "$archive" | awk '{print $1}')
 printf '%s  %s\n' "$digest" "$(basename "$archive")" > "$archive.sha256"
 
 echo "Built $archive"
 echo "Attach with: bun run release:cli -- --channel <channel> --$target $archive"
-"$stage/unpeel" --version
+"$stage/supercli" --version

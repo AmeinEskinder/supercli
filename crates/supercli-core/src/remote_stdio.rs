@@ -386,16 +386,16 @@ fn audit_fields() -> serde_json::Value {
 }
 
 pub fn run_stdio() -> Result<(), String> {
-    crate::app_paths::ensure_unpeel_home()
+    crate::app_paths::ensure_supercli_home()
         .map_err(|error| format!("prepare Unpeel home: {error}"))?;
-    if std::env::var("UNPEEL_LOCAL_GATEWAY").as_deref() == Ok("1") {
+    if std::env::var("SUPERCLI_LOCAL_GATEWAY").as_deref() == Ok("1") {
         if proxy_local_host_service()? {
             return Ok(());
         }
-        if std::env::var("UNPEEL_LOCAL_HOST_REQUIRED").as_deref() == Ok("1") {
+        if std::env::var("SUPERCLI_LOCAL_HOST_REQUIRED").as_deref() == Ok("1") {
             return Err(format!(
                 "local Host service is unavailable at {}",
-                local_host_socket_path(&crate::app_paths::unpeel_home()).display()
+                local_host_socket_path(&crate::app_paths::supercli_home()).display()
             ));
         }
     }
@@ -416,7 +416,7 @@ pub fn run_stdio() -> Result<(), String> {
     // `__remote_stdio__` is exclusively an SSH gateway, but some managed SSH
     // providers do not export SSH_CONNECTION. Apply the idle bound to every
     // gateway so a detached provider PTY cannot retain its dispatcher threads.
-    let result = if std::env::var("UNPEEL_LOCAL_GATEWAY").as_deref() == Ok("1") {
+    let result = if std::env::var("SUPERCLI_LOCAL_GATEWAY").as_deref() == Ok("1") {
         serve(&mut stdin.lock(), &mut stdout, &handler)
     } else {
         let activity = Arc::new((Mutex::new(0), Condvar::new()));
@@ -437,7 +437,7 @@ pub fn run_stdio() -> Result<(), String> {
 fn proxy_local_host_service() -> Result<bool, String> {
     use std::os::unix::net::UnixStream;
 
-    let path = local_host_socket_path(&crate::app_paths::unpeel_home());
+    let path = local_host_socket_path(&crate::app_paths::supercli_home());
     let stream = match UnixStream::connect(&path) {
         Ok(stream) => stream,
         Err(error)

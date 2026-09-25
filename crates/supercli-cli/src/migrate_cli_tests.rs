@@ -1,10 +1,10 @@
 //! Fixture-home tests for `unpeel migrate` (included as `migrate_cli::tests`).
 
 use super::*;
-use unpeel_core::action_reviews::{record_review, verify_review_chain, Actor, ReviewDecision};
+use supercli_core::action_reviews::{record_review, verify_review_chain, Actor, ReviewDecision};
 
 /// Build a fixture home with every legacy format. Never touches the
-/// real UNPEEL_HOME: all paths are explicit.
+/// real SUPERCLI_HOME: all paths are explicit.
 fn fixture_home(name: &str) -> PathBuf {
     let home = std::env::temp_dir().join(format!("unpeel-migrate-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);

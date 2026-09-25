@@ -1,18 +1,18 @@
 //! Workspaces from the CLI — isolated Unpeel instances with their own state homes.
 //!
 //! The shared registry deliberately keeps its historical persistence contract:
-//! one file at the REAL `~/.unpeel/profiles.json`, with a top-level `profiles`
-//! array, and permanent homes under `~/.unpeel/profiles/<slug>`. Existing app
+//! one file at the REAL `~/.supercli/profiles.json`, with a top-level `profiles`
+//! array, and permanent homes under `~/.supercli/profiles/<slug>`. Existing app
 //! builds read that wire format, and provider hook configs bake absolute paths
 //! to those homes. These legacy spellings are storage details, not product
 //! vocabulary, and must not be migrated or removed casually.
 //!
-//! The registry never resolves through `app_paths::unpeel_home()`, which honors
-//! `UNPEEL_HOME`: every instance must see the same registry. Writes are atomic
+//! The registry never resolves through `app_paths::supercli_home()`, which honors
+//! `SUPERCLI_HOME`: every instance must see the same registry. Writes are atomic
 //! last-writer-wins, matching the app.
 //!
 //! `unpeel --workspace NAME …` claims the flag before any dispatch and sets
-//! `UNPEEL_HOME` for the rest of the process; spawned hosts inherit the env,
+//! `SUPERCLI_HOME` for the rest of the process; spawned hosts inherit the env,
 //! so sessions, state, hook broadcasts, and pairing all stay in that home.
 
 use std::path::{Path, PathBuf};
@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 pub struct WorkspaceInstanceRecord {
     pub id: String,
     pub name: String,
-    /// Absolute path of the workspace's UNPEEL_HOME. Minted once at create;
+    /// Absolute path of the workspace's SUPERCLI_HOME. Minted once at create;
     /// rename never moves it (hook configs may already point into it).
     pub home: String,
     #[serde(rename = "createdAt")]
@@ -52,12 +52,12 @@ impl Default for WorkspaceRegistryFile {
     }
 }
 
-/// The real `~/.unpeel`, deliberately ignoring `UNPEEL_HOME`.
-pub fn real_unpeel_dir() -> PathBuf {
+/// The real `~/.supercli`, deliberately ignoring `SUPERCLI_HOME`.
+pub fn real_supercli_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".unpeel")
+        .join(".supercli")
 }
 
 /// Historical registry filename shared with existing native app builds.
@@ -260,15 +260,15 @@ pub fn remove(real_dir: &Path, reference: &str) -> Result<WorkspaceInstanceRecor
 /// home, while other forms would unexpectedly open the interactive TUI.
 /// Resolve the workspace this process is scoped to, for verbs that need the
 /// registry slug back after `--workspace` re-homed the process (service unit
-/// naming). No `UNPEEL_HOME` means the machine scope; a set home must be a
+/// naming). No `SUPERCLI_HOME` means the machine scope; a set home must be a
 /// registered workspace so a unit can address it durably by slug.
 pub fn current_scope() -> Result<Option<(String, PathBuf)>, String> {
-    let Some(home) = std::env::var_os("UNPEEL_HOME").filter(|home| !home.is_empty()) else {
+    let Some(home) = std::env::var_os("SUPERCLI_HOME").filter(|home| !home.is_empty()) else {
         return Ok(None);
     };
     let home = PathBuf::from(home);
     let canonical = std::fs::canonicalize(&home).unwrap_or_else(|_| home.clone());
-    for record in load(&real_unpeel_dir()) {
+    for record in load(&real_supercli_dir()) {
         let recorded = PathBuf::from(trim_trailing_slash(&record.home));
         let recorded = std::fs::canonicalize(&recorded).unwrap_or(recorded);
         if recorded == canonical {
@@ -276,7 +276,7 @@ pub fn current_scope() -> Result<Option<(String, PathBuf)>, String> {
         }
     }
     Err(format!(
-        "UNPEEL_HOME ({}) is not a registered workspace; register it with `unpeel workspaces add` first",
+        "SUPERCLI_HOME ({}) is not a registered workspace; register it with `unpeel workspaces add` first",
         home.display()
     ))
 }
@@ -318,7 +318,7 @@ pub fn claim_workspace_flag(args: &mut Vec<String>) -> Result<Option<String>, St
 /// Resolve the claimed workspace and point this process (and every child it
 /// spawns) at its home. An unknown name offers interactive creation.
 pub fn enter(reference: &str) -> Result<(), String> {
-    let real_dir = real_unpeel_dir();
+    let real_dir = real_supercli_dir();
     let record = match find(&real_dir, reference)? {
         Some(record) => record,
         None => offer_create(&real_dir, reference)?,
@@ -326,7 +326,7 @@ pub fn enter(reference: &str) -> Result<(), String> {
     // The home was minted at create; recreate it if it vanished so a stale
     // registry entry degrades to an empty workspace instead of a crash.
     std::fs::create_dir_all(&record.home).map_err(|e| e.to_string())?;
-    std::env::set_var("UNPEEL_HOME", &record.home);
+    std::env::set_var("SUPERCLI_HOME", &record.home);
     Ok(())
 }
 
@@ -334,9 +334,9 @@ pub fn enter(reference: &str) -> Result<(), String> {
 pub fn cli(args: &[String], json: bool) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("list") | None => {
-            let real_dir = real_unpeel_dir();
+            let real_dir = real_supercli_dir();
             let records = load(&real_dir);
-            let active = std::env::var("UNPEEL_HOME").unwrap_or_default();
+            let active = std::env::var("SUPERCLI_HOME").unwrap_or_default();
             let active = trim_trailing_slash(active.trim()).to_string();
             if json {
                 let list: Vec<serde_json::Value> = records
@@ -378,7 +378,7 @@ pub fn cli(args: &[String], json: bool) -> Result<(), String> {
         }
         Some("add") | Some("create") => {
             let name = args[1..].join(" ");
-            let record = create(&real_unpeel_dir(), &name)?;
+            let record = create(&real_supercli_dir(), &name)?;
             println!("created {} → {}", record.name, record.home);
             println!("run it with `unpeel --workspace {}`", slug_of(&record));
             Ok(())
@@ -387,7 +387,7 @@ pub fn cli(args: &[String], json: bool) -> Result<(), String> {
             let Some(reference) = args.get(1) else {
                 return Err("usage: unpeel workspaces remove <name>".into());
             };
-            let record = remove(&real_unpeel_dir(), reference)?;
+            let record = remove(&real_supercli_dir(), reference)?;
             println!(
                 "removed {} from the registry — its data stays in {}",
                 record.name, record.home

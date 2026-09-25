@@ -3,9 +3,9 @@ umask 077
 SOURCE_EVENT="$1"
 INPUT="${2:-$(cat)}"
 # Global provider hooks must be inert outside a hosted Unpeel Session.
-[ -n "${UNPEEL_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${UNPEEL_HOOK_TRACE_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/hooks/trace.log}"
-UNPEEL_PORT_REGISTRY_FILE="${UNPEEL_APP_PORT_REGISTRY_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/app-ports}"
+[ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
 
 json_escape_string() {
@@ -13,10 +13,10 @@ json_escape_string() {
 }
 
 runtime_generation_json_field() {
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) return 0 ;;
   esac
-  printf ',"unpeel_runtime_generation":%s' "$UNPEEL_RUNTIME_GENERATION"
+  printf ',"supercli_runtime_generation":%s' "$SUPERCLI_RUNTIME_GENERATION"
 }
 
 json_string_value() {
@@ -27,8 +27,8 @@ json_string_value() {
 record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
-  [ -n "${UNPEEL_SESSION_ID:-}" ] || return 0
-  _record_dir="${UNPEEL_SESSION_DIR:-${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$UNPEEL_SESSION_ID}"
+  [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_payload=$(printf '{"hook_event_name":"%s"' "$(json_escape_string "$_record_event_name")")
   if [ -n "$_record_tool_name" ]; then
@@ -43,10 +43,10 @@ record_last_hook_event() {
   fi
 }
 
-current_unpeel_ports() {
-  [ -f "$UNPEEL_PORT_REGISTRY_FILE" ] || return 1
+current_supercli_ports() {
+  [ -f "$SUPERCLI_PORT_REGISTRY_FILE" ] || return 1
   awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ && $1 > 0 && $1 <= 65535 && !seen[$1 + 0]++ { print $1 + 0 }' \
-    "$UNPEEL_PORT_REGISTRY_FILE" 2>/dev/null
+    "$SUPERCLI_PORT_REGISTRY_FILE" 2>/dev/null
 }
 
 # POST one hook payload synchronously and record the outcome in
@@ -81,7 +81,7 @@ post_hook_payload_to_current_ports() {
   _hook_session_id="$2"
   _hook_skip_port="$3"
   _hook_post_pids=""
-  for _hook_candidate_port in $(current_unpeel_ports); do
+  for _hook_candidate_port in $(current_supercli_ports); do
     [ -n "$_hook_candidate_port" ] || continue
     [ "$_hook_candidate_port" = "$_hook_skip_port" ] && continue
     ( post_hook_payload "$_hook_payload" "$_hook_session_id" "$_hook_candidate_port" || true ) &
@@ -147,24 +147,24 @@ esac
 # Cline's hook files are global. Outside an Unpeel-hosted terminal they must be
 # silent no-ops so ordinary Cline sessions keep their native behavior.
 _hook_post_results=""
-if [ -n "${UNPEEL_SESSION_ID:-}" ]; then
+if [ -n "${SUPERCLI_SESSION_ID:-}" ]; then
   # Posts go out synchronously and in order: backgrounded fire-and-forget
   # posts could be reaped when the hook process exited (silently losing the
   # event), and concurrent posts could arrive out of order. Set
-  # UNPEEL_HOOK_POST_SYNC=0 to restore backgrounded posts.
-  if [ "${UNPEEL_HOOK_POST_SYNC:-1}" = "1" ]; then
-    post_hook_payload "$PAYLOAD" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" || true
-    post_hook_payload_to_current_ports "$PAYLOAD" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" || true
+  # SUPERCLI_HOOK_POST_SYNC=0 to restore backgrounded posts.
+  if [ "${SUPERCLI_HOOK_POST_SYNC:-1}" = "1" ]; then
+    post_hook_payload "$PAYLOAD" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" || true
+    post_hook_payload_to_current_ports "$PAYLOAD" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" || true
   else
     (
-      post_hook_payload "$PAYLOAD" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" || true
-      post_hook_payload_to_current_ports "$PAYLOAD" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" || true
+      post_hook_payload "$PAYLOAD" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" || true
+      post_hook_payload_to_current_ports "$PAYLOAD" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" || true
     ) &
   fi
   printf '%s cline-hook session=%s port=%s event=%s provider_session=%s post=%s\n' \
     "$(date '+%Y-%m-%d %H:%M:%S')" \
-    "$UNPEEL_SESSION_ID" \
-    "${UNPEEL_APP_PORT:-}" \
+    "$SUPERCLI_SESSION_ID" \
+    "${SUPERCLI_APP_PORT:-}" \
     "$EVENT_TYPE" \
     "$PROVIDER_SESSION_ID" \
     "${_hook_post_results:-none}" >> "$TRACE_FILE" 2>/dev/null || true

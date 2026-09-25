@@ -887,7 +887,7 @@
       "path": "/mobile/openers",
       "body": {
         "selector": "file:text/markdown",
-        "opener": "app:unpeel.app.filetree"
+        "opener": "app:supercli.app.filetree"
       },
       "expected": {
         "native": 400,
@@ -944,7 +944,7 @@
       "path": "/mobile/apps/open",
       "body": {
         "callerSessionID": "caller",
-        "appID": "unpeel.app.markdown"
+        "appID": "supercli.app.markdown"
       },
       "expected": {
         "native": 400,
@@ -957,7 +957,7 @@
       "path": "/mobile/apps/open",
       "body": {
         "callerSessionID": "caller",
-        "appID": "unpeel.app.filetree",
+        "appID": "supercli.app.filetree",
         "mediaType": "text/markdown",
         "resource": {
           "kind": "file",
@@ -1028,7 +1028,7 @@
       "path": "/mobile/workspace-settings",
       "body": {
         "pluginActivation": {
-          "id": "unpeel.app.markdown",
+          "id": "supercli.app.markdown",
           "active": false
         }
       },
@@ -1043,7 +1043,7 @@
       "path": "/mobile/workspace-settings",
       "body": {
         "pluginActivation": {
-          "id": "unpeel.app.markdown",
+          "id": "supercli.app.markdown",
           "active": true
         }
       },
@@ -1099,7 +1099,7 @@
       "path": "/mobile/workspace-settings",
       "body": {
         "pluginOrder": [
-          "unpeel.app.markdown",
+          "supercli.app.markdown",
           "com.anthropic.claude-code"
         ]
       },
@@ -1138,11 +1138,11 @@
       }
     },
     {
-      "id": "filesystem.file.read.unpeel-storage-denied",
+      "id": "filesystem.file.read.supercli-storage-denied",
       "method": "GET",
       "path": "/mobile/files/read",
       "query": {
-        "path": "~/.unpeel/app-state.json",
+        "path": "~/.supercli/app-state.json",
         "offset": "0"
       },
       "expected": {

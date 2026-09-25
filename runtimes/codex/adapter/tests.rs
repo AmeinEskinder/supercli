@@ -30,8 +30,8 @@ fn codex_notify_normalizer_maps_provider_events_before_generic_transport() {
     assert!(CODEX_NOTIFY_NORMALIZER_SCRIPT.contains("EVENT_TYPE=\"PermissionRequest\""));
     assert!(CODEX_NOTIFY_NORMALIZER_SCRIPT.contains("{{NOTIFY_PATH}}"));
     assert!(!NOTIFY_HOOK_SCRIPT.contains("agent-turn-complete"));
-    assert!(NOTIFY_HOOK_SCRIPT.contains("UNPEEL_PORT_REGISTRY_FILE"));
-    assert!(NOTIFY_HOOK_SCRIPT.contains("current_unpeel_ports"));
+    assert!(NOTIFY_HOOK_SCRIPT.contains("SUPERCLI_PORT_REGISTRY_FILE"));
+    assert!(NOTIFY_HOOK_SCRIPT.contains("current_supercli_ports"));
     assert!(NOTIFY_HOOK_SCRIPT.contains("post_hook_payload_to_current_ports"));
 }
 
@@ -51,10 +51,10 @@ fn notify_hook_script_preserves_codex_session_and_transcript_for_busy_events() {
         .arg(script)
         .arg(&payload)
         .env("HOME", hook_env_home("notify-busy"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
-        .env("UNPEEL_HOOK_POST_SYNC", "1")
-        .env("UNPEEL_HOOK_TRACE_FILE", hook_trace_file("notify-busy"))
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_HOOK_POST_SYNC", "1")
+        .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file("notify-busy"))
         .output()
         .expect("run notify hook");
 
@@ -96,11 +96,11 @@ fn notify_hook_script_preserves_codex_metadata_for_permission_events() {
         .arg(&script)
         .arg(&payload)
         .env("HOME", hook_env_home("notify-permission"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
-        .env("UNPEEL_HOOK_POST_SYNC", "1")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_HOOK_POST_SYNC", "1")
         .env(
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_HOOK_TRACE_FILE",
             hook_trace_file("notify-permission"),
         )
         .output()
@@ -225,7 +225,7 @@ fn codex_managed_hook_command_guards_only_a_missing_script() {
 }
 
 #[test]
-fn codex_hooks_prune_only_stale_unpeel_entries() {
+fn codex_hooks_prune_only_stale_supercli_entries() {
     let root = temp_path("codex-hook-cleanup");
     let current = root.join(".unpeel/hooks/notify-hook.sh");
     let other_live = root.join("unpeel-dev/hooks/notify-hook.sh");

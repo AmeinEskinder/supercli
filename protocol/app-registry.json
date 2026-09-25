@@ -1,8 +1,8 @@
 {
   "diffs": {
-    "id": "unpeel.app.diffs",
+    "id": "supercli.app.diffs",
     "channel": "stable",
-    "binary": "unpeel-diffs",
+    "binary": "supercli-diffs",
     "name": "Git",
     "version": "0.1.1",
     "description": "Git sidebar with Changes and History tabs, changed files, and commit diffs",
@@ -15,13 +15,13 @@
       "resource:git.working-tree"
     ],
     "try": [
-      "unpeel-diffs path/to/project"
+      "supercli-diffs path/to/project"
     ]
   },
   "filetree": {
-    "id": "unpeel.app.filetree",
+    "id": "supercli.app.filetree",
     "channel": "stable",
-    "binary": "unpeel-filetree",
+    "binary": "supercli-filetree",
     "name": "Files",
     "version": "0.1.1",
     "description": "Borderless project-scoped file explorer with filtering and native path dragging",
@@ -34,13 +34,13 @@
       "resource:folder"
     ],
     "try": [
-      "unpeel-filetree path/to/project"
+      "supercli-filetree path/to/project"
     ]
   },
   "markdown": {
-    "id": "unpeel.app.markdown",
+    "id": "supercli.app.markdown",
     "channel": "stable",
-    "binary": "unpeel-markdown",
+    "binary": "supercli-markdown",
     "name": "Markdown",
     "version": "0.1.1",
     "description": "Terminal Markdown editor with live styling, slash commands, mouse editing, and note-vault browsing",
@@ -61,20 +61,20 @@
       "file:text/markdown"
     ],
     "try": [
-      "unpeel-markdown path/to/notes"
+      "supercli-markdown path/to/notes"
     ]
   },
   "usage": {
-    "id": "unpeel.app.usage",
+    "id": "supercli.app.usage",
     "channel": "stable",
-    "binary": "unpeel-usage",
+    "binary": "supercli-usage",
     "name": "Usage",
     "version": "0.1.1",
     "description": "Codex, Claude, Grok, and Muse usage with monthly token totals and alerts",
     "icon_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 256 256\" fill=\"#FFFFFF\"><rect width=\"256\" height=\"256\" fill=\"none\"/><path d=\"M232,112v32a8,8,0,0,1-8,8H56v16h88a8,8,0,0,1,8,8v24a8,8,0,0,1-8,8H56v8a8,8,0,0,1-16,0V40a8,8,0,0,1,16,0v8H176a8,8,0,0,1,8,8V80a8,8,0,0,1-8,8H56v16H224A8,8,0,0,1,232,112Z\"/></svg>",
     "media_types": [],
     "try": [
-      "unpeel-usage"
+      "supercli-usage"
     ]
   }
 }

@@ -434,9 +434,9 @@ Safety:
 The Swift codebase should move toward these target boundaries:
 
 ```text
-clients/shared/UnpeelShared/
+clients/shared/SupercliShared/
   Sources/
-    UnpeelShared/
+    SupercliShared/
       Cross-platform data models
       Remote-control protocol types
       Pure parsing helpers
@@ -446,10 +446,10 @@ clients/shared/UnpeelShared/
 Mac target:
 
 ```text
-clients/native/UnpeelNative/
-  Package.swift depends on ../../shared/UnpeelShared
+clients/native/SupercliNative/
+  Package.swift depends on ../../shared/SupercliShared
   Sources/
-    UnpeelNative/
+    SupercliNative/
       Mac app shell
       AppKit/Ghostty/Sparkle integration
       Local session spawning
@@ -460,9 +460,9 @@ clients/native/UnpeelNative/
 Future iOS target:
 
 ```text
-clients/ios/UnpeelIOS/
+clients/ios/SupercliIOS/
   Sources/
-    UnpeelIOS/
+    SupercliIOS/
       SwiftUI app shell
       Remote client
       Pairing flow
@@ -473,10 +473,10 @@ clients/ios/UnpeelIOS/
 
 Rules:
 
-- `UnpeelShared` must not import AppKit, UIKit, SwiftUI, Ghostty, Sparkle, or Security UI.
-- `UnpeelShared` can import Foundation.
+- `SupercliShared` must not import AppKit, UIKit, SwiftUI, Ghostty, Sparkle, or Security UI.
+- `SupercliShared` can import Foundation.
 - Platform targets adapt shared models into platform UI.
-- Mac-only process and filesystem behavior stays out of `UnpeelShared`.
+- Mac-only process and filesystem behavior stays out of `SupercliShared`.
 - Protocol types should be Codable, Equatable, and Sendable where practical.
 
 Initial shared candidates:
@@ -750,7 +750,7 @@ Each error should tell the user what changed and the next useful action.
 
 V1 must ship:
 
-- Shared Swift `UnpeelShared` protocol models.
+- Shared Swift `SupercliShared` protocol models.
 - Mac remote-control setting and pairing QR.
 - iOS pairing flow.
 - One paired Mac at a time.
@@ -783,7 +783,7 @@ V1 can defer:
 
 ### Milestone 0: Shared Contracts
 
-- Add standalone `UnpeelShared` package.
+- Add standalone `SupercliShared` package.
 - Add remote protocol DTOs and tests.
 - Keep Mac target compiling with shared dependency.
 
@@ -915,13 +915,13 @@ Performance:
 
 ## 25. Immediate Engineering Backlog
 
-1. Keep `UnpeelShared` compiling as a Foundation-only module.
-2. Move only audited pure types into `UnpeelShared`.
+1. Keep `SupercliShared` compiling as a Foundation-only module.
+2. Move only audited pure types into `SupercliShared`.
 3. Add Mac-side adapters from `Project`, `Preset`, `SessionEntry`, and viewport snapshots to shared remote DTOs.
 4. Define the remote bridge storage location and device credential shape.
 5. Add a Mac settings panel section for Remote Control.
 6. Add a development-only localhost bridge endpoint for `bootstrap.snapshot`.
-7. Add a mock iOS package/app target that depends on `UnpeelShared`.
+7. Add a mock iOS package/app target that depends on `SupercliShared`.
 8. Implement session inbox UI against mock data.
 9. Wire pairing once the bridge exists.
 10. Harden auth before enabling LAN access.

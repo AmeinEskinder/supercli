@@ -1,7 +1,7 @@
 //! `unpeel init` — first-run setup for a fresh machine.
 //!
 //! 1. Creates the workspace home with mode 0700 (via
-//!    `ensure_unpeel_home`, which also repairs a wrong mode).
+//!    `ensure_supercli_home`, which also repairs a wrong mode).
 //! 2. Seeds a blank home (builtin presets) and verifies the resulting
 //!    config is valid under the typed schema.
 //! 3. Ensures the Host is running and shows a pairing code + QR so a
@@ -9,7 +9,7 @@
 //!    `unpeel pair` does the blocking wait.
 //! 4. Ends by running `unpeel doctor`; init's exit code is doctor's.
 
-use unpeel_core::{app_paths, app_state, config, first_run};
+use supercli_core::{app_paths, app_state, config, first_run};
 
 pub const INIT_HELP: &str = "\
 unpeel init — first-run setup
@@ -23,8 +23,8 @@ never overwrites an existing home's presets, projects, or settings.\
 
 fn begin_pairing_code() -> Result<String, String> {
     crate::cli::ensure_host_running()?;
-    let home = app_paths::unpeel_home();
-    unpeel_serve::local_gateway::begin_pairing(&home, None, None)
+    let home = app_paths::supercli_home();
+    supercli_serve::local_gateway::begin_pairing(&home, None, None)
 }
 
 pub fn run(args: &[String], json: bool) -> i32 {
@@ -41,7 +41,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
     }
 
     // 1. Home with mode 0700.
-    let home = match app_paths::ensure_unpeel_home() {
+    let home = match app_paths::ensure_supercli_home() {
         Ok(home) => home,
         Err(err) => {
             eprintln!("unpeel init: cannot create workspace home: {err}");
@@ -112,7 +112,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
         }
     };
     if !json {
-        for line in unpeel_serve::pairing::qr_lines(&pairing_code) {
+        for line in supercli_serve::pairing::qr_lines(&pairing_code) {
             println!("{line}");
         }
         println!("\n{pairing_code}\n");

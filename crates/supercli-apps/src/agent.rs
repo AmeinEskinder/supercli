@@ -33,11 +33,11 @@ pub fn clipboard_sequence(text: &str) -> String {
 /// applies, so the first send to that target may wait for user approval.
 /// Returns the receiving session's label.
 ///
-/// Requires running inside a hosted Unpeel session (`UNPEEL_SESSION_ID`)
+/// Requires running inside a hosted Unpeel session (`SUPERCLI_SESSION_ID`)
 /// with `unpeel-host` on PATH; callers fall back to [`clipboard_sequence`]
 /// on Err.
 pub fn send_to_adjacent_agent(token: &str) -> Result<String, String> {
-    if std::env::var("UNPEEL_SESSION_ID").is_err() {
+    if std::env::var("SUPERCLI_SESSION_ID").is_err() {
         return Err("not inside an Unpeel session".into());
     }
     let mut client = McpClient::spawn()?;
@@ -180,7 +180,7 @@ impl AdjacentAgent {
     }
 
     pub fn refresh(&self) {
-        if std::env::var("UNPEEL_SESSION_ID").is_err() {
+        if std::env::var("SUPERCLI_SESSION_ID").is_err() {
             return;
         }
         if self.probing.swap(true, std::sync::atomic::Ordering::SeqCst) {

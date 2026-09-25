@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 
 pub const HOOK_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// Compatibility window for hooks installed by an older Unpeel build, before
-/// lifecycle payloads carried `unpeel_runtime_generation`. Immediately after
+/// lifecycle payloads carried `supercli_runtime_generation`. Immediately after
 /// an in-place generation edge, an untagged Stop is ambiguous: it may be a
 /// background reporter from the process we just terminated. Suppress it until
 /// the replacement proves its own lifecycle with Start/UserPromptSubmit. The
@@ -340,7 +340,7 @@ impl ActivityEngine {
         not_before_unix_ms: Option<u64>,
     ) {
         let Ok(activities) =
-            unpeel_core::hook_assets::read_background_hook_activity(dir, generation)
+            supercli_core::hook_assets::read_background_hook_activity(dir, generation)
         else {
             return;
         };
@@ -372,7 +372,7 @@ impl ActivityEngine {
     }
 
     pub fn sync_cancellation_from_disk(&mut self, session_id: &str, dir: &Path, generation: u64) {
-        if let Some(marker) = unpeel_core::hook_cancellation::read_in(dir) {
+        if let Some(marker) = supercli_core::hook_cancellation::read_in(dir) {
             self.observe_cancellation(session_id, &marker, generation);
         }
     }
@@ -380,7 +380,7 @@ impl ActivityEngine {
     fn observe_cancellation(
         &mut self,
         session_id: &str,
-        marker: &unpeel_core::hook_cancellation::Cancellation,
+        marker: &supercli_core::hook_cancellation::Cancellation,
         generation: u64,
     ) {
         if marker.runtime_generation != generation {
@@ -536,12 +536,12 @@ impl ActivityEngine {
                     if let (Some(dir), Some(through)) =
                         (&entry.session_dir, entry.last_transition_at)
                     {
-                        if let Err(error) = unpeel_core::hook_assets::record_hook_expiry(
+                        if let Err(error) = supercli_core::hook_assets::record_hook_expiry(
                             dir,
                             entry.runtime_launch_generation,
                             through,
                         ) {
-                            unpeel_core::hook_assets::append_trace_log_line(&format!(
+                            supercli_core::hook_assets::append_trace_log_line(&format!(
                                 "Failed to persist hook expiry: {error}"
                             ));
                         }
@@ -636,7 +636,7 @@ impl ActivityEngine {
             .and_then(|v| v.as_str())
             .map(str::to_owned);
         let seed_generation = value
-            .get("unpeel_runtime_generation")
+            .get("supercli_runtime_generation")
             .or_else(|| value.get("unpeelRuntimeGeneration"))
             .and_then(serde_json::Value::as_u64);
 
@@ -666,7 +666,7 @@ impl ActivityEngine {
         );
         if accepted && starts_turn(&canonical) {
             let entry = self.entries.get_mut(session_id).unwrap();
-            if unpeel_core::hook_assets::hook_turn_expired(session_dir, current_generation, seed_at)
+            if supercli_core::hook_assets::hook_turn_expired(session_dir, current_generation, seed_at)
             {
                 entry.state = Some(HookState::Idle);
                 entry.deadline_at = None;
@@ -704,7 +704,7 @@ mod tests {
         fs::write(
             &path,
             serde_json::json!({
-                "hook_event_name": event, "unpeel_runtime_generation": generation
+                "hook_event_name": event, "supercli_runtime_generation": generation
             })
             .to_string(),
         )
@@ -790,7 +790,7 @@ mod tests {
         fs::write(
             &path,
             serde_json::json!({
-                "activity_id": id, "unpeel_runtime_generation": generation
+                "activity_id": id, "supercli_runtime_generation": generation
             })
             .to_string(),
         )
@@ -834,7 +834,7 @@ mod tests {
             } else {
                 engine.observe_cancellation(
                     "s",
-                    &unpeel_core::hook_cancellation::Cancellation {
+                    &supercli_core::hook_cancellation::Cancellation {
                         runtime_generation: 1,
                         cancelled_at: 2000,
                         submitted_at: None,
@@ -857,7 +857,7 @@ mod tests {
         background_marker(dir.path(), 1, "child");
         fs::write(
             dir.path().join("last-hook-event.json"),
-            r#"{"hook_event_name":"Stop","unpeel_runtime_generation":1}"#,
+            r#"{"hook_event_name":"Stop","supercli_runtime_generation":1}"#,
         )
         .unwrap();
         let mut engine = ActivityEngine::default();
@@ -905,7 +905,7 @@ mod tests {
         let mut engine = ActivityEngine::default();
         engine.observe_runtime_launch("s", 1, None);
         engine.apply_hook_event("s", "UserPromptSubmit", None, at(1000));
-        let mut cancellation = unpeel_core::hook_cancellation::Cancellation {
+        let mut cancellation = supercli_core::hook_cancellation::Cancellation {
             runtime_generation: 1,
             cancelled_at: 2000,
             submitted_at: None,
@@ -951,7 +951,7 @@ mod tests {
             let mut engine = ActivityEngine::default();
             engine.observe_runtime_launch("s", 1, None);
             engine.apply_hook_event("s", "UserPromptSubmit", None, at(1000));
-            let mut cancellation = unpeel_core::hook_cancellation::Cancellation {
+            let mut cancellation = supercli_core::hook_cancellation::Cancellation {
                 runtime_generation: 1,
                 cancelled_at: 2000,
                 submitted_at: None,
@@ -972,7 +972,7 @@ mod tests {
         let mut engine = ActivityEngine::default();
         engine.observe_cancellation(
             "s",
-            &unpeel_core::hook_cancellation::Cancellation {
+            &supercli_core::hook_cancellation::Cancellation {
                 runtime_generation: 1,
                 cancelled_at: 2000,
                 submitted_at: None,
@@ -984,7 +984,7 @@ mod tests {
         engine.observe_runtime_launch("s", 2, Some(3000));
         engine.observe_cancellation(
             "s",
-            &unpeel_core::hook_cancellation::Cancellation {
+            &supercli_core::hook_cancellation::Cancellation {
                 runtime_generation: 1,
                 cancelled_at: 2000,
                 submitted_at: None,
@@ -1056,7 +1056,7 @@ mod tests {
         let seed = dir.join("last-hook-event.json");
         fs::write(
             &seed,
-            r#"{"hook_event_name":"Stop","unpeel_runtime_generation":1}"#,
+            r#"{"hook_event_name":"Stop","supercli_runtime_generation":1}"#,
         )
         .unwrap();
         fs::File::open(&seed)
@@ -1301,7 +1301,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("last-hook-event.json"),
-            r#"{"hook_event_name":"Stop","unpeel_runtime_generation":1}"#,
+            r#"{"hook_event_name":"Stop","supercli_runtime_generation":1}"#,
         )
         .unwrap();
 

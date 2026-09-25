@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use unpeel_attach::{
+use supercli_attach::{
     connect_input_stream, connect_output_stream, host_is_alive, load_manifest,
     mode_restore_preamble, output_retained_from, read_output_stream_frame, read_replay_tail,
     request_snapshot, send_command, snapshot_attach_enabled, split_valid_utf8, terminal_size,
@@ -75,9 +75,9 @@ struct Args {
 }
 
 fn default_sessions_dir() -> PathBuf {
-    // Honor UNPEEL_HOME like the app and unpeel-host (app_paths::unpeel_home),
+    // Honor SUPERCLI_HOME like the app and unpeel-host (app_paths::supercli_home),
     // so a dev/blank instance's surfaces attach to its isolated state dir.
-    if let Some(home) = std::env::var_os("UNPEEL_HOME") {
+    if let Some(home) = std::env::var_os("SUPERCLI_HOME") {
         if !home.is_empty() {
             return PathBuf::from(home).join("app-sessions");
         }
@@ -85,7 +85,7 @@ fn default_sessions_dir() -> PathBuf {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default();
-    home.join(".unpeel").join("app-sessions")
+    home.join(".supercli").join("app-sessions")
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -156,9 +156,9 @@ fn main() {
     std::process::exit(code);
 }
 
-/// Mirror of `unpeel_core::session_host::socket_path`: macOS caps
+/// Mirror of `supercli_core::session_host::socket_path`: macOS caps
 /// `sockaddr_un.sun_path` at 104 bytes, so a deep home (another local
-/// workspace: `~/.unpeel/profiles/<name>/app-sessions/<uuid>/session.sock`)
+/// workspace: `~/.supercli/profiles/<name>/app-sessions/<uuid>/session.sock`)
 /// makes the host bind its control socket at a deterministic short path
 /// instead. Attach must compute the same one, or a workspace pane shows the
 /// replayed tail and then never connects.
@@ -514,7 +514,7 @@ fn wake_output_stream_waiter(fd: RawFd) {
 fn wait_for_startup_manifest(
     session_dir: &Path,
     timeout: Duration,
-) -> Option<unpeel_attach::Manifest> {
+) -> Option<supercli_attach::Manifest> {
     let deadline = Instant::now() + timeout;
     loop {
         if let Some(manifest) = load_manifest(session_dir) {
@@ -584,11 +584,11 @@ fn send_startup_resize_when_ready(
     }
 }
 
-/// Attach-to-correct-screen latency probe: with `UNPEEL_ATTACH_TIMING_FILE`
+/// Attach-to-correct-screen latency probe: with `SUPERCLI_ATTACH_TIMING_FILE`
 /// set, append one line per attach measuring request → last replay byte
 /// flushed. Development/measurement only; never on by default.
 fn record_attach_timing(started: Instant, snapshot: bool, replay_len: usize) {
-    let Some(path) = std::env::var_os("UNPEEL_ATTACH_TIMING_FILE") else {
+    let Some(path) = std::env::var_os("SUPERCLI_ATTACH_TIMING_FILE") else {
         return;
     };
     let line = format!(
@@ -1120,14 +1120,14 @@ mod control_socket_path_tests {
 
     #[test]
     fn short_session_dir_keeps_socket_beside_manifest() {
-        let dir = PathBuf::from("/Users/me/.unpeel/app-sessions/abc");
+        let dir = PathBuf::from("/Users/me/.supercli/app-sessions/abc");
         assert_eq!(control_socket_path(&dir, "abc"), dir.join("session.sock"));
     }
 
     #[test]
     fn deep_workspace_home_uses_the_host_fallback_path() {
         let dir = PathBuf::from(
-            "/Users/exampleuser/.unpeel/profiles/notebook/app-sessions/75f60237-6d98-42e4-a4cb-a71a3c74c57a",
+            "/Users/exampleuser/.supercli/profiles/notebook/app-sessions/75f60237-6d98-42e4-a4cb-a71a3c74c57a",
         );
         let path = control_socket_path(&dir, "75f60237-6d98-42e4-a4cb-a71a3c74c57a");
         assert!(path.starts_with("/tmp"), "{}", path.display());

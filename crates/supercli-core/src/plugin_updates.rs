@@ -181,7 +181,7 @@ fn resolve_channel(mut recipe: RuntimeUpdates) -> RuntimeUpdates {
 
 /// Called only by the capability-gated settings read, never by bootstrap.
 pub fn request() -> Value {
-    let home = crate::app_paths::unpeel_home();
+    let home = crate::app_paths::supercli_home();
     request_with(&home, candidates(&home))
 }
 

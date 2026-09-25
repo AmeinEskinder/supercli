@@ -86,7 +86,7 @@ jobs:
       - name: Full native launcher builds (desktop + mobile)
         # This is the build step this VM cannot do (no GTK/WebKit system
         # libs). A green run here is the real proof the launchers compile.
-        run: cargo build --manifest-path clients/dioxus/Cargo.toml --locked -p unpeel-desktop -p unpeel-mobile
+        run: cargo build --manifest-path clients/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
 
   release-size-budget:
     name: Release size budget (R3)
@@ -112,17 +112,17 @@ jobs:
             clients/dioxus
       - name: Release build (Host + launchers)
         run: |
-          cargo build --release --manifest-path crates/Cargo.toml --locked -p unpeel-host
-          cargo build --release --manifest-path clients/dioxus/Cargo.toml --locked -p unpeel-desktop -p unpeel-mobile
+          cargo build --release --manifest-path crates/Cargo.toml --locked -p supercli-host
+          cargo build --release --manifest-path clients/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
       - name: Check size budgets
         run: |
           # R3: release binaries must stay under budget.
           # Budgets (bytes), measured 2026-09-25 on the release profile
           # (thin LTO, 16 codegen units, strip, panic=unwind) + ~35% headroom:
-          # - unpeel-host: measured 16,244,120 -> 21 MiB budget
-          # - unpeel-desktop: measured 9,481,944 -> 12 MiB budget
-          # - unpeel-mobile: measured 8,062,624 -> 11 MiB budget
-          # Debug (before) for reference: unpeel 188,061,600 / unpeel-host 185,019,384.
+          # - supercli-host: measured 16,244,120 -> 21 MiB budget
+          # - supercli-desktop: measured 9,481,944 -> 12 MiB budget
+          # - supercli-mobile: measured 8,062,624 -> 11 MiB budget
+          # Debug (before) for reference: supercli 188,061,600 / supercli-host 185,019,384.
           check_size() {
             local bin="$1"
             local budget="$2"
@@ -134,9 +134,9 @@ jobs:
               exit 1
             fi
           }
-          check_size "crates/target/release/unpeel-host" 22020096
-          check_size "clients/dioxus/target/release/unpeel-desktop" 12582912
-          check_size "clients/dioxus/target/release/unpeel-mobile" 11534336
+          check_size "crates/target/release/supercli-host" 22020096
+          check_size "clients/dioxus/target/release/supercli-desktop" 12582912
+          check_size "clients/dioxus/target/release/supercli-mobile" 11534336
           echo "All release binaries within budget."
 
   web:
@@ -149,7 +149,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: clients/dioxus/unpeel-web/tests/web/package-lock.json
+          cache-dependency-path: clients/dioxus/supercli-web/tests/web/package-lock.json
       - name: Install declared Rust MSRV
         uses: dtolnay/rust-toolchain@1.88.0
         with:
@@ -166,15 +166,40 @@ jobs:
           dx --version
       - name: Build the web bundle
         run: |
-          cd clients/dioxus/unpeel-web
+          cd clients/dioxus/supercli-web
           dx build --platform web
       - name: Install Playwright browsers
         run: |
-          cd clients/dioxus/unpeel-web/tests/web
+          cd clients/dioxus/supercli-web/tests/web
           npm ci
           npx playwright install chromium
       - name: Run Playwright suite against the real bundle
         run: |
-          cd clients/dioxus/unpeel-web/tests/web
-          # server.js probes clients/dioxus/target/dx/unpeel-web/debug/web/public
+          cd clients/dioxus/supercli-web/tests/web
+          # server.js probes clients/dioxus/target/dx/supercli-web/debug/web/public
           npx playwright test
+
+  rename-guard:
+    name: Rename guard (no 'unpeel' remnants)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on any remaining 'unpeel' references
+        run: |
+          # The rename unpeel -> supercli must be complete. Allowlist:
+          # - THIRD_PARTY_NOTICES.txt (generated third-party licenses)
+          # - docs/internal/ (historical records)
+          # - *.lock (cargo lockfiles may reference old names transiently)
+          if grep -ri 'unpeel' \
+            --exclude-dir=target \
+            --exclude-dir=.git \
+            --exclude-dir=docs/internal \
+            --exclude-dir=clients/gpuidart \
+            --exclude=THIRD_PARTY_NOTICES.txt \
+            --exclude='*.lock' \
+            . ; then
+            echo "ERROR: found 'unpeel' references outside the allowlist"
+            exit 1
+          fi
+          echo "Rename guard passed: no 'unpeel' remnants."

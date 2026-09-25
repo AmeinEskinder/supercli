@@ -122,20 +122,20 @@ pub fn resume_failure_markers(command: &str) -> Option<Vec<String>> {
 
 /// Return an Unpeel-managed Pi storage directory, when the Pi adapter proves
 /// the command was pinned beneath `root`.
-pub fn unpeel_managed_pi_session_dir(command: &str, root: &str) -> Option<String> {
+pub fn supercli_managed_pi_session_dir(command: &str, root: &str) -> Option<String> {
     managed_storage_path(command, Path::new(root)).map(|path| path.to_string_lossy().to_string())
 }
 
 /// Return runtime-owned storage referenced by `command`, but only when the
-/// runtime adapter proves that it lives beneath `unpeel_home`. This is the
+/// runtime adapter proves that it lives beneath `supercli_home`. This is the
 /// provider-neutral cleanup/recovery seam used by Hosts and clients; the
 /// compatibility Pi-named wrapper above remains for older callers.
-pub fn managed_storage_path(command: &str, unpeel_home: &Path) -> Option<std::path::PathBuf> {
+pub fn managed_storage_path(command: &str, supercli_home: &Path) -> Option<std::path::PathBuf> {
     let path = adapter(command)
         .and_then(|adapter| adapter.managed_session_dir)
-        .and_then(|managed| managed(command, &unpeel_home.to_string_lossy()))?;
+        .and_then(|managed| managed(command, &supercli_home.to_string_lossy()))?;
     let path = std::path::PathBuf::from(path);
-    let relative = path.strip_prefix(unpeel_home).ok()?;
+    let relative = path.strip_prefix(supercli_home).ok()?;
     let mut components = relative.components();
     if !matches!(components.next(), Some(std::path::Component::Normal(_)))
         || components.any(|component| !matches!(component, std::path::Component::Normal(_)))
@@ -413,10 +413,10 @@ mod tests {
     #[test]
     fn restart_requires_a_managed_launch_and_no_runtime_mismatch() {
         assert!(can_resume("claude --model opus"));
-        assert!(can_resume("/opt/unpeel/bin/claude --model opus"));
+        assert!(can_resume("/opt/supercli/bin/claude --model opus"));
         assert!(can_restart_agent("claude --model opus", Some("claude")));
         assert!(can_restart_agent(
-            "/opt/unpeel/bin/claude --model opus",
+            "/opt/supercli/bin/claude --model opus",
             Some("claude")
         ));
         assert!(can_restart_agent("claude --model opus", None));
@@ -435,7 +435,7 @@ mod tests {
         // Older Pi launches recorded `--session-dir` beneath the Unpeel home;
         // cleanup and relaunch keep honoring it, but nothing adds it now.
         assert_eq!(
-            unpeel_managed_pi_session_dir("pi --yolo --session-dir '/root/pi/s1'", "/root/pi"),
+            supercli_managed_pi_session_dir("pi --yolo --session-dir '/root/pi/s1'", "/root/pi"),
             Some("/root/pi/s1".to_string())
         );
         assert_eq!(

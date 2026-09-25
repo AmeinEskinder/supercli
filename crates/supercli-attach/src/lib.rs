@@ -84,10 +84,10 @@ struct SnapshotReply {
     snapshot: Option<SnapshotHeader>,
 }
 
-/// Snapshot attach is on unless `UNPEEL_ATTACH_SNAPSHOT=0` (the escape hatch
+/// Snapshot attach is on unless `SUPERCLI_ATTACH_SNAPSHOT=0` (the escape hatch
 /// back to raw tail replay, also the control arm of verify-attach.sh).
 pub fn snapshot_attach_enabled() -> bool {
-    !std::env::var("UNPEEL_ATTACH_SNAPSHOT").is_ok_and(|value| value.trim() == "0")
+    !std::env::var("SUPERCLI_ATTACH_SNAPSHOT").is_ok_and(|value| value.trim() == "0")
 }
 
 /// Ask the Host for a VT state snapshot. `Ok(None)` means "use the raw tail

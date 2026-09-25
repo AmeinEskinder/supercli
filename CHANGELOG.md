@@ -66,7 +66,7 @@ All notable changes to Unpeel (Track B + Phases 9–12) are documented here.
 ### Phase 9 H4 — Release engineering
 
 **Added:**
-- `docs/RELEASE_CHECKLIST.md`: workspace version + `cargo update`, test/clippy/fmt matrices, PTY matrix, notices check, 30-min Host soak, release order (CLI → Mac app → website).
+- `docs/internal/release-checklist.md`: workspace version + `cargo update`, test/clippy/fmt matrices, PTY matrix, notices check, 30-min Host soak, release order (CLI → Mac app → website).
 - This CHANGELOG.md.
 
 ### Phase 9 H5 — README quickstart

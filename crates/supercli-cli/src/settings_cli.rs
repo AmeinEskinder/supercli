@@ -7,7 +7,7 @@
 
 use serde_json::{Map, Value};
 
-use unpeel_core::state::{BrowserAccess, ComputerAccess, McpNonChildWriteAccess};
+use supercli_core::state::{BrowserAccess, ComputerAccess, McpNonChildWriteAccess};
 
 const SETTINGS_USAGE: &str = "usage: unpeel settings list|get <key>|set <key> <value> [--json]";
 
@@ -224,7 +224,7 @@ impl SettingKey {
                     .get("auto_stop_archive_minutes")
                     .and_then(Value::as_u64)
                     .filter(|minutes| AUTO_STOP_MINUTE_OPTIONS.contains(minutes))
-                    .unwrap_or(unpeel_serve::auto_archive::DEFAULT_MINUTES)
+                    .unwrap_or(supercli_serve::auto_archive::DEFAULT_MINUTES)
                     .into(),
             ),
             Self::SidebarStoppedLimit => Value::Number(
@@ -232,7 +232,7 @@ impl SettingKey {
                     .get("sidebar_stopped_limit")
                     .and_then(Value::as_u64)
                     .filter(|limit| SIDEBAR_LIMIT_OPTIONS.contains(limit))
-                    .unwrap_or(unpeel_serve::sessions::DEFAULT_SIDEBAR_STOPPED_LIMIT)
+                    .unwrap_or(supercli_serve::sessions::DEFAULT_SIDEBAR_STOPPED_LIMIT)
                     .into(),
             ),
             Self::Theme => {
@@ -334,7 +334,7 @@ pub fn run(args: &[String], json: bool) -> Result<(), String> {
     }
     match parse_command(args)? {
         SettingsCommand::List => {
-            let state = unpeel_core::app_state::load()?;
+            let state = supercli_core::app_state::load()?;
             let state = state
                 .as_object()
                 .ok_or_else(|| "app-state.json is not an object".to_string())?;
@@ -355,7 +355,7 @@ pub fn run(args: &[String], json: bool) -> Result<(), String> {
             Ok(())
         }
         SettingsCommand::Get(key) => {
-            let state = unpeel_core::app_state::load()?;
+            let state = supercli_core::app_state::load()?;
             let state = state
                 .as_object()
                 .ok_or_else(|| "app-state.json is not an object".to_string())?;
@@ -363,7 +363,7 @@ pub fn run(args: &[String], json: bool) -> Result<(), String> {
         }
         SettingsCommand::Set { key, value } => {
             let effective = value.clone();
-            unpeel_core::app_state::edit(|state| key.write(state, value))?;
+            supercli_core::app_state::edit(|state| key.write(state, value))?;
             print_value(key, effective, json)
         }
     }
@@ -375,7 +375,7 @@ fn set_opener(args: &[String], json_output: bool) -> Result<(), String> {
             "usage: unpeel settings openers set <file:media-type|resource:kind> <editor|system|app:id>".into(),
         );
     }
-    let (status, body) = unpeel_core::controller_host::opener_response(
+    let (status, body) = supercli_core::controller_host::opener_response(
         &serde_json::json!({ "selector": args[1], "opener": args[2] }),
     );
     if status != 200 {

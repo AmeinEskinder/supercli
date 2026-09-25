@@ -14,15 +14,15 @@ select menus are detected from rendered viewport text (they fire no hooks).
 
 ## Layout
 
-- `UnpeelIOS/` — the Xcode project (SwiftUI app, Ghostty-based terminal
+- `SupercliIOS/` — the Xcode project (SwiftUI app, Ghostty-based terminal
   rendering, `RemotePreviewStore` for previews — mock data is preview-only,
   never runtime)
-- `UnpeelIOS/Tools/dev_bridge.py` — dev bridge for driving the simulator
+- `SupercliIOS/Tools/dev_bridge.py` — dev bridge for driving the simulator
   against a local desktop instance
 - `PRD.md` — original product framing
 
 Shared protocol/crypto (pairing, remote control, Relay E2E) lives in
-`clients/shared/UnpeelShared`, not here.
+`clients/shared/SupercliShared`, not here.
 
 ## Build & test
 

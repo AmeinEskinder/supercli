@@ -1340,7 +1340,7 @@ fn detect_virt_matches(flag: &str) -> bool {
 /// **Unverified on a real box (2026-09-03):** how a Box identifies itself
 /// from inside is not confirmed, so this checks a documented probe list —
 /// the first that yields a non-empty id wins:
-///   1. env `UNPEEL_HOST_ENVIRONMENT_BOX_ID` (explicit override / test seam)
+///   1. env `SUPERCLI_HOST_ENVIRONMENT_BOX_ID` (explicit override / test seam)
 ///   2. env `BOXD_MACHINE_ID`, then `BOX_ID`, then `BOXD_ID`
 ///   3. the first line of `/etc/boxd/machine-id` or `~/.boxd/machine-id`
 ///
@@ -1352,7 +1352,7 @@ pub fn host_environment() -> Option<Value> {
 
 fn box_identity() -> Option<String> {
     for key in [
-        "UNPEEL_HOST_ENVIRONMENT_BOX_ID",
+        "SUPERCLI_HOST_ENVIRONMENT_BOX_ID",
         "BOXD_MACHINE_ID",
         "BOX_ID",
         "BOXD_ID",
@@ -3020,14 +3020,14 @@ mod tests {
     #[test]
     fn box_identity_reads_the_documented_probe_order() {
         // The explicit override wins and yields a Box environment.
-        std::env::set_var("UNPEEL_HOST_ENVIRONMENT_BOX_ID", "bx_probe_test");
+        std::env::set_var("SUPERCLI_HOST_ENVIRONMENT_BOX_ID", "bx_probe_test");
         let environment = host_environment().expect("box environment");
         assert_eq!(environment.get("kind").and_then(Value::as_str), Some("box"));
         assert_eq!(
             environment.get("id").and_then(Value::as_str),
             Some("bx_probe_test")
         );
-        std::env::remove_var("UNPEEL_HOST_ENVIRONMENT_BOX_ID");
+        std::env::remove_var("SUPERCLI_HOST_ENVIRONMENT_BOX_ID");
     }
 
     #[test]

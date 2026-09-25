@@ -1070,7 +1070,7 @@ mod tests {
         EnsureAppPresentation {
             caller_session_id: caller.to_owned(),
             project_id: project.to_owned(),
-            app_id: "unpeel.app.design".into(),
+            app_id: "supercli.app.design".into(),
             view_id: "canvas".into(),
             resource: Some(AppResourceRef {
                 kind: "folder".into(),
@@ -1144,7 +1144,7 @@ mod tests {
             caller_session_id: "caller".into(),
             companion_session_id: format!("companion-{suffix}"),
             instance_id: format!("instance-{suffix}"),
-            app_id: "unpeel.app.design".into(),
+            app_id: "supercli.app.design".into(),
             view_id: "canvas".into(),
             target: AppPresentationTarget::Panel,
             reveal_revision: 1,
@@ -1404,7 +1404,7 @@ mod tests {
                 "version": APP_PRESENTATIONS_STATE_VERSION,
                 "instances": [{
                     "id": "instance-1",
-                    "app_id": "unpeel.app.design",
+                    "app_id": "supercli.app.design",
                     "project_id": "project-1",
                     "companion_session_id": "../unsafe",
                     "created_at_unix_ms": 1,

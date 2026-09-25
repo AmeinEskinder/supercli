@@ -10,7 +10,7 @@ import GhosttyKit
 
 enum TerminalResourceFreeQueue {
     private static let queue = DispatchQueue(
-        label: "com.unpeel.ghostty-resource-free",
+        label: "com.supercli.ghostty-resource-free",
         qos: .utility
     )
 

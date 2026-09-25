@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::json;
-use unpeel_core::app_presentations::AppResourceRef;
-use unpeel_core::{app_installer, app_open, apps_mcp};
+use supercli_core::app_presentations::AppResourceRef;
+use supercli_core::{app_installer, app_open, apps_mcp};
 
 pub const HELP: &str = "\
 unpeel open — open a resource with a workspace App
@@ -73,12 +73,12 @@ fn run_inner(arguments: &[String]) -> Result<i32, String> {
         if args.resolve {
             return report_plain_file(&args, &resource);
         }
-        let state = unpeel_core::app_state::load().unwrap_or_else(|_| json!({}));
+        let state = supercli_core::app_state::load().unwrap_or_else(|_| json!({}));
         return launch_editor(&state, &resource);
     }
     let selector = resource.selector();
-    let state = unpeel_core::app_state::load().unwrap_or_else(|_| json!({}));
-    let configured = unpeel_core::controller_host::wire_openers(&state)
+    let state = supercli_core::app_state::load().unwrap_or_else(|_| json!({}));
+    let configured = supercli_core::controller_host::wire_openers(&state)
         .get(&selector)
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
@@ -109,7 +109,7 @@ fn run_inner(arguments: &[String]) -> Result<i32, String> {
         return Err(format!("{} does not handle {selector}.", app.name));
     }
 
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let mut status = app_installer::status(&home, &app);
     if status.state != "ready" {
         if !confirm_install(&app.name)? {
@@ -267,7 +267,7 @@ fn report_resolution(
         if !apps_mcp::catalog_app_handles(&app, &resource.kind, resource.media_type.as_deref()) {
             return Err(format!("{} does not handle {selector}.", app.name));
         }
-        let status = app_installer::status(&unpeel_core::app_paths::unpeel_home(), &app);
+        let status = app_installer::status(&supercli_core::app_paths::supercli_home(), &app);
         opener = format!("app:{}", app.id);
         app_json = json!({
             "id": app.id,
@@ -440,10 +440,10 @@ fn confirm_install(app_name: &str) -> Result<bool, String> {
 }
 
 fn caller_session_id() -> Option<String> {
-    std::env::var("UNPEEL_SESSION_ID")
+    std::env::var("SUPERCLI_SESSION_ID")
         .ok()
         .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty() && value != "${UNPEEL_SESSION_ID}")
+        .filter(|value| !value.is_empty() && value != "${SUPERCLI_SESSION_ID}")
 }
 
 fn launch_editor(state: &serde_json::Value, resource: &ResolvedResource) -> Result<i32, String> {

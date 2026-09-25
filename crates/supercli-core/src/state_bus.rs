@@ -2,7 +2,7 @@
 //!
 //! Shared state lives on disk (`app-state.json`, `session-order.json`,
 //! `project-order.json`, `pane-layouts.json`, the per-session markers). Every frontend already
-//! discovers the others through `~/.unpeel/app-ports` — the registry the
+//! discovers the others through `~/.supercli/app-ports` — the registry the
 //! provider hook scripts broadcast to, precisely because several Unpeel
 //! instances can run at once. This reuses that bus for one more message:
 //! **"shared state changed, re-read it."**
@@ -56,7 +56,7 @@ impl Change {
 /// The route every frontend serves to receive these.
 pub const ROUTE: &str = "/state-changed";
 
-/// Path-taking, so tests never touch the process-global `UNPEEL_HOME`:
+/// Path-taking, so tests never touch the process-global `SUPERCLI_HOME`:
 /// cargo runs them in parallel threads and swapping it races every other
 /// test that resolves a path at that moment.
 fn registered_ports_at(path: &std::path::Path) -> Vec<u16> {
@@ -83,10 +83,10 @@ fn registered_ports_at(path: &std::path::Path) -> Vec<u16> {
 pub fn announce(change: Change, own_port: Option<u16>) {
     // A scoped workspace's frontends register in ITS home, but the Mac app
     // that projects every local workspace registers only in the machine
-    // home (`~/.unpeel/app-ports`). Ping both registries so a write in a
+    // home (`~/.supercli/app-ports`). Ping both registries so a write in a
     // sibling workspace reaches the app at once instead of on its next
     // poll — the same immediacy the default workspace already has.
-    let own_home = crate::app_paths::unpeel_home();
+    let own_home = crate::app_paths::supercli_home();
     let machine_home = crate::app_paths::machine_home();
     let mut registries = vec![own_home.join("app-ports")];
     if machine_home != own_home {

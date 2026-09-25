@@ -17,8 +17,8 @@ import test from 'node:test'
 const repoRoot = resolve(import.meta.dirname, '..')
 const installer = resolve(repoRoot, 'scripts/install.sh')
 
-function fixture(binaries = ['unpeel', 'unpeel-host'], { withProtocol = false } = {}) {
-  const root = mkdtempSync(resolve(tmpdir(), 'unpeel-installer-test-'))
+function fixture(binaries = ['supercli', 'supercli-host'], { withProtocol = false } = {}) {
+  const root = mkdtempSync(resolve(tmpdir(), 'supercli-installer-test-'))
   const payload = resolve(root, 'payload')
   const mockBin = resolve(root, 'bin')
   const installDir = resolve(root, 'install')
@@ -36,14 +36,14 @@ function fixture(binaries = ['unpeel', 'unpeel-host'], { withProtocol = false } 
     writeFileSync(resolve(payload, 'generated', 'GeneratedRuntimeCatalog.swift'), '// fixture\n')
   }
 
-  const archive = resolve(root, 'unpeel.tar.gz')
+  const archive = resolve(root, 'supercli.tar.gz')
   const tar = spawnSync('tar', [
     '-czf', archive, '-C', payload, ...binaries, ...(withProtocol ? ['protocol', 'generated'] : [])
   ])
   assert.equal(tar.status, 0, tar.stderr?.toString())
   const digest = createHash('sha256').update(readFileSync(archive)).digest('hex')
-  const sidecar = resolve(root, 'unpeel.tar.gz.sha256')
-  writeFileSync(sidecar, `${digest}  unpeel-latest-test.tar.gz\n`)
+  const sidecar = resolve(root, 'supercli.tar.gz.sha256')
+  writeFileSync(sidecar, `${digest}  supercli-latest-test.tar.gz\n`)
 
   const curl = resolve(mockBin, 'curl')
   writeFileSync(curl, `#!/bin/sh
@@ -75,9 +75,9 @@ function runInstaller(state, sidecar = state.sidecar) {
       ...process.env,
       PATH: `${state.mockBin}:${process.env.PATH}`,
       HOME: state.root,
-      UNPEEL_CHANNEL: 'beta',
-      UNPEEL_INSTALL_BASE: 'https://release.invalid',
-      UNPEEL_INSTALL_DIR: state.installDir,
+      SUPERCLI_CHANNEL: 'beta',
+      SUPERCLI_INSTALL_BASE: 'https://release.invalid',
+      SUPERCLI_INSTALL_DIR: state.installDir,
       MOCK_ARCHIVE: state.archive,
       MOCK_SIDECAR: sidecar
     }
@@ -90,7 +90,7 @@ test('installer requires a checksum sidecar before installing', () => {
     const result = runInstaller(state, resolve(state.root, 'missing.sha256'))
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /checksum sidecar is unavailable/)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel')), false)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli')), false)
   } finally {
     rmSync(state.root, { recursive: true, force: true })
   }
@@ -99,12 +99,12 @@ test('installer requires a checksum sidecar before installing', () => {
 test('installer rejects a malformed checksum sidecar', () => {
   const state = fixture()
   const malformed = resolve(state.root, 'malformed.sha256')
-  writeFileSync(malformed, 'not-a-sha256  unpeel.tar.gz\n')
+  writeFileSync(malformed, 'not-a-sha256  supercli.tar.gz\n')
   try {
     const result = runInstaller(state, malformed)
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /invalid checksum sidecar/)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel')), false)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli')), false)
   } finally {
     rmSync(state.root, { recursive: true, force: true })
   }
@@ -115,8 +115,8 @@ test('installer verifies a valid sidecar and installs both binaries', () => {
   try {
     const result = runInstaller(state)
     assert.equal(result.status, 0, result.stderr)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel')), true)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel-host')), true)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli')), true)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli-host')), true)
     assert.match(result.stdout, /██▓▓▓▓▓▓▓▓▓▓▓▓▓▓██/)
     assert.doesNotMatch(result.stdout, /█   █ █▄  █/)
     assert.doesNotMatch(result.stdout, /\x1b/)
@@ -125,14 +125,14 @@ test('installer verifies a valid sidecar and installs both binaries', () => {
   }
 })
 
-// 0.4.5+ archives carry unpeel-attach; the installer installs it alongside.
+// 0.4.5+ archives carry supercli-attach; the installer installs it alongside.
 // Older two-binary archives (the previous test) must keep installing.
-test('installer installs unpeel-attach when the archive carries it', () => {
-  const state = fixture(['unpeel', 'unpeel-host', 'unpeel-attach'])
+test('installer installs supercli-attach when the archive carries it', () => {
+  const state = fixture(['supercli', 'supercli-host', 'supercli-attach'])
   try {
     const result = runInstaller(state)
     assert.equal(result.status, 0, result.stderr)
-    for (const binary of ['unpeel', 'unpeel-host', 'unpeel-attach']) {
+    for (const binary of ['supercli', 'supercli-host', 'supercli-attach']) {
       assert.equal(existsSync(resolve(state.installDir, binary)), true, binary)
     }
   } finally {
@@ -141,11 +141,11 @@ test('installer installs unpeel-attach when the archive carries it', () => {
 })
 
 test('installer ignores the protocol/ directory that 0.4.4+ archives carry', () => {
-  const state = fixture(['unpeel', 'unpeel-host', 'unpeel-attach'], { withProtocol: true })
+  const state = fixture(['supercli', 'supercli-host', 'supercli-attach'], { withProtocol: true })
   try {
     const result = runInstaller(state)
     assert.equal(result.status, 0, result.stderr)
-    for (const binary of ['unpeel', 'unpeel-host', 'unpeel-attach']) {
+    for (const binary of ['supercli', 'supercli-host', 'supercli-attach']) {
       assert.equal(existsSync(resolve(state.installDir, binary)), true, binary)
     }
     assert.equal(existsSync(resolve(state.installDir, 'protocol')), false, 'protocol/ is never installed')

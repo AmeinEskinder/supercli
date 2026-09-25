@@ -1,4 +1,4 @@
-use crate::app_paths::app_sessions_root as unpeel_sessions_root;
+use crate::app_paths::app_sessions_root as supercli_sessions_root;
 use crate::integrations::{self, shared};
 use crate::menu_prompt::viewport_has_menu_prompt;
 use crate::runtime_observer::ActiveRuntimeObservation;
@@ -169,13 +169,13 @@ pub struct SessionHostLaunch {
     #[serde(default)]
     pub wait_for_attach: bool,
     /// True when the provider CLI gets Unpeel's Sessions MCP registered
-    /// (`--mcp-config` / `UNPEEL_MCP_BIN`). Defaults to true because Read is the
+    /// (`--mcp-config` / `SUPERCLI_MCP_BIN`). Defaults to true because Read is the
     /// default session role; a blocked project forces this false.
     #[serde(default = "default_mcp_enabled")]
     pub mcp_enabled: bool,
     /// True only for sessions granted Browser Access: the provider CLI gets
     /// Unpeel's Browser MCP registered (second `--mcp-config` /
-    /// `UNPEEL_BROWSER_MCP_BIN`). Defaults to false — browser automation can
+    /// `SUPERCLI_BROWSER_MCP_BIN`). Defaults to false — browser automation can
     /// reach logged-in sites, so access is opt-in per session.
     #[serde(default)]
     pub browser_mcp_enabled: bool,
@@ -1133,13 +1133,13 @@ fn runtime_launch_completion_command(
     let path = completion_path.to_string_lossy();
     match shell_family {
         ShellFamily::Posix => format!(
-            "{runtime_command}; __unpeel_resume_status=$?; /bin/mkdir {}; \
-             (exit \"$__unpeel_resume_status\")",
+            "{runtime_command}; __supercli_resume_status=$?; /bin/mkdir {}; \
+             (exit \"$__supercli_resume_status\")",
             shared::shell_quote(&path)
         ),
         ShellFamily::Fish => format!(
-            "{runtime_command}; set -l __unpeel_resume_status $status; /bin/mkdir {}; \
-             /bin/sh -c \"exit $__unpeel_resume_status\"",
+            "{runtime_command}; set -l __supercli_resume_status $status; /bin/mkdir {}; \
+             /bin/sh -c \"exit $__supercli_resume_status\"",
             fish_single_quote(&path)
         ),
         ShellFamily::Other => runtime_command.to_string(),
@@ -2367,9 +2367,9 @@ fn attach_ready_wait_snippet(session_id: &str) -> String {
     let ready = attach_ready_path(session_id);
     let quoted = shared::shell_quote(&ready.to_string_lossy());
     format!(
-        "__unpeel_attach_ready={quoted}; __unpeel_attach_i=0; \
-         while [ \"$__unpeel_attach_i\" -lt 100 ] && [ ! -e \"$__unpeel_attach_ready\" ]; do \
-         sleep 0.02; __unpeel_attach_i=$((__unpeel_attach_i+1)); done"
+        "__supercli_attach_ready={quoted}; __supercli_attach_i=0; \
+         while [ \"$__supercli_attach_i\" -lt 100 ] && [ ! -e \"$__supercli_attach_ready\" ]; do \
+         sleep 0.02; __supercli_attach_i=$((__supercli_attach_i+1)); done"
     )
 }
 
@@ -2400,7 +2400,7 @@ fn build_startup_shell_script(
     // Reset afterwards so the fallback shell starts with default handling.
     shell_segments.push("trap : INT".to_string());
     shell_segments.push(format!("{{ {startup_command}; }}"));
-    shell_segments.push("__unpeel_startup_status=$?".to_string());
+    shell_segments.push("__supercli_startup_status=$?".to_string());
     shell_segments.push("trap - INT".to_string());
     shell_segments.push("set +e".to_string());
 
@@ -2436,9 +2436,9 @@ fn runtime_generation_scoped_command(
 ) -> String {
     match shell_family {
         ShellFamily::Posix => format!(
-            "export UNPEEL_RUNTIME_GENERATION={generation}; {{ {command}; }}; \
-             __unpeel_runtime_status=$?; unset UNPEEL_RUNTIME_GENERATION; \
-             (exit \"$__unpeel_runtime_status\")"
+            "export SUPERCLI_RUNTIME_GENERATION={generation}; {{ {command}; }}; \
+             __supercli_runtime_status=$?; unset SUPERCLI_RUNTIME_GENERATION; \
+             (exit \"$__supercli_runtime_status\")"
         ),
         ShellFamily::Fish => generation_scoped_posix_child(command, generation, fish_single_quote),
         ShellFamily::Other => {
@@ -2459,13 +2459,13 @@ fn generation_scoped_posix_child(
     // itself remains alive.
     let child_script = format!("set +e; {{ {command}; }}");
     format!(
-        "/usr/bin/env UNPEEL_RUNTIME_GENERATION={generation} /bin/sh -c {}",
+        "/usr/bin/env SUPERCLI_RUNTIME_GENERATION={generation} /bin/sh -c {}",
         quote_for_live_shell(&child_script)
     )
 }
 
 pub fn app_sessions_root() -> PathBuf {
-    unpeel_sessions_root()
+    supercli_sessions_root()
 }
 
 pub fn session_dir(session_id: &str) -> PathBuf {
@@ -3385,7 +3385,7 @@ impl OscTitleScanner {
 
 /// macOS caps `sockaddr_un.sun_path` at 104 bytes (Linux 108); the bind fails
 /// once the path plus its NUL no longer fits. A workspace home
-/// (`~/.unpeel/profiles/<name>/app-sessions/<uuid>/session.sock`) is ~15 bytes
+/// (`~/.supercli/profiles/<name>/app-sessions/<uuid>/session.sock`) is ~15 bytes
 /// longer than the default home and tips over that limit, which killed every
 /// session hosted in a non-default workspace. Stay conservative across both
 /// platforms.
@@ -3400,7 +3400,7 @@ pub fn socket_path(session_id: &str) -> PathBuf {
     }
     // Deterministic short fallback keyed by the globally-unique session id, so
     // every consumer (host, attach, gateway, MCP) computes the same path
-    // regardless of how deep its UNPEEL_HOME is. The host creates the parent
+    // regardless of how deep its SUPERCLI_HOME is. The host creates the parent
     // 0700 before bind; only the ephemeral socket moves — manifest/output stay
     // in the session dir.
     let uid = unsafe { libc::getuid() };
@@ -3569,7 +3569,7 @@ fn refresh_manifest_health_from_loaded_manifest_cached(
 fn manifest_lock_target(session_id: &str) -> Result<PathBuf, String> {
     use sha2::{Digest, Sha256};
 
-    let home = crate::app_paths::ensure_unpeel_home().map_err(|error| error.to_string())?;
+    let home = crate::app_paths::ensure_supercli_home().map_err(|error| error.to_string())?;
     let lock_dir = home.join("session-manifest-locks");
     fs::create_dir_all(&lock_dir).map_err(|error| error.to_string())?;
     Ok(lock_dir.join(format!("{:x}", Sha256::digest(session_id.as_bytes()))))
@@ -5192,11 +5192,11 @@ pub fn run_from_args(args: &[String]) -> Result<(), String> {
 /// to escape the Host's private state root or traverse a symlink. Runtime
 /// adapters are compiled code, but this remains a destructive-cleanup trust
 /// boundary because the accepted path is persisted for later removal.
-fn ensure_managed_storage_path(unpeel_home: &Path, requested: &Path) -> Result<(), String> {
-    let relative = requested.strip_prefix(unpeel_home).map_err(|_| {
+fn ensure_managed_storage_path(supercli_home: &Path, requested: &Path) -> Result<(), String> {
+    let relative = requested.strip_prefix(supercli_home).map_err(|_| {
         format!(
             "Runtime managed storage must live beneath {}",
-            unpeel_home.display()
+            supercli_home.display()
         )
     })?;
     let components = relative.components().collect::<Vec<_>>();
@@ -5208,7 +5208,7 @@ fn ensure_managed_storage_path(unpeel_home: &Path, requested: &Path) -> Result<(
         return Err("Runtime managed storage has an unsafe relative path".into());
     }
 
-    let mut current = unpeel_home.to_path_buf();
+    let mut current = supercli_home.to_path_buf();
     for component in components {
         current.push(component.as_os_str());
         match fs::symlink_metadata(&current) {
@@ -5772,7 +5772,7 @@ pub(crate) fn start_host(
         // Make the state dir private (0700) before writing any session
         // artifacts, so output logs / manifests / launch files aren't readable
         // by other local users on a multi-user machine.
-        let unpeel_home = crate::app_paths::ensure_unpeel_home()
+        let supercli_home = crate::app_paths::ensure_supercli_home()
             .map_err(|error| format!("Failed to initialize Unpeel home: {error}"))?;
         // Final ownership authority: every frontend eventually crosses this
         // boundary before a manifest becomes visible. Authenticated remote
@@ -5812,9 +5812,9 @@ pub(crate) fn start_host(
         // already pins Unpeel-managed storage (an older Pi launch, or a
         // resumed one) still gets its directory created beneath the home.
         let managed_storage_path =
-            crate::resume::managed_storage_path(&launch.session.command, &unpeel_home);
+            crate::resume::managed_storage_path(&launch.session.command, &supercli_home);
         if let Some(path) = managed_storage_path.as_deref() {
-            ensure_managed_storage_path(&unpeel_home, path)?;
+            ensure_managed_storage_path(&supercli_home, path)?;
         }
         let resume_failure_markers =
             crate::resume::resume_failure_markers(&launch.session.command).unwrap_or_default();
@@ -5969,7 +5969,7 @@ pub(crate) fn start_host(
         // A Host can itself be launched from inside another Unpeel Session.
         // Generation provenance belongs only to the managed provider child,
         // never to this persistent shell or a blank terminal.
-        cmd.env_remove("UNPEEL_RUNTIME_GENERATION");
+        cmd.env_remove("SUPERCLI_RUNTIME_GENERATION");
         cmd.env_remove("NO_COLOR");
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
@@ -6536,8 +6536,8 @@ mod tests {
             ("HERDR_PLUGIN_FUTURE_SETTING", "enabled"),
             ("HERDR", "not-prefixed"),
             ("herdr_PANE_ID", "wrong-case"),
-            ("UNPEEL_HERDR_STATUS", "on"),
-            ("UNPEEL_SESSION_ID", "session-1"),
+            ("SUPERCLI_HERDR_STATUS", "on"),
+            ("SUPERCLI_SESSION_ID", "session-1"),
             ("PATH", "/usr/bin"),
         ]
         .into_iter()
@@ -6560,8 +6560,8 @@ mod tests {
             ("HERDR_PLUGIN_FUTURE_SETTING", "enabled"),
             ("HERDR", "not-prefixed"),
             ("herdr_PANE_ID", "wrong-case"),
-            ("UNPEEL_HERDR_STATUS", "on"),
-            ("UNPEEL_SESSION_ID", "session-1"),
+            ("SUPERCLI_HERDR_STATUS", "on"),
+            ("SUPERCLI_SESSION_ID", "session-1"),
             ("PATH", "/usr/bin"),
         ]
         .into_iter()
@@ -6586,8 +6586,8 @@ mod tests {
         for (key, expected) in [
             ("HERDR", "not-prefixed"),
             ("herdr_PANE_ID", "wrong-case"),
-            ("UNPEEL_HERDR_STATUS", "on"),
-            ("UNPEEL_SESSION_ID", "session-1"),
+            ("SUPERCLI_HERDR_STATUS", "on"),
+            ("SUPERCLI_SESSION_ID", "session-1"),
             ("PATH", "/usr/bin"),
         ] {
             let value = cmd
@@ -6615,8 +6615,8 @@ mod tests {
         for (key, expected) in [
             ("HERDR", "not-prefixed"),
             ("herdr_PANE_ID", "wrong-case"),
-            ("UNPEEL_HERDR_STATUS", "on"),
-            ("UNPEEL_SESSION_ID", "session-1"),
+            ("SUPERCLI_HERDR_STATUS", "on"),
+            ("SUPERCLI_SESSION_ID", "session-1"),
             ("PATH", "/usr/bin"),
         ] {
             assert_eq!(cmd.get_env(key), Some(OsStr::new(expected)), "{key}");
@@ -6635,7 +6635,7 @@ mod tests {
     fn startup_shell_script_survives_nonzero_provider_exit() {
         let script = build_startup_shell_script(
             "/bin/zsh",
-            vec!["export UNPEEL_SESSION_ID='session-1'".to_string()],
+            vec!["export SUPERCLI_SESSION_ID='session-1'".to_string()],
             "false",
             Some("print -sr -- 'codex'; fc -AI".to_string()),
         );
@@ -6643,7 +6643,7 @@ mod tests {
         assert!(script.starts_with("set +e; "));
         assert!(!script.contains("printf '$"));
         assert!(script.contains(
-            "; trap : INT; { false; }; __unpeel_startup_status=$?; trap - INT; set +e; "
+            "; trap : INT; { false; }; __supercli_startup_status=$?; trap - INT; set +e; "
         ));
         assert!(script.contains("; { print -sr -- 'codex'; fc -AI; }; set +e; "));
         assert!(script.ends_with("; exec '/bin/zsh' -l -i"));
@@ -6670,9 +6670,9 @@ mod tests {
         // fallback exec goes to `true` so the shell ends by itself.
         let script = build_startup_shell_script(
             "/usr/bin/true",
-            vec!["export UNPEEL_TEST_MARK=1".to_string()],
+            vec!["export SUPERCLI_TEST_MARK=1".to_string()],
             "sleep 30",
-            Some("printf 'SURVIVED status=%s' \"$__unpeel_startup_status\"".to_string()),
+            Some("printf 'SURVIVED status=%s' \"$__supercli_startup_status\"".to_string()),
         );
         let pty = native_pty_system();
         let pair = pty
@@ -6725,13 +6725,13 @@ mod tests {
     fn runtime_generation_is_visible_only_inside_provider_invocation() {
         let scoped = runtime_generation_scoped_command(
             ShellFamily::Posix,
-            "printf 'inside=%s;' \"$UNPEEL_RUNTIME_GENERATION\"",
+            "printf 'inside=%s;' \"$SUPERCLI_RUNTIME_GENERATION\"",
             9,
         );
         let output = std::process::Command::new("/bin/sh")
             .args([
                 "-c",
-                &format!("{scoped}; printf 'after=%s' \"${{UNPEEL_RUNTIME_GENERATION-unset}}\""),
+                &format!("{scoped}; printf 'after=%s' \"${{SUPERCLI_RUNTIME_GENERATION-unset}}\""),
             ])
             .output()
             .expect("run scoped runtime command");
@@ -6749,14 +6749,14 @@ mod tests {
         assert_eq!(status.code(), Some(1), "provider status must propagate");
 
         let fish = runtime_generation_scoped_command(ShellFamily::Fish, "claude", 10);
-        assert!(fish.starts_with("/usr/bin/env UNPEEL_RUNTIME_GENERATION=10 /bin/sh -c "));
+        assert!(fish.starts_with("/usr/bin/env SUPERCLI_RUNTIME_GENERATION=10 /bin/sh -c "));
         assert!(fish.contains("set +e; { claude; }"));
 
         // Keep the defensive Other-family quoting branch correct even though
         // Resume Agent rejects unknown live shells before launch preparation.
         let other = runtime_generation_scoped_command(
             ShellFamily::Other,
-            r#"printf 'other=%s:%s' "$UNPEEL_RUNTIME_GENERATION" "it's quoted""#,
+            r#"printf 'other=%s:%s' "$SUPERCLI_RUNTIME_GENERATION" "it's quoted""#,
             11,
         );
         let output = std::process::Command::new("/bin/sh")
@@ -6797,8 +6797,8 @@ if [ "${1:-}" = "--help" ]; then
   printf '%s\n' '--mcp-config-file'
   exit 0
 fi
-printf 'kimi-generation=%s' "${UNPEEL_RUNTIME_GENERATION-unset}"
-exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
+printf 'kimi-generation=%s' "${SUPERCLI_RUNTIME_GENERATION-unset}"
+exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
 "#,
         );
         write_fake(
@@ -6807,8 +6807,8 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
 if [ "${1:-}" = "hub" ]; then
   exit 0
 fi
-printf 'cline-generation=%s' "${UNPEEL_RUNTIME_GENERATION-unset}"
-exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
+printf 'cline-generation=%s' "${SUPERCLI_RUNTIME_GENERATION-unset}"
+exit "${SUPERCLI_FAKE_PROVIDER_STATUS:-0}"
 "#,
         );
         let inherited_path = std::env::var("PATH").unwrap_or_default();
@@ -6817,12 +6817,12 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         for (runtime, startup_command) in [("kimi", "kimi"), ("cline", "cline")] {
             let scoped = runtime_generation_scoped_command(ShellFamily::Fish, startup_command, 23);
             let fish_script = format!(
-                "{scoped}; set -l __unpeel_test_status $status; \
-                 set -l __unpeel_test_after leaked; \
-                 if set -q UNPEEL_RUNTIME_GENERATION; \
-                 else; set __unpeel_test_after unset; end; \
-                 printf '|after=%s' $__unpeel_test_after; \
-                 command /bin/sh -c \"exit $__unpeel_test_status\""
+                "{scoped}; set -l __supercli_test_status $status; \
+                 set -l __supercli_test_after leaked; \
+                 if set -q SUPERCLI_RUNTIME_GENERATION; \
+                 else; set __supercli_test_after unset; end; \
+                 printf '|after=%s' $__supercli_test_after; \
+                 command /bin/sh -c \"exit $__supercli_test_status\""
             );
             let output = std::process::Command::new(&fish)
                 .args(["-c", &fish_script])
@@ -6831,8 +6831,8 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
                 // before starting the interactive shell. Keep the process
                 // proof independent of a test runner that happens to carry
                 // its own generation marker.
-                .env_remove("UNPEEL_RUNTIME_GENERATION")
-                .env("UNPEEL_FAKE_PROVIDER_STATUS", "17")
+                .env_remove("SUPERCLI_RUNTIME_GENERATION")
+                .env("SUPERCLI_FAKE_PROVIDER_STATUS", "17")
                 .output()
                 .expect("run fish provider relaunch");
             assert_eq!(
@@ -6862,9 +6862,9 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
     }
 
     #[test]
-    fn managed_storage_creation_stays_beneath_unpeel_home() {
+    fn managed_storage_creation_stays_beneath_supercli_home() {
         let temp = tempfile::tempdir().expect("managed storage root");
-        let root = temp.path().join(".unpeel");
+        let root = temp.path().join(".supercli");
         std::fs::create_dir(&root).expect("create Unpeel root");
         let managed = root.join("runtime-storage").join("session-1");
         ensure_managed_storage_path(&root, &managed).expect("create managed storage");
@@ -6881,7 +6881,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         use std::os::unix::fs::symlink;
 
         let temp = tempfile::tempdir().expect("managed storage root");
-        let root = temp.path().join(".unpeel");
+        let root = temp.path().join(".supercli");
         let outside = temp.path().join("outside");
         std::fs::create_dir(&root).expect("create Unpeel root");
         std::fs::create_dir(&outside).expect("create outside dir");
@@ -6903,7 +6903,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
     fn fish_bridge_wraps_posix_script_for_sh() {
         let script = build_startup_shell_script(
             "/opt/homebrew/bin/fish",
-            vec!["export UNPEEL_SESSION_ID='session-1'".to_string()],
+            vec!["export SUPERCLI_SESSION_ID='session-1'".to_string()],
             "claude",
             None,
         );
@@ -6911,7 +6911,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         assert!(bridge.starts_with("exec /bin/sh -c '"));
         // The POSIX script's single quotes must be fish-escaped, not POSIX
         // '"'"'-spliced, so fish hands /bin/sh the script byte-for-byte.
-        assert!(bridge.contains(r"export UNPEEL_SESSION_ID=\'session-1\'"));
+        assert!(bridge.contains(r"export SUPERCLI_SESSION_ID=\'session-1\'"));
         assert!(bridge.ends_with(r"exec \'/opt/homebrew/bin/fish\' -l -i'"));
     }
 
@@ -6938,11 +6938,11 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         let script = build_startup_shell_script(
             "/usr/bin/true",
             vec![
-                "export UNPEEL_FISH_TEST='bridged'".to_string(),
+                "export SUPERCLI_FISH_TEST='bridged'".to_string(),
                 // Same POSIX constructs as attach_ready_wait_snippet.
                 "__i=0; while [ \"$__i\" -lt 3 ]; do __i=$((__i+1)); done".to_string(),
             ],
-            "printf '%s' \"marker=$UNPEEL_FISH_TEST\"",
+            "printf '%s' \"marker=$SUPERCLI_FISH_TEST\"",
             None,
         );
 
@@ -8138,8 +8138,8 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
         let session_id = unique_session_id("app-title");
         let manifest = manifest_for_auto_title(
             &session_id,
-            "/opt/bin/unpeel-markdown",
-            "/opt/bin/unpeel-markdown",
+            "/opt/bin/supercli-markdown",
+            "/opt/bin/supercli-markdown",
         );
         fs::create_dir_all(super::session_dir(&session_id)).unwrap();
         save_manifest(&manifest).unwrap();
@@ -8191,7 +8191,7 @@ exit "${UNPEEL_FAKE_PROVIDER_STATUS:-0}"
 
         fs::write(
             dir.join(super::APP_CONTEXT_MARKER),
-            br#"{"app":"unpeel.app.design","context":{"file":"hero.html","lines":[12,32]},"updated_at":1}"#,
+            br#"{"app":"supercli.app.design","context":{"file":"hero.html","lines":[12,32]},"updated_at":1}"#,
         )
         .unwrap();
         let value = super::read_app_context_marker(&session_id).unwrap();

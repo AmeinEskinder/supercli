@@ -13,9 +13,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Serializes the UNPEEL_HOME-mutating tests: they point UNPEEL_HOME at a
-/// temp dir so they never touch the real ~/.unpeel. Shared crate-wide so
-/// every test that mutates UNPEEL_HOME serializes on one lock.
+/// Serializes the SUPERCLI_HOME-mutating tests: they point SUPERCLI_HOME at a
+/// temp dir so they never touch the real ~/.supercli. Shared crate-wide so
+/// every test that mutates SUPERCLI_HOME serializes on one lock.
 #[cfg(test)]
 pub(crate) static APP_STATE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -327,7 +327,7 @@ pub fn persist_grant(kind: &str, caller: &str, target: Option<&str>, answered_by
     // The audit entry is recorded BEFORE the grant (write-ahead), and the
     // batch fsyncs once for N concurrent grants instead of N times.
     if let Err(e) =
-        unpeel_core::grant_writer::persist_grant_grouped(kind, caller, target, answered_by)
+        supercli_core::grant_writer::persist_grant_grouped(kind, caller, target, answered_by)
     {
         eprintln!("Failed to persist grant: {e}");
     }
@@ -349,7 +349,7 @@ pub fn persist_connector_grant(caller: &str, connector: &str, tool: &str) {
     // (answered_by is not threaded through the connector approval path;
     // the audit records policy:Allow — see grant_writer for the default.)
     if let Err(e) =
-        unpeel_core::grant_writer::persist_connector_grant_grouped(caller, connector, tool, None)
+        supercli_core::grant_writer::persist_connector_grant_grouped(caller, connector, tool, None)
     {
         eprintln!("Failed to persist connector grant: {e}");
     }
@@ -360,7 +360,7 @@ pub fn persist_connector_grant(caller: &str, connector: &str, tool: &str) {
 /// ignored (fail closed).
 pub fn connector_grant_exists(caller: &str, connector: &str, tool: &str) -> bool {
     // S2: Check sharded grants.json first
-    if let Ok(raw) = std::fs::read(unpeel_core::app_paths::grants_path()) {
+    if let Ok(raw) = std::fs::read(supercli_core::app_paths::grants_path()) {
         if let Ok(state) = serde_json::from_slice::<serde_json::Value>(&raw) {
             if state
                 .get("mcp_connector_approvals")
@@ -378,7 +378,7 @@ pub fn connector_grant_exists(caller: &str, connector: &str, tool: &str) -> bool
         }
     }
     // Legacy: check app-state.json
-    let Some(state) = std::fs::read(unpeel_core::app_paths::app_state_path())
+    let Some(state) = std::fs::read(supercli_core::app_paths::app_state_path())
         .ok()
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
     else {
@@ -419,18 +419,18 @@ pub fn already_granted(kind: &str, caller: &str, target: Option<&str>) -> bool {
     };
 
     // Check if migrated (grants.json exists)
-    let grants_path = unpeel_core::app_paths::grants_path();
+    let grants_path = supercli_core::app_paths::grants_path();
     if grants_path.exists() {
         // Migrated: read ONLY from grants.json
-        return unpeel_core::grant_store::grant_exists(key, caller, target);
+        return supercli_core::grant_store::grant_exists(key, caller, target);
     }
 
     // Pre-migration: read from app-state.json (legacy)
-    if unpeel_core::grant_store::grant_exists(key, caller, target) {
+    if supercli_core::grant_store::grant_exists(key, caller, target) {
         return true;
     }
     // Legacy: check app-state.json
-    let Some(state) = std::fs::read(unpeel_core::app_paths::app_state_path())
+    let Some(state) = std::fs::read(supercli_core::app_paths::app_state_path())
         .ok()
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
     else {
@@ -490,8 +490,8 @@ mod tests {
             ));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
-            let prev = std::env::var_os("UNPEEL_HOME");
-            std::env::set_var("UNPEEL_HOME", &dir);
+            let prev = std::env::var_os("SUPERCLI_HOME");
+            std::env::set_var("SUPERCLI_HOME", &dir);
             Self {
                 dir,
                 prev,
@@ -503,8 +503,8 @@ mod tests {
     impl Drop for TempHome {
         fn drop(&mut self) {
             match &self.prev {
-                Some(prev) => std::env::set_var("UNPEEL_HOME", prev),
-                None => std::env::remove_var("UNPEEL_HOME"),
+                Some(prev) => std::env::set_var("SUPERCLI_HOME", prev),
+                None => std::env::remove_var("SUPERCLI_HOME"),
             }
             let _ = std::fs::remove_dir_all(&self.dir);
         }
@@ -562,7 +562,7 @@ mod tests {
         persist_connector_grant("sess-1", "github", "db.query");
         // S2: Grants are now sharded to grants.json, not app-state.json
         let state: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(unpeel_core::app_paths::grants_path()).expect("grants.json written"),
+            &std::fs::read(supercli_core::app_paths::grants_path()).expect("grants.json written"),
         )
         .unwrap();
         let grants = state["mcp_connector_approvals"]["sess-1"]
@@ -598,7 +598,7 @@ mod tests {
         // S1 negative test: pre-namespacing grants were bare tool strings.
         // They fail closed — never match — so the user is re-prompted once.
         let _home = TempHome::new("connector-legacy");
-        let _ = unpeel_core::app_state::edit(|root| {
+        let _ = supercli_core::app_state::edit(|root| {
             root.entry("mcp_connector_approvals")
                 .or_insert_with(|| serde_json::json!({}))["sess-1"] = serde_json::json!(["search"]);
             Ok(())
@@ -1034,7 +1034,7 @@ mod tests {
         // in-memory resolved store) must contain exactly ONE entry for the
         // approval after all retries. The agent acts on Applied (writes the
         // entry); on AlreadyResolved it does nothing.
-        use unpeel_core::action_reviews::{record_review, Actor, ReviewDecision};
+        use supercli_core::action_reviews::{record_review, Actor, ReviewDecision};
 
         let dir = tempfile::tempdir().expect("tempdir");
         let session_dir = dir.path();
@@ -1087,7 +1087,7 @@ mod tests {
         }
 
         // Assert exactly ONE entry in the tamper-evident log.
-        let log_path = session_dir.join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let log_path = session_dir.join(supercli_core::action_reviews::REVIEWS_FILE);
         let content = std::fs::read_to_string(&log_path).expect("read log");
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(
@@ -1097,6 +1097,6 @@ mod tests {
             lines.len()
         );
         // Verify the chain is intact (tamper-evident).
-        unpeel_core::action_reviews::verify_review_chain(session_dir).expect("chain must verify");
+        supercli_core::action_reviews::verify_review_chain(session_dir).expect("chain must verify");
     }
 }

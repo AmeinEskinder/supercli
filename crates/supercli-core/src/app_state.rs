@@ -1,4 +1,4 @@
-//! Guarded access to the shared `~/.unpeel/app-state.json`.
+//! Guarded access to the shared `~/.supercli/app-state.json`.
 //!
 //! This file is a **cross-frontend, cross-version contract**: the desktop app
 //! owns keys the Rust side has never heard of (theme, active tabs, pins,
@@ -74,7 +74,7 @@ pub fn load_for_edit() -> Result<Value, String> {
 }
 
 /// The same rules against an explicit path. Tests use this so they never
-/// mutate `UNPEEL_HOME`, which is process-global: swapping it mid-run
+/// mutate `SUPERCLI_HOME`, which is process-global: swapping it mid-run
 /// corrupts whatever other test happens to read a path at that moment.
 pub fn load_for_edit_at(path: &std::path::Path) -> Result<Value, String> {
     let raw = match std::fs::read(path) {
@@ -146,7 +146,7 @@ pub fn save_at(path: &std::path::Path, state: &Value) -> Result<(), String> {
     }
     // Same-directory temp + rename: a reader either sees the old file or the
     // new one, never a partial write.
-    let tmp = path.with_extension("json.unpeel-tmp");
+    let tmp = path.with_extension("json.supercli-tmp");
     std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
@@ -188,7 +188,7 @@ pub fn edit_at<T>(
 mod tests {
     use super::*;
 
-    /// A private state file. Deliberately does NOT touch `UNPEEL_HOME`:
+    /// A private state file. Deliberately does NOT touch `SUPERCLI_HOME`:
     /// that variable is process-global, and cargo runs tests in parallel
     /// threads, so swapping it corrupts whatever other test happens to
     /// resolve a path at that moment (it did — one run in five failed
@@ -228,7 +228,7 @@ mod tests {
             std::fs::write(
                 path,
                 serde_json::to_vec_pretty(&serde_json::json!({
-                    "projects": [{"id": "p", "name": "unpeel", "path": "/tmp"}],
+                    "projects": [{"id": "p", "name": "supercli", "path": "/tmp"}],
                     "presets": [],
                     "theme": "midnight",
                     "active_tabs": {"p": "s1"},
@@ -249,7 +249,7 @@ mod tests {
             assert_eq!(after["theme"], "midnight");
             assert_eq!(after["some_future_key"]["nested"][2], 3);
             assert_eq!(after["pinned_sessions"]["p"][0], "s1");
-            assert_eq!(after["projects"][0]["name"], "unpeel");
+            assert_eq!(after["projects"][0]["name"], "supercli");
             assert_eq!(after["presets"][0]["id"], "x");
         });
     }

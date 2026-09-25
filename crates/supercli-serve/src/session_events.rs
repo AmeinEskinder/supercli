@@ -400,8 +400,8 @@ struct Inner {
 /// in-memory handshake cannot enforce the ordering — the durable log
 /// itself is the authority.
 fn review_log_has_entry(session_id: &str, review_id: &str) -> bool {
-    let path = unpeel_core::session_host::session_dir(session_id)
-        .join(unpeel_core::action_reviews::REVIEWS_FILE);
+    let path = supercli_core::session_host::session_dir(session_id)
+        .join(supercli_core::action_reviews::REVIEWS_FILE);
     let Ok(contents) = std::fs::read_to_string(&path) else {
         return false;
     };
@@ -560,8 +560,8 @@ impl EventBus {
     /// derived from the durable Phase 5 records and must never get ahead
     /// of them, so emission is gated on this check.
     fn outcome_log_has_entry(session_id: &str, review_id: &str) -> bool {
-        let path = unpeel_core::session_host::session_dir(session_id)
-            .join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let path = supercli_core::session_host::session_dir(session_id)
+            .join(supercli_core::action_reviews::REVIEWS_FILE);
         let Ok(contents) = std::fs::read_to_string(&path) else {
             return false;
         };
@@ -660,8 +660,8 @@ impl EventBus {
             .lock()
             .map(|w| w.get(session_id).copied().unwrap_or(0))
             .unwrap_or(0);
-        let path = unpeel_core::session_host::session_dir(session_id)
-            .join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let path = supercli_core::session_host::session_dir(session_id)
+            .join(supercli_core::action_reviews::REVIEWS_FILE);
         let Ok(contents) = std::fs::read_to_string(&path) else {
             return;
         };
@@ -943,8 +943,8 @@ mod tests {
         assert!(json.get("at_ms").is_some());
     }
 
-    /// Run `f` with UNPEEL_HOME pointed at a fresh temp dir, serialized
-    /// on the shared home lock so no two UNPEEL_HOME-mutating tests
+    /// Run `f` with SUPERCLI_HOME pointed at a fresh temp dir, serialized
+    /// on the shared home lock so no two SUPERCLI_HOME-mutating tests
     /// observe each other's home.
     fn with_temp_home(tag: &str, f: impl FnOnce()) {
         let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
@@ -952,12 +952,12 @@ mod tests {
             std::env::temp_dir().join(format!("unpeel-events-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
         f();
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -966,13 +966,13 @@ mod tests {
     /// its review id. Uses the real `record_review` (append + fsync).
     fn write_review(
         session_id: &str,
-        decision: unpeel_core::action_reviews::ReviewDecision,
+        decision: supercli_core::action_reviews::ReviewDecision,
     ) -> String {
-        let dir = unpeel_core::session_host::session_dir(session_id);
+        let dir = supercli_core::session_host::session_dir(session_id);
         std::fs::create_dir_all(&dir).unwrap();
-        unpeel_core::action_reviews::record_review(
+        supercli_core::action_reviews::record_review(
             &dir,
-            unpeel_core::action_reviews::Actor::PolicyAllow,
+            supercli_core::action_reviews::Actor::PolicyAllow,
             "shell",
             "bash.exec",
             "args-hash",
@@ -988,8 +988,8 @@ mod tests {
         with_temp_home("answered", || {
             let bus = EventBus::new();
             let approved_id =
-                write_review("s1", unpeel_core::action_reviews::ReviewDecision::Approved);
-            let denied_id = write_review("s1", unpeel_core::action_reviews::ReviewDecision::Denied);
+                write_review("s1", supercli_core::action_reviews::ReviewDecision::Approved);
+            let denied_id = write_review("s1", supercli_core::action_reviews::ReviewDecision::Denied);
             bus.emit_tool_answered("s1", &approved_id, true, Some("device:phone-1"));
             bus.emit_tool_answered("s1", &denied_id, false, None);
             let (events, _, _) = bus.poll("s1", 0, 128);
@@ -1014,7 +1014,7 @@ mod tests {
             // A review id from another session's log doesn't count either.
             let other_id = write_review(
                 "s-other",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             bus.emit_tool_answered("s-no-review", &other_id, true, None);
             let (events, _, _) = bus.poll("s-no-review", 0, 128);
@@ -1052,12 +1052,12 @@ mod tests {
 
     #[test]
     fn tool_outcome_events_gate_on_durable_outcome() {
-        use unpeel_core::action_reviews::{record_attempt_outcome, Actor, AttemptOutcome};
+        use supercli_core::action_reviews::{record_attempt_outcome, Actor, AttemptOutcome};
         with_temp_home("outcome-gated", || {
             let bus = EventBus::new();
             let review_id = write_review(
                 "s-outcome",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             // Review exists but no outcome recorded: nothing emits.
             bus.emit_tool_executed("s-outcome", &review_id, true);
@@ -1066,7 +1066,7 @@ mod tests {
             assert!(events.is_empty());
 
             // Record the outcome durably, then the events flow.
-            let dir = unpeel_core::session_host::session_dir("s-outcome");
+            let dir = supercli_core::session_host::session_dir("s-outcome");
             record_attempt_outcome(
                 &dir,
                 &review_id,
@@ -1111,14 +1111,14 @@ mod tests {
     fn write_outcome(
         session_id: &str,
         review_id: &str,
-        outcome: unpeel_core::action_reviews::AttemptOutcome,
+        outcome: supercli_core::action_reviews::AttemptOutcome,
     ) {
-        let dir = unpeel_core::session_host::session_dir(session_id);
-        unpeel_core::action_reviews::record_attempt_outcome(
+        let dir = supercli_core::session_host::session_dir(session_id);
+        supercli_core::action_reviews::record_attempt_outcome(
             &dir,
             review_id,
             outcome,
-            unpeel_core::action_reviews::Actor::PolicyAllow,
+            supercli_core::action_reviews::Actor::PolicyAllow,
         )
         .unwrap();
     }
@@ -1133,12 +1133,12 @@ mod tests {
             let bus = EventBus::new();
             let review_id = write_review(
                 "s-exec",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             write_outcome(
                 "s-exec",
                 &review_id,
-                unpeel_core::action_reviews::AttemptOutcome::Executed { success: true },
+                supercli_core::action_reviews::AttemptOutcome::Executed { success: true },
             );
             bus.reconcile_outcomes("s-exec");
             let (events, _, _) = bus.poll("s-exec", 0, 128);
@@ -1167,12 +1167,12 @@ mod tests {
             let bus = EventBus::new();
             let review_id = write_review(
                 "s-amb",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             write_outcome(
                 "s-amb",
                 &review_id,
-                unpeel_core::action_reviews::AttemptOutcome::Ambiguous {
+                supercli_core::action_reviews::AttemptOutcome::Ambiguous {
                     reason: "transport dropped after send".into(),
                 },
             );
@@ -1205,12 +1205,12 @@ mod tests {
             let bus = EventBus::new();
             let review_id = write_review(
                 "s-nr",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             write_outcome(
                 "s-nr",
                 &review_id,
-                unpeel_core::action_reviews::AttemptOutcome::NeverRan {
+                supercli_core::action_reviews::AttemptOutcome::NeverRan {
                     reason: "stale lease before tool call".into(),
                 },
             );
@@ -1245,12 +1245,12 @@ mod tests {
             let bus = EventBus::new();
             let review_id = write_review(
                 "s-skip",
-                unpeel_core::action_reviews::ReviewDecision::Approved,
+                supercli_core::action_reviews::ReviewDecision::Approved,
             );
             write_outcome(
                 "s-skip",
                 &review_id,
-                unpeel_core::action_reviews::AttemptOutcome::Ambiguous {
+                supercli_core::action_reviews::AttemptOutcome::Ambiguous {
                     reason: "cancelled mid-flight".into(),
                 },
             );

@@ -1,5 +1,5 @@
 //! Connector bundles: `pack` builds a distributable signed
-//! `.unpeel-connector` archive; `install`/`publish` verify it.
+//! `.supercli-connector` archive; `install`/`publish` verify it.
 //!
 //! Bundle layout (gzip'd tar):
 //! - `connector.toml` (required — the manifest is the trust boundary)
@@ -63,7 +63,7 @@ fn bundle_files(
 }
 
 pub fn bundle_file_name(name: &str, version: &str) -> String {
-    format!("{name}-{version}.unpeel-connector")
+    format!("{name}-{version}.supercli-connector")
 }
 
 /// Pack a connector dir into a signed bundle. Returns
@@ -250,7 +250,7 @@ provides = ["packme.echo"]
         let _guard = ENV_LOCK.lock().unwrap();
         let keys = std::env::temp_dir().join(format!("unpeel-pack-keys-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&keys);
-        std::env::set_var("UNPEEL_CONNECTOR_KEYS_DIR", &keys);
+        std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &keys);
         keygen("packkey").expect("keygen");
 
         let dir = fixture();
@@ -272,7 +272,7 @@ provides = ["packme.echo"]
         tampered[20] ^= 0xff;
         assert!(unpack_verified(&tampered, &sig, &sig.pubkey, &dir.join("bad")).is_err());
 
-        std::env::remove_var("UNPEEL_CONNECTOR_KEYS_DIR");
+        std::env::remove_var("SUPERCLI_CONNECTOR_KEYS_DIR");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&keys);
     }

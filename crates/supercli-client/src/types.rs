@@ -33,7 +33,7 @@ impl std::fmt::Display for TransportKind {
 }
 
 /// One row of the session browser gallery, mirroring
-/// `unpeel_core::session_artifacts::SessionArtifactMetadata` (snake_case
+/// `supercli_core::session_artifacts::SessionArtifactMetadata` (snake_case
 /// field names — the Host serializes the struct as-is).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ArtifactMeta {

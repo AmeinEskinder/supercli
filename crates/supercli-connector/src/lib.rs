@@ -60,4 +60,4 @@ pub use signing::{
     read_signature, sign_bundle, verify_bundle, BundleSignature, SigningError,
 };
 /// Re-exported so Host-side callers can name the token-store type.
-pub use unpeel_client::CredentialStore;
+pub use supercli_client::CredentialStore;

@@ -2,13 +2,13 @@
 
 ## Session Model
 
-`SessionInfo` in `crates/unpeel-core/src/state.rs` is the canonical app-level session record.
+`SessionInfo` in `crates/supercli-core/src/state.rs` is the canonical app-level session record.
 
 Important fields:
 
-- `id`: Unpeel session id
-- `command`: command Unpeel launched
-- `label` / `custom_title`: display title; by default it follows the agent's own task summary when the foreground runtime publishes semantic terminal titles, falling back to the first typed prompt until one appears. Auto-titling is applied inside the session host (`apply_manifest_auto_title` in `session_host.rs`, on socket `write` commands), so every client — the native attach client, MCP `send_text` — titles sessions the same way. The shared parsing helpers (`extract_submitted_prompt`, `normalize_prompt_title`) live in `session_host.rs`. Slash-command lines (`/resume`, `/model opus`, …) are skipped — every agent CLI has them and none make a useful title — so a session whose first line is `/resume` titles from the next real prompt instead of being called "/resume" forever (absolute paths like `/tmp/build.log …` still title: the discriminator is a single-segment leading token). The native app also keeps user renames as a UserDefaults overlay (`UnpeelStore` session title overrides). The shared `session_title_mode` knob in `app-state.json` (Settings ▸ Appearance ▸ Session titles; `state.rs SessionTitleMode`) selects the driver: `agent` (default), `first_prompt` (one-shot from the first message), or `off` (no automatic titling). In agent mode, the host's `OscTitleScanner` passively watches the PTY output for `OSC 0/2` terminal titles and `apply_agent_terminal_title` folds them into the label, but only while the observed foreground runtime declares the `semantic_terminal_title` capability in its runtime package (Claude today — it publishes model-written task summaries; shell cwd spam, ssh hostnames, and static branding never retitle a row). Agent mode keeps following title updates like the App-title marker, falls back to the first-prompt title until the first OSC title arrives, and every mode loses permanently to a user rename. Hosts re-read the knob per title event, so a Settings change applies live.
+- `id`: Supercli session id
+- `command`: command Supercli launched
+- `label` / `custom_title`: display title; by default it follows the agent's own task summary when the foreground runtime publishes semantic terminal titles, falling back to the first typed prompt until one appears. Auto-titling is applied inside the session host (`apply_manifest_auto_title` in `session_host.rs`, on socket `write` commands), so every client — the native attach client, MCP `send_text` — titles sessions the same way. The shared parsing helpers (`extract_submitted_prompt`, `normalize_prompt_title`) live in `session_host.rs`. Slash-command lines (`/resume`, `/model opus`, …) are skipped — every agent CLI has them and none make a useful title — so a session whose first line is `/resume` titles from the next real prompt instead of being called "/resume" forever (absolute paths like `/tmp/build.log …` still title: the discriminator is a single-segment leading token). The native app also keeps user renames as a UserDefaults overlay (`SupercliStore` session title overrides). The shared `session_title_mode` knob in `app-state.json` (Settings ▸ Appearance ▸ Session titles; `state.rs SessionTitleMode`) selects the driver: `agent` (default), `first_prompt` (one-shot from the first message), or `off` (no automatic titling). In agent mode, the host's `OscTitleScanner` passively watches the PTY output for `OSC 0/2` terminal titles and `apply_agent_terminal_title` folds them into the label, but only while the observed foreground runtime declares the `semantic_terminal_title` capability in its runtime package (Claude today — it publishes model-written task summaries; shell cwd spam, ssh hostnames, and static branding never retitle a row). Agent mode keeps following title updates like the App-title marker, falls back to the first-prompt title until the first OSC title arrives, and every mode loses permanently to a user rename. Hosts re-read the knob per title event, so a Settings change applies live.
 - `created_at`: visible ordering timestamp
 - `owner_principal_id`: immutable human/principal owner. Creation adapters
   derive it from authenticated Controller context; it is never accepted from
@@ -52,7 +52,7 @@ Important fields:
   2026-07-09). Legacy manifests omit it: identity is then provable only via a
   positive argv match on the session id, and a session that can't be
   positively identified is cleaned up without being signaled.
-- `host_build_id`: optional build identity for the `unpeel-host` binary that
+- `host_build_id`: optional build identity for the `supercli-host` binary that
   created the manifest. New hosts write it from the executable's mtime/size;
   older manifests omit it. This is diagnostic only; do not use it to decide
   whether to show restart UI.
@@ -95,7 +95,7 @@ termination output is drained first. Never signal an unverified process group.
 
 ## Persistence, Restart, and Resume
 
-- `~/.unpeel/app-state.json` holds projects, presets, theme, Session pins in
+- `~/.supercli/app-state.json` holds projects, presets, theme, Session pins in
   `pinned_sessions`, and additive plain-group `pinned_at` markers. It is the
   shared on-disk contract. Desktop Pin/Unpin appears only in the Session or
   group row's context menu; the sidebar renders a passive pin icon only after
@@ -111,7 +111,7 @@ termination output is drained first. Never signal an unverified process group.
   fields still use UserDefaults overlays or the shared marker/order files
   documented here.
 - Manual sidebar session order is shared separately in
-  `~/.unpeel/session-order.json`. Both desktop and the (now-removed) TUI preview
+  `~/.supercli/session-order.json`. Both desktop and the (now-removed) TUI preview
   row movement in memory while dragging, then take the shared lock and persist/broadcast the
   final order once on drop. Cancelling a drag restores the last durable order
   without writing.
@@ -202,7 +202,7 @@ is adopted from markers during rescan. Archive state is pruned on true removal
 and deliberately NOT carried across replacement Resume (resuming an archived
 session is "bring it back").
 
-**Sidebar model (reworked 2026-08-05, `sidebarLists` in `UnpeelStore`):**
+**Sidebar model (reworked 2026-08-05, `sidebarLists` in `SupercliStore`):**
 each project's list is ACTIVE (live) subtree blocks first — never truncated —
 then naturally stopped blocks followed by archived blocks, with that combined
 inactive tail capped at `sidebarVisibleSessionLimit`; the default is 5.
@@ -221,7 +221,7 @@ opened from the project context menu's **"Archived (N)"** on desktop (the
 now-removed TUI used **`a`** or the same menu) — there is no sidebar footer row
 (2026-08-10; the row itself
 had replaced "Show N more"; the show-all state and
-`UNPEEL_SHOW_ALL_SESSIONS` snapshot hook are gone). Recent archived rows
+`SUPERCLI_SHOW_ALL_SESSIONS` snapshot hook are gone). Recent archived rows
 therefore DO render in the sidebar (primary action: "Restore & Resume";
 plain "Restore" is retained for legacy unknown/non-resumable archives and does
 not relaunch them).
@@ -258,17 +258,17 @@ uses the same shared lifecycle timestamp as Recently updated; raw terminal
 repaints cannot keep a hook-owned idle agent alive forever. The knob is shared
 state: `auto_stop_archive_minutes` in `app-state.json` (absent = on at 1 day,
 explicit 0 = off; the app folds its legacy
-`unpeel.native.autoSessionStopMinutes` UserDefaults value in once); the sweep
-now runs in the `unpeel-serve` driver (`auto_archive.rs`), previously also in
+`supercli.native.autoSessionStopMinutes` UserDefaults value in once); the sweep
+now runs in the `supercli-serve` driver (`auto_archive.rs`), previously also in
 the now-removed TUI.
 
 ### Restart Recommendation API
 
 Long-lived sessions can survive an app update and keep running an older
-`unpeel-host`. The native app does not force-kill them. Instead it exposes a
+`supercli-host`. The native app does not force-kill them. Instead it exposes a
 small session-level restart recommendation API:
 
-- `crates/unpeel-core/src/session_host.rs` writes `host_build_id`,
+- `crates/supercli-core/src/session_host.rs` writes `host_build_id`,
   `host_protocol_version`, the managed runtime generation, and registration
   evidence plus the saved MCP domain grants into every hosted-session
   manifest. Treat `host_build_id` as
@@ -278,7 +278,7 @@ small session-level restart recommendation API:
   Sessions MCP client was actually injected into a managed launch; a blank
   shell is `false` even if `mcp_enabled` lets a manually configured provider
   use the local server. Browser uses the same grant/evidence split.
-- `UnpeelStore.restartRecommendations` is the native derived API:
+- `SupercliStore.restartRecommendations` is the native derived API:
   `[session id: SessionRestartRecommendation]` (a `{ token, message, action }`
   value). It
   is rebuilt during `rescan()` from live manifests by
@@ -323,12 +323,12 @@ signing.
 `session_ops::relaunch_command` is the canonical Rust derivation used by both
 in-place Resume Agent and replacement restore/handoff paths. The live Host
 owns `SessionHostCommand::ResumeAgent`; local callers use
-`session_ops::resume_agent` / `unpeel-host __resume_agent__`, and Controllers
+`session_ops::resume_agent` / `supercli-host __resume_agent__`, and Controllers
 use the additive protocol-minor-6 `session.runtime.resume` capability with the
 `resume_agent` action. Legacy `restartAgent`/`restart_agent` decoding and route
 support remain for compatibility only: current summaries omit the old
 per-Session capability and current clients do not surface it. The older
-`unpeel-host __resume__` derivation remains for operations that need a command
+`supercli-host __resume__` derivation remains for operations that need a command
 before spawning a Host. `ResumeCommand.hostRelaunchCommand` is the native thin
 caller; its Swift derivation remains a shipped fallback until the Host path has
 lived for one release. The result makes the agent pick up its previous
@@ -343,8 +343,8 @@ the completion wrapper returns control. This preserves terminal output and
 scrollback but does not add a promised entry to the user's shell command
 history.
 
-- **Hook-captured precise** (every provider whose integration is installed; the capture also records which runtime spoke, `provider_runtime` in `provider-session.json`, so a hand-typed agent in a blank terminal is transcript-backed and auto-titled exactly like a preset launch — `transcripts::transcript_provider_for_manifest` resolves launch command → captured runtime → live observation): the provider forwards its conversation id in hook POSTs (`session_id`/`thread_id`/`conversation_id`…). The native hook server captures it (`HookEvent.providerSessionID`, `HookServer.swift`) and `UnpeelStore` persists a `unpeel-id → provider-id` map in a UserDefaults overlay (`NativeOverlay.providerSessionIDsKey`), pruned with the session in `pruneNativeState`; replacement Resume reads it **before** the prune, with the manifest's `provider_session_id` as fallback. Precise forms per CLI: `claude`/`gemini`/`grok`/`cursor-agent`/`copilot --resume <id>`, `cline --id <id>`, `codex resume <id>`, `amp threads continue <id>`, `opencode --session <id>`. Capture is latest-wins and outranks an id the user wrote into the launch command, so a user who switches conversations *inside* the tool (`/resume`, `/clear`) re-targets later resume to the conversation they actually ended up in; claude reports the switch immediately (its `SessionStart` hook, forwarded as metadata-only `HookSeen`, fires on in-tool resume/clear with the new id), other providers on their next hook-bearing event. Nothing mints an id at launch any more: a command runs exactly as typed, and the first hook event is what makes a Session precisely resumable (and archivable).
-- **Older managed storage**: launches from earlier builds pinned pi to `--session-dir ~/.unpeel/pi-sessions/<session-id>`. Such a command keeps its directory across resumes and `confirmRemoveSession` still reaps it on true removal (`unpeelManagedPiSessionDir`); new pi launches run as typed and resume with pi's own `--continue`.
+- **Hook-captured precise** (every provider whose integration is installed; the capture also records which runtime spoke, `provider_runtime` in `provider-session.json`, so a hand-typed agent in a blank terminal is transcript-backed and auto-titled exactly like a preset launch — `transcripts::transcript_provider_for_manifest` resolves launch command → captured runtime → live observation): the provider forwards its conversation id in hook POSTs (`session_id`/`thread_id`/`conversation_id`…). The native hook server captures it (`HookEvent.providerSessionID`, `HookServer.swift`) and `SupercliStore` persists a `supercli-id → provider-id` map in a UserDefaults overlay (`NativeOverlay.providerSessionIDsKey`), pruned with the session in `pruneNativeState`; replacement Resume reads it **before** the prune, with the manifest's `provider_session_id` as fallback. Precise forms per CLI: `claude`/`gemini`/`grok`/`cursor-agent`/`copilot --resume <id>`, `cline --id <id>`, `codex resume <id>`, `amp threads continue <id>`, `opencode --session <id>`. Capture is latest-wins and outranks an id the user wrote into the launch command, so a user who switches conversations *inside* the tool (`/resume`, `/clear`) re-targets later resume to the conversation they actually ended up in; claude reports the switch immediately (its `SessionStart` hook, forwarded as metadata-only `HookSeen`, fires on in-tool resume/clear with the new id), other providers on their next hook-bearing event. Nothing mints an id at launch any more: a command runs exactly as typed, and the first hook event is what makes a Session precisely resumable (and archivable).
+- **Older managed storage**: launches from earlier builds pinned pi to `--session-dir ~/.supercli/pi-sessions/<session-id>`. Such a command keeps its directory across resumes and `confirmRemoveSession` still reaps it on true removal (`supercliManagedPiSessionDir`); new pi launches run as typed and resume with pi's own `--continue`.
 
 Sessions with none of the above (or launched by older builds before an id was captured) fall back to the provider's **continue-last** flag (`codex resume --last`, `gemini --resume latest`, `amp threads continue --last`, `--continue`). Exact for worktree sessions (own cwd); in a shared project root it resumes whichever conversation ran there most recently. Cline is the exception: it has no continue-last flag, so an older id-less session opens `cline history` for an explicit choice.
 
@@ -358,4 +358,4 @@ Sessions launched by user/controller flows never resume.
 
 ### Titling from a resumed conversation
 
-When a provider-id capture *changes* a session's conversation identity (the user ran `/resume` inside the tool — the typed line was a slash command, which auto-titling skips), the still-untitled session is titled from the conversation it now points at: `transcripts::auto_title_session_from_transcript` reads the transcript head (Claude's `summary` record when present, else the first real user prompt; compact-continuation preambles and anything `normalize_prompt_title` rejects fall through) and applies it via `apply_manifest_auto_title`, so all the settled/custom-title rules hold. It refuses the `cwd_match` transcript fallback — only an id- or captured-path-anchored resolution may title, since cwd discovery can land on a different conversation. Triggers: the app shells `unpeel-host __auto_title__ <id>` from `recordProviderMetadata` when the provider-id map changes; the `unpeel serve` hook listener calls it in-process when `session_ops::set_provider_session` reports a marker change (so headless hosts title too; the now-removed TUI's hook listener did the same). Best-effort and idempotent — no transcript yet, settled title, or nothing normalizable all no-op.
+When a provider-id capture *changes* a session's conversation identity (the user ran `/resume` inside the tool — the typed line was a slash command, which auto-titling skips), the still-untitled session is titled from the conversation it now points at: `transcripts::auto_title_session_from_transcript` reads the transcript head (Claude's `summary` record when present, else the first real user prompt; compact-continuation preambles and anything `normalize_prompt_title` rejects fall through) and applies it via `apply_manifest_auto_title`, so all the settled/custom-title rules hold. It refuses the `cwd_match` transcript fallback — only an id- or captured-path-anchored resolution may title, since cwd discovery can land on a different conversation. Triggers: the app shells `supercli-host __auto_title__ <id>` from `recordProviderMetadata` when the provider-id map changes; the `supercli serve` hook listener calls it in-process when `session_ops::set_provider_session` reports a marker change (so headless hosts title too; the now-removed TUI's hook listener did the same). Best-effort and idempotent — no transcript yet, settled title, or nothing normalizable all no-op.

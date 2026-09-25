@@ -31,15 +31,15 @@ struct Args {
     phone_port: u16,
 
     /// Auth token for MCP requests.
-    /// Phase 14 (0c): Prefer env (UNPEEL_MCP_TOKEN) over argv to avoid
+    /// Phase 14 (0c): Prefer env (SUPERCLI_MCP_TOKEN) over argv to avoid
     /// exposing the bearer token in `ps` output.
-    #[arg(long, env = "UNPEEL_MCP_TOKEN")]
+    #[arg(long, env = "SUPERCLI_MCP_TOKEN")]
     mcp_token: String,
 
     /// Auth token for mobile requests.
-    /// Phase 14 (0c): Prefer env (UNPEEL_MOBILE_TOKEN) over argv to avoid
+    /// Phase 14 (0c): Prefer env (SUPERCLI_MOBILE_TOKEN) over argv to avoid
     /// exposing the bearer token in `ps` output.
-    #[arg(long, env = "UNPEEL_MOBILE_TOKEN")]
+    #[arg(long, env = "SUPERCLI_MOBILE_TOKEN")]
     mobile_token: String,
 
     /// Number of concurrent workers

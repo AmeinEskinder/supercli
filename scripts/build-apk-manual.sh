@@ -1,7 +1,7 @@
 #!/bin/bash
 # Manual Android APK assembly without Gradle — fully self-contained end to end.
 #
-# Builds unpeel-mobile as a cdylib for arm64-v8a and x86_64, resolves the
+# Builds supercli-mobile as a cdylib for arm64-v8a and x86_64, resolves the
 # androidx AAR/JAR closure from Google's Maven repo, renders wry's Kotlin
 # activity templates (package dev.dioxus.main, native lib "main"), compiles
 # them with kotlinc, dexes with d8, links with aapt2, packages, zipaligns,
@@ -16,11 +16,11 @@
 #   ANDROIDX_DIR  - optional: reuse a previously resolved androidx artifact dir
 #
 # The script temporarily appends a [lib] cdylib section to
-# clients/dioxus/unpeel-mobile/Cargo.toml and temporarily writes
+# clients/dioxus/supercli-mobile/Cargo.toml and temporarily writes
 # clients/dioxus/.cargo/config.toml for the NDK linkers. Both are restored
 # on exit (a pre-existing .cargo/config.toml is preserved, never clobbered).
 #
-# Output: out/unpeel-mobile-manual.apk (signed, zipaligned)
+# Output: out/supercli-mobile-manual.apk (signed, zipaligned)
 # This is a manual/CI-independent path. It does NOT use Gradle.
 
 set -euo pipefail
@@ -45,7 +45,7 @@ PACKAGE="dev.dioxus.main"
 NATIVE_LIB="main"
 MIN_SDK=24
 TARGET_SDK=35
-APK_OUT="$OUT_DIR/unpeel-mobile-manual.apk"
+APK_OUT="$OUT_DIR/supercli-mobile-manual.apk"
 
 # --- Prerequisite checks ---
 [ -x "$BUILD_TOOLS/aapt2" ]    || fail "aapt2 not found in $BUILD_TOOLS (ANDROID_SDK=$ANDROID_SDK)"
@@ -71,7 +71,7 @@ fi
 [ -f "$KOTLIN_STDLIB" ] || fail "kotlin-stdlib.jar not found at $KOTLIN_STDLIB"
 
 # --- Work dir (clean) and restore trap ---
-CARGO_TOML="$DIOXUS_DIR/unpeel-mobile/Cargo.toml"
+CARGO_TOML="$DIOXUS_DIR/supercli-mobile/Cargo.toml"
 CARGO_CFG="$DIOXUS_DIR/.cargo/config.toml"
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"/{lib/arm64-v8a,lib/x86_64,dex,classes,res/values} "$ANDROIDX_DIR" "$OUT_DIR"
@@ -88,7 +88,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== Manual APK build for unpeel-mobile ==="
+echo "=== Manual APK build for supercli-mobile ==="
 echo "Work dir: $WORK_DIR"
 
 # --- 1. NDK toolchain wrappers (cc-rs needs unversioned names) ---
@@ -133,7 +133,7 @@ cp "$CARGO_TOML" "$CARGO_TOML_BAK"
 cat >> "$CARGO_TOML" <<'EOF'
 
 [lib]
-name = "unpeel_mobile"
+name = "supercli_mobile"
 path = "src/main.rs"
 crate-type = ["cdylib"]
 EOF
@@ -142,13 +142,13 @@ echo "--- Building Rust for aarch64-linux-android ---"
 # NOTE: cargo discovers .cargo/config.toml from the working directory, not
 # from --manifest-path, so the builds must run with cwd inside the workspace.
 cd "$DIOXUS_DIR"
-cargo build --locked -p unpeel-mobile --target aarch64-linux-android --lib
-cp "target/aarch64-linux-android/debug/libunpeel_mobile.so" \
+cargo build --locked -p supercli-mobile --target aarch64-linux-android --lib
+cp "target/aarch64-linux-android/debug/libsupercli_mobile.so" \
    "$WORK_DIR/lib/arm64-v8a/libmain.so"
 
 echo "--- Building Rust for x86_64-linux-android ---"
-cargo build --locked -p unpeel-mobile --target x86_64-linux-android --lib
-cp "target/x86_64-linux-android/debug/libunpeel_mobile.so" \
+cargo build --locked -p supercli-mobile --target x86_64-linux-android --lib
+cp "target/x86_64-linux-android/debug/libsupercli_mobile.so" \
    "$WORK_DIR/lib/x86_64/libmain.so"
 cd - >/dev/null
 

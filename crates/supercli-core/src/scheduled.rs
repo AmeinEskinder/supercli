@@ -43,7 +43,7 @@
 //! autonomous connector mode, duration/step/output caps, bounded retries
 //! with backoff, one [`RunRecord`] appended per trigger), and the
 //! tick-based [`Scheduler`] daemon that arms specs from
-//! `<UNPEEL_HOME>/schedules.json` and fires due triggers. Drive schedules
+//! `<SUPERCLI_HOME>/schedules.json` and fires due triggers. Drive schedules
 //! with `unpeel schedule daemon` (or `unpeel schedule run-once` for one
 //! manual trigger). Do NOT drive schedules from system cron: single-flight
 //! is enforced in-process by the daemon's [`RunGuard`], so a second driver
@@ -56,7 +56,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use unpeel_connector::ApprovalPolicy;
+use supercli_connector::ApprovalPolicy;
 
 use crate::schedule_leases::LeaseFence;
 

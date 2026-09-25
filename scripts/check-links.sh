@@ -6,7 +6,7 @@
 set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 status=0
-files="README.md CONTRIBUTING.md NOTICE.md TRADEMARK.md AGENTS.md SECURITY.md runtimes/README.md"
+files="README.md CONTRIBUTING.md AGENTS.md SECURITY.md runtimes/README.md"
 for page in "$repo_root"/docs/agents/*.md; do
   [ -e "$page" ] && files="$files docs/agents/$(basename "$page")"
 done

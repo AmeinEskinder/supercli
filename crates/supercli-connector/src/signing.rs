@@ -36,18 +36,18 @@ pub enum SigningError {
 const SECRET_PREFIX: &str = "unpeel-ed25519-secret-v1:";
 const PUB_PREFIX: &str = "unpeel-ed25519-pub-v1:";
 
-/// Directory holding publisher keypairs: `~/.unpeel/connector-keys/`
-/// (`UNPEEL_CONNECTOR_KEYS_DIR` overrides for tests/dev).
+/// Directory holding publisher keypairs: `~/.supercli/connector-keys/`
+/// (`SUPERCLI_CONNECTOR_KEYS_DIR` overrides for tests/dev).
 pub fn keys_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("UNPEEL_CONNECTOR_KEYS_DIR") {
+    if let Some(dir) = std::env::var_os("SUPERCLI_CONNECTOR_KEYS_DIR") {
         let path = PathBuf::from(dir);
         if !path.as_os_str().is_empty() {
             return path;
         }
     }
     match std::env::var_os("HOME") {
-        Some(home) => PathBuf::from(home).join(".unpeel").join("connector-keys"),
-        None => PathBuf::from(".unpeel-connector-keys"),
+        Some(home) => PathBuf::from(home).join(".supercli").join("connector-keys"),
+        None => PathBuf::from(".supercli-connector-keys"),
     }
 }
 
@@ -198,7 +198,7 @@ mod tests {
     fn test_keys_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("unpeel-sign-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::env::set_var("UNPEEL_CONNECTOR_KEYS_DIR", &dir);
+        std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &dir);
         dir
     }
 
@@ -217,7 +217,7 @@ mod tests {
         keygen("other").expect("keygen other");
         let other_pub = load_public_key("other").expect("load other");
         assert!(verify_bundle(bundle, &sig, &public_key_base64(&other_pub)).is_err());
-        std::env::remove_var("UNPEEL_CONNECTOR_KEYS_DIR");
+        std::env::remove_var("SUPERCLI_CONNECTOR_KEYS_DIR");
     }
 
     #[test]
@@ -226,6 +226,6 @@ mod tests {
         let _dir = test_keys_dir("overwrite");
         keygen("dup").expect("first");
         assert!(matches!(keygen("dup"), Err(SigningError::KeyExists(_))));
-        std::env::remove_var("UNPEEL_CONNECTOR_KEYS_DIR");
+        std::env::remove_var("SUPERCLI_CONNECTOR_KEYS_DIR");
     }
 }

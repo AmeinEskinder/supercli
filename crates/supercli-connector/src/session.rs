@@ -2,7 +2,7 @@
 //!
 //! `unpeel connector enable <name> --session <id>` records the attachment;
 //! the Host reads it when it assembles the session's MCP servers (spawned
-//! per session, token injected as `UNPEEL_CONNECTOR_TOKEN`, tool list
+//! per session, token injected as `SUPERCLI_CONNECTOR_TOKEN`, tool list
 //! filtered to `tools.provides`, calls wrapped in the session's approval
 //! policy). `disconnect` detaches the connector from every session.
 //!

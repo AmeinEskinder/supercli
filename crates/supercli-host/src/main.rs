@@ -8,8 +8,8 @@
 //! - `unpeel-host <launch-file>` (launcher used by the native Swift app; it
 //!   spawns the detached `__session_host__` form and exits)
 //! - `unpeel-host __mcp__` (unified Unpeel MCP over stdio; this is the
-//!   command recorded in `~/.unpeel/mcp/claude-mcp.json` and the Codex
-//!   wrapper's `mcp_servers.unpeel-sessions` overrides)
+//!   command recorded in `~/.supercli/mcp/claude-mcp.json` and the Codex
+//!   wrapper's `mcp_servers.supercli-sessions` overrides)
 //! - `unpeel-host __transcript__ snapshot|stream <session-id>` reads the
 //!   provider transcript as normalized JSON for desktop/iOS remote clients.
 //! - `unpeel-host __auto_title__ <session-id>` titles an untitled session
@@ -31,7 +31,7 @@
 //!   concurrent frames over stdin/stdout for `ssh -T` Controllers.
 //! - `unpeel-host __serve__` runs the UI-free Host service embedded in the
 //!   desktop app bundle; `unpeel serve` is the public spelling.
-//! - With `UNPEEL_SSH_ASKPASS_SECRET` set, this binary is the native app's
+//! - With `SUPERCLI_SSH_ASKPASS_SECRET` set, this binary is the native app's
 //!   narrow local system-SSH askpass helper and prints only that secret.
 //! - `unpeel-host __compact_output_journals__` reclaims evicted physical
 //!   blocks from stopped legacy Session journals without touching live Hosts.
@@ -39,7 +39,7 @@
 //! The launch file is the JSON `SessionHostLaunch` written by
 //! `session_host::write_launch_file`; the host deletes it after reading.
 
-use unpeel_core::{
+use supercli_core::{
     browser_mcp, direct_path_punch, mcp_gate, mcp_host, relay_probe, remote_attach, remote_server,
     remote_stdio, session_host, terminal_viewport, transcripts,
 };
@@ -57,21 +57,21 @@ fn main() {
 
     // OpenSSH invokes SSH_ASKPASS as `<program> <prompt>`; the prompt is not
     // stable and must never be interpreted as a normal unpeel-host argv mode.
-    if let Some(secret) = std::env::var_os("UNPEEL_SSH_ASKPASS_SECRET") {
+    if let Some(secret) = std::env::var_os("SUPERCLI_SSH_ASKPASS_SECRET") {
         println!("{}", secret.to_string_lossy());
         return;
     }
 
-    if args.as_slice() == [unpeel_serve::service::SERVICE_ARG] {
-        if let Err(error) = unpeel_serve::service::run(|event| println!("{event}")) {
+    if args.as_slice() == [supercli_serve::service::SERVICE_ARG] {
+        if let Err(error) = supercli_serve::service::run(|event| println!("{event}")) {
             eprintln!("{error}");
             std::process::exit(1);
         }
         return;
     }
 
-    if args.as_slice() == [unpeel_serve::service::WORKSPACE_WORKER_ARG] {
-        if let Err(error) = unpeel_serve::service::run_workspace_worker(|event| println!("{event}"))
+    if args.as_slice() == [supercli_serve::service::WORKSPACE_WORKER_ARG] {
+        if let Err(error) = supercli_serve::service::run_workspace_worker(|event| println!("{event}"))
         {
             eprintln!("{error}");
             std::process::exit(1);
@@ -158,7 +158,7 @@ fn main() {
             eprintln!("usage: unpeel-host __managed_storage__ <session-id>");
             std::process::exit(2);
         }
-        match unpeel_core::session_ops::managed_storage_path_for_session(&session_id) {
+        match supercli_core::session_ops::managed_storage_path_for_session(&session_id) {
             Some(path) => println!("{path}"),
             None => println!(),
         }
@@ -176,7 +176,7 @@ fn main() {
             eprintln!("usage: unpeel-host __resume__ <session-id> [--fresh]");
             std::process::exit(2);
         }
-        let mode = unpeel_core::session_ops::RelaunchMode::Restart {
+        let mode = supercli_core::session_ops::RelaunchMode::Restart {
             force_fresh: args.iter().any(|a| a == "--fresh"),
         };
         // unpeel-host keeps serde_json out of the binary; a one-field JSON
@@ -198,9 +198,9 @@ fn main() {
             out.push('"');
             out
         }
-        match unpeel_core::session_ops::relaunch_command(&session_id, mode) {
+        match supercli_core::session_ops::relaunch_command(&session_id, mode) {
             Ok(command) => {
-                let markers = unpeel_core::resume::resume_failure_markers(&command)
+                let markers = supercli_core::resume::resume_failure_markers(&command)
                     .unwrap_or_default()
                     .into_iter()
                     .map(|marker| json_string(&marker))
@@ -227,7 +227,7 @@ fn main() {
             eprintln!("usage: unpeel-host __restart_agent__ <session-id>");
             std::process::exit(2);
         }
-        match unpeel_core::session_ops::restart_agent(&session_id) {
+        match supercli_core::session_ops::restart_agent(&session_id) {
             Ok(()) => {
                 println!("{{\"restarted\":true}}");
                 return;
@@ -246,7 +246,7 @@ fn main() {
             eprintln!("usage: unpeel-host __resume_agent__ <session-id>");
             std::process::exit(2);
         }
-        match unpeel_core::session_ops::resume_agent(&session_id) {
+        match supercli_core::session_ops::resume_agent(&session_id) {
             Ok(()) => {
                 println!("{{\"resumed\":true}}");
                 return;
@@ -273,7 +273,7 @@ fn main() {
             eprintln!("usage: unpeel-host __request_screenshot__ <session-id>");
             std::process::exit(2);
         };
-        if let Err(error) = unpeel_core::session_input::request_screenshot(session_id) {
+        if let Err(error) = supercli_core::session_input::request_screenshot(session_id) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -347,7 +347,7 @@ fn main() {
     if args.first().map(String::as_str) == Some("__check_local_url__") {
         args.remove(0);
         for url in &args {
-            let ok = unpeel_core::local_urls::url_is_openable_site(url);
+            let ok = supercli_core::local_urls::url_is_openable_site(url);
             println!("{url}\t{ok}");
         }
         return;
@@ -361,7 +361,7 @@ fn main() {
     if args.first().map(String::as_str) == Some("__local_site_server__") {
         match args
             .get(1)
-            .and_then(|url| unpeel_core::local_urls::server_for_url(url))
+            .and_then(|url| supercli_core::local_urls::server_for_url(url))
         {
             Some(server) => {
                 println!(
@@ -379,7 +379,7 @@ fn main() {
         let result = args
             .get(1)
             .ok_or_else(|| "usage: __stop_local_site_server__ <url>".to_string())
-            .and_then(|url| unpeel_core::local_urls::stop_server_for_url(url));
+            .and_then(|url| supercli_core::local_urls::stop_server_for_url(url));
         match result {
             Ok(server) => println!("stopped {} (pid {})", server.command, server.pid),
             Err(error) => {
@@ -396,7 +396,7 @@ fn main() {
         args.remove(0);
         match args.first().map(String::as_str) {
             Some("list") => {
-                println!("{}", unpeel_core::apps_mcp::installable_apps_json());
+                println!("{}", supercli_core::apps_mcp::installable_apps_json());
             }
             _ => {
                 eprintln!("usage: unpeel-host __apps__ list");
@@ -417,7 +417,7 @@ fn main() {
 
     // One-shot session grid metrics for the workspace multiplexer: the Mac
     // app proxies GET /mobile/metrics for a scoped LOCAL workspace by running
-    // this against that workspace's UNPEEL_HOME — the same read the shared
+    // this against that workspace's SUPERCLI_HOME — the same read the shared
     // router's metrics route performs in-process for its own home. Prints the
     // wire-shape camelCase JSON on stdout; non-zero exit with the message on
     // stderr.
@@ -427,7 +427,7 @@ fn main() {
             eprintln!("usage: unpeel-host __metrics__ <session-id>");
             std::process::exit(2);
         };
-        match unpeel_core::controller_api::read_session_metrics(session_id) {
+        match supercli_core::controller_api::read_session_metrics(session_id) {
             Ok(metrics) => {
                 // Hand-rolled to keep serde_json out of the binary (see the
                 // MCP config note above); the id is already validated to a
@@ -451,10 +451,10 @@ fn main() {
 
     if matches!(
         args.first().map(String::as_str),
-        Some(unpeel_core::pty_core::PTY_CORE_ARG)
+        Some(supercli_core::pty_core::PTY_CORE_ARG)
     ) {
         args.remove(0);
-        if let Err(error) = unpeel_core::pty_core::run_from_args(&args) {
+        if let Err(error) = supercli_core::pty_core::run_from_args(&args) {
             eprintln!("{error}");
             std::process::exit(1);
         }

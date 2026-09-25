@@ -53,7 +53,7 @@ description = "Swift test fixtures: fake pairing token and dummy callback token"
 targetRules = ["generic-api-key", "curl-auth-header", "hashicorp-tf-password"]
 paths = [
   '''^apps/(native|ios|shared)/.*/Tests/.*\.swift$''',
-  '''^clients/native/UnpeelNative/Sources/UnpeelNative/Previews/.*\.swift$''',
+  '''^clients/native/SupercliNative/Sources/SupercliNative/Previews/.*\.swift$''',
 ]
 regexes = [
   '''0123456789abcdef0123456789abcdef''',
@@ -63,6 +63,6 @@ regexes = [
 [[allowlists]]
 description = "RelayProtocol.swift: Curve25519 private-key type declarations"
 targetRules = ["generic-api-key", "private-key"]
-paths = ['''^clients/shared/UnpeelShared/Sources/UnpeelShared/RelayProtocol\.swift$''']
+paths = ['''^clients/shared/SupercliShared/Sources/SupercliShared/RelayProtocol\.swift$''']
 regexes = ['''privateKey''']
 

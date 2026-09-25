@@ -1,5 +1,5 @@
 [package]
-name = "unpeel-core"
+name = "supercli-core"
 description = "Unpeel session backend: hosted PTY sessions, provider integrations, hook assets, MCP host"
 version.workspace = true
 edition.workspace = true
@@ -12,7 +12,7 @@ authors.workspace = true
 # Controllers opt into only the transport-neutral semantic and wire layers.
 default = ["native-host"]
 # Allocator integration (Round 4, Lane 2): route release_memory_to_os through
-# mimalloc's collect when unpeel-host is built with --features mimalloc.
+# mimalloc's collect when supercli-host is built with --features mimalloc.
 mimalloc = ["dep:libmimalloc-sys"]
 controller-core = [
     "dep:base64",
@@ -37,7 +37,7 @@ native-host = [
     "dep:semver",
     "dep:toml",
     "dep:webpki-roots",
-    "dep:unpeel-connector",
+    "dep:supercli-connector",
     "dep:rusqlite",
     "dep:tar",
 ]
@@ -62,7 +62,7 @@ webpki-roots = { version = "0.26", optional = true }
 sha2 = { version = "0.10", optional = true }
 md5 = { version = "0.7", optional = true }
 semver = { version = "1", optional = true }
-unpeel-connector = { version = "0.9.0", path = "../unpeel-connector", optional = true }
+supercli-connector = { version = "0.9.0", path = "../supercli-connector", optional = true }
 rusqlite = { version = "0.37", optional = true, features = ["bundled", "backup"] }
 tar = { version = "0.4", optional = true }
 

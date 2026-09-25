@@ -6,7 +6,7 @@ An HTTPS+WSS layer over the hosted-session artifacts so phones/other Macs can
 list sessions, stream terminal output, send input, resize, and kill. Current
 contract: the route and wire-format headers in `remote_server.rs`.
 
-> **Hosts are not only desktop apps (updated 2026-08-10).** `unpeel serve`
+> **Hosts are not only desktop apps (updated 2026-08-10).** `supercli serve`
 > (previously also served by the interactive TUI, removed 2026-09-03) serves
 > the same `/mobile` protocol app-lessly and pairs phones with the same
 > crypto — on a headless box it *is* the terminal server. It now supervises
@@ -26,16 +26,16 @@ contract: the route and wire-format headers in `remote_server.rs`.
 > implemented: shared macOS pairing and the
 > Share This Mac/Add Host picker, a direct `HostConnection` and panic-contained
 > native bridge, plus the shipped iOS Relay client/E2E handshake exposed from
-> `UnpeelShared` through a generation-bound Link `HostConnection`,
+> `SupercliShared` through a generation-bound Link `HostConnection`,
 > Host-scoped sidebar/runtime, remote-only in-memory Ghostty panes,
 > commit-gated bounded output, ordered at-most-once input, desktop fit/clear,
-> mark-read, and explicit connection states. `unpeel pair --serve` pairs a
-> Controller against the running `unpeel serve` (this originally read "opens
+> mark-read, and explicit connection states. `supercli pair --serve` pairs a
+> Controller against the running `supercli serve` (this originally read "opens
 > the Host TUI"; the TUI is gone). This is not the secure-direct exit:
 > the desktop data path is bearer-authenticated **plaintext HTTP** on a trusted
 > LAN/VPN and ignores the certificate pin. It reconnects only to the persisted
 > trusted endpoint, and the picker is visible only in explicitly branded
-> **Unpeel Dev** bundles. Automatic Bonjour rediscovery is disabled until pinned TLS
+> **Supercli Dev** bundles. Automatic Bonjour rediscovery is disabled until pinned TLS
 > or another proof-of-possession can authenticate a candidate without exposing
 > the saved bearer. For an already-paired Host, the runtime falls back to Link
 > only on Direct reachability failure, probes back to Direct, and shows only
@@ -83,16 +83,16 @@ creation, title organization, Session and plain-group pinning, in-place Resume
 Agent, and lifecycle stop/terminal-restart/remove now have real headless effects and common
 conformance. Archive listing is a shared
 router operation too: both adapters use the same validation/envelope, and
-`unpeel serve` publishes every archived row in native-compatible newest-first
+`supercli serve` publishes every archived row in native-compatible newest-first
 project buckets. Transcript Markdown, artifact list/read/delete, and the typed
 screenshot request work on both Host implementations. Original artifact byte
 ranges now use the shared no-follow reader; positive `max_dim` thumbnail
 generation remains a native in-memory ImageIO enrichment sourced only from
-those secured bytes. `unpeel serve` advertises none of the remaining gaps
+those secured bytes. `supercli serve` advertises none of the remaining gaps
 even where a compatibility route accepts a partial no-op. Phase 3 closes these through the
 shared Host router.
 
-The shared router lives in `unpeel-core::controller_api`. It defines the
+The shared router lives in `supercli-core::controller_api`. It defines the
 transport-neutral authenticated request/response envelope (including binary
 bodies), owns bootstrap protocol metadata, and owns read-only terminal metrics
 plus transcript Markdown, archived-session listing, raw terminal write/resize,
@@ -100,12 +100,12 @@ typed screenshot requests, read receipts, and artifact
 list/read/resumable-upload/delete. It also owns the typed headless lifecycle
 effect boundary for shell-only Resume Agent, terminal/session restart, and
 session-action stop/restart/remove. The legacy
-one-shot native upload remains a compatibility exception. `unpeel serve`'s
+one-shot native upload remains a compatibility exception. `supercli serve`'s
 `/mobile` adapter sends those operations through the router; the Rust secure server uses
 the same metrics operation while preserving its shipped `/api/*` response
 shape. The native Host enters it after
 bearer authentication through the panic-contained JSON C ABI in
-`unpeel-native-bridge`. Authentication, HTTP/Relay framing, Keychain/UI work,
+`supercli-native-bridge`. Authentication, HTTP/Relay framing, Keychain/UI work,
 and platform enrichment remain adapter concerns; Swift falls back to its
 existing handlers for unmigrated routes. In particular, native deliberately
 supplies no Rust lifecycle effects yet, so the router returns unhandled and
@@ -124,7 +124,7 @@ The resulting optional fields are exposed in Session summaries; older
 Controllers ignore them and older summaries decode without them.
 
 Raw terminal writes are an at-most-once boundary. Link request ids survive the
-native and `unpeel serve` adapters; the shared router keeps a bounded five-minute,
+native and `supercli serve` adapters; the shared router keeps a bounded five-minute,
 per-principal replay cache and returns the first response for an identical
 resend instead of applying the mutation twice. A two-second Host command
 timeout bounds wedged sockets, but timeout/response loss is still ambiguous:
@@ -191,9 +191,9 @@ storage discipline to the Host user's own folders. `filesystem.directories.list`
 `filesystem.directories.create`, `project.add`, and `filesystem.file.read`
 (`GET /mobile/files/read`, bounded pages of base64 bytes) resolve every path on
 the Host inside an explicit scope: the registered project roots plus the Host
-user's home minus Unpeel's own storage and SSH material (a project
+user's home minus Supercli's own storage and SSH material (a project
 registered at `~` or above never re-exposes those; a worktree registered
-inside `~/.unpeel/worktrees` stays a project). The walk opens one
+inside `~/.supercli/worktrees` stays a project). The walk opens one
 component at a time with `O_NOFOLLOW` from an opened root after an lstat, so a
 symlinked parent or leaf is refused with `403` rather than followed, `..` is
 rejected before anything is opened, and a path outside the scope never touches
@@ -222,10 +222,10 @@ results from a superseded connection generation are discarded after reconnect.
 
 ### SSH stdio Host gateway
 
-`unpeel-host __remote_stdio__` is the free, accountless Host-side transport
+`supercli-host __remote_stdio__` is the free, accountless Host-side transport
 used by native App Controllers (originally also the interactive TUI, removed
 2026-09-03). Standard system
-SSH launches it as `ssh -T host unpeel-host __remote_stdio__`. It is an
+SSH launches it as `ssh -T host supercli-host __remote_stdio__`. It is an
 on-demand gateway over the same Host contract, not a daemon, session owner,
 second route dialect, TCP listener, or Relay feature.
 
@@ -236,17 +236,17 @@ gateway command, waits for a random marker on its own line within a bounded
 64-KiB/20-second preamble, switches the remote PTY to raw/no-echo, and then
 hands the exact same framed Host protocol to `RemoteSessionBackend`. Upstash
 Box was verified in this category. Passwords/provider API keys are stored in
-Keychain and supplied by the embedded `unpeel-host` SSH_ASKPASS helper; they
+Keychain and supplied by the embedded `supercli-host` SSH_ASKPASS helper; they
 never enter SSH argv, UserDefaults, Host metadata, or diagnostics.
 
 The Add Host sheet accepts only `user@host` or an SSH config alias. The system
 SSH client retains the user's config, key/agent, ProxyJump, and VPN while
-Unpeel uses `StrictHostKeyChecking=accept-new` (new keys are recorded; changed
+Supercli uses `StrictHostKeyChecking=accept-new` (new keys are recorded; changed
 keys fail), and disables agent/X11/credential forwarding and arbitrary local
 commands. The native Controller probes command mode first, falls back to
 interactive mode, bootstraps and pins the Host identity before saving the row,
 and reconnects using the successful mode. (The now-removed TUI's
-`unpeel --host ssh://…` continued to require ordinary remote-command
+`supercli --host ssh://…` continued to require ordinary remote-command
 support; that dispatch mode no longer exists.)
 
 Each frame uses `[UPL1][kind u8][flags u8][reserved u16][length u32 BE]`
@@ -264,7 +264,7 @@ SSH authenticates the remote Unix account. The Host always injects
 principal_id: "host-owner:<host-id>" }`; wire
 `auth`, `$USER`, and other client-controlled identity fields cannot select a
 principal. Start/stop records use the shared rotating audit log at
-`~/.unpeel/remote/audit.log`, including the effective Unix identity and the
+`~/.supercli/remote/audit.log`, including the effective Unix identity and the
 diagnostic remote address but no request body or credential.
 
 The gateway currently builds a capability-advertised subset from Host-owned
@@ -277,7 +277,7 @@ also remain outside this disk adapter. The process integration test covers
 bootstrap, large output paging, concurrent waits, stable owner identity,
 malformed-request recovery, real create/remove, clean EOF, and audit privacy.
 
-The Controller-side `unpeel-core::SshHostConnection` invokes `/usr/bin/ssh`
+The Controller-side `supercli-core::SshHostConnection` invokes `/usr/bin/ssh`
 with fixed, structured, noninteractive arguments and a validated config alias;
 it never invokes a local shell or interpolates the target into the fixed remote
 command. Calls receive connection-owned one-use ids, are bounded in flight,
@@ -295,7 +295,7 @@ any request byte was written.
 
 ### Paired direct/LAN Host connection
 
-`unpeel-core::DirectHostConnection` is the first non-SSH desktop Controller
+`supercli-core::DirectHostConnection` is the first non-SSH desktop Controller
 transport beneath the same `HostConnection` contract. It accepts only the
 exact `http://HOST[:PORT]/mobile` endpoint emitted by pairing, applies the
 per-device bearer at the transport boundary, bounds requests/responses and
@@ -349,7 +349,7 @@ the live connection only — no 10 s LAN wait, no throwaway second socket);
 and terminal surfaces stage their output stream behind the current client
 generation's first bootstrap (`RemotePreviewStore.hasBootstrapForCurrentClient`).
 
-On macOS, Add Host uses the shared `UnpeelShared` sealed pairing exchange,
+On macOS, Add Host uses the shared `SupercliShared` sealed pairing exchange,
 stores command credentials in Keychain, and records non-secret Host metadata
 separately. The native bridge opens the Rust direct connection and exposes the
 shared semantic backend without moving credentials into Swift route logic.
@@ -359,9 +359,9 @@ discovery filters the current logical Host id, while `RemoteHostStore` also
 rejects a pasted self-code and removes legacy self-pair records before they can
 be selected.
 
-For a headless first pairing, `unpeel pair --serve` closes the one-shot HTTP
+For a headless first pairing, `supercli pair --serve` closes the one-shot HTTP
 exchange, preserves the exact canonical Host port, and hands that endpoint to
-`unpeel serve` (originally the interactive TUI); it refuses to pair through a random fallback while an
+`supercli serve` (originally the interactive TUI); it refuses to pair through a random fallback while an
 existing canonical endpoint is occupied. That is continuity for this
 trusted-network slice, not Host authentication—the pinned transport remains
 the security completion.
@@ -387,7 +387,7 @@ troubleshooting reference live in
 owns the connection and FIFO effect lifecycle, retains the last valid snapshot
 while reconnecting, and never falls back to Local execution. Remote terminals
 use Host-and-Session-keyed in-memory Ghostty panes rather than launching a
-local `unpeel-attach`/hosted Session. Output pages advance their Host cursor
+local `supercli-attach`/hosted Session. Output pages advance their Host cursor
 only after the attached pane accepts the full byte sequence; reset pages reset
 the local VT first. Input, fit/clear, and mark-read remain generation-bound and
 at most once.
@@ -403,11 +403,11 @@ remain. (The TUI's own Direct/Link selection is moot: the TUI was removed
 ### Native Mac Link downlink and automatic route selection
 
 The Mac Controller does not implement a second Relay client. The shipped iOS
-`RemoteRelayConnection` now lives beside `RelayProtocol` in `UnpeelShared`.
+`RemoteRelayConnection` now lives beside `RelayProtocol` in `SupercliShared`.
 Both clients therefore use the same outbound WebSocket, authenticated
 forward-secret handshake, AEAD framing, limits, push handling, and canonical
 Relay tunnel DTOs. A callback-backed native bridge adapts that shared Swift
-actor into `unpeel-core::RelayHostConnection`; semantic state and effects
+actor into `supercli-core::RelayHostConnection`; semantic state and effects
 remain owned by the same Rust `RemoteSessionBackend` used by Direct and SSH.
 
 Link calls bind to the socket generation accepted by bootstrap. A bound call
@@ -432,20 +432,20 @@ switching waits for an in-flight effect tail before retiring its transport.
 The Host's existing **Access away from home** opt-in owns the uplink; the
 Controller has no Relay toggle and reports only **Direct** or **Via Link**.
 
-Deterministic development/QA can launch a picker-enabled **Unpeel Dev** build
-with `-unpeel.native.forceLink YES`. That forces the selected paired Host onto
+Deterministic development/QA can launch a picker-enabled **Supercli Dev** build
+with `-supercli.native.forceLink YES`. That forces the selected paired Host onto
 Link so the downlink and route UI can be exercised without making transport
 choice a customer setting; non-Dev/picker-disabled builds ignore the override.
 
 This branch still uses the shipped legacy Ed25519 entitlement and credentials.
-Unpeel Link browser/device sign-in, account seats, short-lived assertions on
+Supercli Link browser/device sign-in, account seats, short-lived assertions on
 both Relay sides, Host publication/rendezvous, headless-serve downlink
 (previously also a TUI downlink, removed 2026-09-03), and production
 rollout are defined by the Link service contract rather than this adapter.
 
 ### Transport-neutral Controller session backend
 
-`unpeel-core::remote_session_backend` is now the shared semantic
+`supercli-core::remote_session_backend` is now the shared semantic
 Controller layer above `HostConnection`. It decodes the shipped mobile-v1
 bootstrap into typed projects, presets, Sessions, activity, capabilities, and
 approvals; requires a compatible advertised Host major; validates a supplied
@@ -491,19 +491,19 @@ Descriptor-less legacy Hosts remain read-only.
 
 The module depends only on `HostConnection` and protocol types—there is no
 local app-state, Session, hook, or filesystem fallback. (The now-removed TUI
-selected it through strict `unpeel --host ssh://HOST`; that dispatch mode no
+selected it through strict `supercli --host ssh://HOST`; that dispatch mode no
 longer exists.) On this branch the native app selects it through the bridge
 for its paired Direct/Link terminal slice. The
 remaining lifecycle, organization, transcript/artifact, and settings
 operations remain the next layer for remote desktop scope.
 
 For a developer-only reachability check,
-`crates/unpeel-core/examples/ssh_host_probe.rs` constructs that shared backend
+`crates/supercli-core/examples/ssh_host_probe.rs` constructs that shared backend
 over the production system-SSH connection, performs one validated read-only
 bootstrap, and prints the remote Session list. From the repository root:
-`cargo run --manifest-path crates/Cargo.toml -p unpeel-core --example ssh_host_probe -- ssh://studio`;
+`cargo run --manifest-path crates/Cargo.toml -p supercli-core --example ssh_host_probe -- ssh://studio`;
 add `--json` for the full bootstrap JSON. The example is not installed as
-the `unpeel` CLI and does not yet exercise attach, input, semantic reconnect,
+the `supercli` CLI and does not yet exercise attach, input, semantic reconnect,
 or verbs; the native app's SSH workspaces consume the same connection for
 their interactive slice (originally also the now-removed TUI Controller).
 
@@ -515,12 +515,12 @@ prepare→death→request race. It also proves a raw write reaches the Host cont
 socket once before its receipt is lost. Real-gateway cases now drive the
 semantic backend through typed bootstrap and committed output at exact offsets,
 plus write, desktop-fit, and mark-read. A self-spawned child starts with an
-empty isolated Controller `HOME`, a nonexistent Controller `UNPEEL_HOME`, and
+empty isolated Controller `HOME`, a nonexistent Controller `SUPERCLI_HOME`, and
 a distinct Host home; it proves the Controller stays untouched while
 write/resize commands and the read marker land only on the Host. This is not an
 actual sshd/two-machine proof. The `remote_host` PTY case drives the real
 gateway (substituting only the SSH executable, no longer through the removed
-`unpeel --host ssh://HOST` dispatch) and proves Host-only sidebar state,
+`supercli --host ssh://HOST` dispatch) and proves Host-only sidebar state,
 in-memory VT output, ordered input, fit/clear, and blank Controller homes.
 Focused backend tests cover commit-gated output, mark-read, reconnect, and
 ambiguity halting. The native UI now consumes the backend for paired
@@ -547,7 +547,7 @@ protocol or Host implementation.
 an acknowledgement timestamp. Both Hosts translate that semantic request into
 the same provider-neutral prompt through `session_input`: sanitized bracketed
 paste, settle, then the proven double-Enter submission. Controllers never
-construct terminal escapes. The prompt asks the active agent to use Unpeel
+construct terminal escapes. The prompt asks the active agent to use Supercli
 Browser's screenshot action with `gallery=true` and save a session screenshot
 artifact, while explicitly allowing the agent to report that a non-visual task
 has nothing to capture. That explicit Controller request overrides the ordinary
@@ -562,16 +562,16 @@ visual result. The headless Host serves the matching read-only
 `/mobile/artifacts` and `/mobile/artifact` routes, so the review flow does not
 depend on the native app being present.
 
-- Server: `crates/unpeel-core/src/remote_server.rs`, run as
-  `unpeel-host __remote__ [--bind ADDR] [--port N]`. Like the Sessions MCP it
+- Server: `crates/supercli-core/src/remote_server.rs`, run as
+  `supercli-host __remote__ [--bind ADDR] [--port N]`. Like the Sessions MCP it
   talks directly to session artifacts and needs no app window. Hand-rolled
   sync HTTP/1.1 + RFC 6455 WS over rustls (no tokio/axum).
 - Security: TLS always (self-signed cert + fingerprint in
-  `~/.unpeel/remote/tls/`), per-start bearer token (`~/.unpeel/remote.json`,
+  `~/.supercli/remote/tls/`), per-start bearer token (`~/.supercli/remote.json`,
   0600), **plus** the app's paired-device tokens (verified live against
-  `~/.unpeel/mobile/devices.json`, so app-side pairing/revocation applies
+  `~/.supercli/mobile/devices.json`, so app-side pairing/revocation applies
   immediately). Per-IP rate limiting, audit log at
-  `~/.unpeel/remote/audit.log`.
+  `~/.supercli/remote/audit.log`.
 - Routes: `/api/status|sessions[/:id[/activity|metrics|viewers]]`, output
   (WS stream or plain-GET JSON long-poll), `input`, `resize`, `kill`,
   `/api/clients`, browser artifacts (`.../artifacts/browser[...]` +
@@ -580,16 +580,16 @@ depend on the native app being present.
   `output.bin` on disk and only subscribe the live control socket at the tail
   offset — subscribing far behind the host's in-memory broadcaster kills the
   socket (the attach client splits replay/live the same way).
-- **Unpeel Link Relay (originally shipped as Unpeel Remote, 2026-07-02,
+- **Supercli Link Relay (originally shipped as Supercli Remote, 2026-07-02,
   dark)** — off-LAN phone access through
-  a Cloudflare Worker + Durable Object (`unpeel-cloud:apps/relay`, plain `.mjs`, no deps).
+  a Cloudflare Worker + Durable Object (`supercli-cloud:apps/relay`, plain `.mjs`, no deps).
   Both sides dial outbound; interactive session frames are end-to-end encrypted.
   APNs notification metadata is a separately disclosed, bounded relay path.
   The LAN pairing request/response is AES-GCM sealed with the scanned QR secret
   and bound to the scanned Mac id + endpoint. Native keeps Mac E2E keys in
   Keychain and, for app → headless-serve handoff (previously also
   app → standalone-TUI handoff), reconciles authorized
-  entries into the shared `~/.unpeel/mobile/e2e-keys.json` registry. That
+  entries into the shared `~/.supercli/mobile/e2e-keys.json` registry. That
   compatibility copy is an atomically replaced 0600 file readable by
   processes running as the same local user; it is not an opaque Keychain
   broker or a crash-atomic multi-store transaction.
@@ -597,10 +597,10 @@ depend on the native app being present.
   ephemeral X25519 per connection, HMAC transcript MAC authenticating the
   ephemeral keys against a relay MITM/downgrade; HKDF per-direction keys,
   AES-256-GCM with direction-tagged counter nonces (`RelayProtocol.swift` in
-  UnpeelShared). Verified by a cross-language known-answer test (Swift
+  SupercliShared). Verified by a cross-language known-answer test (Swift
   CryptoKit vs JS WebCrypto, byte-identical) and a live workerd integration
-  test driving every auth gate adversarially — `npm test` in `unpeel-cloud:apps/relay`. Mac uplink: the workspace worker
-  (`crates/unpeel-serve`, relay URL override `unpeel.native.relayURL` read
+  test driving every auth gate adversarially — `npm test` in `supercli-cloud:apps/relay`. Mac uplink: the workspace worker
+  (`crates/supercli-serve`, relay URL override `supercli.native.relayURL` read
   through the overlay). `RelayUplinkManager.swift` keeps only the client
   half: the shared Link authority record, the `link.entitlement.refresh`
   platform callback, and APNs push through the Link service. The phone and Mac
@@ -614,25 +614,25 @@ depend on the native app being present.
   route leaves an otherwise-valid legacy credential intact.
   **Paid-service gate**: the
   uplink needs an Ed25519-signed entitlement from
-  `POST unpeel.com/api/remote/entitlement` (active-seat checked and persistently
+  `POST supercli.com/api/remote/entitlement` (active-seat checked and persistently
   bound to the licensing device id + relay Mac id; an active Pro license is
   the whole **shipped** gate — the old `REMOTE_ACCESS_MODE` knob is retired).
   The target Link identity/seat/login model and the Relay deploy runbook
   are not part of this repository. Relay tests:
-  `npm test` in `unpeel-cloud:apps/relay`.
+  `npm test` in `supercli-cloud:apps/relay`.
   - **Public website doc (live since 2026-07-23):** a user-facing doc lives
-    at `unpeel-cloud:apps/website/app/docs/unpeel-remote.md`, registered in
-    `unpeel-cloud:apps/website/app/docs/manifest.ts` as the "Remote access" group and
-    published at `unpeel.com/docs/unpeel-remote`. The build-time gate
-    `VITE_UNPEEL_REMOTE` is now set permanently via the committed
-    `unpeel-cloud:apps/website/.env` (Vite inlines it) — don't remove that file or the group
+    at `supercli-cloud:apps/website/app/docs/supercli-remote.md`, registered in
+    `supercli-cloud:apps/website/app/docs/manifest.ts` as the "Remote access" group and
+    published at `supercli.com/docs/supercli-remote`. The build-time gate
+    `VITE_SUPERCLI_REMOTE` is now set permanently via the committed
+    `supercli-cloud:apps/website/.env` (Vite inlines it) — don't remove that file or the group
     drops from `DOC_GROUPS` again (absent from the sidebar and unroutable;
     `isDocSlug` derives from `DOC_GROUPS`). The security section is
     intentionally accurate-not-overclaimed: it states
     E2E/forward-secret/zero-knowledge + standard primitives, and does **not**
     claim an independent audit or "Tailscale-level" assurance. It also
     includes a "How is this different from SSH?" comparison.
-- Viewer presence: the server writes `~/.unpeel/remote/presence.json` and
+- Viewer presence: the server writes `~/.supercli/remote/presence.json` and
   the worker writes `mobile-presence.json` beside it; `ViewerPresence.swift`
   merges both files by device identity. `TerminalPresenceView` renders
   device chips beside the shared-grid fit control in each native pane header.
@@ -640,11 +640,11 @@ depend on the native app being present.
   See [viewer presence and terminal sizing](presence.md) for scope and expiry.
 - Connection resilience (security correction 2026-08-14): the phone persists
   the Mac's `/mobile` endpoint at pairing time, and the worker's Direct
-  listener normally re-binds that port from `~/.unpeel/mobile/server-port`. When
+  listener normally re-binds that port from `~/.supercli/mobile/server-port`. When
   bootstrap polls fail, the phone shows an explicit "Connection lost" state,
   hides stale sessions, retries only that persisted endpoint, and falls back
   to the E2E Relay when enrolled. It does **not** adopt Bonjour candidates.
-  `_unpeel-remote._tcp` TXT data is unauthenticated; sending the saved bearer
+  `_supercli-remote._tcp` TXT data is unauthenticated; sending the saved bearer
   to a discovered plaintext URL would disclose it before any bootstrap macID
   check could run. An exact-identity E2E Relay bootstrap instead advertises
   the Mac app Host's current Direct `/mobile` endpoint. iOS strictly validates
@@ -657,11 +657,11 @@ depend on the native app being present.
   candidate before credentials are sent. The per-run pinned WSS port still
   rides authenticated bootstrap responses from the persisted/Relay path.
 - Lifecycle: the workspace worker spawns/supervises the server
-  (`crates/unpeel-serve/src/remote_streamer.rs`) whenever paired mobile
-  devices exist (`~/.unpeel/mobile/devices.json` non-empty) — auto-start on
+  (`crates/supercli-serve/src/remote_streamer.rs`) whenever paired mobile
+  devices exist (`~/.supercli/mobile/devices.json` non-empty) — auto-start on
   launch/pairing, stop when the last device unpairs. `RemoteControlManager`
   (Swift) was retired 2026-09-03. The
-  hidden default `unpeel.native.remoteControlServer` is a force override
+  hidden default `supercli.native.remoteControlServer` is a force override
   (true = always run, false = never, absent = automatic). No settings UI yet
   (that is phase 3). Paired phones discover the server via the optional
   `remoteServerPort` + `remoteServerCertificateFingerprint` fields on the
@@ -680,7 +680,7 @@ depend on the native app being present.
   followed by exactly one text frame
   `{"type":"baseline","journal_offset":N,"cols":C,"rows":R,"bytes_base64":"…"}`
   before any binary frame. The client resets its VT, feeds the decoded
-  bytes (the same libghostty-vt formatter output `unpeel-attach` applies:
+  bytes (the same libghostty-vt formatter output `supercli-attach` applies:
   cells, styles, scrollback, every non-default mode, scroll region, cursor),
   sets its cursor to `N`, and then consumes binary frames from `N` exactly
   as today. The streamer obtains the snapshot over the Session's control
@@ -688,7 +688,7 @@ depend on the native app being present.
   stream through the same explicit-replay-from-offset path an `?offset=`
   resume uses, so the broadcaster-ring race and retention eviction (close
   1012) are handled identically. `"snapshot": false` means the Host could
-  not answer (older `unpeel-host`, exited session, transport error): the raw
+  not answer (older `supercli-host`, exited session, transport error): the raw
   tail path follows unchanged. An explicit `?offset=` resume never gets a
   baseline (the client already holds state), and a client that does not
   advertise sees neither key nor frame — byte-identical to before. Rust

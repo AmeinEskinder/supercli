@@ -48,7 +48,7 @@ test('--allow-dirty is the explicit escape hatch for a dirty tree', () => {
 })
 
 test('batch publishing can defer the registry until every artifact is uploaded', () => {
-  const stage = mkdtempSync(join(tmpdir(), 'unpeel-app-publish-'))
+  const stage = mkdtempSync(join(tmpdir(), 'supercli-app-publish-'))
   try {
     const archive = join(stage, 'app.tar.gz')
     writeFileSync(archive, 'local dry-run artifact')
@@ -58,8 +58,8 @@ test('batch publishing can defer the registry until every artifact is uploaded',
     for (const deferred of [false, true]) {
       const result = spawnSync(process.execPath, deferred ? [...args, '--skip-registry'] : args, { encoding: 'utf8' })
       assert.equal(result.status, 0, result.stderr)
-      assert.match(result.stdout, /unpeel-diffs-latest-linux-x86_64.tar.gz/)
-      assert.match(result.stdout, /unpeel-diffs-latest-macos-universal.tar.gz/)
+      assert.match(result.stdout, /supercli-diffs-latest-linux-x86_64.tar.gz/)
+      assert.match(result.stdout, /supercli-diffs-latest-macos-universal.tar.gz/)
       assert.equal(result.stdout.includes('stable/protocol/app-registry.json'), !deferred)
     }
   } finally {

@@ -63,7 +63,7 @@ const RESERVED_EXECUTABLE_NAMES: &[&str] = &[
     "git",
     "make",
     "cargo",
-    "unpeel",
+    "supercli",
     "unpeel-host",
     "unpeel-attach",
 ];
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn index_maps_aliases_and_ids_with_builtins_reserved() {
         let app = crate::apps_mcp::InstalledApp {
-            id: "unpeel.app.design".into(),
+            id: "supercli.app.design".into(),
             name: "Unpeel Design".into(),
             version: Some("0.1.0".into()),
             description: String::new(),
@@ -253,12 +253,12 @@ mod tests {
         // never do.
         for alias in ["design", "unpeel-design"] {
             let identity = index.by_alias.get(alias).expect(alias);
-            assert_eq!(identity.app_id, "unpeel.app.design");
+            assert_eq!(identity.app_id, "supercli.app.design");
             assert_eq!(identity.tint.as_deref(), Some("#8B5CF6"));
         }
         assert!(!index.by_alias.contains_key("claude"));
         assert!(!index.by_alias.contains_key("bash"));
-        assert!(index.by_id.contains_key("unpeel.app.design"));
+        assert!(index.by_id.contains_key("supercli.app.design"));
     }
 
     #[test]

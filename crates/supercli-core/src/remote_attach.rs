@@ -10,7 +10,7 @@
 //!   unpeel-host __remote_attach__ --url https://mac:55280 --token T \
 //!       [--fingerprint SHA256HEX] <session-id>
 //!
-//! With --url omitted it reads `~/.unpeel/remote.json` (attach through this
+//! With --url omitted it reads `~/.supercli/remote.json` (attach through this
 //! machine's own server — the loopback demo).
 //!
 //! Transport: the server's plain-GET long-poll (`/output?offset&wait_ms`)
@@ -41,7 +41,7 @@ pub const REMOTE_ATTACH_ARG: &str = "__remote_attach__";
 /// Feature flag: remote attach (this CLI and the server's raw `/write`
 /// endpoint) is experimental and off by default. One env var gates both
 /// halves so a stray build can't expose raw remote input.
-pub const REMOTE_ATTACH_ENV: &str = "UNPEEL_REMOTE_ATTACH";
+pub const REMOTE_ATTACH_ENV: &str = "SUPERCLI_REMOTE_ATTACH";
 
 pub fn remote_attach_enabled() -> bool {
     std::env::var(REMOTE_ATTACH_ENV).ok().as_deref() == Some("1")
@@ -140,7 +140,7 @@ pub fn run_cli(args: &[String]) -> i32 {
             }
             None => {
                 eprintln!(
-                    "no --url/--token and ~/.unpeel/remote.json is unavailable \
+                    "no --url/--token and ~/.supercli/remote.json is unavailable \
                      (is the remote server running?)"
                 );
                 return 2;
@@ -589,7 +589,7 @@ fn parse_https_url(url: &str) -> Option<(String, u16)> {
 
 fn read_local_remote_state() -> Option<(String, String, Option<String>)> {
     read_peer_file(
-        crate::app_paths::unpeel_home()
+        crate::app_paths::supercli_home()
             .join("remote.json")
             .to_str()?,
     )

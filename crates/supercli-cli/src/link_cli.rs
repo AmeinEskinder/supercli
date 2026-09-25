@@ -2,7 +2,7 @@
 //!
 //! This is the SSH/provisioning spelling of the interactive TUI Settings ▸
 //! Remote activation path. It deliberately reuses the exact
-//! `unpeel_core::license` request/commit primitives (and therefore the same
+//! `supercli_core::license` request/commit primitives (and therefore the same
 //! locked durable suppression record), so deactivation and authoritative
 //! rejection semantics are identical to the interactive path — never a
 //! second activation implementation, and never a client-side gate on
@@ -14,8 +14,8 @@
 //!   2  transient failure — retry later (network/service outage; for
 //!      `enroll` the activation may already be durably committed, see below)
 
-use unpeel_core::license;
-use unpeel_core::relay_uplink;
+use supercli_core::license;
+use supercli_core::relay_uplink;
 
 pub const HELP: &str = "\
 unpeel link — Unpeel Link enrollment for this Host machine

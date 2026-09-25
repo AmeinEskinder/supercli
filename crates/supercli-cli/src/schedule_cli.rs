@@ -7,7 +7,7 @@
 //! stays denied, and every trigger appends one audit record to
 //! `<session-dir>/scheduled-runs.jsonl`.
 //!
-//! Safety rules enforced by this module and `unpeel_core::scheduled`:
+//! Safety rules enforced by this module and `supercli_core::scheduled`:
 //! * schedules are explicit operator opt-in (`add`); nothing runs without one;
 //! * one named session per schedule; the session must exist at `add` time;
 //! * defaults are 30 min / 200 steps / 4 MiB / 0 retries, adjustable per
@@ -21,13 +21,13 @@
 //!   system cron, which would break the single-flight guarantee.
 
 use std::path::Path;
-use unpeel_core::app_paths;
-use unpeel_core::scheduled::{
+use supercli_core::app_paths;
+use supercli_core::scheduled::{
     load_schedules, save_schedules, schedules_path, AutonomousPolicy, RunOutcome, RunRecord,
     ScheduleSpec, ScheduledRunner, ScheduledTask, ScheduledToolCall, Scheduler, SystemClock,
 };
-use unpeel_core::session_connectors::SessionConnectors;
-use unpeel_core::session_host;
+use supercli_core::session_connectors::SessionConnectors;
+use supercli_core::session_host;
 
 pub const HELP: &str = "\
 unpeel schedule — scheduled autonomous sessions (explicit operator opt-in)
@@ -238,7 +238,7 @@ fn add(args: &[String]) -> Result<i32, String> {
     };
     spec.validate()
         .map_err(|e| format!("invalid schedule: {e}"))?;
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let mut specs = load_schedules(&home).map_err(|e| e.to_string())?;
     if specs.iter().any(|s| s.id == spec.id) {
         return Err(format!("schedule {:?} already exists", spec.id));
@@ -271,7 +271,7 @@ fn list(args: &[String]) -> Result<i32, String> {
     if args.iter().any(|a| a != "--json") {
         return Err("usage: unpeel schedule list [--json]".to_string());
     }
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let specs = load_schedules(&home).map_err(|e| e.to_string())?;
     if json {
         println!(
@@ -298,7 +298,7 @@ fn list(args: &[String]) -> Result<i32, String> {
 fn set_enabled(args: &[String], enabled: bool) -> Result<i32, String> {
     let verb = if enabled { "resume" } else { "pause" };
     let id = single_id(args, verb)?;
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let mut specs = load_schedules(&home).map_err(|e| e.to_string())?;
     let spec = specs
         .iter_mut()
@@ -312,7 +312,7 @@ fn set_enabled(args: &[String], enabled: bool) -> Result<i32, String> {
 
 fn remove(args: &[String]) -> Result<i32, String> {
     let id = single_id(args, "remove")?;
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let mut specs = load_schedules(&home).map_err(|e| e.to_string())?;
     let before = specs.len();
     specs.retain(|s| s.id != id);
@@ -336,7 +336,7 @@ fn run_once(args: &[String]) -> Result<i32, String> {
         [id, flag] if flag == "--json" => (id.clone(), true),
         _ => return Err("usage: unpeel schedule run-once <id> [--json]".to_string()),
     };
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let specs = load_schedules(&home).map_err(|e| e.to_string())?;
     let spec = specs
         .iter()
@@ -382,18 +382,18 @@ fn run_once(args: &[String]) -> Result<i32, String> {
 /// registers) AND a stderr line, because this daemon usually runs headless
 /// and the operator watches its logs.
 fn notify_failure(spec: &ScheduleSpec, record: &RunRecord) {
-    let hub = unpeel_serve::platform_adapter::PlatformAdapterHub::default();
+    let hub = supercli_serve::platform_adapter::PlatformAdapterHub::default();
     let title = format!("Scheduled run failed: {}", spec.id);
     let body = record
         .error
         .clone()
         .unwrap_or_else(|| format!("outcome: {:?}", record.outcome));
-    let _ = unpeel_serve::notifications::deliver(
+    let _ = supercli_serve::notifications::deliver(
         &hub,
-        unpeel_serve::notifications::NotificationRequest {
+        supercli_serve::notifications::NotificationRequest {
             session_id: &spec.session_id,
             title: &title,
-            kind: unpeel_serve::notifications::NotificationKind::Alert,
+            kind: supercli_serve::notifications::NotificationKind::Alert,
             body: Some(&body),
             requires_notify_when_done: true,
             send_desktop: false,
@@ -412,7 +412,7 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     if !args.is_empty() {
         return Err("usage: unpeel schedule daemon (no arguments)".to_string());
     }
-    let home = app_paths::ensure_unpeel_home().map_err(|e| e.to_string())?;
+    let home = app_paths::ensure_supercli_home().map_err(|e| e.to_string())?;
     eprintln!(
         "unpeel schedule daemon: watching {} (Ctrl-C to stop)",
         schedules_path(&home).display()
@@ -422,9 +422,9 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     // a schedule's lease, this one skips it; a crashed daemon's leases
     // expire and this one takes over. Fail-closed: without the lease DB
     // the daemon refuses to start rather than risk double-firing.
-    let leases = unpeel_core::schedule_leases::ScheduleLeases::open(
+    let leases = supercli_core::schedule_leases::ScheduleLeases::open(
         &home,
-        unpeel_core::schedule_leases::DEFAULT_TENANT,
+        supercli_core::schedule_leases::DEFAULT_TENANT,
     )
     .map_err(|e| format!("cannot open schedule lease database: {e}"))?;
     let mut scheduler = scheduler.with_lease_store(leases);
@@ -432,7 +432,7 @@ fn daemon(args: &[String]) -> Result<i32, String> {
         // Fresh connector set per trigger: no state leaks between runs,
         // and the runner puts it in autonomous mode for the run's duration.
         Box::new(SessionConnectors::resolve(session_id, session_dir))
-            as Box<dyn unpeel_core::scheduled::ScheduledToolExecutor>
+            as Box<dyn supercli_core::scheduled::ScheduledToolExecutor>
     };
     loop {
         let report = scheduler.tick(

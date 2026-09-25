@@ -1,22 +1,22 @@
 //! `unpeel doctor` — R4 operability diagnostics.
 //!
 //! Checks:
-//! - Home-dir permissions (UNPEEL_HOME exists, writable, not world-writable)
+//! - Home-dir permissions (SUPERCLI_HOME exists, writable, not world-writable)
 //! - Chain integrity (verify_review_chain for all sessions)
 //! - Stale leases (expired but unreleased lease rows)
 //! - Clock skew (system time vs file mtimes — detects major skew)
 
 use std::path::PathBuf;
 
-fn unpeel_home() -> PathBuf {
-    if let Some(home) = std::env::var_os("UNPEEL_HOME") {
+fn supercli_home() -> PathBuf {
+    if let Some(home) = std::env::var_os("SUPERCLI_HOME") {
         return PathBuf::from(home);
     }
-    // Fall back to ~/.unpeel (never used in tests; tests set UNPEEL_HOME).
+    // Fall back to ~/.supercli (never used in tests; tests set SUPERCLI_HOME).
     if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home).join(".unpeel");
+        return PathBuf::from(home).join(".supercli");
     }
-    PathBuf::from(".unpeel")
+    PathBuf::from(".supercli")
 }
 
 /// Run all doctor checks. Returns exit code (0 = all passed).
@@ -24,7 +24,7 @@ fn unpeel_home() -> PathBuf {
 /// Run the checks without printing. Shared by `run` and `unpeel init`
 /// (which merges the doctor report into its own JSON output).
 pub fn run_checks() -> (PathBuf, Vec<(&'static str, bool, String)>) {
-    let home = unpeel_home();
+    let home = supercli_home();
 
     // 1. Home-dir permissions. 2. Chain integrity. 3. Stale leases. 4. Clock skew.
     // 5. Grants file (S2: sharded from app-state.json).
@@ -157,14 +157,14 @@ fn check_chain_integrity(home: &std::path::Path) -> (&'static str, bool, String)
             continue;
         }
         // Only check if there's a review log.
-        let review_log = session_dir.join(unpeel_core::action_reviews::REVIEWS_FILE);
+        let review_log = session_dir.join(supercli_core::action_reviews::REVIEWS_FILE);
         if !review_log.exists() {
             continue;
         }
         checked += 1;
         // R4: use the real verify_review_chain from unpeel-core.
         // This validates the hash chain cryptographically, not just JSON syntax.
-        match unpeel_core::action_reviews::verify_review_chain(&session_dir) {
+        match supercli_core::action_reviews::verify_review_chain(&session_dir) {
             Ok(count) => {
                 // Chain verifies; count is the number of entries.
                 let _ = count;
@@ -196,10 +196,10 @@ fn check_stale_leases(home: &std::path::Path) -> (&'static str, bool, String) {
     //
     // Doctor is diagnostic: never create the DB as a side effect. If the
     // file doesn't exist, there are no leases at all.
-    if !unpeel_core::schedule_leases::leases_db_path(home).exists() {
+    if !supercli_core::schedule_leases::leases_db_path(home).exists() {
         return ("stale-leases", true, "no lease DB".to_string());
     }
-    let db = match unpeel_core::schedule_leases::ScheduleLeases::open(home, "default") {
+    let db = match supercli_core::schedule_leases::ScheduleLeases::open(home, "default") {
         Ok(db) => db,
         Err(e) => return ("stale-leases", false, format!("DB error: {e:?}")),
     };
@@ -304,10 +304,10 @@ fn check_grants_file(home: &PathBuf) -> (&'static str, bool, String) {
 /// security violation (quarantined on startup).
 fn check_grant_audit(_home: &PathBuf) -> (&'static str, bool, String) {
     // Verify the audit chain integrity.
-    match unpeel_core::grant_audit::verify_grant_audit() {
+    match supercli_core::grant_audit::verify_grant_audit() {
         Ok(count) => {
             // Check grants ⊆ chain.
-            match unpeel_core::grant_audit::doctor_check_grants_subset() {
+            match supercli_core::grant_audit::doctor_check_grants_subset() {
                 Ok(()) => (
                     "grant-audit",
                     true,
@@ -375,7 +375,7 @@ fn build_bundle(home: &std::path::Path, output: &std::path::Path) -> Result<(), 
 
     // versions.json
     let versions = serde_json::json!({
-        "unpeel": env!("CARGO_PKG_VERSION"),
+        "supercli": env!("CARGO_PKG_VERSION"),
         "rustc": rustc_version(),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
@@ -479,7 +479,7 @@ fn collect_stats(home: &std::path::Path) -> Result<serde_json::Value, String> {
                 let count = content.lines().filter(|l| !l.trim().is_empty()).count();
                 total_reviews += count;
                 // Verify chain (metadata only, no payload)
-                match unpeel_core::action_reviews::verify_review_bytes(content.as_bytes(), "bundle")
+                match supercli_core::action_reviews::verify_review_bytes(content.as_bytes(), "bundle")
                 {
                     Ok(_) => chains_ok += 1,
                     Err(_) => chains_failed += 1,
@@ -509,7 +509,7 @@ fn collect_lease_stats(home: &std::path::Path) -> (usize, usize) {
         return (0, 0);
     }
     // Use the ScheduleLeases API if available; fall back to 0 on error.
-    match unpeel_core::schedule_leases::ScheduleLeases::open(home, "default") {
+    match supercli_core::schedule_leases::ScheduleLeases::open(home, "default") {
         Ok(db) => {
             let total = db.list_holders().map(|v| v.len()).unwrap_or(0);
             let stale = db.list_stale().map(|v| v.len()).unwrap_or(0);
@@ -593,14 +593,14 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("doctor-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         // Should pass with an empty home (no sessions, no leases).
         // run() returns exit code: 0 = success.
         let code = run(&["--json".to_string()]);
         assert_eq!(code, 0, "doctor should pass on empty home");
 
-        std::env::remove_var("UNPEEL_HOME");
+        std::env::remove_var("SUPERCLI_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -611,9 +611,9 @@ mod tests {
         // so remove the dir both before and after (robust, no pollution).
         let fake_home = std::path::Path::new("/nonexistent-doctor-test-12345");
         let _ = std::fs::remove_dir_all(fake_home);
-        std::env::set_var("UNPEEL_HOME", "/nonexistent-doctor-test-12345");
+        std::env::set_var("SUPERCLI_HOME", "/nonexistent-doctor-test-12345");
         let code = run(&[]);
-        std::env::remove_var("UNPEEL_HOME");
+        std::env::remove_var("SUPERCLI_HOME");
         let _ = std::fs::remove_dir_all(fake_home);
         assert_ne!(code, 0, "doctor should fail on missing home");
     }
@@ -625,9 +625,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("doctor-nodb-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
         let code = run(&[]);
-        std::env::remove_var("UNPEEL_HOME");
+        std::env::remove_var("SUPERCLI_HOME");
         assert_eq!(code, 0, "doctor should pass on empty home");
         assert!(
             !dir.join("schedule-leases.db").exists(),
@@ -696,16 +696,16 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("doctor-stale-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let db = unpeel_core::schedule_leases::ScheduleLeases::open(&dir, "default")
+        let db = supercli_core::schedule_leases::ScheduleLeases::open(&dir, "default")
             .unwrap()
             .with_ttl(0);
         db.claim("crashed-worker").unwrap().unwrap();
         let stale = db.list_stale().unwrap();
         assert_eq!(stale.len(), 1, "one stale row expected: {stale:?}");
 
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
         let code = run(&[]);
-        std::env::remove_var("UNPEEL_HOME");
+        std::env::remove_var("SUPERCLI_HOME");
         assert_ne!(code, 0, "doctor should fail with a stale lease");
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -38,7 +38,7 @@ pub(crate) fn local_neighborhood(
     caller_session_id: &str,
 ) -> Result<Option<PaneNeighborhood>, String> {
     neighborhood_at(
-        &crate::app_paths::unpeel_home().join("pane-layouts.json"),
+        &crate::app_paths::supercli_home().join("pane-layouts.json"),
         WINDOW_ID,
         SCOPE_ID,
         caller_session_id,

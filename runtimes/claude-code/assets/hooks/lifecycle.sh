@@ -2,20 +2,20 @@
 umask 077
 INPUT=$(cat)
 # Global provider hooks must be inert outside a hosted Unpeel Session.
-[ -n "${UNPEEL_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${UNPEEL_HOOK_TRACE_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+[ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
 # Cap trace growth so the log can never grow without bound.
 if [ -f "$TRACE_FILE" ]; then
-  _unpeel_trace_size=$(wc -c < "$TRACE_FILE" 2>/dev/null | tr -d ' ')
-  if [ -n "$_unpeel_trace_size" ] && [ "$_unpeel_trace_size" -gt 10485760 ]; then
+  _supercli_trace_size=$(wc -c < "$TRACE_FILE" 2>/dev/null | tr -d ' ')
+  if [ -n "$_supercli_trace_size" ] && [ "$_supercli_trace_size" -gt 10485760 ]; then
     mv -f "$TRACE_FILE" "$TRACE_FILE.1" 2>/dev/null || true
   fi
 fi
 # The payload contains the user's prompt text; the trace line at the end of
 # this script logs only the event/tool/post metadata unless
-# UNPEEL_HOOK_TRACE_VERBOSE=1 explicitly opts into full-payload logging.
-UNPEEL_PORT_REGISTRY_FILE="${UNPEEL_APP_PORT_REGISTRY_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/app-ports}"
+# SUPERCLI_HOOK_TRACE_VERBOSE=1 explicitly opts into full-payload logging.
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
 
 # POST one hook payload synchronously and record the outcome in
 # _hook_post_results ("<port>=<http-code>,..."). Loopback posts finish in
@@ -44,10 +44,10 @@ post_hook_payload() {
   esac
 }
 
-current_unpeel_ports() {
-  [ -f "$UNPEEL_PORT_REGISTRY_FILE" ] || return 1
+current_supercli_ports() {
+  [ -f "$SUPERCLI_PORT_REGISTRY_FILE" ] || return 1
   awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ && $1 > 0 && $1 <= 65535 && !seen[$1 + 0]++ { print $1 + 0 }' \
-    "$UNPEEL_PORT_REGISTRY_FILE" 2>/dev/null
+    "$SUPERCLI_PORT_REGISTRY_FILE" 2>/dev/null
 }
 
 post_hook_payload_to_current_ports() {
@@ -55,7 +55,7 @@ post_hook_payload_to_current_ports() {
   _hook_session_id="$2"
   _hook_skip_port="$3"
   _hook_post_pids=""
-  for _hook_candidate_port in $(current_unpeel_ports); do
+  for _hook_candidate_port in $(current_supercli_ports); do
     [ -n "$_hook_candidate_port" ] || continue
     [ "$_hook_candidate_port" = "$_hook_skip_port" ] && continue
     ( post_hook_payload "$_hook_payload" "$_hook_session_id" "$_hook_candidate_port" || true ) &
@@ -72,21 +72,21 @@ json_escape_string() {
 }
 
 runtime_generation_json_field() {
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) return 0 ;;
   esac
-  printf ',"unpeel_runtime_generation":%s' "$UNPEEL_RUNTIME_GENERATION"
+  printf ',"supercli_runtime_generation":%s' "$SUPERCLI_RUNTIME_GENERATION"
 }
 
 add_runtime_generation_to_payload() {
   _generation_payload="$1"
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) printf '%s' "$_generation_payload"; return 0 ;;
   esac
-  if printf '%s' "$_generation_payload" | grep -q '"unpeel_runtime_generation"[[:space:]]*:'; then
+  if printf '%s' "$_generation_payload" | grep -q '"supercli_runtime_generation"[[:space:]]*:'; then
     printf '%s' "$_generation_payload"
   elif printf '%s' "$_generation_payload" | grep -q '^[[:space:]]*{'; then
-    printf '%s' "$_generation_payload" | sed "1s/^[[:space:]]*{/&\"unpeel_runtime_generation\":$UNPEEL_RUNTIME_GENERATION,/"
+    printf '%s' "$_generation_payload" | sed "1s/^[[:space:]]*{/&\"supercli_runtime_generation\":$SUPERCLI_RUNTIME_GENERATION,/"
   else
     printf '%s' "$_generation_payload"
   fi
@@ -99,8 +99,8 @@ add_runtime_generation_to_payload() {
 record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
-  [ -n "${UNPEEL_SESSION_ID:-}" ] || return 0
-  _record_dir="${UNPEEL_SESSION_DIR:-${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$UNPEEL_SESSION_ID}"
+  [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_name_json="$(json_escape_string "$_record_event_name")"
   _record_generation="$(runtime_generation_json_field)"
@@ -122,7 +122,7 @@ trace_claude_hook() {
   if [ -n "$_trace_reason" ]; then
     printf '%s claude-hook session=%s event=%s tool=%s post=%s ignored=%s\n' \
       "$(date '+%Y-%m-%d %H:%M:%S')" \
-      "${UNPEEL_SESSION_ID:-}" \
+      "${SUPERCLI_SESSION_ID:-}" \
       "$LAST_EVENT_NAME" \
       "$LAST_TOOL_NAME" \
       "${_hook_post_results:-none}" \
@@ -130,15 +130,15 @@ trace_claude_hook() {
   else
     printf '%s claude-hook session=%s event=%s tool=%s post=%s\n' \
       "$(date '+%Y-%m-%d %H:%M:%S')" \
-      "${UNPEEL_SESSION_ID:-}" \
+      "${SUPERCLI_SESSION_ID:-}" \
       "$LAST_EVENT_NAME" \
       "$LAST_TOOL_NAME" \
       "${_hook_post_results:-none}" >> "$TRACE_FILE" 2>/dev/null || true
   fi
-  if [ "${UNPEEL_HOOK_TRACE_VERBOSE:-}" = "1" ]; then
+  if [ "${SUPERCLI_HOOK_TRACE_VERBOSE:-}" = "1" ]; then
     printf '%s claude-hook-payload session=%s payload=%s\n' \
       "$(date '+%Y-%m-%d %H:%M:%S')" \
-      "${UNPEEL_SESSION_ID:-}" \
+      "${SUPERCLI_SESSION_ID:-}" \
       "$INPUT" >> "$TRACE_FILE" 2>/dev/null || true
   fi
 }
@@ -151,8 +151,8 @@ trace_claude_hook() {
 if [ -n "${GROK_SESSION_ID:-}" ]; then
   printf '%s claude-hook session=%s port=%s ignored=grok\n' \
     "$(date '+%Y-%m-%d %H:%M:%S')" \
-    "${UNPEEL_SESSION_ID:-}" \
-    "${UNPEEL_APP_PORT:-}" >> "$TRACE_FILE" 2>/dev/null || true
+    "${SUPERCLI_SESSION_ID:-}" \
+    "${SUPERCLI_APP_PORT:-}" >> "$TRACE_FILE" 2>/dev/null || true
   exit 0
 fi
 
@@ -190,21 +190,21 @@ INPUT=$(add_runtime_generation_to_payload "$INPUT")
 # A generation directory prevents a departed runtime's children from keeping
 # its replacement busy. Untagged/manual launches retain metadata-only behavior.
 record_subagent_activity() {
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) return 0 ;;
   esac
   _child_id=$(printf '%s' "$INPUT" | grep -oE '"agent_id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]+"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
   [ -n "$_child_id" ] && [ "${#_child_id}" -le 160 ] || return 0
-  _child_session_dir="${UNPEEL_SESSION_DIR:-${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$UNPEEL_SESSION_ID}"
+  _child_session_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_child_session_dir" ] || return 0
-  _child_dir="$_child_session_dir/background-hooks/$UNPEEL_RUNTIME_GENERATION"
+  _child_dir="$_child_session_dir/background-hooks/$SUPERCLI_RUNTIME_GENERATION"
   _child_file="$_child_dir/$_child_id.json"
   case "$LAST_EVENT_NAME" in
     SubagentStart)
       mkdir -p "$_child_dir" 2>/dev/null || return 0
       _child_tmp="$_child_dir/.$_child_id.$$"
-      if printf '{"activity_id":"%s","unpeel_runtime_generation":%s}' \
-          "$_child_id" "$UNPEEL_RUNTIME_GENERATION" > "$_child_tmp" 2>/dev/null; then
+      if printf '{"activity_id":"%s","supercli_runtime_generation":%s}' \
+          "$_child_id" "$SUPERCLI_RUNTIME_GENERATION" > "$_child_tmp" 2>/dev/null; then
         mv -f "$_child_tmp" "$_child_file" 2>/dev/null \
           || rm -f "$_child_tmp" 2>/dev/null || true
       fi
@@ -223,22 +223,22 @@ case "$LAST_EVENT_NAME" in
 esac
 
 _hook_post_results=""
-if [ -n "$UNPEEL_SESSION_ID" ]; then
+if [ -n "$SUPERCLI_SESSION_ID" ]; then
   # Several Unpeel instances can run at once (e.g. a dev build next to the
   # installed app) and they share the port registry. Post to every known
   # port, not just the first that answers, so the instance that owns this
   # session always receives the event. Posts go out synchronously and in
   # order: backgrounded fire-and-forget posts could be reaped when the hook
   # process exited (silently losing the event), and concurrent posts could
-  # arrive out of order. Set UNPEEL_HOOK_POST_SYNC=0 to restore backgrounded
+  # arrive out of order. Set SUPERCLI_HOOK_POST_SYNC=0 to restore backgrounded
   # posts.
-  if [ "${UNPEEL_HOOK_POST_SYNC:-1}" = "1" ]; then
-    post_hook_payload "$INPUT" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
-    post_hook_payload_to_current_ports "$INPUT" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
+  if [ "${SUPERCLI_HOOK_POST_SYNC:-1}" = "1" ]; then
+    post_hook_payload "$INPUT" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
+    post_hook_payload_to_current_ports "$INPUT" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
   else
     (
-      post_hook_payload "$INPUT" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
-      post_hook_payload_to_current_ports "$INPUT" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
+      post_hook_payload "$INPUT" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
+      post_hook_payload_to_current_ports "$INPUT" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
     ) &
   fi
 fi

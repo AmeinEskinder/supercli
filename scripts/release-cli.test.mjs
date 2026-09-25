@@ -137,17 +137,17 @@ test('revision recovery requires a complete same-version replacement without for
 test('revisioned artifact URLs are unique while normal keys stay unchanged', () => {
   assert.equal(
     cliVersionedArtifactKey('beta', '0.2.0', 'linux-x86_64'),
-    'beta/cli/unpeel-0.2.0-linux-x86_64.tar.gz'
+    'beta/cli/supercli-0.2.0-linux-x86_64.tar.gz'
   )
   assert.equal(
     cliVersionedArtifactUrl(
-      'https://unpeel.com/',
+      'https://supercli.com/',
       'beta',
       '0.2.0',
       'linux-x86_64',
       'abcdef012345'
     ),
-    'https://unpeel.com/releases/beta/cli/unpeel-0.2.0-abcdef012345-linux-x86_64.tar.gz'
+    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-x86_64.tar.gz'
   )
 })
 
@@ -159,7 +159,7 @@ test('immutable object checks catch an artifact omitted from latest.json', async
 
   const found = await findPublishedCliArtifacts({
     fetchImpl,
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'alpha',
     version: '0.2.0',
     targets: ['linux-x86_64', 'linux-aarch64'],
@@ -168,7 +168,7 @@ test('immutable object checks catch an artifact omitted from latest.json', async
 
   assert.deepEqual(found, [{
     target: 'linux-x86_64',
-    url: 'https://unpeel.com/releases/alpha/cli/unpeel-0.2.0-linux-x86_64.tar.gz'
+    url: 'https://supercli.com/releases/alpha/cli/supercli-0.2.0-linux-x86_64.tar.gz'
   }])
 })
 
@@ -176,7 +176,7 @@ test('unexpected object-check responses fail closed', async () => {
   await assert.rejects(
     findPublishedCliArtifacts({
       fetchImpl: async () => response(503),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       version: '0.2.0',
       targets: ['macos-universal'],
@@ -196,7 +196,7 @@ test('revision preflight checks both immutable archive and sidecar', async () =>
       requested.push(cleanUrl.toString())
       return response(new URL(url).pathname.endsWith('.sha256') ? 200 : 404)
     },
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'beta',
     version: '0.2.0',
     artifactRevision: 'abcdef012345',
@@ -205,13 +205,13 @@ test('revision preflight checks both immutable archive and sidecar', async () =>
   })
 
   assert.deepEqual(requested, [
-    'https://unpeel.com/releases/beta/cli/unpeel-0.2.0-abcdef012345-linux-aarch64.tar.gz',
-    'https://unpeel.com/releases/beta/cli/unpeel-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
+    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz',
+    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
   ])
   assert.deepEqual(found, [{
     target: 'linux-aarch64',
     kind: 'sidecar',
-    url: 'https://unpeel.com/releases/beta/cli/unpeel-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
+    url: 'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
   }])
 })
 
@@ -221,7 +221,7 @@ test('a missing channel manifest is a clean first publish', async () => {
       assert.equal(options.method, 'GET')
       return response(404)
     },
-    baseUrl: 'https://unpeel.com/',
+    baseUrl: 'https://supercli.com/',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -233,7 +233,7 @@ test('a malformed channel manifest fails closed instead of erasing targets', asy
   await assert.rejects(
     readPublishedCliLatest({
       fetchImpl: async () => response(200, { channel: 'beta', version: '0.2.0' }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -243,8 +243,8 @@ test('a malformed channel manifest fails closed instead of erasing targets', asy
 
 test('published target metadata is validated before it can be preserved', async () => {
   const validTarget = {
-    key: 'beta/cli/unpeel-0.2.0-macos-universal.tar.gz',
-    latest_key: 'beta/cli/unpeel-latest-macos-universal.tar.gz',
+    key: 'beta/cli/supercli-0.2.0-macos-universal.tar.gz',
+    latest_key: 'beta/cli/supercli-latest-macos-universal.tar.gz',
     bytes: 123,
     sha256: 'a'.repeat(64)
   }
@@ -254,7 +254,7 @@ test('published target metadata is validated before it can be preserved', async 
       version: '0.2.0',
       targets: { 'macos-universal': validTarget }
     }),
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -267,7 +267,7 @@ test('published target metadata is validated before it can be preserved', async 
         version: '0.2.0',
         targets: { 'linux-x86_64': { ...validTarget, sha256: 'not-a-digest' } }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -280,13 +280,13 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
   const target = 'linux-x86_64'
   const validTargets = {}
   for (const currentTarget of ['macos-universal', 'linux-x86_64', 'linux-aarch64']) {
-    const key = `beta/cli/unpeel-0.2.0-${revision}-${currentTarget}.tar.gz`
+    const key = `beta/cli/supercli-0.2.0-${revision}-${currentTarget}.tar.gz`
     validTargets[currentTarget] = {
       key,
-      latest_key: `beta/cli/unpeel-latest-${currentTarget}.tar.gz`,
+      latest_key: `beta/cli/supercli-latest-${currentTarget}.tar.gz`,
       sidecar_key: `${key}.sha256`,
       sidecar_path: `/releases/${key}.sha256`,
-      sidecar_url: `https://unpeel.com/releases/${key}.sha256`,
+      sidecar_url: `https://supercli.com/releases/${key}.sha256`,
       bytes: 123,
       sha256: 'a'.repeat(64)
     }
@@ -299,7 +299,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
   }
   const latest = await readPublishedCliLatest({
     fetchImpl: async () => response(200, body),
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -313,11 +313,11 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
           ...validTargets,
           [target]: {
             ...validTargets[target],
-            key: `beta/cli/unpeel-0.2.0-${target}.tar.gz`
+            key: `beta/cli/supercli-0.2.0-${target}.tar.gz`
           }
         }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -332,7 +332,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
           [target]: { ...validTargets[target], sidecar_key: 'wrong' }
         }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -344,7 +344,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
         ...body,
         artifact_revision: 'ABCDEF012345'
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -356,7 +356,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
         ...body,
         targets: { [target]: validTargets[target] }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -444,15 +444,15 @@ test('a revisioned same-version manifest rejects every later normal publish', ()
 
 test('archive entry check requires the three binaries, the payloads, and protocol/', () => {
   const complete = [
-    'unpeel', 'unpeel-host', 'unpeel-attach', 'LICENSE', 'THIRD_PARTY_NOTICES.txt',
+    'supercli', 'supercli-host', 'supercli-attach', 'LICENSE', 'THIRD_PARTY_NOTICES.txt',
     'BUILD_PROVENANCE.json', 'protocol', 'protocol/host-capabilities-v1.json',
     'protocol/host-conformance-v1.json', 'protocol/relay-kat-vectors-v1.json',
     'generated', 'generated/GeneratedRuntimeCatalog.swift'
   ]
   assert.doesNotThrow(() => assertCliArchiveEntries(complete, 'macos-universal'))
   assert.throws(
-    () => assertCliArchiveEntries(complete.filter((entry) => entry !== 'unpeel-attach'), 'linux-x86_64'),
-    /missing required release payload: unpeel-attach/
+    () => assertCliArchiveEntries(complete.filter((entry) => entry !== 'supercli-attach'), 'linux-x86_64'),
+    /missing required release payload: supercli-attach/
   )
   assert.throws(
     () => assertCliArchiveEntries(complete.filter((entry) => !entry.startsWith('protocol')), 'linux-aarch64'),

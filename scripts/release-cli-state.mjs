@@ -18,7 +18,7 @@ const CLI_TARGETS = ['macos-universal', 'linux-x86_64', 'linux-aarch64']
 // relay KAT vectors, app registry). The clients that pin a server release
 // (the Apple repo's conformance tests, humans) read `protocol/` from the
 // archive; `install.sh` ignores it.
-export const CLI_BINARIES = Object.freeze(['unpeel', 'unpeel-host', 'unpeel-attach'])
+export const CLI_BINARIES = Object.freeze(['supercli', 'supercli-host', 'supercli-attach'])
 export const CLI_ARCHIVE_PAYLOAD = Object.freeze([
   ...CLI_BINARIES,
   'LICENSE',
@@ -138,7 +138,7 @@ export function cliLatestUrl(baseUrl, channel) {
 
 export function cliVersionedArtifactKey(channel, version, target, artifactRevision = null) {
   const revisionPart = artifactRevision == null ? '' : `-${artifactRevision}`
-  return `${channel}/cli/unpeel-${version}${revisionPart}-${target}.tar.gz`
+  return `${channel}/cli/supercli-${version}${revisionPart}-${target}.tar.gz`
 }
 
 export function cliVersionedArtifactUrl(
@@ -215,7 +215,7 @@ export async function readPublishedCliLatest({
       target,
       artifactRevision
     )
-    const expectedLatestKey = `${channel}/cli/unpeel-latest-${target}.tar.gz`
+    const expectedLatestKey = `${channel}/cli/supercli-latest-${target}.tar.gz`
     const expectedSidecarKey = `${expectedKey}.sha256`
     if (
       !isObject(entry)

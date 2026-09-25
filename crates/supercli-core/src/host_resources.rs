@@ -59,9 +59,9 @@ impl ResourceScope {
     }
 
     pub fn new(home: Option<PathBuf>, project_roots: Vec<PathBuf>) -> Self {
-        let mut denied = vec![crate::app_paths::unpeel_home()];
+        let mut denied = vec![crate::app_paths::supercli_home()];
         if let Some(home) = &home {
-            denied.push(home.join(".unpeel"));
+            denied.push(home.join(".supercli"));
             denied.push(home.join(".ssh"));
         }
         Self {
@@ -108,7 +108,7 @@ impl ResourceScope {
         // The most specific registered project root wins over the home rule,
         // but never re-exposes a denied folder from above: a project at `~`
         // or `/` does not make ~/.ssh readable. A worktree registered under
-        // ~/.unpeel/worktrees is inside the denied prefix itself, so it
+        // ~/.supercli/worktrees is inside the denied prefix itself, so it
         // stays a project rather than Unpeel storage.
         let project_root = self
             .project_roots
@@ -451,7 +451,7 @@ mod tests {
         let outside = root.path().join("outside");
         for dir in [
             home.join("docs"),
-            home.join(".unpeel"),
+            home.join(".supercli"),
             home.join(".ssh"),
             project.join("src"),
             outside.clone(),
@@ -459,7 +459,7 @@ mod tests {
             std::fs::create_dir_all(dir).unwrap();
         }
         std::fs::write(home.join("docs/notes.txt"), b"hello notes").unwrap();
-        std::fs::write(home.join(".unpeel/app-state.json"), b"{}").unwrap();
+        std::fs::write(home.join(".supercli/app-state.json"), b"{}").unwrap();
         std::fs::write(home.join(".ssh/id_ed25519"), b"secret").unwrap();
         std::fs::write(project.join("src/main.rs"), b"fn main() {}").unwrap();
         std::fs::write(outside.join("secret.txt"), b"never").unwrap();
@@ -484,14 +484,14 @@ mod tests {
     }
 
     #[test]
-    fn unpeel_storage_and_ssh_material_are_denied_under_home() {
+    fn supercli_storage_and_ssh_material_are_denied_under_home() {
         let fixture = fixture();
-        let unpeel = fixture.home.join(".unpeel/app-state.json");
+        let unpeel = fixture.home.join(".supercli/app-state.json");
         assert_eq!(status(read(&fixture.scope, unpeel.to_str().unwrap())), 403);
         assert_eq!(status(read(&fixture.scope, "~/.ssh/id_ed25519")), 403);
         let listing = fixture
             .scope
-            .resolve("~/.unpeel")
+            .resolve("~/.supercli")
             .and_then(|resolved| resolved.open_dir().map(|_| json!(null)));
         assert_eq!(status(listing), 403);
     }
@@ -552,12 +552,12 @@ mod tests {
             vec![parent, fixture.home.clone()],
         );
         assert_eq!(status(read(&scope, "~/.ssh/id_ed25519")), 403);
-        let unpeel = fixture.home.join(".unpeel/app-state.json");
+        let unpeel = fixture.home.join(".supercli/app-state.json");
         assert_eq!(status(read(&scope, unpeel.to_str().unwrap())), 403);
         // Ordinary home files stay readable through the project root.
         assert_eq!(status(read(&scope, "~/docs/notes.txt")), 200);
-        // A worktree registered inside ~/.unpeel is a project, not storage.
-        let worktree = fixture.home.join(".unpeel/worktrees/feature");
+        // A worktree registered inside ~/.supercli is a project, not storage.
+        let worktree = fixture.home.join(".supercli/worktrees/feature");
         std::fs::create_dir_all(&worktree).unwrap();
         std::fs::write(worktree.join("README.md"), b"wt").unwrap();
         let scope = ResourceScope::new(Some(fixture.home.clone()), vec![worktree.clone()]);

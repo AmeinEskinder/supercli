@@ -104,7 +104,7 @@ Sorted key order: `actor`, `outcome`, `prev_hash`, `reason`, `review_id`,
 ## Golden vectors
 
 Fixed inputs and their exact canonical bytes + hashes are pinned in
-`crates/unpeel-core/src/action_reviews.rs`:
+`crates/supercli-core/src/action_reviews.rs`:
 
 - `golden_vector_canonical_bytes`: pins `canonical_bytes()` output and its
   SHA-256 for a fixed review entry (keys alphabetical, no whitespace, no

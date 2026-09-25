@@ -4,11 +4,11 @@
 # the committed THIRD_PARTY_NOTICES.txt. Exit 0 = in sync.
 set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-tmp=$(mktemp "${TMPDIR:-/tmp}/unpeel-notices.XXXXXX")
+tmp=$(mktemp "${TMPDIR:-/tmp}/supercli-notices.XXXXXX")
 trap 'rm -f "$tmp"' EXIT INT TERM
-cargo run --quiet --locked --manifest-path "$repo_root/crates/Cargo.toml" -p unpeel-license-notices -- \
-  --manifest-path "$repo_root/crates/Cargo.toml" --package unpeel-cli --package unpeel-host \
-  --manifest-path "$repo_root/crates/unpeel-attach/Cargo.toml" --package unpeel-attach \
+cargo run --quiet --locked --manifest-path "$repo_root/crates/Cargo.toml" -p supercli-license-notices -- \
+  --manifest-path "$repo_root/crates/Cargo.toml" --package supercli-cli --package supercli-host \
+  --manifest-path "$repo_root/crates/supercli-attach/Cargo.toml" --package supercli-attach \
   --target aarch64-apple-darwin --target x86_64-apple-darwin \
   --target x86_64-unknown-linux-gnu --target aarch64-unknown-linux-gnu \
   --output "$tmp"

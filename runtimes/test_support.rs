@@ -1,5 +1,5 @@
 // Shared fixtures for the hook-reporter conformance tests; included by
-// `unpeel_core::hook_assets::test_support` (test builds only).
+// `supercli_core::hook_assets::test_support` (test builds only).
 
 use super::{
     kiro_mcp_server_value, AMP_PLUGIN_SCRIPT, CLAUDE_HOOK_SCRIPT, CLINE_HOOK_SCRIPT,
@@ -209,10 +209,10 @@ pub(crate) fn run_hook_script_with_stdin(
         .arg(script)
         .args(args)
         .env("HOME", hook_env_home(label))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
-        .env("UNPEEL_RUNTIME_GENERATION", "7")
-        .env("UNPEEL_HOOK_TRACE_FILE", hook_trace_file(label))
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_RUNTIME_GENERATION", "7")
+        .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file(label))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -297,10 +297,10 @@ pub(crate) fn run_hook_path_recording(
         .arg(script)
         .args(args)
         .env("HOME", hook_env_home(label))
-        .env("UNPEEL_SESSION_ID", "unpeel-record-session")
-        .env("UNPEEL_SESSION_DIR", session_dir)
-        .env("UNPEEL_RUNTIME_GENERATION", "7")
-        .env("UNPEEL_HOOK_TRACE_FILE", hook_trace_file(label))
+        .env("SUPERCLI_SESSION_ID", "unpeel-record-session")
+        .env("SUPERCLI_SESSION_DIR", session_dir)
+        .env("SUPERCLI_RUNTIME_GENERATION", "7")
+        .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file(label))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

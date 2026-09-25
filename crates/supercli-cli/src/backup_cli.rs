@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use unpeel_core::{app_paths, backup};
+use supercli_core::{app_paths, backup};
 
 pub const BACKUP_HELP: &str = "\
 unpeel backup — snapshot this workspace home into a verifiable archive
@@ -104,7 +104,7 @@ pub fn backup_cmd(args: &[String]) -> i32 {
         Some(p) => PathBuf::from(p),
         None => PathBuf::from(format!("unpeel-backup-{}.tar", epoch_secs())),
     };
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     match backup::create_backup(&home, &dest) {
         Ok(report) => {
             if json {
@@ -168,7 +168,7 @@ pub fn restore_cmd(args: &[String]) -> i32 {
         eprintln!("unpeel restore: --from <path> is required\n{RESTORE_HELP}");
         return 2;
     };
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     match backup::restore_backup(Path::new(from), &home, force) {
         Ok(report) => {
             if json {

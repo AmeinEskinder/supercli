@@ -7,7 +7,7 @@ A release is cut from a Mac with **one command** — `clients/native/release.sh`
 there is no website/admin path, because signing, notarization, and Sparkle
 signing need local secrets a Cloudflare Worker cannot hold. The release order
 is CLI (`bun run release:cli`) → Mac app (`bun run release:mac`) → website
-(the changelog entry goes live from the separate `unpeel-cloud` repo).
+(the changelog entry goes live from the separate `supercli-cloud` repo).
 
 ```sh
 CODESIGN_IDENTITY="Developer ID Application: <team> (<TEAMID>)" \
@@ -16,7 +16,7 @@ NOTARY_KEY_ID=<KEYID> NOTARY_ISSUER=<issuer-uuid> \
 bun run release:mac -- --channel beta --build 9
 ```
 
-**Lockstep versioning (decided 2026-08-13):** the app and the `unpeel` CLI
+**Lockstep versioning (decided 2026-08-13):** the app and the `supercli` CLI
 share one version number, sourced from `crates/Cargo.toml`
 (`[workspace.package] version`). Both `release.sh` and `release-cli.mjs`
 derive it from there; passing `--version` is optional and both refuse a value
@@ -35,20 +35,20 @@ always check it before picking `--build`.
 
 The pipeline (each step reuses an existing script):
 
-1. `build-app.sh` — build + Developer ID sign `Unpeel.app` (hardened runtime);
+1. `build-app.sh` — build + Developer ID sign `Supercli.app` (hardened runtime);
    `--channel` bakes the matching `SUFeedURL` into Info.plist.
 2. Notarize + staple the **app** (submit a throwaway ZIP via
-   `notarize-dmg.sh <zip> --staple Unpeel.app`) — before packaging, so the app
+   `notarize-dmg.sh <zip> --staple Supercli.app`) — before packaging, so the app
    inside the DMG and inside the Sparkle ZIP both carry a stapled ticket and
    pass Gatekeeper offline.
-3. `make-dmg.sh` — package + sign the install DMG (`Unpeel-<version>.dmg`)
+3. `make-dmg.sh` — package + sign the install DMG (`Supercli-<version>.dmg`)
    from the stapled app.
 4. `notarize-dmg.sh` — notarize + staple the DMG itself.
 5. `ditto` — zip the stapled app as the Sparkle self-update archive, into a
    cleaned per-channel staging dir (one ZIP → one appcast item; stale
    ZIPs/deltas are never re-advertised).
 6. `generate_appcast` (Sparkle CLI, EdDSA key from the login Keychain) — sign the
-   ZIP and write `appcast.xml` with URLs under `https://unpeel.com/releases/<channel>/`.
+   ZIP and write `appcast.xml` with URLs under `https://supercli.com/releases/<channel>/`.
 7. `scripts/publish-cloudflare-release.mjs` — upload DMG + ZIP + appcast +
    `latest.json` to R2.
 
@@ -61,7 +61,7 @@ CFBundleVersion is one monotonic space across channels (`--force` overrides
 the published-state guards; versioned artifacts are CDN-cached as immutable,
 so overwriting a published version strands clients on a ZIP whose EdDSA
 signature no longer matches the appcast) — or the version has no
-`## <version>` entry in `unpeel-cloud:apps/website/app/changelog.md` (the website's
+`## <version>` entry in `supercli-cloud:apps/website/app/changelog.md` (the website's
 `/changelog` page; add the entry, and deploy the site after the release so it
 goes live — dry runs are exempt). The lower-level publisher preserves validated
 same-version fields for a partial/appcast repair; a new version must include
@@ -96,15 +96,15 @@ fallbacks.
 > it the file is named after the feed URL (e.g. `appcast-beta.xml`).
 
 
-## CLI (`unpeel`) Install Channel
+## CLI (`supercli`) Install Channel
 
 The CLI installs with:
 
 ```sh
-curl -fsSL https://unpeel.com/install.sh | sh
+curl -fsSL https://supercli.com/install.sh | sh
 ```
 
-- `/install.sh` is served by the releases worker (`unpeel-cloud:apps/releases/src/worker.mjs`),
+- `/install.sh` is served by the releases worker (`supercli-cloud:apps/releases/src/worker.mjs`),
   which fetches `<channel>/cli/install.sh` from R2 per request (bounded
   60 s in-isolate cache, `served-assets.mjs`) and substitutes
   `__DEFAULT_CHANNEL__` / `__BASE_URL__` per request. The script's source is
@@ -113,25 +113,25 @@ curl -fsSL https://unpeel.com/install.sh | sh
   after `latest.json`, so an installer fix ships with the next CLI publish.
   The Worker keeps a deploy-time copy of all three as the fallback for a
   channel that has not published them yet or an R2 failure
-  (`x-unpeel-asset-source: r2|fallback` on the response). Tests:
+  (`x-supercli-asset-source: r2|fallback` on the response). Tests:
   `scripts/release-installer.test.mjs`, `scripts/release-worker-assets.test.mjs`.
 - The installer detects the platform (`macos-universal`, `linux-x86_64`,
   `linux-aarch64` — same names as the vendored ghostty-vt slices), downloads
-  `/releases/<channel>/cli/unpeel-latest-<target>.tar.gz` from the same R2
+  `/releases/<channel>/cli/supercli-latest-<target>.tar.gz` from the same R2
   bucket the app uses, requires and verifies the `.sha256` sidecar, and installs
-  `unpeel` and `unpeel-host` (the CLI's `unpeel serve` and one-shot verbs
-  spawn sessions via a sibling `unpeel-host` — `resolve_host_binary` in
+  `supercli` and `supercli-host` (the CLI's `supercli serve` and one-shot verbs
+  spawn sessions via a sibling `supercli-host` — `resolve_host_binary` in
   `session_ops.rs`) plus, when the
-  archive carries it (0.4.5+), `unpeel-attach` (the Controller terminal
+  archive carries it (0.4.5+), `supercli-attach` (the Controller terminal
   client; harmless standalone, and what the Mac app will bundle from these
   archives after the repo split — the private "open-source" design record). The installer
-  never requires `unpeel-attach`, so a worker deploy ahead of a CLI publish
+  never requires `supercli-attach`, so a worker deploy ahead of a CLI publish
   keeps installing the older two-binary `-latest` archive. Everything goes into
-  `/usr/local/bin` if writable, else `~/.local/bin` (`UNPEEL_INSTALL_DIR`
-  overrides; `UNPEEL_CHANNEL` picks alpha/beta/stable).
+  `/usr/local/bin` if writable, else `~/.local/bin` (`SUPERCLI_INSTALL_DIR`
+  overrides; `SUPERCLI_CHANNEL` picks alpha/beta/stable).
 - Publishing coordinates: `scripts/r2.jsonc` (account id + bucket) and the
-  root `wrangler` devDependency; neither publisher reads `unpeel-cloud:apps/website` or
-  `unpeel-cloud:apps/releases` any more (`--bucket` / `UNPEEL_RELEASE_BUCKET` still
+  root `wrangler` devDependency; neither publisher reads `supercli-cloud:apps/website` or
+  `supercli-cloud:apps/releases` any more (`--bucket` / `SUPERCLI_RELEASE_BUCKET` still
   override).
 - Publishing: `bun run release:cli -- --channel beta` on a Mac builds both
   darwin triples (needs `rustup target add aarch64-apple-darwin
@@ -140,8 +140,8 @@ curl -fsSL https://unpeel.com/install.sh | sh
   `<channel>/cli/latest.json` via wrangler. Linux tarballs are built on a
   Linux box/CI with `scripts/build-cli-linux.sh` and attached with
   `--linux-x86_64 <tar.gz>` / `--linux-aarch64 <tar.gz>`. Every archive
-  includes the three binaries (`unpeel`, `unpeel-host`, `unpeel-attach` —
-  the last built from the standalone `crates/unpeel-attach` manifest and
+  includes the three binaries (`supercli`, `supercli-host`, `supercli-attach` —
+  the last built from the standalone `crates/supercli-attach` manifest and
   lipo'd the same way; `CLI_BINARIES` in `release-cli.mjs` is the one list),
   license notices covering all three crates, and `BUILD_PROVENANCE.json`;
   the publisher rejects a target/version/source commit mismatch, refuses an
@@ -152,14 +152,14 @@ curl -fsSL https://unpeel.com/install.sh | sh
   builds and prints the uploads
   without publishing. Versioned keys are immutable at the CDN — bump the
   version rather than `--force`.
-- **Unpeel Apps** (design, usage, markdown) ship through one generalized
-  lane: `curl -fsSL https://unpeel.com/install/<app>/install.sh | sh`,
+- **Supercli Apps** (design, usage, markdown) ship through one generalized
+  lane: `curl -fsSL https://supercli.com/install/<app>/install.sh | sh`,
   served from the single `scripts/install-app.sh` template (published per
   channel like `install.sh`) with
   the same substitutions, checksum-sidecar requirement, and install-dir
-  rules; each installs the single `unpeel-<app>` binary and writes
-  `~/.unpeel/<app>-install.json`. The app registry
-  (`protocol/app-registry.json`, embedded by `unpeel-core` and published per
+  rules; each installs the single `supercli-<app>` binary and writes
+  `~/.supercli/<app>-install.json`. The app registry
+  (`protocol/app-registry.json`, embedded by `supercli-core` and published per
   channel by both `release:cli` and `release:app`) is the single source of truth:
   one entry there registers the app for both the worker's wildcard
   `/install/*` route (no per-app route patterns) and
@@ -167,7 +167,7 @@ curl -fsSL https://unpeel.com/install.sh | sh
   `bun run release:app -- --app <app> --channel beta [--dry-run]` builds
   the macos-universal binary from **`crates/apps/<app>`** (the first-party
   Apps' own workspace; an App not yet moved in falls back to the sibling
-  checkout `~/Dev/unpeel-app-<app>`), lipos/ad-hoc signs/tars it, and uploads
+  checkout `~/Dev/supercli-app-<app>`), lipos/ad-hoc signs/tars it, and uploads
   versioned + `-latest` tarballs and sha256 sidecars under
   `<channel>/<app>/`. Linux tarballs attach with `--linux-*` like the CLI.
   For a multi-App release, pass `--skip-registry` for every App, verify all
@@ -176,16 +176,16 @@ curl -fsSL https://unpeel.com/install.sh | sh
   `--skip-build --macos-universal <archive>` uploads an already verified Mac
   archive alongside the Linux archives without rebuilding or repackaging it.
   Hosts may install the same assets directly with
-  `unpeel apps install <unpeel.app.id>`; those managed copies live in
-  `~/.unpeel/apps/bin`, which precedes ordinary PATH discovery. **Versions:**
+  `supercli apps install <supercli.app.id>`; those managed copies live in
+  `~/.supercli/apps/bin`, which precedes ordinary PATH discovery. **Versions:**
   each registry entry carries the App's `version`; the installer records
-  what it installed in `~/.unpeel/apps/installed.json`, the Host publishes
+  what it installed in `~/.supercli/apps/installed.json`, the Host publishes
   `version`/`installedVersion`/`updateAvailable` on `availableApps`, and
-  Settings (Open resources, Agents, Plugins) offers **Update** while `unpeel
+  Settings (Open resources, Agents, Plugins) offers **Update** while `supercli
   apps update [--check]` does it headless. A new App version therefore
   needs the crate version AND the registry entry bumped in one commit
   (`release:app` refuses a mismatch; a Rust test pins registry = crate for
-  Apps in `crates/apps`), and reaches Hosts with the next Unpeel release
+  Apps in `crates/apps`), and reaches Hosts with the next Supercli release
   that embeds that registry.
   Interactive installs ask for confirmation and unattended user-owned
   automation must pass `--yes`. A Host advertises `apps.install` only on a
@@ -200,7 +200,7 @@ curl -fsSL https://unpeel.com/install.sh | sh
   publish checkout's current HEAD; recovery mode rejects `--force`, partial
   target sets, a missing/different published semantic version, and any
   pre-existing revisioned archive or sidecar. It writes new immutable
-  `unpeel-<version>-<revision>-<target>.tar.gz(.sha256)` objects, records the
+  `supercli-<version>-<revision>-<target>.tar.gz(.sha256)` objects, records the
   revision and sidecar locations in `cli/latest.json`, then replaces the
   mutable latest archive/checksum pairs. Every immutable archive and sidecar
   finishes before the first mutable alias is touched; the manifest remains
@@ -230,7 +230,7 @@ On the Linux architecture being packaged, use
 `scripts/build-cli-linux.sh` (or `bun run release:cli:linux` when Bun is
 available). It builds both release binaries, creates the correctly named
 tarball plus a SHA-256 sidecar under `dist/cli/`, embeds the source commit and
-dirty-state provenance, runs the packaged `unpeel --version`, and prints the
+dirty-state provenance, runs the packaged `supercli --version`, and prints the
 exact `release:cli` attachment flag. Official archives have a hard GLIBC 2.31
 ceiling (Ubuntu 20.04 / Debian 11); the build script inspects both binaries and
 fails if a newer build host raises that floor. The x86 CI artifact is therefore
@@ -246,19 +246,19 @@ architecture or in a matching CI runner.
 The now-removed interactive terminal UI used to check its install channel for
 a newer published version and show a persistent, click-to-dismiss toast in
 the top-right (same slot as the transient verb toast, which took precedence
-while up); `crates/unpeel-cli/src/update.rs` and the toast UI were deleted
+while up); `crates/supercli-cli/src/update.rs` and the toast UI were deleted
 with the TUI, and there is currently no update-notification surface in the
 CLI. The install-channel marker itself is unaffected:
-`~/.unpeel/cli-install.json`, written by `install.sh`, still distinguishes an
+`~/.supercli/cli-install.json`, written by `install.sh`, still distinguishes an
 installed build from a from-source checkout or the PTY test harness's
-isolated `UNPEEL_HOME` — it is simply unread now that nothing checks for
+isolated `SUPERCLI_HOME` — it is simply unread now that nothing checks for
 updates.
 
 ## Server archives, `protocol/`, and the Mac app's server binaries
 
 - **Every CLI archive ships `generated/`** — `generated/GeneratedRuntimeCatalog.swift`,
   the client-safe runtime catalog. The Apple clients in this tree consume the
-  identical copy at `clients/shared/UnpeelShared/Sources/UnpeelShared/` (both are
+  identical copy at `clients/shared/SupercliShared/Sources/SupercliShared/` (both are
   written by `bun run generate:runtimes` and verified by `bun run
   check:runtimes`); the archive copy exists for out-of-tree clients and
   humans. Same rules as `protocol/`: in the tar lists, in the required-entry
@@ -275,18 +275,18 @@ updates.
   out-of-tree clients that pin a server release and for humans. The Swift
   conformance tests in `apps/` read this checkout's `protocol/` directly.
 - **Every versioned archive has an immutable `.sha256` sidecar** at
-  `<channel>/cli/unpeel-<version>-<target>.tar.gz.sha256` (previously only
+  `<channel>/cli/supercli-<version>-<target>.tar.gz.sha256` (previously only
   `-latest` and revisioned keys had one). A Mac app build that bundles an
   archive verifies the exact versioned archive against it.
 - **The Mac app bundles the server built from this tree.** `build-app.sh`
-  cargo-builds `unpeel-host`, `unpeel`, and `unpeel-attach` (`--release
-  --locked`, from `crates/` and `crates/unpeel-attach`) at the same commit as
-  the app and the `unpeel-native-bridge` crate (a workspace member with path
-  deps on `unpeel-core`/`unpeel-serve`), and collects their third-party
-  notices with `unpeel-license-notices` exactly like `release:cli`. There is
+  cargo-builds `supercli-host`, `supercli`, and `supercli-attach` (`--release
+  --locked`, from `crates/` and `crates/supercli-attach`) at the same commit as
+  the app and the `supercli-native-bridge` crate (a workspace member with path
+  deps on `supercli-core`/`supercli-serve`), and collects their third-party
+  notices with `supercli-license-notices` exactly like `release:cli`. There is
   no server-version pin file and no bridge tag to re-pin: the crates workspace
   version is the only version, for the CLI archives and the app alike.
-  `UNPEEL_SERVER_ARCHIVE=<local .tar.gz>` is the explicit opt-in that bundles
+  `SUPERCLI_SERVER_ARCHIVE=<local .tar.gz>` is the explicit opt-in that bundles
   a published `macos-universal` CLI archive instead (reproducibility checks,
   upgrade rehearsals): its `.sha256` sibling is verified when present and its
   `BUILD_PROVENANCE.json` must name the workspace version, `macos-universal`,
@@ -296,14 +296,14 @@ updates.
   independent steps of one release: cut the CLI first (`release:cli`, all
   three targets), then the app (`release:mac`), then deploy the website.
 - **The changelog lives with the website.** `release.sh` resolves it via
-  `scripts/release-changelog.mjs`: `UNPEEL_CHANGELOG`, then
-  `../unpeel-cloud/apps/website/app/changelog.md` (the sibling checkout after the
-  split), then `unpeel-cloud:apps/website/app/changelog.md` (monorepo), and fails naming
+  `scripts/release-changelog.mjs`: `SUPERCLI_CHANGELOG`, then
+  `../supercli-cloud/apps/website/app/changelog.md` (the sibling checkout after the
+  split), then `supercli-cloud:apps/website/app/changelog.md` (monorepo), and fails naming
   the sibling checkout when none exists. Author the `## <version>` entry in
   the website before the app cut; deploy the website after.
 - **The release Worker's deploy-time fallbacks are vendored**, not imported
-  from the tree: `unpeel-cloud:apps/releases/scripts/vendor-fallbacks.mjs` copies
+  from the tree: `supercli-cloud:apps/releases/scripts/vendor-fallbacks.mjs` copies
   `scripts/install.sh`, `scripts/install-app.sh`, and
   `protocol/app-registry.json` from `--from <server checkout>` (default: this
-  repo root) into `unpeel-cloud:apps/releases/vendored/` (gitignored); `release:updates:*`
-  and `unpeel-cloud:apps/releases` `npm run deploy[:dry-run]` run it first.
+  repo root) into `supercli-cloud:apps/releases/vendored/` (gitignored); `release:updates:*`
+  and `supercli-cloud:apps/releases` `npm run deploy[:dry-run]` run it first.

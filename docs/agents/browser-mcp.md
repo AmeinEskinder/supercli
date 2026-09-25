@@ -2,21 +2,21 @@
 
 ## Built-in Browser MCP (Browser Access)
 
-Unpeel ships a second first-party MCP server that gives an agent session a real
+Supercli ships a second first-party MCP server that gives an agent session a real
 browser. Design rationale and verified engine findings:
 the private "browser-mcp-deep-check" design record (the engine has **no MCP mode of its
-own** — Unpeel authors the server and owns the tool schema).
+own** — Supercli authors the server and owns the tool schema).
 
 > **Security scope:** the separate browser profile isolates browsing data from
 > the user's normal browser; it does not isolate the hosted process. On/Ask/Off
 > and site rules are cooperative controls for agents using Browser MCP, not a
 > sandbox against commands running as the same OS user. Same-user code can read
-> local Unpeel state and invoke local tools outside this wrapper. Do not call
+> local Supercli state and invoke local tools outside this wrapper. Do not call
 > these settings a hard security boundary.
 
-- Server: `crates/unpeel-core/src/browser_mcp.rs`, run as
-  `unpeel-host __browser_mcp__` (stdio JSON-RPC, hand-rolled like `mcp_host.rs`).
-  Caller identity via `UNPEEL_SESSION_ID`. 13 tools (`browser_open`,
+- Server: `crates/supercli-core/src/browser_mcp.rs`, run as
+  `supercli-host __browser_mcp__` (stdio JSON-RPC, hand-rolled like `mcp_host.rs`).
+  Caller identity via `SUPERCLI_SESSION_ID`. 13 tools (`browser_open`,
   `browser_snapshot`, `browser_click`, `browser_fill`, `browser_type`,
   `browser_press`, `browser_get`, `browser_screenshot`, `browser_wait`,
   `browser_scroll`, `browser_console`, `browser_close`, `browser_context`), each
@@ -28,15 +28,15 @@ own** — Unpeel authors the server and owns the tool schema).
   (`AGENT_BROWSER_NATIVE=1`) — a pure-Rust CDP daemon driving the **system
   Chrome/Chromium**, no Node/Playwright/Chromium download. Verified live: open,
   snapshot refs, screenshot, allowed-domains enforcement. Binary resolution
-  (`resolve_engine_binary`): `UNPEEL_BROWSER_BIN` env → sibling of `unpeel-host`
-  (packaged layout) → `~/.unpeel/browser/bin/agent-browser` → PATH (dev).
-  `agent-browser` is pinned to **0.34.0**. Every Unpeel Session still gets an
-  independent engine daemon, `unpeel-<session-id>`, with sockets under
-  `~/.unpeel/browser/sockets`; by default those daemons use pinned-tab mode to
+  (`resolve_engine_binary`): `SUPERCLI_BROWSER_BIN` env → sibling of `supercli-host`
+  (packaged layout) → `~/.supercli/browser/bin/agent-browser` → PATH (dev).
+  `agent-browser` is pinned to **0.34.0**. Every Supercli Session still gets an
+  independent engine daemon, `supercli-<session-id>`, with sockets under
+  `~/.supercli/browser/sockets`; by default those daemons use pinned-tab mode to
   attach to one project-owned Chrome process, so each Session controls exactly
   one tab in the project's shared browser window.
 - Remote CDP mode: a Host provisioner may write an owner-only regular file at
-  `~/.unpeel/browser/remote-cdp.json` (`0600`, never a symlink):
+  `~/.supercli/browser/remote-cdp.json` (`0600`, never a symlink):
 
   ```json
   {
@@ -62,7 +62,7 @@ own** — Unpeel authors the server and owns the tool schema).
   until `browser_close`. The endpoint remains visible to the same Unix user through
   the environment/config file, so Browser MCP's existing cooperative-security
   caveat still applies. The provider owns browser-process/profile isolation
-  and remote downloads; Unpeel still owns MCP access policy and writes screenshots into
+  and remote downloads; Supercli still owns MCP access policy and writes screenshots into
   the Session artifact/gallery paths. Provisioning and refresh code must write
   the file atomically with `0600` permissions and must not place the provider's
   broader API key in the Box.
@@ -71,22 +71,22 @@ own** — Unpeel authors the server and owns the tool schema).
   then-pinned 0.31.1 both received HTTP 400 from that proxy. The Box-local `9222` binding
   passed the complete Browser MCP path and is the supported Upstash form until
   that client/proxy mismatch changes.
-  `UNPEEL_TEST_REMOTE_CDP_URL='wss://…' scripts/verify-browser.sh`
+  `SUPERCLI_TEST_REMOTE_CDP_URL='wss://…' scripts/verify-browser.sh`
   exercises this path end to end when a disposable provider endpoint is
   available; the ordinary smoke remains local-only when it is absent.
 - Artifacts: with the default Settings ▸ Agent access auto-gallery toggle,
   screenshots land in
-  `~/.unpeel/app-sessions/<id>/artifacts/browser/screenshots/`; when disabled,
+  `~/.supercli/app-sessions/<id>/artifacts/browser/screenshots/`; when disabled,
   ordinary captures land in the unlisted `.../browser/captures/` directory
   until the agent calls Sessions `add_to_gallery` (or requests the screenshot
   with `gallery: true`). In separate-per-Session mode downloads use
   `.../downloads/` via `AGENT_BROWSER_DOWNLOAD_PATH`; the default shared
   project browser keeps downloads under
-  `~/.unpeel/browser/projects/<project-key>/downloads/`. Tools return their
+  `~/.supercli/browser/projects/<project-key>/downloads/`. Tools return their
   paths. Phone screenshot requests explicitly set `gallery: true`.
 - Grants (`state.rs`, reworked 2026-07-18): `BrowserAccess` is now
   `off`/`ask`/`on` — a three-mode picker with **On
-  ("Allow") as the default** (the engine uses an Unpeel-managed project
+  ("Allow") as the default** (the engine uses an Supercli-managed project
   profile with no access to the user's own browser, so it does not expose
   personal logins; Settings ▸ Agent access ▸ Browser access ▸ Off is the master disable).
   Under `ask`, a session's first browser action blocks on an approval alert
@@ -96,7 +96,7 @@ own** — Unpeel authors the server and owns the tool schema).
   `"on"` for wire compat; `from_state_str` accepts `"allow"` as a synonym.
   Browser MCP is also **experimental** in the native app (Settings ▸
   Features ▸ Experimental; `AppFeature.browserMcp`, env
-  `UNPEEL_DEV_BROWSER_MCP=1`), gating
+  `SUPERCLI_DEV_BROWSER_MCP=1`), gating
   the Settings ▸ Agent access page and native launch injection. Headless/CLI
   launches have no native UserDefaults feature layer, so they derive launch
   injection directly from the shared `browser_default_access` setting. There
@@ -109,7 +109,7 @@ own** — Unpeel authors the server and owns the tool schema).
   `browser_default_access != off`; malformed explicit access fails closed),
   recorded as the `browser_mcp_enabled` domain grant; the separate
   `browser_client_registered` bit records automatic provider setup. Since 2026-07-18
-  the browser tools ride the **unified `unpeel` server** for new launches (the
+  the browser tools ride the **unified `supercli` server** for new launches (the
   `browser` action tool, advertised only when the domain grant is set — see
   the unified-surface note in the Sessions MCP section); there is no separate
   per-provider browser config anymore. The standalone `__browser_mcp__` argv
@@ -119,8 +119,8 @@ own** — Unpeel authors the server and owns the tool schema).
   terminal (there is no per-session reload banner); **off** applies live
   through the per-call gate.
 - Lifecycle: the engine daemon + project Chrome deliberately outlive the
-  provider CLI, so `UnpeelStore.killAndCleanup` also spawns
-  `unpeel-host __browser_cleanup__ <id>`. Cleanup explicitly closes that
+  provider CLI, so `SupercliStore.killAndCleanup` also spawns
+  `supercli-host __browser_cleanup__ <id>`. Cleanup explicitly closes that
   Session's pinned tab before its daemon, removes every daemon sidecar, and
   drops its project membership. Other Session tabs stay alive; the project
   owner closes Chrome only when the final live/recent Session member is gone.
@@ -131,8 +131,8 @@ own** — Unpeel authors the server and owns the tool schema).
   `state.rs`): `headed` (default true — visible window; false = headless,
   screenshots still work), `allowed_domains` (engine-enforced allowlist with
   wildcards; blocks navigation, sub-resources, and WebSockets), `profile_mode`
-  (`"project"`, the default, = one persistent Unpeel-managed browser
-  window/profile per project tree under `~/.unpeel/browser/profiles/`, with a
+  (`"project"`, the default, = one persistent Supercli-managed browser
+  window/profile per project tree under `~/.supercli/browser/profiles/`, with a
   pinned tab per Session and shared cookies/logins; `"session"` = a separate
   ephemeral browser per Session — neither ever uses the user's own Chrome
   profile), `executable_path` (custom Chromium-based browser; empty =
@@ -148,10 +148,10 @@ own** — Unpeel authors the server and owns the tool schema).
 - Native UI: Settings ▸ **Browser** only (engine status probe, the single
   app-wide access picker, Options — window/browsing data/clear/browser app,
   Site access rules) in `SettingsView.swift` (`BrowserSettingsPanel`). There is
-  no sidebar Browser Access menu. `UnpeelStore.setDefaultBrowserAccess` /
+  no sidebar Browser Access menu. `SupercliStore.setDefaultBrowserAccess` /
   `updateBrowserSettings` / `clearBrowserProfiles` are the write paths.
 - **The Node "full engine" mode is ruled out** (product decision 2026-07-02):
-  Unpeel stays a lightweight Swift app and will never ship or require a Node
+  Supercli stays a lightweight Swift app and will never ship or require a Node
   runtime. Everything that lives only in the engine's Node/Playwright daemon
   — video recording (native `record` silently writes no file), traces,
   viewport WebSocket streaming (`AGENT_BROWSER_STREAM_PORT` is a no-op in
@@ -160,16 +160,16 @@ own** — Unpeel authors the server and owns the tool schema).
   never "detect/enable Node". Deferred by choice, not blocked: action
   policies/confirmations, the engine auth vault, per-origin header injection,
   extensions.
-- Debugging: `browser-mcp` lines in `~/.unpeel/hooks/trace.log`. Test with
-  `printf '...' | UNPEEL_SESSION_ID=<id> unpeel-host __browser_mcp__`.
+- Debugging: `browser-mcp` lines in `~/.supercli/hooks/trace.log`. Test with
+  `printf '...' | SUPERCLI_SESSION_ID=<id> supercli-host __browser_mcp__`.
 - **Host-owned install (2026-09-03, open-source prerequisite 2):** the pin
   is `protocol/browser-engine-v1.json` (`version`, `license`, the Apache-2.0
   `notice` URL + sha256, and one `{platform, url, sha256}` per
   `darwin-arm64` / `darwin-x64` / `linux-x64` / `linux-arm64`, pointing at
   the upstream GitHub release assets — byte-identical to the npm package's
   `bin/` binaries; the two darwin hashes are the ones `build-app.sh` checks).
-  `unpeel_core::browser_engine` embeds it (`pinned()`) and installs the
-  platform binary into `~/.unpeel/browser/bin/agent-browser`
+  `supercli_core::browser_engine` embeds it (`pinned()`) and installs the
+  platform binary into `~/.supercli/browser/bin/agent-browser`
   (`ensure_installed(home)`): accept a copy whose sha256 matches; otherwise
   stream the download over the rustls `http_fetch::get_to_file` path
   (redirects followed, 64 MiB cap, one 64 KiB read buffer straight into a
@@ -179,29 +179,29 @@ own** — Unpeel authors the server and owns the tool schema).
   rename into place, write
   `LICENSE-agent-browser.txt` (hash-verified) and `agent-browser.version`
   next to it, `chmod 755`, one `browser-engine` line in
-  `~/.unpeel/hooks/trace.log`. An exclusive flock on `browser/bin/.lock`
+  `~/.supercli/hooks/trace.log`. An exclusive flock on `browser/bin/.lock`
   serialises installers: a second one waits, re-verifies, and finds the
   first one's work. No Node, no npm, no JS shim, ever.
-- **When it runs:** (a) `unpeel browser install [--check] [--json]`
+- **When it runs:** (a) `supercli browser install [--check] [--json]`
   (`docs/agents/cli.md`); (b) the workspace worker calls `ensure_installed`
   once at start on a background thread and publishes
   `serve.json.browserEngine = {state: ready|installing|failed, version,
   path, error}` (additive; a failure is a trace line + that status, never a
-  startup failure — `docs/agents/serve.md`). `UNPEEL_BROWSER_ENGINE_INSTALL=0`
+  startup failure — `docs/agents/serve.md`). `SUPERCLI_BROWSER_ENGINE_INSTALL=0`
   opts the worker out (state `disabled`, no thread, no network; benchmarks
   and hand-managed Hosts); (c) the MCP server resolves the
   engine per call.
 - **Resolution order** (`browser_engine::resolve`, shared by the MCP server,
-  the CLI verb, and `verify-browser.sh`): `UNPEEL_AGENT_BROWSER_BIN` (the
-  older `UNPEEL_BROWSER_BIN` still works) → the managed
-  `~/.unpeel/browser/bin/agent-browser` **only if it verifies** against the
+  the CLI verb, and `verify-browser.sh`): `SUPERCLI_AGENT_BROWSER_BIN` (the
+  older `SUPERCLI_BROWSER_BIN` still works) → the managed
+  `~/.supercli/browser/bin/agent-browser` **only if it verifies** against the
   pin (a stale copy is skipped, not used) → `agent-browser` next to the
-  running `unpeel-host` (the app bundle; a compatibility candidate until the
+  running `supercli-host` (the app bundle; a compatibility candidate until the
   repo split removes bundling) → `PATH`. A missing engine is the same
-  clear MCP error as before plus the `unpeel browser install` hint and, when
+  clear MCP error as before plus the `supercli browser install` hint and, when
   the managed copy exists but is stale, its recorded version.
 - **Linux / no browser:** the engine drives a system Chrome/Chromium and
-  Unpeel never installs one. `unpeel browser install [--check]` exits 4 and
+  Supercli never installs one. `supercli browser install [--check]` exits 4 and
   the MCP error names what was looked for (`google-chrome`,
   `google-chrome-stable`, `chromium`, `chromium-browser`, `chrome`,
   `brave-browser`, `microsoft-edge` on PATH; the `/Applications` bundles on
@@ -212,19 +212,19 @@ own** — Unpeel authors the server and owns the tool schema).
 - Bundling: none since 0.5.0 — `build-app.sh` no longer copies an engine
   or its notice into the app; the Host-installed copy is the engine, and
   Settings ▸ Agent access shows `serve.json.browserEngine` (ready / installing /
-  failed / disabled with the error and the `unpeel browser install` fix).
-  A copy next to `unpeel-host` is still honoured as a compatibility
+  failed / disabled with the error and the `supercli browser install` fix).
+  A copy next to `supercli-host` is still honoured as a compatibility
   resolution candidate for older bundles.
 - **Engine bump procedure:** update `version`, every `sha256`, and the
   `notice` in `protocol/browser-engine-v1.json` from the real release assets
   (`shasum -a 256` of the GitHub assets; they must equal the npm `bin/`
   files), bump `AGENT_BROWSER_EXPECTED_VERSION` + hashes in `build-app.sh`
-  while bundling remains, run `cargo test -p unpeel-core browser_engine`,
+  while bundling remains, run `cargo test -p supercli-core browser_engine`,
   then `clients/native/verify-browser.sh` against a blank home.
 - Shared-project **logins** persist in the project profile in 0.34.0 (the live
-  smoke proves a cookie survives a full browser restart). Unpeel also keeps
+  smoke proves a cookie survives a full browser restart). Supercli also keeps
   the engine's encrypted state save/restore enabled as a recovery layer
-  (`AGENT_BROWSER_SESSION_NAME=unpeel-proj-<root>` plus a per-install
+  (`AGENT_BROWSER_SESSION_NAME=supercli-proj-<root>` plus a per-install
   `AGENT_BROWSER_ENCRYPTION_KEY` →
   `~/.agent-browser/sessions/*.json.enc`). This remains entirely separate
   from the user's own browser profile. Do not re-attempt cookie-DB copying;
@@ -235,7 +235,7 @@ own** — Unpeel authors the server and owns the tool schema).
   its loopback WebSocket CDP endpoint, and attaches each Session's own daemon
   with `AGENT_BROWSER_PIN_TAB=1`. The binding marker contains only a project
   key plus an endpoint hash; the validated loopback endpoint and owner record
-  are owner-only files under `~/.unpeel/browser/projects/<key>/`. Worktree
+  are owner-only files under `~/.supercli/browser/projects/<key>/`. Worktree
   projects resolve to their top-level parent, matching the existing project
   tree scoping. Site allowlists currently cannot be combined with an attached
   CDP browser, so setting site rules deliberately falls back to the separate

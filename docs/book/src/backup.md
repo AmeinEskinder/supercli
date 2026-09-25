@@ -2,10 +2,10 @@
 
 ## Backup
 
-`unpeel backup` takes a consistent snapshot of your workspace:
+`supercli backup` takes a consistent snapshot of your workspace:
 
 ```sh
-unpeel backup --output unpeel-backup.tar.gz
+supercli backup --output supercli-backup.tar.gz
 ```
 
 The snapshot covers sessions, artifacts, the lease database (via SQLite
@@ -19,7 +19,7 @@ produce a torn snapshot.
 ## Restore
 
 ```sh
-unpeel restore --input unpeel-backup.tar.gz
+supercli restore --input supercli-backup.tar.gz
 ```
 
 Restore:

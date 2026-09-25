@@ -15,7 +15,7 @@ Date: 2026-09-25. Tools: cargo-deny 0.20.2, cargo-audit (RustSec DB).
 
 ### Advisory ignored
 - **RUSTSEC-2017-0008** (`serial` 0.4.0 unmaintained): transitive dep of
-  portable-pty, used only for serial-port enumeration which Unpeel never
+  portable-pty, used only for serial-port enumeration which Supercli never
   calls. No safe upgrade exists. Risk accepted as dead code.
 
 ### Licenses allowed (beyond standard permissive set)

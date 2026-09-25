@@ -1,0 +1,20 @@
+[package]
+name = "supercli-device"
+# Explicit keys while standalone. At integration time (added to the workspace
+# `members` in crates/Cargo.toml) switch these to `*.workspace = true` and
+# delete the empty `[workspace]` table below.
+version = "0.9.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "LITE Android/iOS emulator control for supercli: shells out to adb/emulator and xcrun simctl; no bundled emulators, no heavy deps"
+
+[features]
+# Real backends (adb.rs, simctl.rs) compile only with this feature.
+# Without it the crate is just the trait + error types (a few KB).
+device = []
+
+# Standalone during development: keeps cargo from treating this crate as a
+# member of the parent workspace (crates/Cargo.toml) before integration.
+# Integration deletes this table and adds "supercli-device" to members.
+[workspace]

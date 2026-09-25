@@ -18,10 +18,10 @@ Unpeel Dev from that dist bundle, then `open -n`s
 Gotchas:
 
 - **Same bundle id everywhere**: `open` without `-n` re-focuses whichever
-  `com.unpeel.native` is already running (often `/Applications/Unpeel.app`).
+  `com.supercli.native` is already running (often `/Applications/Unpeel.app`).
   The script uses `open -n` and only quits **Unpeel Dev**; NEVER quit the
   installed app without operator approval (AGENTS.md never-quit rule).
-- Confirm which binary is live: `pgrep -fl "Unpeel.app/Contents/MacOS/UnpeelNative"`
+- Confirm which binary is live: `pgrep -fl "Unpeel.app/Contents/MacOS/SupercliNative"`
   (path shows dist vs /Applications).
 
 ## Drive the Host without clicking

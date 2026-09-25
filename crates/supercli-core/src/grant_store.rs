@@ -133,7 +133,7 @@ fn write_grants_bytes(body: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let tmp = path.with_extension("json.unpeel-tmp");
+    let tmp = path.with_extension("json.supercli-tmp");
     {
         let mut f = std::fs::OpenOptions::new()
             .create(true)
@@ -217,14 +217,14 @@ mod tests {
         .unwrap();
     }
 
-    /// Serialize UNPEEL_HOME mutation against all other tests that touch it.
+    /// Serialize SUPERCLI_HOME mutation against all other tests that touch it.
     /// Returns the home dir and holds the lock via the returned guard.
     fn locked_test_home() -> (PathBuf, std::sync::MutexGuard<'static, ()>) {
-        let guard = crate::app_paths::TEST_UNPEEL_HOME_LOCK
+        let guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         let home = test_home();
-        std::env::set_var("UNPEEL_HOME", &home);
+        std::env::set_var("SUPERCLI_HOME", &home);
         (home, guard)
     }
 
@@ -275,7 +275,7 @@ mod tests {
         assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
 
         let path = grants_path();
-        let tmp = path.with_extension("json.unpeel-tmp");
+        let tmp = path.with_extension("json.supercli-tmp");
         std::fs::write(&tmp, b"not valid json{{{").unwrap();
 
         assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));

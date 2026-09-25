@@ -1,5 +1,5 @@
 // Provider-neutral hook reporter/transport conformance; included by
-// `unpeel_core::hook_assets` (test builds only). Package-specific tests
+// `supercli_core::hook_assets` (test builds only). Package-specific tests
 // live in `runtimes/<slug>/adapter/tests.rs`.
 
 use super::test_support::*;
@@ -261,14 +261,14 @@ fn native_stop_outcomes_survive_delivery_and_restart_seeding() {
         }
         let mut child = command
             .env("HOME", &session_dir)
-            .env("UNPEEL_HOME", &session_dir)
-            .env("UNPEEL_HOOK_TRACE_FILE", session_dir.join("trace.log"))
-            .env("UNPEEL_SESSION_ID", "outcome")
-            .env("UNPEEL_SESSION_DIR", &session_dir)
-            .env("UNPEEL_RUNTIME_GENERATION", "7")
-            .env("UNPEEL_APP_PORT", "")
-            .env("UNPEEL_APP_PORT_REGISTRY_FILE", registry)
-            .env_remove("UNPEEL_HOOK_POST_SYNC")
+            .env("SUPERCLI_HOME", &session_dir)
+            .env("SUPERCLI_HOOK_TRACE_FILE", session_dir.join("trace.log"))
+            .env("SUPERCLI_SESSION_ID", "outcome")
+            .env("SUPERCLI_SESSION_DIR", &session_dir)
+            .env("SUPERCLI_RUNTIME_GENERATION", "7")
+            .env("SUPERCLI_APP_PORT", "")
+            .env("SUPERCLI_APP_PORT_REGISTRY_FILE", registry)
+            .env_remove("SUPERCLI_HOOK_POST_SYNC")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -285,7 +285,7 @@ fn native_stop_outcomes_survive_delivery_and_restart_seeding() {
         assert_eq!(capture.event_names(), [expected], "{label}: {input}");
         let seed = read_last_hook_event(&session_dir);
         assert_eq!(seed["hook_event_name"], expected, "{label}: {input}");
-        assert_eq!(seed["unpeel_runtime_generation"], 7);
+        assert_eq!(seed["supercli_runtime_generation"], 7);
     }
 }
 
@@ -302,7 +302,7 @@ fn tool_metadata_does_not_overwrite_a_settled_turn() {
         ),
     ] {
         let session_dir = temp_path(&format!("metadata-{label}"));
-        let seed = r#"{"hook_event_name":"StopCancelled","unpeel_runtime_generation":7}"#;
+        let seed = r#"{"hook_event_name":"StopCancelled","supercli_runtime_generation":7}"#;
         fs::write(session_dir.join("last-hook-event.json"), seed).unwrap();
         let args = if arg.is_empty() { vec![] } else { vec![arg] };
         let output = run_hook_script_recording(script, label, &args, input, &session_dir);
@@ -342,8 +342,8 @@ fn all_hook_scripts_record_last_hook_event() {
             "{label} hook script must write last-hook-event.json"
         );
         assert!(
-            script.contains("UNPEEL_SESSION_DIR"),
-            "{label} hook script must honor UNPEEL_SESSION_DIR"
+            script.contains("SUPERCLI_SESSION_DIR"),
+            "{label} hook script must honor SUPERCLI_SESSION_DIR"
         );
     }
 }
@@ -369,7 +369,7 @@ fn hook_reporters_are_inert_outside_unpeel() {
             .env_clear()
             .env("PATH", "/usr/bin:/bin")
             .env("HOME", &home)
-            .env("UNPEEL_HOME", &home)
+            .env("SUPERCLI_HOME", &home)
             .arg("-c")
             .arg("bash \"$1\"; result=$?; exit \"$result\"")
             .arg("hook-test")
@@ -412,15 +412,15 @@ fn stalled_ports_do_not_starve_later_hook_listeners() {
             .arg(script)
             .args(case.args)
             .env("HOME", &home)
-            .env("UNPEEL_HOME", &home)
-            .env("UNPEEL_SESSION_ID", "stalled")
-            .env("UNPEEL_HOOK_TRACE_FILE", home.join("trace.log"))
+            .env("SUPERCLI_HOME", &home)
+            .env("SUPERCLI_SESSION_ID", "stalled")
+            .env("SUPERCLI_HOOK_TRACE_FILE", home.join("trace.log"))
             .env(
-                "UNPEEL_APP_PORT",
+                "SUPERCLI_APP_PORT",
                 stalled[0].local_addr().unwrap().port().to_string(),
             )
-            .env("UNPEEL_APP_PORT_REGISTRY_FILE", registry)
-            .env_remove("UNPEEL_HOOK_POST_SYNC")
+            .env("SUPERCLI_APP_PORT_REGISTRY_FILE", registry)
+            .env_remove("SUPERCLI_HOOK_POST_SYNC")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -465,16 +465,16 @@ fn every_owned_hook_reporter_tags_http_payload_and_durable_seed_generation() {
             .arg(&script)
             .args(case.args)
             .env("HOME", hook_env_home(case.label))
-            .env("UNPEEL_APP_PORT", capture.port.to_string())
-            .env("UNPEEL_SESSION_ID", "unpeel-generation-session")
-            .env("UNPEEL_SESSION_DIR", &session_dir)
-            .env("UNPEEL_RUNTIME_GENERATION", "42")
-            .env_remove("UNPEEL_HOOK_POST_SYNC")
+            .env("SUPERCLI_APP_PORT", capture.port.to_string())
+            .env("SUPERCLI_SESSION_ID", "unpeel-generation-session")
+            .env("SUPERCLI_SESSION_DIR", &session_dir)
+            .env("SUPERCLI_RUNTIME_GENERATION", "42")
+            .env_remove("SUPERCLI_HOOK_POST_SYNC")
             .env("all_proxy", "http://127.0.0.1:9")
             .env_remove("NO_PROXY")
             .env_remove("no_proxy")
-            .env("UNPEEL_APP_PORT_REGISTRY_FILE", &registry)
-            .env("UNPEEL_HOOK_TRACE_FILE", hook_trace_file(case.label))
+            .env("SUPERCLI_APP_PORT_REGISTRY_FILE", &registry)
+            .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file(case.label))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -515,7 +515,7 @@ fn every_owned_hook_reporter_tags_http_payload_and_durable_seed_generation() {
             });
         assert_eq!(
             posted
-                .get("unpeel_runtime_generation")
+                .get("supercli_runtime_generation")
                 .and_then(Value::as_u64),
             Some(42),
             "{} HTTP payload",
@@ -523,7 +523,7 @@ fn every_owned_hook_reporter_tags_http_payload_and_durable_seed_generation() {
         );
         let seed = read_last_hook_event(&session_dir);
         assert_eq!(
-            seed.get("unpeel_runtime_generation")
+            seed.get("supercli_runtime_generation")
                 .and_then(Value::as_u64),
             Some(42),
             "{} durable seed",

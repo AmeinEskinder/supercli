@@ -17,7 +17,7 @@
 //! The integration is a per-user fact, because the provider configs it edits
 //! are per user: every local workspace of one account shares one set of
 //! markers, hook scripts, and one shim under `app_paths::machine_home()`
-//! (the machine's `~/.unpeel` whenever `UNPEEL_HOME` is a workspace in the
+//! (the machine's `~/.supercli` whenever `SUPERCLI_HOME` is a workspace in the
 //! machine's registry, the isolated home itself otherwise — a blank
 //! instance or a test is never registered). Installing from any local
 //! workspace installs for all of them; a remote Host has its own machine
@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 
 /// Name of the stable launcher every provider's MCP configuration points at.
 /// The shim survives Host upgrades and dev/release swaps: it prefers the
-/// `UNPEEL_HOST_BIN` the hosted shell exports and falls back to the binary
+/// `SUPERCLI_HOST_BIN` the hosted shell exports and falls back to the binary
 /// recorded at install time for launchers that strip the environment from
 /// their MCP children.
 pub const MCP_SHIM_NAME: &str = "unpeel-mcp";
@@ -52,7 +52,7 @@ pub fn mcp_shim_script(host_bin: &str) -> String {
         "#!/bin/sh\n\
          # Managed by Unpeel. Starts the unified `unpeel` MCP server for the agent\n\
          # running inside an Unpeel session; outside one it serves no tools.\n\
-         exec \"${{UNPEEL_HOST_BIN:-{host_bin}}}\" {gate} {kind}\n",
+         exec \"${{SUPERCLI_HOST_BIN:-{host_bin}}}\" {gate} {kind}\n",
         host_bin = shell_double_quote_safe(host_bin),
         gate = crate::mcp_gate::MCP_GATE_ARG,
         kind = crate::mcp_gate::UNIFIED_KIND,
@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn shim_commands_are_recognized_by_basename() {
-        assert!(is_mcp_shim_command("/home/me/.unpeel/bin/unpeel-mcp"));
+        assert!(is_mcp_shim_command("/home/me/.supercli/bin/unpeel-mcp"));
         assert!(is_mcp_shim_command("/tmp/other-home/bin/unpeel-mcp"));
         assert!(!is_mcp_shim_command("/usr/local/bin/unpeel-host"));
         assert!(!is_mcp_shim_command("unpeel-mcp-other"));
@@ -466,7 +466,7 @@ mod tests {
         let script = mcp_shim_script("/Applications/Unpeel.app/Contents/MacOS/unpeel-host");
         assert!(script.starts_with("#!/bin/sh\n"));
         assert!(script.contains(
-            "exec \"${UNPEEL_HOST_BIN:-/Applications/Unpeel.app/Contents/MacOS/unpeel-host}\" __mcp_gate__ unified"
+            "exec \"${SUPERCLI_HOST_BIN:-/Applications/Unpeel.app/Contents/MacOS/unpeel-host}\" __mcp_gate__ unified"
         ));
         let quoted = mcp_shim_script("/tmp/odd \"dir\"/unpeel-host");
         assert!(quoted.contains("/tmp/odd \\\"dir\\\"/unpeel-host"));

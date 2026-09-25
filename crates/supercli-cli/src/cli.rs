@@ -1,16 +1,16 @@
 //! Headless `unpeel` command surface — the scriptable half of the product.
 //! Every verb here runs against the shared on-disk contract and
-//! `unpeel_core::session_ops`, so agents, CI, and cron drive sessions without
+//! `supercli_core::session_ops`, so agents, CI, and cron drive sessions without
 //! any UI (and without the desktop app). `--json` everywhere that returns
 //! data; exit codes are meaningful (`wait` returns 1 on timeout).
 
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use unpeel_core::app_paths;
+use supercli_core::app_paths;
 
-use unpeel_serve::activity::ActivityEngine;
-use unpeel_serve::sessions::{scan_sidebar, ScanCache, SessionRow, SidebarItem, Status};
+use supercli_serve::activity::ActivityEngine;
+use supercli_serve::sessions::{scan_sidebar, ScanCache, SessionRow, SidebarItem, Status};
 
 const SESSION_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const PAIR_STANDALONE_NOTICE: &str =
@@ -154,9 +154,9 @@ impl Args {
 
 fn rows() -> Vec<SessionRow> {
     let mut engine = ActivityEngine::default();
-    let overlay = unpeel_serve::overlay::load();
+    let overlay = supercli_serve::overlay::load();
     let keep = std::collections::HashSet::new();
-    let listed = |model: &unpeel_serve::sessions::SidebarModel| -> Vec<SessionRow> {
+    let listed = |model: &supercli_serve::sessions::SidebarModel| -> Vec<SessionRow> {
         model
             .items
             .iter()
@@ -289,8 +289,8 @@ fn new_session(args: &Args) -> Result<(), String> {
     }
     let command = match (args.value("preset"), args.value("command")) {
         (Some(label), _) => {
-            let overlay = unpeel_serve::overlay::load();
-            unpeel_serve::sessions::fallback_presets(overlay.as_ref())
+            let overlay = supercli_serve::overlay::load();
+            supercli_serve::sessions::fallback_presets(overlay.as_ref())
                 .into_iter()
                 .find(|(l, _)| *l == label)
                 .map(|(_, c)| c)
@@ -308,8 +308,8 @@ fn new_session(args: &Args) -> Result<(), String> {
         })
         .unwrap_or_else(|| "/".into());
     let project_id = args.value("project").unwrap_or_default();
-    let label = unpeel_core::state::initial_session_label(&command, &cwd);
-    let session = unpeel_core::state::SessionInfo {
+    let label = supercli_core::state::initial_session_label(&command, &cwd);
+    let session = supercli_core::state::SessionInfo {
         id: String::new(),
         project_id,
         label,
@@ -334,8 +334,8 @@ fn new_session(args: &Args) -> Result<(), String> {
     };
     let cols = args.number("cols").unwrap_or(120) as u16;
     let rows_n = args.number("rows").unwrap_or(32) as u16;
-    let id = unpeel_core::session_ops::spawn_session(session, &cwd, None, cols, rows_n)?;
-    unpeel_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
+    let id = supercli_core::session_ops::spawn_session(session, &cwd, None, cols, rows_n)?;
+    supercli_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
         .map_err(|error| format!("session {id} did not become ready: {error}"))?;
     if args.has("json") {
         println!("{}", serde_json::json!({ "id": id }));
@@ -359,7 +359,7 @@ fn wait(args: &Args) -> Result<bool, String> {
     let mut cache = ScanCache::default();
     while Instant::now() < deadline {
         if let Some(needle) = &needle {
-            if let Ok(snapshot) = unpeel_serve::control::viewport_snapshot(&row.dir(), 0) {
+            if let Ok(snapshot) = supercli_serve::control::viewport_snapshot(&row.dir(), 0) {
                 if snapshot
                     .viewport_rows
                     .iter()
@@ -369,7 +369,7 @@ fn wait(args: &Args) -> Result<bool, String> {
                 }
             }
         } else {
-            let overlay = unpeel_serve::overlay::load();
+            let overlay = supercli_serve::overlay::load();
             let model = scan_sidebar(
                 &mut engine,
                 overlay.as_ref(),
@@ -399,7 +399,7 @@ fn logs(args: &Args) -> Result<(), String> {
     let lines = args.number("lines").unwrap_or(200) as usize;
     // Approximate: read a generous tail, then keep the last N lines.
     let want = (lines * 400) as u64;
-    let initial = unpeel_core::session_host::read_output_chunk(
+    let initial = supercli_core::session_host::read_output_chunk(
         &row.id,
         None,
         Some(want.min(usize::MAX as u64) as usize),
@@ -419,12 +419,12 @@ fn logs(args: &Args) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(200));
         let current = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(offset);
         if current <= offset {
-            if unpeel_core::session_ops::archived_marker(&row.id).is_some() {
+            if supercli_core::session_ops::archived_marker(&row.id).is_some() {
                 return Ok(());
             }
             continue;
         }
-        let chunk = unpeel_core::session_host::read_output_chunk(
+        let chunk = supercli_core::session_host::read_output_chunk(
             &row.id,
             Some(offset),
             Some((current - offset).min(8 * 1024 * 1024) as usize),
@@ -457,7 +457,7 @@ fn projects(args: &[String]) -> Result<(), String> {
                     );
                 }
             }
-            if let Some(overlay) = unpeel_serve::overlay::load() {
+            if let Some(overlay) = supercli_serve::overlay::load() {
                 for (_, name) in &overlay.projects {
                     println!("{name:24} (app-managed)");
                 }
@@ -516,7 +516,7 @@ fn add_here(args: &Args) -> Result<(), String> {
     }
     // Standing inside a repo? Offer its root — that's the project, not the
     // subdirectory you happen to be in.
-    let root = unpeel_core::worktrees::repo_toplevel(&path).unwrap_or_else(|_| path.clone());
+    let root = supercli_core::worktrees::repo_toplevel(&path).unwrap_or_else(|_| path.clone());
     let chosen = if root != path && !args.has("here") {
         println!("using the repo root {root} (--here to add this folder instead)");
         root
@@ -544,7 +544,7 @@ fn add_here(args: &Args) -> Result<(), String> {
 }
 
 fn remove_project(needle: &str) -> Result<(), String> {
-    unpeel_core::app_state::edit(|state| {
+    supercli_core::app_state::edit(|state| {
         let projects = state
             .get_mut("projects")
             .and_then(|v| v.as_array_mut())
@@ -574,7 +574,7 @@ fn transcript(args: &Args) -> Result<(), String> {
     } else {
         "snapshot"
     };
-    let host = unpeel_core::session_ops::resolve_host_binary()?;
+    let host = supercli_core::session_ops::resolve_host_binary()?;
     let mut command = std::process::Command::new(host);
     command.arg("__transcript__").arg(mode).arg(&row.id);
     if let Some(entries) = args.number("entries") {
@@ -592,23 +592,23 @@ fn pair_through_running_host(
     advertised_host: Option<&str>,
     advertised_port: Option<u16>,
 ) -> Result<(), String> {
-    let home = unpeel_core::app_paths::unpeel_home();
-    let code = unpeel_serve::local_gateway::begin_pairing(&home, advertised_host, advertised_port)?;
-    for line in unpeel_serve::pairing::qr_lines(&code) {
+    let home = supercli_core::app_paths::supercli_home();
+    let code = supercli_serve::local_gateway::begin_pairing(&home, advertised_host, advertised_port)?;
+    for line in supercli_serve::pairing::qr_lines(&code) {
         println!("{line}");
     }
     println!("\n{code}\n");
     println!("paste or scan in an Unpeel Controller — expires in 5 minutes");
     loop {
-        match unpeel_serve::local_gateway::pairing_status(&home)? {
-            unpeel_serve::local_gateway::PairingStatus::Active => {
+        match supercli_serve::local_gateway::pairing_status(&home)? {
+            supercli_serve::local_gateway::PairingStatus::Active => {
                 std::thread::sleep(Duration::from_millis(100));
             }
-            unpeel_serve::local_gateway::PairingStatus::Completed => {
+            supercli_serve::local_gateway::PairingStatus::Completed => {
                 println!("paired");
                 return Ok(());
             }
-            unpeel_serve::local_gateway::PairingStatus::Closed => {
+            supercli_serve::local_gateway::PairingStatus::Closed => {
                 return Err("pairing window closed without a device".into())
             }
         }
@@ -618,15 +618,15 @@ fn pair_through_running_host(
 /// Pairing always rides the Host service so the paired device lands in the
 /// worker's live device list, not in a one-shot process that exits.
 pub(crate) fn ensure_host_running() -> Result<(), String> {
-    if unpeel_serve::driver::is_running() {
+    if supercli_serve::driver::is_running() {
         return Ok(());
     }
     eprintln!("{PAIR_STANDALONE_NOTICE}");
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-    unpeel_serve::service::ensure_background(&executable)?;
+    supercli_serve::service::ensure_background(&executable)?;
     let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
-        if unpeel_serve::driver::is_running() {
+        if supercli_serve::driver::is_running() {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -635,8 +635,8 @@ pub(crate) fn ensure_host_running() -> Result<(), String> {
 }
 
 fn paired_device_list() -> Result<Vec<serde_json::Value>, String> {
-    let home = unpeel_core::app_paths::unpeel_home();
-    unpeel_serve::local_gateway::paired_devices(&home)
+    let home = supercli_core::app_paths::supercli_home();
+    supercli_serve::local_gateway::paired_devices(&home)
 }
 
 fn device_field<'a>(device: &'a serde_json::Value, key: &str) -> &'a str {
@@ -700,8 +700,8 @@ fn pair_list(json: bool) -> Result<(), String> {
 fn pair_remove(selector: &str) -> Result<(), String> {
     ensure_host_running()?;
     let id = resolve_paired_device(selector)?;
-    let home = unpeel_core::app_paths::unpeel_home();
-    unpeel_serve::local_gateway::revoke_device(&home, &id)?;
+    let home = supercli_core::app_paths::supercli_home();
+    supercli_serve::local_gateway::revoke_device(&home, &id)?;
     println!("unpaired: {id}");
     Ok(())
 }
@@ -709,8 +709,8 @@ fn pair_remove(selector: &str) -> Result<(), String> {
 fn pair_relay(selector: &str, allowed: bool) -> Result<(), String> {
     ensure_host_running()?;
     let id = resolve_paired_device(selector)?;
-    let home = unpeel_core::app_paths::unpeel_home();
-    unpeel_serve::local_gateway::set_device_relay_allowed(&home, &id, allowed)?;
+    let home = supercli_core::app_paths::supercli_home();
+    supercli_serve::local_gateway::set_device_relay_allowed(&home, &id, allowed)?;
     println!(
         "relay {} for {id}",
         if allowed { "allowed" } else { "disabled" }
@@ -737,7 +737,7 @@ fn advertised_pairing_port(parsed: &Args) -> Result<Option<u16>, String> {
 }
 
 fn serve() -> Result<(), String> {
-    unpeel_serve::service::run(|event| {
+    supercli_serve::service::run(|event| {
         println!("{event}");
         let _ = std::io::stdout().flush();
     })
@@ -753,7 +753,7 @@ never the shared PTY core, never by name match. Prints what it reaped.";
 
 /// `unpeel hosts prune` — user-only on-demand reap of orphaned session hosts.
 fn hosts_prune(json: bool) -> Result<(), String> {
-    let reaped = unpeel_core::session_host::reap_orphan_session_hosts();
+    let reaped = supercli_core::session_host::reap_orphan_session_hosts();
     if json {
         let rows: Vec<serde_json::Value> = reaped
             .iter()
@@ -811,17 +811,17 @@ single-workspace unit instead of the machine service. Templates for manual
 or image use: packaging/service/ (macOS needs auto-login on a headless Mac;
 Linux needs `loginctl enable-linger`).";
 
-/// Machine scope with no `UNPEEL_HOME`; a registered workspace otherwise —
+/// Machine scope with no `SUPERCLI_HOME`; a registered workspace otherwise —
 /// the same rule `unpeel serve` itself uses to pick what it runs.
-fn serve_unit_scope() -> Result<unpeel_serve::service_install::ServiceScope, String> {
+fn serve_unit_scope() -> Result<supercli_serve::service_install::ServiceScope, String> {
     Ok(match crate::workspaces::current_scope()? {
-        None => unpeel_serve::service_install::ServiceScope::Machine,
-        Some((slug, home)) => unpeel_serve::service_install::ServiceScope::Workspace { slug, home },
+        None => supercli_serve::service_install::ServiceScope::Machine,
+        Some((slug, home)) => supercli_serve::service_install::ServiceScope::Workspace { slug, home },
     })
 }
 
 fn serve_service(action: &str, graphical: bool) -> Result<i32, String> {
-    use unpeel_serve::service_install as install;
+    use supercli_serve::service_install as install;
 
     let manager = install::ServiceManager::detect()?;
     let scope = serve_unit_scope()?;
@@ -833,7 +833,7 @@ fn serve_service(action: &str, graphical: bool) -> Result<i32, String> {
             println!("installed {}", path.display());
             if graphical {
                 println!("the Unpeel Host service now runs inside this user's desktop session (graphical-session.target)");
-                println!("desktop session note: the session must import DISPLAY (`systemctl --user import-environment DISPLAY XAUTHORITY`) and pull in graphical-session.target — GNOME/KDE/sway do; an Xvfb or streamed-Xorg script starts packaging/service/unpeel-desktop-session.target instead (graphical-session.target refuses manual start)");
+                println!("desktop session note: the session must import DISPLAY (`systemctl --user import-environment DISPLAY XAUTHORITY`) and pull in graphical-session.target — GNOME/KDE/sway do; an Xvfb or streamed-Xorg script starts packaging/service/supercli-desktop-session.target instead (graphical-session.target refuses manual start)");
             } else {
                 println!("the Unpeel Host service now starts on boot for this user");
             }
@@ -935,7 +935,7 @@ pub fn run(args: &[String]) -> i32 {
             if parsed.has("enter") {
                 text.push('\r');
             }
-            unpeel_serve::control::send_text(&row.dir(), &text).map(|_| 0)
+            supercli_serve::control::send_text(&row.dir(), &text).map(|_| 0)
         }),
         "keys" => reference_arg().and_then(|reference| {
             let row = resolve(&reference)?;
@@ -943,7 +943,7 @@ pub fn run(args: &[String]) -> i32 {
                 return Ok(crate::mcp_cli::send_keys(&row.id, &parsed.positional[2..]));
             }
             let sequence = unescape(&parsed.positional[2..].join(" "));
-            unpeel_serve::control::send_text(&row.dir(), &sequence).map(|_| 0)
+            supercli_serve::control::send_text(&row.dir(), &sequence).map(|_| 0)
         }),
         "mcp" => Ok(crate::mcp_cli::run(&args[1..])),
         "current" => Ok(crate::mcp_cli::current(&args[1..])),
@@ -957,8 +957,8 @@ pub fn run(args: &[String]) -> i32 {
             let cols = parsed.number("cols").unwrap_or(100) as u16;
             let rows_n = parsed.number("rows").unwrap_or(30) as u16;
             let snapshot =
-                unpeel_serve::control::viewport_snapshot(&row.dir(), 0).or_else(|_| {
-                    unpeel_core::terminal_viewport::read_terminal_viewport_snapshot(
+                supercli_serve::control::viewport_snapshot(&row.dir(), 0).or_else(|_| {
+                    supercli_core::terminal_viewport::read_terminal_viewport_snapshot(
                         row.id.clone(),
                         cols,
                         rows_n,
@@ -980,15 +980,15 @@ pub fn run(args: &[String]) -> i32 {
                 if !row.resume_agent_available {
                     return Err(crate::state_cli::resume_unavailable_message(&row).into());
                 }
-                unpeel_core::session_ops::resume_agent(&row.id)?;
+                supercli_core::session_ops::resume_agent(&row.id)?;
                 // In-place resume deliberately preserves the Session/PTY id.
                 println!("{}", row.id);
             } else {
                 if !row.resume_available {
                     return Err("this session cannot be resumed".into());
                 }
-                let id = unpeel_core::session_ops::resume_session(&row.id, None, 120, 32)?;
-                unpeel_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
+                let id = supercli_core::session_ops::resume_session(&row.id, None, 120, 32)?;
+                supercli_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
                     .map_err(|error| format!("session {id} did not become ready: {error}"))?;
                 println!("{id}");
             }
@@ -996,10 +996,10 @@ pub fn run(args: &[String]) -> i32 {
         }),
         "stop" => reference_arg()
             .and_then(|reference| resolve(&reference))
-            .and_then(|row| unpeel_core::session_ops::stop_session(&row.id).map(|_| 0)),
+            .and_then(|row| supercli_core::session_ops::stop_session(&row.id).map(|_| 0)),
         "archive" => reference_arg()
             .and_then(|reference| resolve(&reference))
-            .and_then(|row| unpeel_core::session_ops::archive_session(&row.id).map(|_| 0)),
+            .and_then(|row| supercli_core::session_ops::archive_session(&row.id).map(|_| 0)),
         "restore" => {
             // Backup archives take `--from`; a bare session reference keeps
             // the historical archived-session restore.
@@ -1008,12 +1008,12 @@ pub fn run(args: &[String]) -> i32 {
             } else {
                 reference_arg()
                     .and_then(|reference| resolve(&reference))
-                    .and_then(|row| unpeel_core::session_ops::restore_session(&row.id).map(|_| 0))
+                    .and_then(|row| supercli_core::session_ops::restore_session(&row.id).map(|_| 0))
             }
         }
         "rm" | "remove" | "close" => reference_arg()
             .and_then(|reference| resolve(&reference))
-            .and_then(|row| unpeel_core::session_ops::remove_session(&row.id).map(|_| 0)),
+            .and_then(|row| supercli_core::session_ops::remove_session(&row.id).map(|_| 0)),
         "transcript" => transcript(&parsed).map(|_| 0),
         "open" => Ok(crate::open_cli::run(&args[1..])),
         "settings" => match args.get(1).map(String::as_str) {
@@ -1029,7 +1029,13 @@ pub fn run(args: &[String]) -> i32 {
         },
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
-        "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
+        "migrate" => {
+            if args[1..].iter().any(|a| a == "--from-unpeel") {
+                Ok(crate::import_unpeel_cli::run_from_unpeel(&args[1..]))
+            } else {
+                Ok(crate::migrate_cli::run(&args[1..]))
+            }
+        },
         "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
         "self-update" => Ok(crate::self_update_cli::run(&args[1..])),
         "init" => Ok(crate::init_cli::run(
@@ -1065,7 +1071,7 @@ pub fn run(args: &[String]) -> i32 {
             )),
         },
         "integrations" => crate::integrations_cli::run(&args[1..], parsed.has("json")),
-        // `install` is the Host-owned engine verb (unpeel_core::browser_engine);
+        // `install` is the Host-owned engine verb (supercli_core::browser_engine);
         // every other browser action drives this session's isolated browser
         // through the same dispatcher as the MCP `browser` tool.
         "browser" => match args.get(1).map(String::as_str) {

@@ -28,10 +28,10 @@ fn grok_hook_script_carries_provider_session_and_tool_for_attention_events() {
         .arg(&script)
         .arg("Attention")
         .env("HOME", hook_env_home("grok-attention"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
-        .env("UNPEEL_HOOK_TRACE_FILE", hook_trace_file("grok-attention"))
+        .env("SUPERCLI_HOOK_TRACE_FILE", hook_trace_file("grok-attention"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -101,11 +101,11 @@ fn grok_hook_script_posts_through_port_registry_without_app_port() {
         .arg(&script)
         .arg("UserPromptSubmit")
         .env("HOME", hook_env_home("grok-registry-only"))
-        .env_remove("UNPEEL_APP_PORT")
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
-        .env("UNPEEL_APP_PORT_REGISTRY_FILE", &registry)
+        .env_remove("SUPERCLI_APP_PORT")
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_APP_PORT_REGISTRY_FILE", &registry)
         .env(
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_HOOK_TRACE_FILE",
             hook_trace_file("grok-registry-only"),
         )
         .stdin(Stdio::piped())
@@ -147,6 +147,6 @@ fn grok_native_cancel_and_failure_keep_their_event_identity() {
         assert!(output.status.success(), "{output:?}");
         let recorded = read_last_hook_event(&session);
         assert_eq!(recorded["hook_event_name"], event);
-        assert_eq!(recorded["unpeel_runtime_generation"], 7);
+        assert_eq!(recorded["supercli_runtime_generation"], 7);
     }
 }

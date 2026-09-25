@@ -1268,7 +1268,7 @@ pub struct RemoteWorkspaceSettings {
     pub plugin_activation: Option<HashMap<String, bool>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub available_agents: Option<Vec<RemoteAgentSummary>>,
-    /// `~/.unpeel/bin/unpeel-mcp` on this Host: the one command every
+    /// `~/.supercli/bin/unpeel-mcp` on this Host: the one command every
     /// provider's MCP config points at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_shim_path: Option<String>,
@@ -2513,7 +2513,7 @@ impl RemoteSessionBackend {
             {
                 return Err(invalid_effect_input(OPERATION, "invalid opener selector"));
             }
-            if !matches!(opener, "editor" | "system") && !opener.starts_with("app:unpeel.app.") {
+            if !matches!(opener, "editor" | "system") && !opener.starts_with("app:supercli.app.") {
                 return Err(invalid_effect_input(OPERATION, "invalid opener"));
             }
             Ok(())
@@ -4918,15 +4918,15 @@ mod tests {
                 OPENERS_PATH,
                 json!({
                     "selector": "file:text/markdown",
-                    "opener": "app:unpeel.app.markdown",
+                    "opener": "app:supercli.app.markdown",
                 }),
             ),
-            (APPS_INSTALL_PATH, json!({ "appID": "unpeel.app.markdown" })),
+            (APPS_INSTALL_PATH, json!({ "appID": "supercli.app.markdown" })),
             (
                 APPS_OPEN_PATH,
                 json!({
                     "callerSessionID": "s1",
-                    "appID": "unpeel.app.markdown",
+                    "appID": "supercli.app.markdown",
                     "mediaType": "text/markdown",
                     "resource": {
                         "kind": "file",
@@ -4948,14 +4948,14 @@ mod tests {
 
         assert_eq!(
             backend
-                .set_opener("file:text/markdown", "app:unpeel.app.markdown")
+                .set_opener("file:text/markdown", "app:supercli.app.markdown")
                 .unwrap()
                 .request_id(),
             2
         );
         assert_eq!(
             backend
-                .install_app("unpeel.app.markdown")
+                .install_app("supercli.app.markdown")
                 .unwrap()
                 .request_id(),
             3
@@ -4964,7 +4964,7 @@ mod tests {
             backend
                 .open_app(
                     "s1",
-                    "unpeel.app.markdown",
+                    "supercli.app.markdown",
                     "file",
                     Some("text/markdown"),
                     "/tmp/hello world.md",
@@ -6806,8 +6806,8 @@ mod tests {
             "availableAgents":[{"id":"com.openai.codex","name":"Codex","command":"codex",
                 "installed":true,"websiteURL":"https://openai.com/codex"}]
         });
-        bootstrap["availableApps"] = json!([{"id":"unpeel.app.markdown", "name":"Markdown",
-            "command":"unpeel-markdown", "installCommand":"/remote/bin/unpeel apps install unpeel.app.markdown --yes"}]);
+        bootstrap["availableApps"] = json!([{"id":"supercli.app.markdown", "name":"Markdown",
+            "command":"supercli-markdown", "installCommand":"/remote/bin/unpeel apps install supercli.app.markdown --yes"}]);
         add_bootstrap(&connection, generation, bootstrap);
         connection.push(reply_step(
             expected_effect(
@@ -6824,7 +6824,7 @@ mod tests {
         let wire = serde_json::to_value(&snapshot.snapshot).unwrap();
         assert_eq!(
             wire["availableApps"][0]["installCommand"],
-            "/remote/bin/unpeel apps install unpeel.app.markdown --yes"
+            "/remote/bin/unpeel apps install supercli.app.markdown --yes"
         );
         assert_eq!(
             wire["workspaceSettings"]["pluginActivation"]["com.openai.codex"],

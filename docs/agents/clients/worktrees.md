@@ -4,8 +4,8 @@
 
 Sessions can run in a git worktree of the project instead of the main checkout, so multiple agents can work the same repo in parallel without touching each other's files.
 
-- Worktree git operations (native): `clients/native/UnpeelNative/Sources/UnpeelNative/WorktreeGit.swift` shells out to stock `git worktree`.
-- Unpeel-created worktrees live in `~/.unpeel/worktrees/<repo-name>-<hash>/<worktree-name-slug>/`, outside the repo (same convention as Codex's `~/.codex/worktrees`). If no custom worktree name is provided, the branch slug is used. Legacy in-repo `<repo>/.worktrees/` checkouts are still recognized as Unpeel-managed.
+- Worktree git operations (native): `clients/native/SupercliNative/Sources/SupercliNative/WorktreeGit.swift` shells out to stock `git worktree`.
+- Supercli-created worktrees live in `~/.supercli/worktrees/<repo-name>-<hash>/<worktree-name-slug>/`, outside the repo (same convention as Codex's `~/.codex/worktrees`). If no custom worktree name is provided, the branch slug is used. Legacy in-repo `<repo>/.worktrees/` checkouts are still recognized as Supercli-managed.
 - Each used worktree becomes a child `Project` (`worktree_branch` + `parent_project_id` fields), so it groups multiple sessions and reuses all project UI.
 - The native app also discovers worktrees created by Claude,
   Codex, or any other tool. Discovery is provider-neutral and project-scoped:
@@ -20,7 +20,7 @@ Sessions can run in a git worktree of the project instead of the main checkout, 
   worktree; explicitly created/adopted projects are never pruned by discovery.
   Discovery is additionally **opt-in** (2026-08-23): the "Show agent
   worktrees" toggle in Settings ▸ Worktrees
-  (`UnpeelStore.showAgentWorktrees`, default off) gates it — off skips
+  (`SupercliStore.showAgentWorktrees`, default off) gates it — off skips
   discovery and purges previously auto-discovered records (safe: they are
   reconstructible; explicit worktree projects are untouched), on rediscovers
   them on the next rescan. That same Settings tab lists this workspace's
@@ -69,7 +69,7 @@ branch glyph, and sort among them. Creation: project context menu
 Moving a session into a group is the session context menu's **"Move to"** —
 Git worktrees are intentionally excluded because changing checkout requires
 an explicit restart/resume. The group move writes the shared per-session marker
-`~/.unpeel/app-sessions/<id>/project-override.json`
+`~/.supercli/app-sessions/<id>/project-override.json`
 (`{"project_id": "<target>", "moved_at": ms}`), display + ordering only; the
 manifest's `project_id` stays the launch truth. Helpers:
 `session_ops::{set,clear}_project_override` (Rust) and

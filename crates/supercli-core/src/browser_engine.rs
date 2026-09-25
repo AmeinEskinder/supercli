@@ -6,7 +6,7 @@
 //! Host had no engine and the public server repo would have depended on the
 //! app for it. Now the pin lives in `protocol/browser-engine-v1.json`
 //! (embedded here), and the Host installs the platform binary itself into
-//! `~/.unpeel/browser/bin/agent-browser` after verifying its sha256 against
+//! `~/.supercli/browser/bin/agent-browser` after verifying its sha256 against
 //! that manifest:
 //!
 //! - `pinned()` — the embedded manifest.
@@ -18,7 +18,7 @@
 //!   safe: an exclusive flock on `browser/bin/.lock`; a second installer
 //!   waits, then re-verifies and finds the first one's work.
 //! - `resolve(home)` — the resolution order every consumer shares:
-//!   `UNPEEL_AGENT_BROWSER_BIN` (or the older `UNPEEL_BROWSER_BIN`) →
+//!   `SUPERCLI_AGENT_BROWSER_BIN` (or the older `SUPERCLI_BROWSER_BIN`) →
 //!   the verified managed copy → next to the running executable (the app
 //!   bundle, kept as a compatibility candidate until the repo split) →
 //!   `PATH`.
@@ -151,7 +151,7 @@ impl Status {
             error: None,
         }
     }
-    /// `UNPEEL_BROWSER_ENGINE_INSTALL=0`: the worker starts no install
+    /// `SUPERCLI_BROWSER_ENGINE_INSTALL=0`: the worker starts no install
     /// thread (benchmarks, air-gapped Hosts, operators who manage the engine
     /// themselves); resolution still finds an existing engine.
     pub fn disabled() -> Self {
@@ -475,9 +475,9 @@ pub fn resolve_with(
 
 /// `resolve_with` from the process environment.
 pub fn resolve(home: &Path) -> Result<PathBuf, String> {
-    let env_override = std::env::var("UNPEEL_AGENT_BROWSER_BIN")
+    let env_override = std::env::var("SUPERCLI_AGENT_BROWSER_BIN")
         .ok()
-        .or_else(|| std::env::var("UNPEEL_BROWSER_BIN").ok())
+        .or_else(|| std::env::var("SUPERCLI_BROWSER_BIN").ok())
         .filter(|v| !v.trim().is_empty());
     let exe_dir = std::env::current_exe()
         .ok()
@@ -506,7 +506,7 @@ pub fn missing_engine_message(home: &Path) -> String {
     };
     format!(
         "The browser engine (agent-browser {}) is not available: {hint}. Run `unpeel browser \
-install` on this Host (or set UNPEEL_AGENT_BROWSER_BIN to an engine binary).",
+install` on this Host (or set SUPERCLI_AGENT_BROWSER_BIN to an engine binary).",
         pinned().version
     )
 }

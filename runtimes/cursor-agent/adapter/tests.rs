@@ -74,11 +74,11 @@ fn cursor_hook_script_uses_cursor_conversation_id_for_start_events() {
         .arg(&script)
         .arg("Start")
         .env("HOME", hook_env_home("cursor-start-env"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
         .env("CURSOR_CONVERSATION_ID", "cursor-chat-123")
         .env(
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_HOOK_TRACE_FILE",
             hook_trace_file("cursor-start-env"),
         )
         .stdin(Stdio::piped())
@@ -112,11 +112,11 @@ fn cursor_hook_script_ignores_all_grok_events() {
         .arg(&script)
         .arg("Start")
         .env("HOME", hook_env_home("cursor-ignore-grok"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
         .env(
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_HOOK_TRACE_FILE",
             hook_trace_file("cursor-ignore-grok"),
         )
         .stdin(Stdio::piped())
@@ -152,8 +152,8 @@ fn cursor_hook_script_ignores_all_grok_events() {
 fn cursor_hook_script_auto_confirms_permission_requests() {
     assert!(CURSOR_HOOK_SCRIPT.contains("PermissionRequest"));
     assert!(CURSOR_HOOK_SCRIPT.contains("{\"continue\":true}"));
-    assert!(CURSOR_HOOK_SCRIPT.contains("UNPEEL_APP_PORT"));
-    assert!(CURSOR_HOOK_SCRIPT.contains("UNPEEL_PORT_REGISTRY_FILE"));
+    assert!(CURSOR_HOOK_SCRIPT.contains("SUPERCLI_APP_PORT"));
+    assert!(CURSOR_HOOK_SCRIPT.contains("SUPERCLI_PORT_REGISTRY_FILE"));
     assert!(CURSOR_HOOK_SCRIPT.contains("post_hook_event_to_current_ports"));
     assert!(CURSOR_HOOK_SCRIPT.contains("GROK_SESSION_ID"));
     assert!(CURSOR_HOOK_SCRIPT.contains("\"session_id\""));
@@ -168,7 +168,7 @@ fn cursor_hook_script_auto_confirms_permission_requests() {
 }
 
 #[test]
-fn cursor_mcp_config_merges_and_prunes_unpeel_servers() {
+fn cursor_mcp_config_merges_and_prunes_supercli_servers() {
     let home = hook_env_home("cursor-mcp-config");
     let mcp_path = home.join(".cursor").join("mcp.json");
     fs::create_dir_all(mcp_path.parent().unwrap()).expect("create cursor dir");

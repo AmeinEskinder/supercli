@@ -610,8 +610,8 @@ fn upload_storage_error(context: &str, error: std::io::Error) -> ResumableArtifa
 #[cfg(unix)]
 fn upload_state_names(upload: &ValidatedUpload<'_>) -> (String, String) {
     (
-        format!(".unpeel-upload-{}.json", upload.upload_key),
-        format!(".unpeel-upload-{}.part", upload.upload_key),
+        format!(".supercli-upload-{}.json", upload.upload_key),
+        format!(".supercli-upload-{}.part", upload.upload_key),
     )
 }
 
@@ -626,7 +626,7 @@ fn process_upload_chunk(
     // One per-Session lock serializes chunk commits, quota decisions, and
     // expiry cleanup. Uploads are small and network-bound; avoiding a second
     // lock order is more valuable than parallel writes within one Session.
-    let _upload_lock = secure_fs::open_and_lock_file(uploads, b".unpeel-upload.lock")
+    let _upload_lock = secure_fs::open_and_lock_file(uploads, b".supercli-upload.lock")
         .map_err(|error| upload_storage_error("lock upload", error))?;
     let now_unix_ms = upload_now_unix_ms();
     recover_expired_uploads(uploads)?;
@@ -865,7 +865,7 @@ fn secure_regular_size(
 fn upload_key_from_internal_name(name: &[u8], suffix: &str) -> Option<String> {
     let rendered = std::str::from_utf8(name).ok()?;
     let key = rendered
-        .strip_prefix(".unpeel-upload-")?
+        .strip_prefix(".supercli-upload-")?
         .strip_suffix(suffix)?;
     if key.len() == 64
         && key
@@ -887,7 +887,7 @@ fn recover_expired_uploads(uploads: &std::fs::File) -> Result<(), ResumableArtif
         let Some(key) = upload_key_from_internal_name(&name, ".expired") else {
             continue;
         };
-        let part_name = format!(".unpeel-upload-{key}.part");
+        let part_name = format!(".supercli-upload-{key}.part");
         secure_fs::unlink_regular_or_symlink(uploads, part_name.as_bytes())
             .map_err(|error| upload_storage_error("recover expired upload bytes", error))?;
         secure_fs::unlink_regular_or_symlink(uploads, &name)
@@ -934,10 +934,10 @@ fn expire_incomplete_uploads(
         // Renaming the receipt is the durable expiry commit. If the process
         // dies after this point, recover_expired_uploads finishes removing the
         // matching part before any request examines upload state.
-        let expired_name = format!(".unpeel-upload-{key}.expired");
+        let expired_name = format!(".supercli-upload-{key}.expired");
         secure_fs::rename_regular_at(uploads, &state_name, expired_name.as_bytes())
             .map_err(|error| upload_storage_error("expire upload receipt", error))?;
-        let part_name = format!(".unpeel-upload-{key}.part");
+        let part_name = format!(".supercli-upload-{key}.part");
         secure_fs::unlink_regular_or_symlink(uploads, part_name.as_bytes())
             .map_err(|error| upload_storage_error("expire upload bytes", error))?;
         secure_fs::unlink_regular_or_symlink(uploads, expired_name.as_bytes())
@@ -974,7 +974,7 @@ pub fn sweep_incomplete_uploads(now_unix_ms: u64) -> Result<usize, String> {
         let Ok(uploads) = secure_fs::open_dir_chain(&session, &["artifacts", "uploads"]) else {
             continue;
         };
-        let Ok(_lock) = secure_fs::open_and_lock_file(&uploads, b".unpeel-upload.lock") else {
+        let Ok(_lock) = secure_fs::open_and_lock_file(&uploads, b".supercli-upload.lock") else {
             continue;
         };
         if recover_expired_uploads(&uploads).is_err() {
@@ -1037,7 +1037,7 @@ fn staged_upload_usage(
     let mut staged_bytes = 0_u64;
     for name in names {
         let rendered = String::from_utf8_lossy(&name);
-        if !rendered.starts_with(".unpeel-upload-") || !rendered.ends_with(".json") {
+        if !rendered.starts_with(".supercli-upload-") || !rendered.ends_with(".json") {
             continue;
         }
         let parsed = secure_fs::read_regular_at(uploads, &name, 64 * 1024)
@@ -2043,7 +2043,7 @@ pub(crate) mod secure_fs {
             Err(error) => return Err(error),
         }
 
-        let temp_name = format!(".unpeel-upload-tmp-{}", uuid::Uuid::new_v4());
+        let temp_name = format!(".supercli-upload-tmp-{}", uuid::Uuid::new_v4());
         let temp_encoded = safe_leaf(temp_name.as_bytes())?;
         let descriptor = unsafe {
             libc::openat(
@@ -2663,10 +2663,10 @@ mod tests {
 
         let key = sha256_hex(upload_id.as_bytes());
         let uploads = session.join("artifacts/uploads");
-        let part = uploads.join(format!(".unpeel-upload-{key}.part"));
+        let part = uploads.join(format!(".supercli-upload-{key}.part"));
         assert_eq!(std::fs::read(part).unwrap(), image[..split]);
         let state: ResumableUploadState = serde_json::from_slice(
-            &std::fs::read(uploads.join(format!(".unpeel-upload-{key}.json"))).unwrap(),
+            &std::fs::read(uploads.join(format!(".supercli-upload-{key}.json"))).unwrap(),
         )
         .unwrap();
         assert_eq!(state.committed_offset, split as u64);
@@ -2695,8 +2695,8 @@ mod tests {
         .unwrap();
         let uploads = session.join("artifacts/uploads");
         let key = sha256_hex(upload_id.as_bytes());
-        let state_path = uploads.join(format!(".unpeel-upload-{key}.json"));
-        let part_path = uploads.join(format!(".unpeel-upload-{key}.part"));
+        let state_path = uploads.join(format!(".supercli-upload-{key}.json"));
+        let part_path = uploads.join(format!(".supercli-upload-{key}.part"));
         let mut state: ResumableUploadState =
             serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
         state.complete = false;
@@ -2750,7 +2750,7 @@ mod tests {
         let key = sha256_hex(upload_id.as_bytes());
         let part_path = session
             .join("artifacts/uploads")
-            .join(format!(".unpeel-upload-{key}.part"));
+            .join(format!(".supercli-upload-{key}.part"));
         use std::io::Write as _;
         let mut part = std::fs::OpenOptions::new()
             .append(true)
@@ -2833,13 +2833,13 @@ mod tests {
 
         let state_path = |upload_id: &str| {
             uploads.join(format!(
-                ".unpeel-upload-{}.json",
+                ".supercli-upload-{}.json",
                 sha256_hex(upload_id.as_bytes())
             ))
         };
         let part_path = |upload_id: &str| {
             uploads.join(format!(
-                ".unpeel-upload-{}.part",
+                ".supercli-upload-{}.part",
                 sha256_hex(upload_id.as_bytes())
             ))
         };
@@ -2928,9 +2928,9 @@ mod tests {
         .unwrap();
         let uploads = session.join("artifacts/uploads");
         let key = sha256_hex(upload_id.as_bytes());
-        let state = uploads.join(format!(".unpeel-upload-{key}.json"));
-        let expired = uploads.join(format!(".unpeel-upload-{key}.expired"));
-        let part = uploads.join(format!(".unpeel-upload-{key}.part"));
+        let state = uploads.join(format!(".supercli-upload-{key}.json"));
+        let expired = uploads.join(format!(".supercli-upload-{key}.expired"));
+        let part = uploads.join(format!(".supercli-upload-{key}.part"));
 
         // The atomic receipt rename happened, then the Host died before it
         // could unlink either the part or tombstone.
@@ -3216,7 +3216,7 @@ mod tests {
         assert!(!root
             .join(session_id)
             .join("artifacts/uploads")
-            .join(format!(".unpeel-upload-{gap_key}.json"))
+            .join(format!(".supercli-upload-{gap_key}.json"))
             .exists());
 
         for _ in 0..RESUMABLE_UPLOAD_MAX_ACTIVE {
@@ -3444,7 +3444,7 @@ mod tests {
         std::fs::write(&outside_file, b"untouched").unwrap();
         let lock_path = session
             .join("artifacts/uploads")
-            .join(".unpeel-upload.lock");
+            .join(".supercli-upload.lock");
         std::os::unix::fs::symlink(&outside_file, &lock_path).unwrap();
         let error = send_chunk(
             &root,
@@ -3463,7 +3463,7 @@ mod tests {
         std::fs::remove_file(lock_path).unwrap();
         let part_path = session
             .join("artifacts/uploads")
-            .join(format!(".unpeel-upload-{key}.part"));
+            .join(format!(".supercli-upload-{key}.part"));
         std::os::unix::fs::symlink(&outside_file, &part_path).unwrap();
         let error = send_chunk(
             &root,

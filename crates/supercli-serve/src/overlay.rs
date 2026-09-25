@@ -1,10 +1,10 @@
 //! Read-only view of the native app's UserDefaults overlay
-//! (`com.unpeel.native`): native projects + project order, pins, per-project
+//! (`com.supercli.native`): native projects + project order, pins, per-project
 //! manual session order, title renames, and the archived set. This is what
 //! lets the disk-fallback sidebar match the desktop when the running app
 //! build has no `/mcp/sidebar` route (or no app runs at all). Never written.
 //!
-//! Skipped entirely when `UNPEEL_HOME` is set: isolated workspace and blank
+//! Skipped entirely when `SUPERCLI_HOME` is set: isolated workspace and blank
 //! instances use a home-derived defaults suite, and test fixtures must not
 //! inherit the real app's organization.
 
@@ -96,11 +96,11 @@ pub fn load() -> Option<NativeOverlay> {
     return None;
     #[cfg(target_os = "macos")]
     {
-        if std::env::var_os("UNPEEL_HOME").is_some_and(|v| !v.is_empty()) {
+        if std::env::var_os("SUPERCLI_HOME").is_some_and(|v| !v.is_empty()) {
             return None;
         }
         let output = Command::new("defaults")
-            .args(["export", "com.unpeel.native", "-"])
+            .args(["export", "com.supercli.native", "-"])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -138,10 +138,10 @@ pub fn from_adapter_response(value: &serde_json::Value) -> Result<NativeOverlay,
 
 /// Whether this Host can persist folder colors at all: they live in the
 /// desktop app's UserDefaults domain, which does not exist off macOS or in
-/// isolated workspaces (`UNPEEL_HOME`).
+/// isolated workspaces (`SUPERCLI_HOME`).
 pub fn project_folder_color_supported() -> bool {
     cfg!(target_os = "macos")
-        && std::env::var_os("UNPEEL_HOME").is_none_or(|value| value.is_empty())
+        && std::env::var_os("SUPERCLI_HOME").is_none_or(|value| value.is_empty())
 }
 
 /// Write a folder color into the desktop app's UserDefaults — the same store
@@ -149,7 +149,7 @@ pub fn project_folder_color_supported() -> bool {
 /// frontend reads one truth. Used by the headless Controller route
 /// (`project.organization.set`); the interactive path in `main.rs` keeps its
 /// own copy because it also updates the in-memory overlay and status line.
-/// Colors do not exist off macOS or in isolated workspaces (`UNPEEL_HOME`),
+/// Colors do not exist off macOS or in isolated workspaces (`SUPERCLI_HOME`),
 /// where the overlay itself is skipped — report unsupported instead of
 /// writing another instance's defaults domain.
 pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Result<(), String> {
@@ -160,10 +160,10 @@ pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Resu
     }
     #[cfg(target_os = "macos")]
     {
-        if std::env::var_os("UNPEEL_HOME").is_some_and(|v| !v.is_empty()) {
+        if std::env::var_os("SUPERCLI_HOME").is_some_and(|v| !v.is_empty()) {
             return Err("folder colors are not supported by this Host".into());
         }
-        const DOMAIN: &str = "com.unpeel.native";
+        const DOMAIN: &str = "com.supercli.native";
         const KEY: &str = "unpeel.native.projectFolderColors";
         let run = |args: &[&str]| {
             Command::new("defaults")
@@ -202,7 +202,7 @@ pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Resu
     }
 }
 
-/// Parse an exported `com.unpeel.native` defaults plist. Split from `load()`
+/// Parse an exported `com.supercli.native` defaults plist. Split from `load()`
 /// so the dialect (blob JSON key spellings, pin tombstones) is testable
 /// without a real defaults domain.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -417,7 +417,7 @@ mod tests {
         // the desktop writes camelCase — snake_case here would silently
         // orphan every desktop-created worktree into the top-level list.
         let projects = serde_json::json!([
-            {"id": "p1", "name": "unpeel", "path": "/tmp/unpeel"},
+            {"id": "p1", "name": "supercli", "path": "/tmp/unpeel"},
             {"id": "w1", "name": "Example", "path": "/tmp/wt",
              "parentProjectID": "p1", "worktreeBranch": "worktree/example"},
             {"id": "w2", "name": "legacy", "path": "/tmp/wt2",

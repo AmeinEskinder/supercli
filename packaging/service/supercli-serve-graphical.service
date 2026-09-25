@@ -2,14 +2,14 @@
 #
 # Graphical tools launched by agents run inside the desktop session:
 # it needs the session's DISPLAY or WAYLAND_DISPLAY and the accessibility
-# (AT-SPI) bus on the session D-Bus. The plain unpeel-serve.service starts at
+# (AT-SPI) bus on the session D-Bus. The plain supercli-serve.service starts at
 # login with neither, so a Host that should inherit the graphical session installs this
-# variant instead (`unpeel serve install --graphical`), which starts when the
+# variant instead (`supercli serve install --graphical`), which starts when the
 # desktop session activates and stops when it ends:
 #
-#   cp unpeel-serve-graphical.service ~/.config/systemd/user/unpeel-serve.service
+#   cp supercli-serve-graphical.service ~/.config/systemd/user/supercli-serve.service
 #   systemctl --user daemon-reload
-#   systemctl --user enable unpeel-serve.service
+#   systemctl --user enable supercli-serve.service
 #
 # How the display reaches the service: GNOME, KDE, sway, and other session
 # managers import DISPLAY / WAYLAND_DISPLAY / XAUTHORITY into the user manager
@@ -17,20 +17,20 @@
 # DBUS_SESSION_BUS_ADDRESS is the user manager's own bus. A hand-rolled
 # session (an Xvfb script, a streamed Xorg desktop such as a Box) has no
 # session manager, and graphical-session.target refuses manual start, so it
-# starts its own session target that binds it (unpeel-desktop-session.target
+# starts its own session target that binds it (supercli-desktop-session.target
 # in this directory) once the display is up:
 #
 #   systemctl --user import-environment DISPLAY XAUTHORITY
-#   systemctl --user start unpeel-desktop-session.target
+#   systemctl --user start supercli-desktop-session.target
 #
 # (An ExecStartPre= import inside this unit cannot do that: it would run with
 # the user manager's environment, which is exactly what lacks the display.)
 #
-# `unpeel serve status` reports whether graphical-session.target is active
+# `supercli serve status` reports whether graphical-session.target is active
 # and whether a desktop session with a session bus is visible to the
 # calling shell.
 # Everything else about this unit (per-user only, `loginctl enable-linger`,
-# diagnostics) matches unpeel-serve.service.
+# diagnostics) matches supercli-serve.service.
 
 [Unit]
 Description=Unpeel Host service (desktop session)
@@ -38,7 +38,7 @@ PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
-ExecStart=/usr/local/bin/unpeel serve
+ExecStart=/usr/local/bin/supercli serve
 Restart=on-failure
 RestartSec=5
 

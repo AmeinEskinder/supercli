@@ -464,11 +464,11 @@ mod tests {
         // chain. This test fails if the chain can be forked (duplicate
         // prev_hash values).
         //
-        // Setup: use a temp UNPEEL_HOME.
+        // Setup: use a temp SUPERCLI_HOME.
         let dir = std::env::temp_dir().join(format!("grant-fork-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("UNPEEL_HOME", &dir);
+        std::env::set_var("SUPERCLI_HOME", &dir);
 
         // Spawn 8 threads, each doing 50 grouped writes concurrently.
         let mut handles = vec![];
@@ -514,7 +514,7 @@ mod tests {
         // Also verify the chain cryptographically.
         crate::grant_audit::verify_grant_audit().expect("chain must verify");
 
-        std::env::remove_var("UNPEEL_HOME");
+        std::env::remove_var("SUPERCLI_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

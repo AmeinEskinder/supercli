@@ -11,13 +11,13 @@ use std::time::Duration;
 
 use base64::Engine;
 
-/// Where the relay lives. `UNPEEL_RELAY_URL` overrides for dev
+/// Where the relay lives. `SUPERCLI_RELAY_URL` overrides for dev
 /// (`ws://127.0.0.1:8787` against `wrangler dev`).
 pub fn relay_url() -> String {
-    std::env::var("UNPEEL_RELAY_URL")
+    std::env::var("SUPERCLI_RELAY_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "wss://relay.unpeel.com".into())
+        .unwrap_or_else(|| "wss://relay.supercli.com".into())
 }
 
 /// Match the native app's refresh window: keep using a valid entitlement,
@@ -42,7 +42,7 @@ pub struct CachedEntitlement {
 }
 
 fn entitlement_cache_path() -> std::path::PathBuf {
-    crate::app_paths::unpeel_home()
+    crate::app_paths::supercli_home()
         .join("mobile")
         .join("relay-entitlement.json")
 }
@@ -52,7 +52,7 @@ fn entitlement_cache_path() -> std::path::PathBuf {
 /// an atomic private temp-file rename and never returns an unpersisted id.
 pub fn ensure_host_id() -> Result<String, String> {
     ensure_host_id_at(
-        &crate::app_paths::unpeel_home()
+        &crate::app_paths::supercli_home()
             .join("mobile")
             .join("mac-id"),
     )
@@ -196,7 +196,7 @@ pub fn cached_entitlement(expected_mac_id: &str) -> Option<(String, String)> {
 /// the `macID` self-asserted by the cache file.
 pub fn cached_entitlement_for_host() -> Option<(String, String)> {
     let mac_id = std::fs::read_to_string(
-        crate::app_paths::unpeel_home()
+        crate::app_paths::supercli_home()
             .join("mobile")
             .join("mac-id"),
     )

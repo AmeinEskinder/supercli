@@ -221,7 +221,7 @@ default; session creation stays user-only. Detail:
 - **iPhone / iPad app** — [`clients/ios`](clients/ios). A remote Controller: steer
   every session from your phone over your network or through Unpeel Link.
   Builds ship through TestFlight; see [unpeel.com](https://unpeel.com).
-- **Shared Swift package** — [`clients/shared/UnpeelShared`](clients/shared/UnpeelShared):
+- **Shared Swift package** — [`clients/shared/SupercliShared`](clients/shared/SupercliShared):
   pairing, the Host protocol client, and the end-to-end relay crypto both apps
   use, pinned to the same test vectors as the Rust side.
 - **`unpeel` CLI** — this repository's `crates/unpeel-cli`, for terminals and
@@ -236,10 +236,9 @@ Building the apps from source is covered in the "Apple clients" section of
 ## Open source boundary
 
 The server — this repository — is public under the MIT license
-(`LICENSE`), with the Unpeel name, logo, icon, and mascot covered by
-[`TRADEMARK.md`](TRADEMARK.md). The Mac and iOS app sources are here too
-(`apps/`); official signed builds are published only by the Unpeel team (see
-the "Official builds" note in `TRADEMARK.md`). The only closed component is
+(`LICENSE`). The Mac and iOS app sources are here too
+(`apps/`); official signed builds are published only by the Unpeel team.
+The only closed component is
 the backend of the operated Unpeel Link service (accounts, seats,
 entitlements, rendezvous, relay, push): everything local and direct is free
 and has no Link dependency. Design records and plans live in a private

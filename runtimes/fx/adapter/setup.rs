@@ -14,7 +14,7 @@ pub(crate) fn fx_mcp_config_path() -> Option<PathBuf> {
 /// `environment` block: fx replaces the child's whole environment when one is
 /// declared and inherits the parent's otherwise (`mcp_runtime.zig` builds an
 /// env map only from configured entries), so omitting it is what carries
-/// `UNPEEL_SESSION_ID` into each session's gate process. Outside a granted
+/// `SUPERCLI_SESSION_ID` into each session's gate process. Outside a granted
 /// hosted Session the gate serves a valid endpoint with no tools.
 pub(crate) fn fx_mcp_server_value(shim: &str) -> Value {
     json!({

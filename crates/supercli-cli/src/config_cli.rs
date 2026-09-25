@@ -5,7 +5,7 @@
 //! command exits 2. The Host applies the same schema at startup and refuses
 //! to serve an invalid config.
 
-use unpeel_core::{app_state, config};
+use supercli_core::{app_state, config};
 
 pub const CONFIG_HELP: &str = "\
 unpeel config — inspect the workspace configuration
@@ -43,7 +43,7 @@ pub fn run(args: &[String], json: bool) -> i32 {
 }
 
 /// Validate an already-loaded document. Split from `run` so tests can
-/// exercise the exit codes without mutating process-global `UNPEEL_HOME`.
+/// exercise the exit codes without mutating process-global `SUPERCLI_HOME`.
 fn check_loaded(doc: &Result<serde_json::Value, String>, json: bool) -> i32 {
     let doc = match doc {
         Ok(doc) => doc,
@@ -92,10 +92,10 @@ fn check_loaded(doc: &Result<serde_json::Value, String>, json: bool) -> i32 {
 }
 
 /// Print the config reference as Markdown, generated from the P3 schema
-/// (`unpeel_core::config::SETTINGS`). Used by the mdBook docs build; not
+/// (`supercli_core::config::SETTINGS`). Used by the mdBook docs build; not
 /// handwritten.
 fn print_reference() -> i32 {
-    use unpeel_core::config::{SettingType, SETTINGS};
+    use supercli_core::config::{SettingType, SETTINGS};
     println!("# Config reference");
     println!();
     println!("Generated from the typed config schema (`unpeel config reference`).");

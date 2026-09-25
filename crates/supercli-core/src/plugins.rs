@@ -367,14 +367,14 @@ mod tests {
                 {"id":"com.openai.codex","name":"Codex","command":"codex","installed":false}
             ]),
             json!([
-                {"id":"unpeel.app.markdown","name":"Markdown","command":"unpeel-markdown","installed":true}
+                {"id":"supercli.app.markdown","name":"Markdown","command":"supercli-markdown","installed":true}
             ]),
         )
     }
 
     #[test]
     fn plugin_order_merges_visible_rows_without_losing_hidden_or_future_rows() {
-        let mut object = json!({"plugin_order":["com.openai.codex","future-plugin","unpeel.app.markdown","com.anthropic.claude-code"], "future":42}).as_object().unwrap().clone();
+        let mut object = json!({"plugin_order":["com.openai.codex","future-plugin","supercli.app.markdown","com.anthropic.claude-code"], "future":42}).as_object().unwrap().clone();
         apply_order(
             &mut object,
             &[
@@ -387,7 +387,7 @@ mod tests {
             json!([
                 "com.anthropic.claude-code",
                 "future-plugin",
-                "unpeel.app.markdown",
+                "supercli.app.markdown",
                 "com.openai.codex"
             ])
         );
@@ -403,31 +403,31 @@ mod tests {
     #[test]
     fn app_variants_keep_the_default_and_plugin_order_groups_commands() {
         let (agents, apps) = inventory();
-        let mut state = json!({"presets":[], "plugin_order":["unpeel.app.markdown","com.anthropic.claude-code"]});
+        let mut state = json!({"presets":[], "plugin_order":["supercli.app.markdown","com.anthropic.claude-code"]});
         let mut wire = vec![];
         let mut create = vec![];
         project_presets(&state, &agents, &apps, &mut wire, &mut create);
-        assert_eq!(wire[0]["pluginID"], "unpeel.app.markdown");
+        assert_eq!(wire[0]["pluginID"], "supercli.app.markdown");
         preserve_projected_defaults(
             state.as_object_mut().unwrap(),
             &wire,
-            Some("unpeel-markdown notes.md"),
+            Some("supercli-markdown notes.md"),
         )
         .unwrap();
-        assert_eq!(state["presets"][0]["command"], "unpeel-markdown");
+        assert_eq!(state["presets"][0]["command"], "supercli-markdown");
         materialize_default(
             state.as_object_mut().unwrap(),
-            "__app__:unpeel.app.markdown",
+            "__app__:supercli.app.markdown",
         )
         .unwrap();
         assert_eq!(state["presets"].as_array().unwrap().len(), 1);
         let mut wire =
-            vec![json!({"id":"custom-app", "command":"unpeel-markdown notes.md", "enabled":true})];
+            vec![json!({"id":"custom-app", "command":"supercli-markdown notes.md", "enabled":true})];
         let mut create = vec![];
         project_presets(&state, &agents, &apps, &mut wire, &mut create);
         assert_eq!(
             wire.iter()
-                .filter(|row| row["pluginID"] == "unpeel.app.markdown")
+                .filter(|row| row["pluginID"] == "supercli.app.markdown")
                 .count(),
             1
         );
@@ -462,7 +462,7 @@ mod tests {
         project_presets(&state, &agents, &apps, &mut wire, &mut create);
         assert_eq!(wire.len(), 2);
         assert_eq!(wire[0]["command"], "claude");
-        assert_eq!(wire[1]["command"], "unpeel-markdown");
+        assert_eq!(wire[1]["command"], "supercli-markdown");
         assert!(create.iter().all(|preset| preset.enabled));
         assert_eq!(state["presets"], json!([]));
     }
@@ -516,7 +516,7 @@ mod tests {
                 project_id: None,
             })
             .collect();
-        let state = json!({"plugin_activation":{"com.anthropic.claude-code":false,"unpeel.app.markdown":false}});
+        let state = json!({"plugin_activation":{"com.anthropic.claude-code":false,"supercli.app.markdown":false}});
         project_presets(&state, &agents, &apps, &mut wire, &mut create);
         assert_eq!(
             wire.len(),
@@ -553,12 +553,12 @@ mod tests {
     #[test]
     fn existing_app_command_is_not_duplicated_and_defaults_materialize_only_once() {
         let (agents, apps) = inventory();
-        let mut wire = vec![json!({"id":"saved","command":"unpeel-markdown","enabled":true})];
+        let mut wire = vec![json!({"id":"saved","command":"supercli-markdown","enabled":true})];
         let mut create = vec![];
         project_presets(&json!({}), &agents, &apps, &mut wire, &mut create);
         assert_eq!(
             wire.iter()
-                .filter(|row| row["command"] == "unpeel-markdown")
+                .filter(|row| row["command"] == "supercli-markdown")
                 .count(),
             1
         );
@@ -583,10 +583,10 @@ mod tests {
         }
         assert_eq!(
             validate_patch(
-                &json!({"pluginActivation":{"id":"unpeel.app.markdown","active":false}})
+                &json!({"pluginActivation":{"id":"supercli.app.markdown","active":false}})
             )
             .unwrap(),
-            Some(("unpeel.app.markdown".into(), false))
+            Some(("supercli.app.markdown".into(), false))
         );
     }
 }

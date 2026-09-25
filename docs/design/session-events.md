@@ -12,7 +12,7 @@ did the lease fence change. Parsing output is fragile and races the
 check-then-act window (P5-3). The Host already knows all of this
 structurally — hook ingestion (`hook_listener.rs`), the activity engine
 (`activity.rs`), the approval queue (`approvals.rs`), and the Phase 5
-durable records (`unpeel-core/src/action_reviews.rs`). The event stream
+durable records (`supercli-core/src/action_reviews.rs`). The event stream
 exposes that knowledge as typed facts.
 
 ## Design principles
@@ -141,7 +141,7 @@ composer knows exactly when a turn starts and ends.
 ## First slice (implemented)
 
 - `SessionEvent` enum + `EventBus` (per-session ring buffer, monotonic
-  seq) in `unpeel-serve`.
+  seq) in `supercli-serve`.
 - `GET /mobile/events` handler in `mobile.rs`, wired to the shared bus.
 - Approval events (`tool.requested`, `tool.approved`, `tool.denied`)
   emitted from `ApprovalHub::request` / `ApprovalHub::answer`.
@@ -149,7 +149,7 @@ composer knows exactly when a turn starts and ends.
   engine's turn transitions.
 - `session.events.v1` capability + `PROTOCOL_MINOR` 21 → 22, mirrored in
   the Swift `RemoteControlProtocol` and `protocol/host-capabilities-v1.json`.
-- Client DTOs in `unpeel-client/src/events.rs`, `HostClient::events()`,
+- Client DTOs in `supercli-client/src/events.rs`, `HostClient::events()`,
   `ClientEventCursor`, `has_session_events()`.
 - Dioxus composer consumes turn events to drive Send/Stop.
 - Host tests 4/4, client tests 6/6.

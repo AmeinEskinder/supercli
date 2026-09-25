@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use unpeel_core::session_host::HostedSessionManifest;
-use unpeel_core::state::AppState;
+use supercli_core::session_host::HostedSessionManifest;
+use supercli_core::state::AppState;
 
 use crate::overlay::NativeOverlay;
 
@@ -72,12 +72,12 @@ pub(crate) fn response_with_overlay(
         &records,
     );
     let user_id = manifest.session.owner_principal_id.clone().or_else(|| {
-        unpeel_core::relay_uplink::ensure_host_id()
+        supercli_core::relay_uplink::ensure_host_id()
             .ok()
-            .map(|host_id| unpeel_core::state::host_owner_principal_id(&host_id))
+            .map(|host_id| supercli_core::state::host_owner_principal_id(&host_id))
     });
     let user = user_id
-        .filter(|id| unpeel_core::state::valid_session_attribution_id(id))
+        .filter(|id| supercli_core::state::valid_session_attribution_id(id))
         .map(|id| UserContext { id });
     let response = AppContextResponse {
         version: CONTEXT_VERSION,
@@ -194,30 +194,30 @@ fn resolve_project(
 }
 
 fn current_workspace(overlay: Option<&NativeOverlay>) -> WorkspaceContext {
-    let explicit_home = std::env::var_os("UNPEEL_HOME")
+    let explicit_home = std::env::var_os("SUPERCLI_HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty());
     let real_unpeel = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".unpeel");
+        .join(".supercli");
     workspace_at(explicit_home.as_deref(), &real_unpeel, overlay)
 }
 
 /// The name Controllers should show for THIS Host when it serves an isolated
-/// workspace (`UNPEEL_HOME` other than the real `~/.unpeel`): the registered
+/// workspace (`SUPERCLI_HOME` other than the real `~/.supercli`): the registered
 /// workspace name — exactly what the desktop's workspace picker shows — so a
 /// phone paired to two workspaces on one Mac can tell them apart instead of
 /// seeing the hostname twice. `None` for the default workspace, which keeps
 /// naming itself after the Mac.
 pub(crate) fn isolated_workspace_name() -> Option<String> {
-    let explicit_home = std::env::var_os("UNPEEL_HOME")
+    let explicit_home = std::env::var_os("SUPERCLI_HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())?;
     let real_unpeel = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".unpeel");
+        .join(".supercli");
     isolated_workspace_name_at(&explicit_home, &real_unpeel)
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn advertised_host_name(overlay: Option<&NativeOverlay>) -> String {
                 .and_then(|overlay| overlay.default_workspace_name.clone())
                 .filter(|name| valid_wire_text(name, 1024))
         })
-        .unwrap_or_else(unpeel_core::host_name::machine_display_name)
+        .unwrap_or_else(supercli_core::host_name::machine_display_name)
 }
 
 fn isolated_workspace_name_at(explicit_home: &Path, real_unpeel: &Path) -> Option<String> {
@@ -258,7 +258,7 @@ fn workspace_at(
         };
     };
     let target = normalized_path(explicit_home);
-    if let Some(record) = unpeel_core::app_paths::read_workspace_registry(real_unpeel)
+    if let Some(record) = supercli_core::app_paths::read_workspace_registry(real_unpeel)
         .into_iter()
         .find(|record| normalized_path(&record.home) == target)
     {
@@ -390,9 +390,9 @@ mod tests {
             default_workspace_name: Some("Unpeel".into()),
             ..NativeOverlay::default()
         };
-        // A default-home worker (no UNPEEL_HOME in this test process) names
+        // A default-home worker (no SUPERCLI_HOME in this test process) names
         // itself after the renamed default workspace.
-        if std::env::var_os("UNPEEL_HOME").is_none_or(|home| home.is_empty()) {
+        if std::env::var_os("SUPERCLI_HOME").is_none_or(|home| home.is_empty()) {
             assert_eq!(advertised_host_name(Some(&overlay)), "Unpeel");
         }
         let machine = advertised_host_name(None);

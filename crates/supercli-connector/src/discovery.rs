@@ -57,7 +57,7 @@ pub fn discover(roots: &[&Path]) -> (Vec<DiscoveredConnector>, Vec<DiscoveryErro
 }
 
 /// Default install roots: the bundled connectors shipped with the Host,
-/// then the user's `~/.unpeel/connectors`. User installs shadow bundled
+/// then the user's `~/.supercli/connectors`. User installs shadow bundled
 /// ones by name (last write wins at enable time).
 pub fn default_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
@@ -67,7 +67,7 @@ pub fn default_roots() -> Vec<PathBuf> {
         }
     }
     if let Some(home) = std::env::var_os("HOME") {
-        roots.push(PathBuf::from(home).join(".unpeel").join("connectors"));
+        roots.push(PathBuf::from(home).join(".supercli").join("connectors"));
     }
     roots
 }

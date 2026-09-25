@@ -89,7 +89,7 @@ The grant audit log (`grant-audit.jsonl`) uses a hash chain separate from the pe
 - Grant lifecycle (create, reconcile, quarantine) is independent of tool execution reviews.
 - Merging would require a global review chain, a larger design change.
 
-The separate chain is hash-chained (SHA-256, `prev_hash`/`entry_hash`), fsynced before `grants.json` (audit-first ordering), covered by `unpeel backup` (HOME_FILES includes `grant-audit.jsonl`), verified on restore (chain must verify), and checked by doctor (`grants ⊆ chain`; grant without chain entry is quarantined).
+The separate chain is hash-chained (SHA-256, `prev_hash`/`entry_hash`), fsynced before `grants.json` (audit-first ordering), covered by `supercli backup` (HOME_FILES includes `grant-audit.jsonl`), verified on restore (chain must verify), and checked by doctor (`grants ⊆ chain`; grant without chain entry is quarantined).
 
 This design is a deliberate choice, not a limitation. It awaits explicit acceptance.
 

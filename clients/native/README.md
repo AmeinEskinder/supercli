@@ -8,13 +8,13 @@ Keychain, APNs, approval dialogs); the session backend it drives is the
 
 Layout:
 
-- `UnpeelNative/` — the Swift macOS app: sidebar/session UI
+- `SupercliNative/` — the Swift macOS app: sidebar/session UI
   (`UnpeelStore.swift`, the Controller projection), the loopback listener
   (`HookServer.swift`, platform-adapter callback only — no Host routes), the
   startup activity seed (`SessionActivity.swift`), binary resolution
   (`LaunchConfig.swift`), licensing (`Licensing/LicenseManager.swift`), and
   the remote Host runtime (`RemoteHostRuntime.swift`).
-- `UnpeelNative/Sources/CUnpeelNativeBridge/` — the C shim over
+- `SupercliNative/Sources/CSupercliNativeBridge/` — the C shim over
   `crates/unpeel-native-bridge` (the header must stay identical to the
   crate's `include/unpeel_native_bridge.h`; `build-rust-bridge.sh` checks).
 - `vendor/libghostty-spm/` — vendored libghostty Swift package with local
@@ -44,6 +44,6 @@ check the menu bar says "Unpeel Dev". Ghostty surfaces cannot initialize in
 headless agent runs — verify Metal rendering interactively only.
 
 Build: `clients/native/build-rust-bridge.sh debug` then `swift build` in
-`UnpeelNative/` for a compile check; `bun run dev:native` from the repo root
+`SupercliNative/` for a compile check; `bun run dev:native` from the repo root
 for a runnable signed app; `CODESIGN_IDENTITY=- clients/native/build-app.sh`
 for an unsigned (ad-hoc) bundle without launching anything.

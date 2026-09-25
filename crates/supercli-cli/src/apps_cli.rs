@@ -2,7 +2,7 @@
 
 use std::io::{self, IsTerminal, Write};
 
-use unpeel_core::{app_installer, apps_mcp};
+use supercli_core::{app_installer, apps_mcp};
 
 pub const HELP: &str = "\
 unpeel apps — Host-side Unpeel Apps
@@ -13,7 +13,7 @@ unpeel apps — Host-side Unpeel Apps
   unpeel apps link <app-id> <executable>
   unpeel apps unlink <app-id>
 
-Apps install under ~/.unpeel/apps/bin after the release tarball is verified
+Apps install under ~/.supercli/apps/bin after the release tarball is verified
 against its mandatory SHA-256 sidecar. --check never downloads anything.
 Interactive installs ask first; noninteractive installs require --yes.
 
@@ -60,7 +60,7 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 fn list(json: bool) -> i32 {
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let statuses: Vec<_> = apps_mcp::catalog_apps()
         .iter()
         .map(|app| app_installer::status(&home, app))
@@ -96,7 +96,7 @@ fn install(app_id: &str, check: bool, yes: bool, json: bool) -> i32 {
         eprintln!("unknown or unsupported App id {app_id:?}");
         return 1;
     };
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let mut status = app_installer::status(&home, &app);
     let code = if status.state == "ready" {
         0
@@ -168,7 +168,7 @@ fn confirm_install(app_name: &str) -> Result<bool, String> {
 }
 
 fn link(app_id: &str, executable: &str) -> i32 {
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let path = std::path::Path::new(executable);
     let path = if path.is_absolute() {
         path.to_path_buf()
@@ -179,7 +179,7 @@ fn link(app_id: &str, executable: &str) -> i32 {
     };
     match app_installer::link(&home, app_id, &path) {
         Ok(target) => {
-            unpeel_core::state_bus::flush();
+            supercli_core::state_bus::flush();
             println!("{} -> {}", target.display(), path.display());
             0
         }
@@ -191,10 +191,10 @@ fn link(app_id: &str, executable: &str) -> i32 {
 }
 
 fn unlink(app_id: &str) -> i32 {
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     match app_installer::unlink(&home, app_id) {
         Ok(removed) => {
-            unpeel_core::state_bus::flush();
+            supercli_core::state_bus::flush();
             println!(
                 "{}",
                 if removed {
@@ -216,7 +216,7 @@ fn unlink(app_id: &str) -> i32 {
 /// version. One App, or every installed one with `--all`. `--check` only
 /// reports: exit 3 when at least one update is available, 0 when none.
 fn update(app_id: Option<&str>, check: bool, yes: bool, json: bool) -> i32 {
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let candidates: Vec<_> = match app_id {
         Some(app_id) => match apps_mcp::catalog_app(app_id) {
             Some(app) => vec![app],
@@ -283,7 +283,7 @@ fn update(app_id: Option<&str>, check: bool, yes: bool, json: bool) -> i32 {
             }
         }
     }
-    unpeel_core::state_bus::flush();
+    supercli_core::state_bus::flush();
     if json {
         println!(
             "{}",

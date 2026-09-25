@@ -42,8 +42,8 @@ fn live_opencode_run_emits_stop() {
     let mut command = Command::new("opencode");
     command
         .current_dir(repo_root())
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "live-opencode")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "live-opencode")
         .env(
             "OPENCODE_CONFIG_DIR",
             crate::hook_assets::opencode_config_dir().to_string_lossy().to_string(),

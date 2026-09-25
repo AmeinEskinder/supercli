@@ -330,7 +330,7 @@ pub(crate) fn parse_managed_codex_hook_command(command: &str) -> Option<PathBuf>
 // Older builds registered the script path directly, before managed commands
 // carried an ownership marker. Keep this deliberately narrow so a missing
 // Clarity/Superset/user hook is never mistaken for an Unpeel hook.
-pub(crate) fn looks_like_legacy_unpeel_notify_hook(path: &Path) -> bool {
+pub(crate) fn looks_like_legacy_supercli_notify_hook(path: &Path) -> bool {
     path.is_absolute()
         && path.file_name().and_then(|name| name.to_str()) == Some("notify-hook.sh")
         && path
@@ -355,7 +355,7 @@ pub(crate) fn managed_codex_hook_path(
     }
 
     let path = PathBuf::from(command);
-    if path == current_script_path || looks_like_legacy_unpeel_notify_hook(&path) {
+    if path == current_script_path || looks_like_legacy_supercli_notify_hook(&path) {
         return Some(path);
     }
     None
@@ -407,7 +407,7 @@ pub(crate) fn reconcile_codex_hooks_json(
         }
         let array = entries.as_array_mut().unwrap();
 
-        // UNPEEL_HOME lets release, dev, and clean-state instances coexist, so
+        // SUPERCLI_HOME lets release, dev, and clean-state instances coexist, so
         // retain every live Unpeel hook and prune only scripts that disappeared.
         // Guarded commands make the gap before this startup cleanup harmless.
         array.retain_mut(|entry| {

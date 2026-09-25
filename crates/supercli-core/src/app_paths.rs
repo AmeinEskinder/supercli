@@ -4,21 +4,21 @@ fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// The real per-user Unpeel root, deliberately ignoring `UNPEEL_HOME`.
+/// The real per-user Unpeel root, deliberately ignoring `SUPERCLI_HOME`.
 ///
 /// Machine-wide coordination (the workspace registry and Host-service
 /// supervisor) lives here. A scoped workspace process must still be able to
 /// find that coordination root without accidentally treating its own
 /// isolated state directory as the machine root.
-pub fn real_unpeel_home() -> PathBuf {
-    home_dir().join(".unpeel")
+pub fn real_supercli_home() -> PathBuf {
+    home_dir().join(".supercli")
 }
 
-/// The Unpeel state dir: `~/.unpeel`, or the directory named by `UNPEEL_HOME`
+/// The Unpeel state dir: `~/.supercli`, or the directory named by `SUPERCLI_HOME`
 /// when that env var is set and non-empty. The native app sets it for blank
 /// dev instances and spawns hosts with the env inherited, so app + host agree
 /// on one isolated state dir.
-/// The machine-wide workspace registry: one file at the REAL `~/.unpeel`,
+/// The machine-wide workspace registry: one file at the REAL `~/.supercli`,
 /// legacy wire name `profiles.json` with a top-level `profiles` array whose
 /// records carry `id`, `name`, and the workspace's absolute `home`. Written
 /// by the app and `unpeel workspaces`; read here only.
@@ -95,14 +95,14 @@ fn normalized_path(path: &Path) -> PathBuf {
 /// (`~/.claude.json`, `~/.codex/config.toml`, …) are per user, not per
 /// workspace, so the integration markers, hook scripts, and MCP shim they
 /// point at live in one place for every local workspace of one account:
-/// the real `~/.unpeel` whenever this process's `UNPEEL_HOME` is a
+/// the real `~/.supercli` whenever this process's `SUPERCLI_HOME` is a
 /// registered workspace of that machine, and the home itself otherwise. A
 /// blank dev instance or a test home is never registered, so it stays
 /// private with no flag; installing from any registered workspace installs
 /// for all of them.
 pub fn machine_home() -> PathBuf {
-    let own = unpeel_home();
-    let real = real_unpeel_home();
+    let own = supercli_home();
+    let real = real_supercli_home();
     let registered = own != real && is_registered_workspace_home(&real, &own);
     machine_home_from(own, real, registered)
 }
@@ -115,34 +115,34 @@ pub fn machine_home_from(own_home: PathBuf, real_home: PathBuf, registered: bool
     }
 }
 
-pub fn unpeel_home() -> PathBuf {
-    if let Some(override_dir) = std::env::var_os("UNPEEL_HOME") {
+pub fn supercli_home() -> PathBuf {
+    if let Some(override_dir) = std::env::var_os("SUPERCLI_HOME") {
         let trimmed = override_dir.to_string_lossy().trim().to_string();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);
         }
     }
-    real_unpeel_home()
+    real_supercli_home()
 }
 
-/// Test-only lock serializing mutation of the process-global `UNPEEL_HOME`.
+/// Test-only lock serializing mutation of the process-global `SUPERCLI_HOME`.
 ///
 /// Rust runs tests in one process in parallel; `std::env::set_var` is
-/// process-global, so two tests pointing `UNPEEL_HOME` at different scratch
-/// dirs race. Any test that sets `UNPEEL_HOME` must hold this lock for the
+/// process-global, so two tests pointing `SUPERCLI_HOME` at different scratch
+/// dirs race. Any test that sets `SUPERCLI_HOME` must hold this lock for the
 /// whole time the override is in effect (acquire before set, release after
 /// restore). Production code never touches this.
 #[cfg(test)]
-pub static TEST_UNPEEL_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub static TEST_SUPERCLI_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// Ensure `~/.unpeel` exists and is private to the current user (mode `0700`).
+/// Ensure `~/.supercli` exists and is private to the current user (mode `0700`).
 /// Session artifacts underneath (`output.bin`, `manifest.json`, `launch.json`)
 /// can contain echoed secrets and the first typed prompt; a `0700` parent makes
 /// them unreadable by other local users even though the files themselves are
 /// created under the default umask. Idempotent and cheap; safe to call at every
 /// host startup.
-pub fn ensure_unpeel_home() -> std::io::Result<PathBuf> {
-    let home = unpeel_home();
+pub fn ensure_supercli_home() -> std::io::Result<PathBuf> {
+    let home = supercli_home();
     std::fs::create_dir_all(&home)?;
     #[cfg(unix)]
     {
@@ -159,26 +159,26 @@ pub fn ensure_unpeel_home() -> std::io::Result<PathBuf> {
 }
 
 pub fn app_state_path() -> PathBuf {
-    unpeel_home().join("app-state.json")
+    supercli_home().join("app-state.json")
 }
 
 /// Path to the grants file (sharded from app-state.json for concurrency).
 /// S2: persist_grant was serializing on the app-state.json exclusive lock;
 /// grants have no chain semantics, so they get their own file+lock.
 pub fn grants_path() -> PathBuf {
-    unpeel_home().join("grants.json")
+    supercli_home().join("grants.json")
 }
 
 pub fn activity_state_path() -> PathBuf {
-    unpeel_home().join("activity-state.json")
+    supercli_home().join("activity-state.json")
 }
 
 pub fn app_sessions_root() -> PathBuf {
-    unpeel_home().join("app-sessions")
+    supercli_home().join("app-sessions")
 }
 
 pub fn worktrees_root() -> PathBuf {
-    unpeel_home().join("worktrees")
+    supercli_home().join("worktrees")
 }
 
 #[cfg(test)]
@@ -187,8 +187,8 @@ mod machine_home_tests {
 
     #[test]
     fn a_registered_workspace_shares_the_machine_home_and_others_keep_their_own() {
-        let real = PathBuf::from("/Users/me/.unpeel");
-        let workspace = PathBuf::from("/Users/me/.unpeel/profiles/work");
+        let real = PathBuf::from("/Users/me/.supercli");
+        let workspace = PathBuf::from("/Users/me/.supercli/profiles/work");
         let blank = PathBuf::from("/tmp/upblank");
         assert_eq!(machine_home_from(workspace, real.clone(), true), real);
         assert_eq!(machine_home_from(blank.clone(), real.clone(), false), blank);
@@ -198,7 +198,7 @@ mod machine_home_tests {
     #[test]
     fn registry_parsing_tolerates_unknown_keys_and_skips_homeless_records() {
         let raw = br#"{"version":1,"profiles":[
-            {"id":"a","name":"Work","home":"/Users/me/.unpeel/profiles/work","extra":true},
+            {"id":"a","name":"Work","home":"/Users/me/.supercli/profiles/work","extra":true},
             {"id":"b","name":"Broken"},
             {"id":"c","name":"Blank","home":"   "}
         ]}"#;
@@ -208,7 +208,7 @@ mod machine_home_tests {
             vec![WorkspaceRegistryRecord {
                 id: "a".into(),
                 name: "Work".into(),
-                home: PathBuf::from("/Users/me/.unpeel/profiles/work"),
+                home: PathBuf::from("/Users/me/.supercli/profiles/work"),
             }]
         );
         assert!(parse_workspace_registry(b"not json").is_empty());

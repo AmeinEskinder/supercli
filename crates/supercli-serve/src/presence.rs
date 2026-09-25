@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use unpeel_core::controller_api::ControllerPrincipal;
+use supercli_core::controller_api::ControllerPrincipal;
 
 const MOBILE_VIEWER_TTL: Duration = Duration::from_secs(15);
 const REMOTE_VIEWER_TTL: Duration = Duration::from_secs(20);

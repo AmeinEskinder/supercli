@@ -6,7 +6,7 @@
 //! - `msg`: the message
 //! - `fields`: optional structured data
 //!
-//! Level is controlled by `UNPEEL_LOG_LEVEL` env var (default INFO).
+//! Level is controlled by `SUPERCLI_LOG_LEVEL` env var (default INFO).
 //! Set to DEBUG for verbose output.
 
 use std::sync::OnceLock;
@@ -42,7 +42,7 @@ impl Level {
     }
 
     fn from_env() -> Self {
-        std::env::var("UNPEEL_LOG_LEVEL")
+        std::env::var("SUPERCLI_LOG_LEVEL")
             .ok()
             .and_then(|s| Level::parse(&s))
             .unwrap_or(Level::Info)
@@ -56,7 +56,7 @@ fn min_level() -> Level {
 }
 
 /// Override the minimum log level programmatically (e.g., from a `--log-level`
-/// CLI flag). Takes precedence over the `UNPEEL_LOG_LEVEL` env var. Must be
+/// CLI flag). Takes precedence over the `SUPERCLI_LOG_LEVEL` env var. Must be
 /// called before any log output; subsequent calls are ignored (OnceLock).
 pub fn set_level(level: Level) {
     let _ = MIN_LEVEL.set(level);

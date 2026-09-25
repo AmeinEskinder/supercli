@@ -89,7 +89,7 @@ pub fn run_cli(args: &[String]) -> Result<(), String> {
 fn usage() -> String {
     "usage: unpeel-host __relay_probe__ [options]\n\
      \n\
-     --url <ws(s)://host[:port]>  relay to probe (default: UNPEEL_RELAY_URL or production)\n\
+     --url <ws(s)://host[:port]>  relay to probe (default: SUPERCLI_RELAY_URL or production)\n\
      --samples <n>                passive samples per measurement (default 5)\n\
      --frames <n>                 echo frames per size in --full (default 20)\n\
      --full                       also measure the DO forward path (displaces the\n\

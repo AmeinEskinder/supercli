@@ -49,7 +49,7 @@ pub enum ConnectorKind {
 
 /// How the connector authenticates to its external service. The harness
 /// runs the flow once; the connector only ever sees the resulting token
-/// via the `UNPEEL_CONNECTOR_TOKEN` env var.
+/// via the `SUPERCLI_CONNECTOR_TOKEN` env var.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthFlow {
     OAuth2,

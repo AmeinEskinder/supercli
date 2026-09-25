@@ -91,20 +91,20 @@ git -C "$WORKTREE" checkout -b "$BRANCH" 2>&1 | tail -1
 
 # Git identity for the logical commits (worktree-local, not global).
 git -C "$WORKTREE" config user.name "Track B"
-git -C "$WORKTREE" config user.email "track-b@unpeel.local"
+git -C "$WORKTREE" config user.email "track-b@supercli.local"
 
 # --- 2. Logical commits ------------------------------------------------
 # Each entry: "commit message|pathspec1|pathspec2|..."
 TRACKB_GROUPS=(
     "track-b: workspace manifests and lockfiles|crates/Cargo.toml|crates/Cargo.lock|clients/dioxus/Cargo.toml|clients/dioxus/Cargo.lock|clients/dioxus/.gitignore|clients/dioxus/.cargo|clients/dioxus/README.md"
-    "track-b: unpeel-core - session backend, action reviews, hash chain|crates/unpeel-core"
-    "track-b: unpeel-client - pairing, transport, controller client|crates/unpeel-client"
-    "track-b: unpeel-connector - connector system and approval grants|crates/unpeel-connector"
-    "track-b: unpeel-serve - Host service, /mobile, pairing, turn-cancel|crates/unpeel-serve"
-    "track-b: unpeel-cli - CLI commands and e2e helpers|crates/unpeel-cli"
-    "track-b: dioxus-ui - shared UI components and web target|clients/dioxus/unpeel-ui|clients/dioxus/unpeel-web"
-    "track-b: launchers - mobile/desktop launchers and native shell|clients/dioxus/unpeel-mobile|clients/dioxus/unpeel-desktop|clients/dioxus/native-shell"
-    "track-b: ios-bridge - iOS bridge and fastlane|clients/dioxus/unpeel-ios-bridge|clients/dioxus/fastlane"
+    "track-b: supercli-core - session backend, action reviews, hash chain|crates/supercli-core"
+    "track-b: supercli-client - pairing, transport, controller client|crates/supercli-client"
+    "track-b: supercli-connector - connector system and approval grants|crates/supercli-connector"
+    "track-b: supercli-serve - Host service, /mobile, pairing, turn-cancel|crates/supercli-serve"
+    "track-b: supercli-cli - CLI commands and e2e helpers|crates/supercli-cli"
+    "track-b: dioxus-ui - shared UI components and web target|clients/dioxus/supercli-ui|clients/dioxus/supercli-web"
+    "track-b: launchers - mobile/desktop launchers and native shell|clients/dioxus/supercli-mobile|clients/dioxus/supercli-desktop|clients/dioxus/native-shell"
+    "track-b: ios-bridge - iOS bridge and fastlane|clients/dioxus/supercli-ios-bridge|clients/dioxus/fastlane"
     "track-b: ci - GitHub workflows and actionlint|.github"
     "track-b: scripts - e2e scenario, apk build, apply helpers|scripts"
     "track-b: docs - security review, canonical form, setup guides|docs"

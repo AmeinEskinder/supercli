@@ -1,7 +1,6 @@
 # Third-party notices
 
-Unpeel is MIT-licensed (`LICENSE`); the Unpeel name, logo, icon, and mascot
-are covered by `TRADEMARK.md`. This file lists the third-party software this
+This project is MIT-licensed (`LICENSE`). This file lists the third-party software this
 repository vendors, bundles, or fetches at runtime, and where each license
 text lives. Rust dependency licenses are generated, not hand-maintained.
 

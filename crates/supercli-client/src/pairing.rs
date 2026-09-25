@@ -627,7 +627,7 @@ pub fn device_identity(
     random_bytes(&mut id_bytes).map_err(|e| CredentialError::Store(e.to_string()))?;
     let identity = RemoteDeviceIdentity {
         id: id_bytes.iter().map(|b| format!("{b:02x}")).collect(),
-        name: std::env::var("UNPEEL_DEVICE_NAME")
+        name: std::env::var("SUPERCLI_DEVICE_NAME")
             .unwrap_or_else(|_| "Unpeel Controller".to_string()),
         platform: std::env::consts::OS.to_string(),
         app_version: None,

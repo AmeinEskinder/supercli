@@ -1,12 +1,12 @@
 //! Connector registry: publish signed bundles, resolve and fetch them.
 //!
-//! A registry is a directory (local path; `UNPEEL_CONNECTOR_REGISTRY`
-//! overrides the default `~/.unpeel/registry/connectors`):
+//! A registry is a directory (local path; `SUPERCLI_CONNECTOR_REGISTRY`
+//! overrides the default `~/.supercli/registry/connectors`):
 //! ```text
 //! <registry>/
 //!   index.json            # name -> versions -> {bundle, sha256, pubkey, key_id}
-//!   bundles/<name>-<version>.unpeel-connector
-//!   bundles/<name>-<version>.unpeel-connector.sig
+//!   bundles/<name>-<version>.supercli-connector
+//!   bundles/<name>-<version>.supercli-connector.sig
 //! ```
 //! The first publish of a name pins its publisher public key; later
 //! publishes for the same name must carry a signature from the same key
@@ -49,7 +49,7 @@ pub enum RegistryError {
 
 /// Default registry location.
 pub fn default_registry_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("UNPEEL_CONNECTOR_REGISTRY") {
+    if let Some(dir) = std::env::var_os("SUPERCLI_CONNECTOR_REGISTRY") {
         let path = PathBuf::from(dir);
         if !path.as_os_str().is_empty() {
             return path;
@@ -57,10 +57,10 @@ pub fn default_registry_dir() -> PathBuf {
     }
     match std::env::var_os("HOME") {
         Some(home) => PathBuf::from(home)
-            .join(".unpeel")
+            .join(".supercli")
             .join("registry")
             .join("connectors"),
-        None => PathBuf::from(".unpeel-connector-registry"),
+        None => PathBuf::from(".supercli-connector-registry"),
     }
 }
 
@@ -259,7 +259,7 @@ provides = ["regme.echo"]
         let base = std::env::temp_dir().join(format!("unpeel-reg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let keys = base.join("keys");
-        std::env::set_var("UNPEEL_CONNECTOR_KEYS_DIR", &keys);
+        std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", &keys);
         keygen("regkey").expect("keygen");
 
         let src = base.join("src");
@@ -287,7 +287,7 @@ provides = ["regme.echo"]
             Err(RegistryError::KeyMismatch(_))
         ));
 
-        std::env::remove_var("UNPEEL_CONNECTOR_KEYS_DIR");
+        std::env::remove_var("SUPERCLI_CONNECTOR_KEYS_DIR");
         let _ = std::fs::remove_dir_all(&base);
     }
 }

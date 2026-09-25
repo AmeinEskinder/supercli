@@ -10,7 +10,7 @@
 //! platform capability adapters.
 //!
 //! The mutating control path (create/input/kill) already lives in
-//! `unpeel_core::controller_api`; these modules are the read/publish side plus
+//! `supercli_core::controller_api`; these modules are the read/publish side plus
 //! HTTP/relay framing.
 
 pub mod activity;

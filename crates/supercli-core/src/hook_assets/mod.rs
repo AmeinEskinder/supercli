@@ -1,4 +1,4 @@
-use crate::app_paths::unpeel_home;
+use crate::app_paths::supercli_home;
 use serde_json::{json, Value};
 use std::fs;
 use std::io::Write;
@@ -13,12 +13,12 @@ pub(crate) use scripts::NOTIFY_HOOK_SCRIPT;
 
 const TRACE_LOG_MAX_BYTES: u64 = 10 * 1024 * 1024;
 
-/// Append a line to `~/.unpeel/hooks/trace.log`, rotating the file to
+/// Append a line to `~/.supercli/hooks/trace.log`, rotating the file to
 /// `trace.log.1` once it grows past `TRACE_LOG_MAX_BYTES` so the trace can
 /// never grow without bound. The hook shell scripts append to the same file;
 /// rotation here also caps their output because the app appends frequently.
 pub fn append_trace_log_line(line: &str) {
-    let trace_path = unpeel_home().join("hooks").join("trace.log");
+    let trace_path = supercli_home().join("hooks").join("trace.log");
     if let Some(parent) = trace_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -85,7 +85,7 @@ fn write_file_atomic_with_mode(
         .unwrap_or("unpeel-settings");
     let (tmp, mut file) = loop {
         let tmp = path.with_file_name(format!(
-            ".{file_name}.unpeel-tmp.{}.{}",
+            ".{file_name}.supercli-tmp.{}.{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -262,7 +262,7 @@ pub(crate) fn write_project_file_no_symlinks(
     for _ in 0..32 {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let name = std::ffi::CString::new(format!(
-            ".unpeel-hook-tmp.{}.{}",
+            ".supercli-hook-tmp.{}.{}",
             std::process::id(),
             sequence
         ))
@@ -581,8 +581,8 @@ pub use crate::integrations::{
 pub(crate) use crate::integrations::{
     amp::setup::AMP_PLUGIN_SCRIPT,
     claude::setup::{
-        build_hook_entry, claude_hook_script_path, is_stale_unpeel_claude_hook,
-        prune_stale_unpeel_claude_hooks, CLAUDE_HOOK_SCRIPT, HOOK_EVENTS,
+        build_hook_entry, claude_hook_script_path, is_stale_supercli_claude_hook,
+        prune_stale_supercli_claude_hooks, CLAUDE_HOOK_SCRIPT, HOOK_EVENTS,
     },
     cline::setup::{write_cline_event_hook, CLINE_HOOK_SCRIPT},
     codex::setup::{

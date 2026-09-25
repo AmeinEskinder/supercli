@@ -10,7 +10,7 @@ on:
     paths:
       - 'crates/**/Cargo.toml'
       - 'crates/Cargo.lock'
-      - 'crates/unpeel-attach/Cargo.lock'
+      - 'crates/supercli-attach/Cargo.lock'
       - 'crates/license-notices/**'
       - 'THIRD_PARTY_NOTICES.txt'
       - 'NOTICE.md'
@@ -19,7 +19,7 @@ on:
     paths:
       - 'crates/**/Cargo.toml'
       - 'crates/Cargo.lock'
-      - 'crates/unpeel-attach/Cargo.lock'
+      - 'crates/supercli-attach/Cargo.lock'
       - 'crates/license-notices/**'
       - 'THIRD_PARTY_NOTICES.txt'
       - 'NOTICE.md'
@@ -42,7 +42,7 @@ jobs:
         with:
           workspaces: |
             crates
-            crates/unpeel-attach
+            crates/supercli-attach
       - name: Every vendored artifact carries a LICENSE
         run: |
           set -eu
@@ -58,9 +58,9 @@ jobs:
           exit $status
       - name: Regenerate the notices snapshot
         run: |
-          cargo run --quiet --locked --manifest-path crates/Cargo.toml -p unpeel-license-notices -- \
-            --manifest-path crates/Cargo.toml --package unpeel-cli --package unpeel-host \
-            --manifest-path crates/unpeel-attach/Cargo.toml --package unpeel-attach \
+          cargo run --quiet --locked --manifest-path crates/Cargo.toml -p supercli-license-notices -- \
+            --manifest-path crates/Cargo.toml --package supercli-cli --package supercli-host \
+            --manifest-path crates/supercli-attach/Cargo.toml --package supercli-attach \
             --target aarch64-apple-darwin --target x86_64-apple-darwin \
             --target x86_64-unknown-linux-gnu --target aarch64-unknown-linux-gnu \
             --output /tmp/THIRD_PARTY_NOTICES.txt

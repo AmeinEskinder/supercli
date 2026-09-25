@@ -26,10 +26,10 @@ const appRegistry = JSON.parse(
 )
 
 function renderInstaller(root, app = 'filetree') {
-  const binary = `unpeel-${app}`
+  const binary = `supercli-${app}`
   const rendered = installerTemplate
     .replaceAll('__DEFAULT_CHANNEL__', 'beta')
-    .replaceAll('__BASE_URL__', 'https://unpeel.com')
+    .replaceAll('__BASE_URL__', 'https://supercli.com')
     .replaceAll('__APP__', app)
     .replaceAll('__BIN__', binary)
     .replaceAll('__TRY_LINES__', `echo "Try it:  ${binary}"`)
@@ -40,28 +40,28 @@ function renderInstaller(root, app = 'filetree') {
 }
 
 function fixture() {
-  const root = mkdtempSync(resolve(tmpdir(), 'unpeel-app-installer-test-'))
+  const root = mkdtempSync(resolve(tmpdir(), 'supercli-app-installer-test-'))
   const payload = resolve(root, 'payload')
   const mockBin = resolve(root, 'bin')
   const installDir = resolve(root, 'install')
-  const unpeelHome = resolve(root, '.unpeel')
+  const supercliHome = resolve(root, '.supercli')
   mkdirSync(payload)
   mkdirSync(mockBin)
   const installer = renderInstaller(root)
-  const binary = resolve(payload, 'unpeel-filetree')
+  const binary = resolve(payload, 'supercli-filetree')
   writeFileSync(binary, [
     '#!/bin/sh',
-    'echo "unpeel-filetree 0.1.0"',
+    'echo "supercli-filetree 0.1.0"',
     ''
   ].join('\n'))
   chmodSync(binary, 0o755)
 
-  const archive = resolve(root, 'unpeel-filetree.tar.gz')
-  const tar = spawnSync('tar', ['-czf', archive, '-C', payload, 'unpeel-filetree'])
+  const archive = resolve(root, 'supercli-filetree.tar.gz')
+  const tar = spawnSync('tar', ['-czf', archive, '-C', payload, 'supercli-filetree'])
   assert.equal(tar.status, 0, tar.stderr?.toString())
   const digest = createHash('sha256').update(readFileSync(archive)).digest('hex')
-  const sidecar = resolve(root, 'unpeel-filetree.tar.gz.sha256')
-  writeFileSync(sidecar, `${digest}  unpeel-filetree-latest-test.tar.gz\n`)
+  const sidecar = resolve(root, 'supercli-filetree.tar.gz.sha256')
+  writeFileSync(sidecar, `${digest}  supercli-filetree-latest-test.tar.gz\n`)
 
   const curl = resolve(mockBin, 'curl')
   writeFileSync(curl, `#!/bin/sh
@@ -83,7 +83,7 @@ cp "$source_file" "$out"
 `)
   chmodSync(curl, 0o755)
 
-  return { root, mockBin, installDir, unpeelHome, installer, archive, sidecar }
+  return { root, mockBin, installDir, supercliHome, installer, archive, sidecar }
 }
 
 function runInstaller(state, sidecar = state.sidecar) {
@@ -92,10 +92,10 @@ function runInstaller(state, sidecar = state.sidecar) {
     env: {
       ...process.env,
       PATH: `${state.mockBin}:${process.env.PATH}`,
-      UNPEEL_HOME: state.unpeelHome,
-      UNPEEL_CHANNEL: 'beta',
-      UNPEEL_INSTALL_BASE: 'https://release.invalid',
-      UNPEEL_INSTALL_DIR: state.installDir,
+      SUPERCLI_HOME: state.supercliHome,
+      SUPERCLI_CHANNEL: 'beta',
+      SUPERCLI_INSTALL_BASE: 'https://release.invalid',
+      SUPERCLI_INSTALL_DIR: state.installDir,
       MOCK_ARCHIVE: state.archive,
       MOCK_SIDECAR: sidecar
     }
@@ -108,7 +108,7 @@ test('App installer requires a checksum sidecar', () => {
     const result = runInstaller(state, resolve(state.root, 'missing.sha256'))
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /checksum sidecar is unavailable/)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel-filetree')), false)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli-filetree')), false)
   } finally {
     rmSync(state.root, { recursive: true, force: true })
   }
@@ -117,12 +117,12 @@ test('App installer requires a checksum sidecar', () => {
 test('App installer rejects a checksum mismatch', () => {
   const state = fixture()
   const wrong = resolve(state.root, 'wrong.sha256')
-  writeFileSync(wrong, `${'a'.repeat(64)}  unpeel-filetree.tar.gz\n`)
+  writeFileSync(wrong, `${'a'.repeat(64)}  supercli-filetree.tar.gz\n`)
   try {
     const result = runInstaller(state, wrong)
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /checksum mismatch/)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel-filetree')), false)
+    assert.equal(existsSync(resolve(state.installDir, 'supercli-filetree')), false)
   } finally {
     rmSync(state.root, { recursive: true, force: true })
   }
@@ -133,8 +133,8 @@ test('App installer verifies and installs without mutating an Unpeel registry', 
   try {
     const result = runInstaller(state)
     assert.equal(result.status, 0, result.stderr)
-    assert.equal(existsSync(resolve(state.installDir, 'unpeel-filetree')), true)
-    const appHome = resolve(state.unpeelHome, 'apps', 'unpeel.app.filetree')
+    assert.equal(existsSync(resolve(state.installDir, 'supercli-filetree')), true)
+    const appHome = resolve(state.supercliHome, 'apps', 'supercli.app.filetree')
     assert.equal(existsSync(appHome), false)
     assert.match(result.stdout, /detects it automatically/)
   } finally {
@@ -150,11 +150,11 @@ test('App registry covers every standalone App with a stable id', () => {
     'usage'
   ])
   for (const [app, config] of Object.entries(appRegistry)) {
-    assert.match(config.id, /^unpeel\.app\.[a-z0-9-]+$/)
-    assert.equal(config.binary, `unpeel-${app}`)
+    assert.match(config.id, /^supercli\.app\.[a-z0-9-]+$/)
+    assert.equal(config.binary, `supercli-${app}`)
     assert.equal(typeof config.name, 'string')
     assert.equal(typeof config.description, 'string')
-    const root = mkdtempSync(resolve(tmpdir(), `unpeel-${app}-installer-render-`))
+    const root = mkdtempSync(resolve(tmpdir(), `supercli-${app}-installer-render-`))
     try {
       renderInstaller(root, app)
     } finally {

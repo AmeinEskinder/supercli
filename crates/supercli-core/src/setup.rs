@@ -14,8 +14,8 @@ pub struct DependencyReport {
     pub any_ai_installed: bool,
 }
 
-const PATH_MARKER_START: &str = "__UNPEEL_PATH_START__";
-const PATH_MARKER_END: &str = "__UNPEEL_PATH_END__";
+const PATH_MARKER_START: &str = "__SUPERCLI_PATH_START__";
+const PATH_MARKER_END: &str = "__SUPERCLI_PATH_END__";
 
 fn extract_marked<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
     let start_idx = text.find(start)? + start.len();
@@ -92,7 +92,7 @@ const PATH_CACHE_TTL_MS: u64 = 10 * 60 * 1000;
 const EMPTY_PATH_CACHE_TTL_MS: u64 = 5 * 1000;
 
 fn path_cache_file() -> PathBuf {
-    crate::app_paths::unpeel_home().join("path-probe-cache.json")
+    crate::app_paths::supercli_home().join("path-probe-cache.json")
 }
 
 fn now_unix_ms() -> u64 {
@@ -254,7 +254,7 @@ fn common_bin_dirs() -> Vec<PathBuf> {
 
 /// Returns the full PATH string by merging the process PATH, interactive shell
 /// PATH, and common bin directories.  This is the PATH that should be used as
-/// `UNPEEL_ORIGINAL_PATH` so that wrapper scripts can locate binaries
+/// `SUPERCLI_ORIGINAL_PATH` so that wrapper scripts can locate binaries
 /// installed via version managers (nvm, rbenv, pyenv, etc.) that are only
 /// present in an interactive shell.
 pub fn resolved_shell_path() -> String {
@@ -273,7 +273,7 @@ pub fn search_dirs() -> Vec<PathBuf> {
     let mut seen = std::collections::HashSet::new();
     let mut dirs = Vec::new();
 
-    for dir in crate::app_installer::install_dirs(&crate::app_paths::unpeel_home())
+    for dir in crate::app_installer::install_dirs(&crate::app_paths::supercli_home())
         .into_iter()
         .chain(current_env_path_dirs())
         .chain(shell_path_dirs())
@@ -406,9 +406,9 @@ mod tests {
 
     #[test]
     fn extract_marked_handles_shell_noise() {
-        let text = "noise\n__UNPEEL_PATH_START__/a:/b__UNPEEL_PATH_END__\nmore";
+        let text = "noise\n__SUPERCLI_PATH_START__/a:/b__SUPERCLI_PATH_END__\nmore";
         assert_eq!(
-            extract_marked(text, "__UNPEEL_PATH_START__", "__UNPEEL_PATH_END__"),
+            extract_marked(text, "__SUPERCLI_PATH_START__", "__SUPERCLI_PATH_END__"),
             Some("/a:/b")
         );
     }

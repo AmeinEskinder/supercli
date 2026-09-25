@@ -1,7 +1,7 @@
 # Unpeel local patches
 
 Vendored from https://github.com/Lakr233/libghostty-spm at tag `1.2.4`
-(`.git` and `Example/` removed). UnpeelNative consumes this copy via a
+(`.git` and `Example/` removed). SupercliNative consumes this copy via a
 path dependency because these changes are not upstream yet:
 
 > **libghostty core upgraded to ghostty tip (2026-07-09).** The binary

@@ -7,8 +7,8 @@ use crate::session_host::SessionHostLaunch;
 
 /// Absolute path of the `unpeel-host` that hosts a session, exported to every
 /// hosted child so Apps and scripts talk to the Host they run under.
-pub const HOST_BIN_ENV: &str = "UNPEEL_HOST_BIN";
-const APP_ACCENT_ENV: &str = "UNPEEL_APP_ACCENT";
+pub const HOST_BIN_ENV: &str = "SUPERCLI_HOST_BIN";
+const APP_ACCENT_ENV: &str = "SUPERCLI_APP_ACCENT";
 
 #[derive(Clone, Copy)]
 pub struct BuiltinPresetDefinition {
@@ -167,22 +167,22 @@ pub fn configure_host_command(
 ) -> Result<(), String> {
     // The unified MCP host uses this identity for every domain. These paths
     // must also be explicit for hookless headless/CLI launches: otherwise an
-    // isolated `UNPEEL_HOME` can fall back to the user's default ~/.unpeel.
+    // isolated `SUPERCLI_HOME` can fall back to the user's default ~/.supercli.
     let session_dir = crate::app_paths::app_sessions_root().join(&launch.session.id);
     let session_dir_value = session_dir.to_string_lossy().to_string();
-    let home = crate::app_paths::unpeel_home();
+    let home = crate::app_paths::supercli_home();
     let registry_value = home.join("app-ports").to_string_lossy().to_string();
     let trace_value = home
         .join("hooks")
         .join("trace.log")
         .to_string_lossy()
         .to_string();
-    cmd.env("UNPEEL_SESSION_ID", &launch.session.id);
-    cmd.env("UNPEEL_SESSION_DIR", &session_dir_value);
-    cmd.env("UNPEEL_APP_PORT_REGISTRY_FILE", &registry_value);
-    cmd.env("UNPEEL_HOOK_TRACE_FILE", &trace_value);
+    cmd.env("SUPERCLI_SESSION_ID", &launch.session.id);
+    cmd.env("SUPERCLI_SESSION_DIR", &session_dir_value);
+    cmd.env("SUPERCLI_APP_PORT_REGISTRY_FILE", &registry_value);
+    cmd.env("SUPERCLI_HOOK_TRACE_FILE", &trace_value);
     shell_prelude.push(format!(
-        "export UNPEEL_SESSION_ID={} UNPEEL_SESSION_DIR={} UNPEEL_APP_PORT_REGISTRY_FILE={} UNPEEL_HOOK_TRACE_FILE={}",
+        "export SUPERCLI_SESSION_ID={} SUPERCLI_SESSION_DIR={} SUPERCLI_APP_PORT_REGISTRY_FILE={} SUPERCLI_HOOK_TRACE_FILE={}",
         shared::shell_quote(&launch.session.id),
         shared::shell_quote(&session_dir_value),
         shared::shell_quote(&registry_value),
@@ -251,16 +251,16 @@ pub fn configure_host_command(
         // Hook scripts persist the last lifecycle event into the session dir
         // (last-hook-event.json) so a restarted app can re-seed busy/attention
         // state. The shared paths above keep that state workspace-isolated.
-        cmd.env("UNPEEL_APP_PORT", &port_value);
+        cmd.env("SUPERCLI_APP_PORT", &port_value);
         shell_prelude.push(format!(
-            "export UNPEEL_APP_PORT={}",
+            "export SUPERCLI_APP_PORT={}",
             shared::shell_quote(&port_value),
         ));
     } else {
         // `unpeel create` can itself run inside another hosted Session. Never
         // let the nested child inherit its parent's hook endpoint.
-        cmd.env_remove("UNPEEL_APP_PORT");
-        shell_prelude.push("unset UNPEEL_APP_PORT".to_string());
+        cmd.env_remove("SUPERCLI_APP_PORT");
+        shell_prelude.push("unset SUPERCLI_APP_PORT".to_string());
     }
 
     Ok(())
@@ -293,7 +293,7 @@ pub fn mcp_registration_evidence(
     browser_mcp_enabled: bool,
 ) -> McpRegistrationEvidence {
     mcp_registration_evidence_in(
-        &crate::app_paths::unpeel_home(),
+        &crate::app_paths::supercli_home(),
         tool,
         mcp_enabled,
         browser_mcp_enabled,
@@ -441,7 +441,7 @@ mod tests {
             for alias in &runtime.detection.command_aliases {
                 for command in [
                     alias.clone(),
-                    format!("/opt/unpeel/bin/{alias} --test-flag"),
+                    format!("/opt/supercli/bin/{alias} --test-flag"),
                 ] {
                     let actual = integration_for_command(&command)
                         .unwrap_or_else(|| panic!("missing dispatch for {command}"));
@@ -463,9 +463,9 @@ mod tests {
             }
         }
 
-        assert!(integration_for_command("/opt/unpeel/bin/not-an-agent --flag").is_none());
-        assert!(!has_integration_installer("/opt/unpeel/bin/not-an-agent"));
-        assert!(run_integration_installer("/opt/unpeel/bin/not-an-agent").is_err());
+        assert!(integration_for_command("/opt/supercli/bin/not-an-agent --flag").is_none());
+        assert!(!has_integration_installer("/opt/supercli/bin/not-an-agent"));
+        assert!(run_integration_installer("/opt/supercli/bin/not-an-agent").is_err());
     }
 
     /// A launch grant is never registration evidence on its own: the
@@ -505,10 +505,10 @@ mod tests {
     }
 
     /// The hook env block must pin the registry/trace fallback paths to this
-    /// instance's UNPEEL_HOME — otherwise a workspace instance's hook scripts
-    /// broadcast against (and trace into) the real ~/.unpeel.
+    /// instance's SUPERCLI_HOME — otherwise a workspace instance's hook scripts
+    /// broadcast against (and trace into) the real ~/.supercli.
     #[test]
-    fn hook_env_block_pins_registry_and_trace_to_unpeel_home() {
+    fn hook_env_block_pins_registry_and_trace_to_supercli_home() {
         let launch: SessionHostLaunch = serde_json::from_value(serde_json::json!({
             "session": {
                 "id": "test-session",
@@ -525,15 +525,15 @@ mod tests {
         let mut prelude = Vec::new();
         configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
         let exports = prelude.join("\n");
-        let home = crate::app_paths::unpeel_home();
+        let home = crate::app_paths::supercli_home();
         let registry = shared::shell_quote(&home.join("app-ports").to_string_lossy());
         let trace = shared::shell_quote(&home.join("hooks").join("trace.log").to_string_lossy());
         assert!(
-            exports.contains(&format!("UNPEEL_APP_PORT_REGISTRY_FILE={registry}")),
+            exports.contains(&format!("SUPERCLI_APP_PORT_REGISTRY_FILE={registry}")),
             "registry path missing from prelude: {exports}"
         );
         assert!(
-            exports.contains(&format!("UNPEEL_HOOK_TRACE_FILE={trace}")),
+            exports.contains(&format!("SUPERCLI_HOOK_TRACE_FILE={trace}")),
             "trace path missing from prelude: {exports}"
         );
     }
@@ -563,7 +563,7 @@ mod tests {
         );
         assert!(prelude
             .join("\n")
-            .contains("export UNPEEL_APP_ACCENT='#4EC3C9'"));
+            .contains("export SUPERCLI_APP_ACCENT='#4EC3C9'"));
     }
 
     #[test]
@@ -580,31 +580,31 @@ mod tests {
         }))
         .expect("launch fixture");
         let mut cmd = CommandBuilder::new("true");
-        cmd.env("UNPEEL_APP_PORT", "9999");
+        cmd.env("SUPERCLI_APP_PORT", "9999");
         cmd.env(APP_ACCENT_ENV, "#D97757");
         let mut prelude = Vec::new();
 
         configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
 
         let session_dir = crate::app_paths::app_sessions_root().join("headless-session");
-        let home = crate::app_paths::unpeel_home();
+        let home = crate::app_paths::supercli_home();
         assert_eq!(
-            cmd.get_env("UNPEEL_SESSION_ID"),
+            cmd.get_env("SUPERCLI_SESSION_ID"),
             Some(std::ffi::OsStr::new("headless-session"))
         );
         assert_eq!(
-            cmd.get_env("UNPEEL_SESSION_DIR"),
+            cmd.get_env("SUPERCLI_SESSION_DIR"),
             Some(session_dir.as_os_str())
         );
         assert_eq!(
-            cmd.get_env("UNPEEL_APP_PORT_REGISTRY_FILE"),
+            cmd.get_env("SUPERCLI_APP_PORT_REGISTRY_FILE"),
             Some(home.join("app-ports").as_os_str())
         );
         assert_eq!(
-            cmd.get_env("UNPEEL_HOOK_TRACE_FILE"),
+            cmd.get_env("SUPERCLI_HOOK_TRACE_FILE"),
             Some(home.join("hooks").join("trace.log").as_os_str())
         );
-        assert_eq!(cmd.get_env("UNPEEL_APP_PORT"), None);
+        assert_eq!(cmd.get_env("SUPERCLI_APP_PORT"), None);
         assert_eq!(cmd.get_env(APP_ACCENT_ENV), None);
         let host_bin = crate::session_host::resolve_current_executable().expect("current exe");
         assert_eq!(cmd.get_env(HOST_BIN_ENV), Some(host_bin.as_os_str()));
@@ -615,14 +615,14 @@ mod tests {
         assert_eq!(child_path.split(':').next(), Some(apps_bin.as_str()));
 
         let exports = prelude.join("\n");
-        assert!(exports.contains("UNPEEL_SESSION_ID='headless-session'"));
-        assert!(exports.contains("UNPEEL_SESSION_DIR="));
-        assert!(exports.contains("UNPEEL_APP_PORT_REGISTRY_FILE="));
-        assert!(exports.contains("UNPEEL_HOOK_TRACE_FILE="));
-        assert!(exports.contains("unset UNPEEL_APP_PORT"));
-        assert!(exports.contains("unset UNPEEL_APP_ACCENT"));
+        assert!(exports.contains("SUPERCLI_SESSION_ID='headless-session'"));
+        assert!(exports.contains("SUPERCLI_SESSION_DIR="));
+        assert!(exports.contains("SUPERCLI_APP_PORT_REGISTRY_FILE="));
+        assert!(exports.contains("SUPERCLI_HOOK_TRACE_FILE="));
+        assert!(exports.contains("unset SUPERCLI_APP_PORT"));
+        assert!(exports.contains("unset SUPERCLI_APP_ACCENT"));
         assert!(exports.contains(&format!(
-            "export UNPEEL_HOST_BIN={}",
+            "export SUPERCLI_HOST_BIN={}",
             shared::shell_quote(&host_bin.to_string_lossy())
         )));
         assert!(exports.contains(&format!(
@@ -655,12 +655,12 @@ mod tests {
         configure_host_command(&launch, &mut cmd, &mut prelude).expect("configure");
         let exports = prelude.join("\n");
         for forbidden in [
-            "UNPEEL_MCP_BIN",
-            "UNPEEL_REAL_CODEX_BIN",
-            "UNPEEL_ORIGINAL_PATH",
+            "SUPERCLI_MCP_BIN",
+            "SUPERCLI_REAL_CODEX_BIN",
+            "SUPERCLI_ORIGINAL_PATH",
             "hooks/bin",
-            "UNPEEL_SESSIONS_MCP_ENABLED",
-            "UNPEEL_KIRO_",
+            "SUPERCLI_SESSIONS_MCP_ENABLED",
+            "SUPERCLI_KIRO_",
             "CLINE_",
             "MUSE_EXPERIMENTAL_PLUGINS",
             "OPENCODE_CONFIG_DIR",

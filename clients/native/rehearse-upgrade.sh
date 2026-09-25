@@ -83,7 +83,7 @@ export UNPEEL_HOME="$HOME_ISO"
 # binding. The old CLI only adds the project and the custom preset (shared
 # app-state.json writes the app picks up live).
 launch_app() { # $1 app, $2 tag
-  local exe="$1/Contents/MacOS/UnpeelNative" log="$REPORT/$2.stdout"
+  local exe="$1/Contents/MacOS/SupercliNative" log="$REPORT/$2.stdout"
   "$exe" >"$log" 2>&1 &
   echo $!
 }
@@ -328,7 +328,7 @@ def key(p):
 a,b=key(sys.argv[1]),key(sys.argv[2]); sys.exit(0 if a is not None and a==b else 1)
 EOF
 step "modal-dialog heuristic (unified log for the new app run)"
-log show --style compact --start "$t_new" --predicate 'process == "UnpeelNative"' 2>/dev/null | grep -Ei 'NSAlert|runModal|SUUpdateAlert|beginSheet|NSSavePanel|permission' > "$REPORT/new-app.log-alerts" || true
+log show --style compact --start "$t_new" --predicate 'process == "SupercliNative"' 2>/dev/null | grep -Ei 'NSAlert|runModal|SUUpdateAlert|beginSheet|NSSavePanel|permission' > "$REPORT/new-app.log-alerts" || true
 if [ -s "$REPORT/new-app.log-alerts" ]; then note "possible dialog activity logged — inspect $REPORT/new-app.log-alerts"; else ok "no alert/sheet/panel lines in the unified log during the new app run"; fi
 
 step "cleanup (stop the seeded hosted sessions and any Host worker in the isolated home)"

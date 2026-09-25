@@ -1416,13 +1416,13 @@ mod tests {
     }
 
     /// Child entry point for [`killed_holder_releases_lock`]: when the
-    /// `UNPEEL_TEST_HOLD_REVIEW_LOCK` env var names a session dir, record
+    /// `SUPERCLI_TEST_HOLD_REVIEW_LOCK` env var names a session dir, record
     /// one review, take the lock, signal readiness via a `holder-ready`
     /// file, then hold the lock until killed. Without the env var this is
     /// a no-op (it also runs as an ordinary test in the parent suite).
     #[test]
     fn lock_holder_child() {
-        let Some(dir) = std::env::var_os("UNPEEL_TEST_HOLD_REVIEW_LOCK") else {
+        let Some(dir) = std::env::var_os("SUPERCLI_TEST_HOLD_REVIEW_LOCK") else {
             return;
         };
         let dir = std::path::PathBuf::from(dir);
@@ -1458,7 +1458,7 @@ mod tests {
         let dir = test_dir("killed-holder");
         let exe = std::env::current_exe().expect("test binary path");
         let mut child = std::process::Command::new(exe)
-            .env("UNPEEL_TEST_HOLD_REVIEW_LOCK", &dir)
+            .env("SUPERCLI_TEST_HOLD_REVIEW_LOCK", &dir)
             .arg("--exact")
             .arg("action_reviews::tests::lock_holder_child")
             .stdin(std::process::Stdio::null())

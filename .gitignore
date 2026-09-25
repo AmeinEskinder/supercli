@@ -32,7 +32,7 @@ src-tauri/target
 *.sw?
 
 # Rust (standalone attach client crate, not a crates/ workspace member)
-crates/unpeel-attach/target
+crates/supercli-attach/target
 scripts/tools/ht
 clients/native/tools/ht
 
@@ -40,8 +40,8 @@ clients/native/tools/ht
 clients/*/*/.build
 clients/*/*/.derived
 clients/*/*/.swiftpm
-clients/ios/UnpeelIOS/.deriveddata
-clients/ios/UnpeelIOS/build
+clients/ios/SupercliIOS/.deriveddata
+clients/ios/SupercliIOS/build
 DerivedData
 xcuserdata/
 

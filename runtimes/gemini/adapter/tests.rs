@@ -71,5 +71,5 @@ fn gemini_hook_script_maps_agent_events() {
     assert!(GEMINI_HOOK_SCRIPT.contains("EVENT_TYPE=\"UserPromptSubmit\""));
     assert!(GEMINI_HOOK_SCRIPT.contains("EVENT_TYPE=\"Stop\""));
     assert!(GEMINI_HOOK_SCRIPT.contains("EVENT_TYPE=\"PermissionRequest\""));
-    assert!(GEMINI_HOOK_SCRIPT.contains("UNPEEL_APP_PORT"));
+    assert!(GEMINI_HOOK_SCRIPT.contains("SUPERCLI_APP_PORT"));
 }

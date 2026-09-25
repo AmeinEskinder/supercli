@@ -1,5 +1,5 @@
 [package]
-name = "unpeel-attach"
+name = "supercli-attach"
 version = "0.1.0"
 edition = "2021"
 description = "tmux-style attach client for Unpeel hosted sessions"
@@ -19,11 +19,11 @@ signal-hook = "0.3"
 libc = "0.2"
 
 [[bin]]
-name = "unpeel-attach"
+name = "supercli-attach"
 path = "src/main.rs"
 
 [lib]
-name = "unpeel_attach"
+name = "supercli_attach"
 path = "src/lib.rs"
 
 [profile.dist]

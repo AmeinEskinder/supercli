@@ -8,14 +8,14 @@
 //! hosts live Sessions, and this supervisor never sends it.
 //!
 //! Gate: the core is the default since 0.4.4 (2026-09-03). Only
-//! `UNPEEL_PTY_CORE=0` keeps the per-process behavior — no core is started
+//! `SUPERCLI_PTY_CORE=0` keeps the per-process behavior — no core is started
 //! and nothing is published; absent, empty, or any other value manages a
 //! core, exactly like spawn routing. The variable is
 //! inherited unchanged by everything the worker spawns, so
 //! `session_host::spawn_host_process_from_launch_file` routing and the escape
 //! hatch stay consistent across the whole process tree.
 //!
-//! On start the supervisor reads `$UNPEEL_HOME/pty-core.json`; when the
+//! On start the supervisor reads `$SUPERCLI_HOME/pty-core.json`; when the
 //! record names a live process (pid identity via `pid_started_at`, then a
 //! `ping` on `pty-core.sock` answering with the same pid) it ADOPTS that core.
 //! Otherwise it spawns a fresh one and waits, non-blocking, for `ping`. If the
@@ -31,10 +31,10 @@ use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use unpeel_core::session_host::{recorded_pid_identity, PidIdentity};
+use supercli_core::session_host::{recorded_pid_identity, PidIdentity};
 
 /// Environment gate shared with `session_host` routing.
-pub const ENV_GATE: &str = "UNPEEL_PTY_CORE";
+pub const ENV_GATE: &str = "SUPERCLI_PTY_CORE";
 /// `unpeel-host` argv mode of the core (owned by Lane A; contract name).
 pub const PTY_CORE_ARG: &str = "__pty_core__";
 /// Delay before respawning an exited core.
@@ -161,7 +161,7 @@ pub enum CoreEvent {
     Warning(String),
 }
 
-/// `$UNPEEL_HOME/pty-core.json`, written by the core after it binds.
+/// `$SUPERCLI_HOME/pty-core.json`, written by the core after it binds.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 pub struct CoreRecord {
     pub pid: u32,
@@ -249,19 +249,19 @@ pub const TAKEOVER_TIMEOUT: Duration = Duration::from_secs(30);
 /// Build id of the binary the production spawner would launch, in the
 /// core's own `host_build_id` shape; `None` when it cannot be resolved.
 pub fn expected_host_build_id() -> Option<String> {
-    let binary = unpeel_core::session_ops::resolve_host_binary().ok()?;
-    unpeel_core::session_host::host_build_id_for(&binary)
+    let binary = supercli_core::session_ops::resolve_host_binary().ok()?;
+    supercli_core::session_host::host_build_id_for(&binary)
 }
 
 /// Production spawner: `unpeel-host __pty_core__`, detached exactly like a
 /// session host (setsid, stdio null, leaked `HERDR_*` env removed).
 pub fn detached_core_spawner() -> Spawner {
     Box::new(|takeover| {
-        let binary = unpeel_core::session_ops::resolve_host_binary()?;
+        let binary = supercli_core::session_ops::resolve_host_binary()?;
         let mut command = std::process::Command::new(binary);
         command.arg(PTY_CORE_ARG);
         if takeover {
-            command.arg(unpeel_core::pty_core::TAKEOVER_ARG);
+            command.arg(supercli_core::pty_core::TAKEOVER_ARG);
         }
         command
             .stdin(std::process::Stdio::null())
@@ -323,7 +323,7 @@ pub struct PtyCoreSupervisor {
     /// core unable to host new Sessions (children died at spawn and were
     /// never reaped). Instead the older core keeps serving its Sessions, new
     /// Sessions run one process each, and once the old core is empty it is
-    /// asked to exit so a current-build core starts. `UNPEEL_PTY_CORE_TAKEOVER=1`
+    /// asked to exit so a current-build core starts. `SUPERCLI_PTY_CORE_TAKEOVER=1`
     /// re-enables the in-place path (tests, and once it is proven).
     allow_takeover: bool,
     /// The older-build core pid we already announced as draining.
@@ -334,9 +334,9 @@ pub struct PtyCoreSupervisor {
     adopted_started_at: Option<u64>,
 }
 
-/// `UNPEEL_PTY_CORE_TAKEOVER=1` opts back into in-place takeovers.
+/// `SUPERCLI_PTY_CORE_TAKEOVER=1` opts back into in-place takeovers.
 pub fn takeover_enabled() -> bool {
-    std::env::var("UNPEEL_PTY_CORE_TAKEOVER").is_ok_and(|value| value.trim() == "1")
+    std::env::var("SUPERCLI_PTY_CORE_TAKEOVER").is_ok_and(|value| value.trim() == "1")
 }
 
 impl PtyCoreSupervisor {
@@ -377,7 +377,7 @@ impl PtyCoreSupervisor {
         self.probe_expected_build_id = false;
     }
 
-    /// Honor the gate: adopt or spawn when `UNPEEL_PTY_CORE` is on.
+    /// Honor the gate: adopt or spawn when `SUPERCLI_PTY_CORE` is on.
     pub fn from_env(home: PathBuf) -> (Self, Vec<CoreEvent>) {
         if enabled() {
             let (mut supervisor, events) = Self::start(home, detached_core_spawner());
@@ -481,7 +481,7 @@ impl PtyCoreSupervisor {
     fn drain_older_core(&mut self, old_pid: u32, socket: &Path, events: &mut Vec<CoreEvent>) {
         let sessions = self.sessions.unwrap_or(u64::MAX);
         if sessions == 0 {
-            match unpeel_core::pty_core::shutdown_at(socket, HEALTH_INTERVAL) {
+            match supercli_core::pty_core::shutdown_at(socket, HEALTH_INTERVAL) {
                 Ok(()) => events.push(CoreEvent::Warning(format!(
                     "PTY core pid {old_pid} runs an older build and holds no Sessions; asked it to exit so a current-build core can start"
                 ))),
@@ -1128,7 +1128,7 @@ mod tests {
             .spawn()
             .unwrap();
         let old = FakeCore::start(home.path(), parked.id(), 3);
-        let started = unpeel_core::session_host::recorded_process_start_time_ms(parked.id());
+        let started = supercli_core::session_host::recorded_process_start_time_ms(parked.id());
         old.write_record(home.path(), started);
 
         let takeover_flags = Arc::new(std::sync::Mutex::new(Vec::new()));

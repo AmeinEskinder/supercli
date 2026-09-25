@@ -24,7 +24,7 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use base64::Engine;
 use rand::RngCore;
 
-use unpeel_core::app_paths;
+use supercli_core::app_paths;
 
 const PAIRING_TTL: Duration = Duration::from_secs(5 * 60);
 const PAIRING_RESPONSE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -482,11 +482,11 @@ impl PairingWindow {
 }
 
 fn relay_url() -> String {
-    std::env::var("UNPEEL_RELAY_URL").unwrap_or_else(|_| "wss://relay.unpeel.com".into())
+    std::env::var("SUPERCLI_RELAY_URL").unwrap_or_else(|_| "wss://relay.supercli.com".into())
 }
 
 fn mobile_dir() -> std::path::PathBuf {
-    app_paths::unpeel_home().join("mobile")
+    app_paths::supercli_home().join("mobile")
 }
 
 /// Cross-process transaction lock shared with native MobilePairingStore.
@@ -574,7 +574,7 @@ fn register_device(
             // Current pairing grants owner/controller scope. Persist the
             // human principal separately from the device now so future Link
             // accounts can attach several devices to one Session owner.
-            "principalID": unpeel_core::state::host_owner_principal_id(mac_id),
+            "principalID": supercli_core::state::host_owner_principal_id(mac_id),
             "tokenHash": sha256_hex(auth_token),
             "pairedAtUnixMs": now_ms(),
             "lastSeenAtUnixMs": now_ms(),

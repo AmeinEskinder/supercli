@@ -3,7 +3,7 @@
 //! Each installed integration registers the same stable shim
 //! (`integrations::install::mcp_shim_path`), which starts this gate. The gate
 //! resolves the calling Session (`mcp_host::self_session_id`: exported
-//! `UNPEEL_SESSION_ID`, or process ancestry for launchers that strip their
+//! `SUPERCLI_SESSION_ID`, or process ancestry for launchers that strip their
 //! MCP children's environment) and reads that Session's manifest grants to
 //! decide which domains the unified server advertises. Outside a granted
 //! hosted Session — a plain terminal, an agent started elsewhere — the
@@ -24,9 +24,9 @@ pub const COMPUTER_KIND: &str = "computer";
 /// installs.
 pub const UNIFIED_KIND: &str = "unified";
 
-pub const SESSIONS_ENABLED_ENV: &str = "UNPEEL_SESSIONS_MCP_ENABLED";
-pub const BROWSER_ENABLED_ENV: &str = "UNPEEL_BROWSER_MCP_ENABLED";
-pub const COMPUTER_ENABLED_ENV: &str = "UNPEEL_COMPUTER_MCP_ENABLED";
+pub const SESSIONS_ENABLED_ENV: &str = "SUPERCLI_SESSIONS_MCP_ENABLED";
+pub const BROWSER_ENABLED_ENV: &str = "SUPERCLI_BROWSER_MCP_ENABLED";
+pub const COMPUTER_ENABLED_ENV: &str = "SUPERCLI_COMPUTER_MCP_ENABLED";
 const PROTOCOL_VERSION_FALLBACK: &str = "2025-06-18";
 
 pub fn run_stdio(kind: &str) -> Result<(), String> {
@@ -56,7 +56,7 @@ pub fn run_stdio(kind: &str) -> Result<(), String> {
         skills: sessions_granted || browser_granted,
     };
     let (granted, server_name) = match kind {
-        UNIFIED_KIND => (sessions_granted || browser_granted, "unpeel"),
+        UNIFIED_KIND => (sessions_granted || browser_granted, "supercli"),
         SESSIONS_KIND => (sessions_granted, "unpeel-sessions"),
         BROWSER_KIND => (browser_granted, "unpeel-browser"),
         _ => return Err(format!("Unknown gated MCP kind: {kind}")),

@@ -61,7 +61,7 @@ pub fn read_background_hook_activity(
                 .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
             || path.file_stem().and_then(|stem| stem.to_str()) != Some(id)
             || value
-                .get("unpeel_runtime_generation")
+                .get("supercli_runtime_generation")
                 .and_then(serde_json::Value::as_u64)
                 != Some(generation)
         {
@@ -93,7 +93,7 @@ mod tests {
             fs::write(
                 markers.join(format!("{file}.json")),
                 serde_json::json!({
-                    "activity_id": id, "unpeel_runtime_generation": generation,
+                    "activity_id": id, "supercli_runtime_generation": generation,
                 })
                 .to_string(),
             )

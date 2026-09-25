@@ -1,25 +1,25 @@
 #!/bin/bash
 INPUT=$(cat)
 # Global provider hooks must be inert outside a hosted Unpeel Session.
-[ -n "${UNPEEL_SESSION_ID:-}" ] || exit 0
+[ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
 # Native Grok invokes turn hooks inside subagents too. Those events belong
 # to the child, never to the foreground turn represented by this reporter.
 if printf '%s' "$INPUT" | grep -qE '"subagent(Type|_type)"[[:space:]]*:[[:space:]]*"[^"[:space:]][^"]*"'; then
   exit 0
 fi
-TRACE_FILE="${UNPEEL_HOOK_TRACE_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
-UNPEEL_PORT_REGISTRY_FILE="${UNPEEL_APP_PORT_REGISTRY_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/app-ports}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
 
 json_escape_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
 runtime_generation_json_field() {
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) return 0 ;;
   esac
-  printf ',"unpeel_runtime_generation":%s' "$UNPEEL_RUNTIME_GENERATION"
+  printf ',"supercli_runtime_generation":%s' "$SUPERCLI_RUNTIME_GENERATION"
 }
 
 # Persist the last lifecycle event into the session dir so a restarted app can
@@ -29,8 +29,8 @@ record_last_hook_event() {
   _record_tool_name="$2"
   # Session metadata must not erase a Stop/cancellation needed after restart.
   [ "$_record_event_name" != HookSeen ] || return 0
-  [ -n "${UNPEEL_SESSION_ID:-}" ] || return 0
-  _record_dir="${UNPEEL_SESSION_DIR:-${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$UNPEEL_SESSION_ID}"
+  [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   # Repeated idle pings must preserve the known turn outcome and its recency.
   if [ "$_record_event_name" = Idle ] && [ -f "$_record_dir/last-hook-event.json" ]; then
@@ -114,10 +114,10 @@ post_hook_event() {
   esac
 }
 
-current_unpeel_ports() {
-  [ -f "$UNPEEL_PORT_REGISTRY_FILE" ] || return 1
+current_supercli_ports() {
+  [ -f "$SUPERCLI_PORT_REGISTRY_FILE" ] || return 1
   awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ && $1 > 0 && $1 <= 65535 && !seen[$1 + 0]++ { print $1 + 0 }' \
-    "$UNPEEL_PORT_REGISTRY_FILE" 2>/dev/null
+    "$SUPERCLI_PORT_REGISTRY_FILE" 2>/dev/null
 }
 
 post_hook_event_to_current_ports() {
@@ -126,7 +126,7 @@ post_hook_event_to_current_ports() {
   _hook_skip_port="$3"
   _tool_name="${4:-}"
   _hook_post_pids=""
-  for _hook_candidate_port in $(current_unpeel_ports); do
+  for _hook_candidate_port in $(current_supercli_ports); do
     [ -n "$_hook_candidate_port" ] || continue
     [ "$_hook_candidate_port" = "$_hook_skip_port" ] && continue
     ( post_hook_event "$_hook_event_name" "$_hook_session_id" "$_hook_candidate_port" "$_tool_name" || true ) &
@@ -157,26 +157,26 @@ DELIVERY_EVENT="$EVENT_TYPE"
 [ "$EVENT_TYPE" != Idle ] || DELIVERY_EVENT=HookSeen
 
 _hook_post_results=""
-if [ -n "$UNPEEL_SESSION_ID" ]; then
+if [ -n "$SUPERCLI_SESSION_ID" ]; then
   # Posts go out synchronously and in order: backgrounded fire-and-forget
   # posts could be reaped when the hook process exited (silently losing the
   # event), and concurrent posts could arrive out of order. Set
-  # UNPEEL_HOOK_POST_SYNC=0 to restore backgrounded posts.
-  if [ "${UNPEEL_HOOK_POST_SYNC:-1}" = "1" ]; then
-    post_hook_event "$DELIVERY_EVENT" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" "$TOOL_NAME" || true
-    post_hook_event_to_current_ports "$DELIVERY_EVENT" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" "$TOOL_NAME" || true
+  # SUPERCLI_HOOK_POST_SYNC=0 to restore backgrounded posts.
+  if [ "${SUPERCLI_HOOK_POST_SYNC:-1}" = "1" ]; then
+    post_hook_event "$DELIVERY_EVENT" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" "$TOOL_NAME" || true
+    post_hook_event_to_current_ports "$DELIVERY_EVENT" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" "$TOOL_NAME" || true
   else
     (
-      post_hook_event "$DELIVERY_EVENT" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" "$TOOL_NAME" || true
-      post_hook_event_to_current_ports "$DELIVERY_EVENT" "$UNPEEL_SESSION_ID" "${UNPEEL_APP_PORT:-}" "$TOOL_NAME" || true
+      post_hook_event "$DELIVERY_EVENT" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" "$TOOL_NAME" || true
+      post_hook_event_to_current_ports "$DELIVERY_EVENT" "$SUPERCLI_SESSION_ID" "${SUPERCLI_APP_PORT:-}" "$TOOL_NAME" || true
     ) &
   fi
 fi
 
 [ -n "$EVENT_TYPE" ] && printf '%s grok-hook session=%s port=%s event=%s tool=%s post=%s\n' \
   "$(date '+%Y-%m-%d %H:%M:%S')" \
-  "${UNPEEL_SESSION_ID:-}" \
-  "${UNPEEL_APP_PORT:-}" \
+  "${SUPERCLI_SESSION_ID:-}" \
+  "${SUPERCLI_APP_PORT:-}" \
   "$EVENT_TYPE" \
   "${TOOL_NAME:-}" \
   "${_hook_post_results:-none}" >> "$TRACE_FILE" 2>/dev/null || true

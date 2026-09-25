@@ -15,7 +15,7 @@
 //! token, filtering tools to `tools.provides`, enforcing the effective
 //! approval policy, refreshing OAuth2 tokens before they expire).
 //! `keygen`/`pack`/`publish` are the publisher side: Ed25519 keypairs,
-//! signed `.unpeel-connector` bundles, and a local registry index that
+//! signed `.supercli-connector` bundles, and a local registry index that
 //! pins each publisher's key. `config` renders the manifest's
 //! `config_schema` as an interactive form (or validates key=value pairs)
 //! into the installed connector's `config.json`. `audit` queries the
@@ -28,8 +28,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Map, Value};
-use unpeel_client::CredentialStore;
-use unpeel_connector::{
+use supercli_client::CredentialStore;
+use supercli_connector::{
     auth_flow_from_str, bundle_manifest, config_string, connector_kind_from_str, default_roots,
     delete_connector_token, disable_attachment, discover, effective_policy, enable_attachment,
     fetch, keygen, load_connector_token, load_public_key, mcp_url_from_config, merge_config,
@@ -56,10 +56,10 @@ unpeel connector — Host-side connectors (plugins)
                                   scan for installed connector.toml manifests
   unpeel connector install <name-or-path> [key=value ...] [--json]
                                   copy a connector into the user's install dir
-                                  (~/.unpeel/connectors/<name>/); <name> is a
+                                  (~/.supercli/connectors/<name>/); <name> is a
                                   discovered connector, <path> a directory
                                   holding connector.toml, or a
-                                  .unpeel-connector bundle file. key=value
+                                  .supercli-connector bundle file. key=value
                                   pairs are written to config.json
                                   (non-secrets only, validated against the
                                   manifest's config_schema when present)
@@ -83,9 +83,9 @@ unpeel connector — Host-side connectors (plugins)
                                   validated against it
   unpeel connector keygen [--key-id <id>] [--json]
                                   generate an Ed25519 publisher keypair
-                                  (~/.unpeel/connector-keys/<id>.key/.pub)
+                                  (~/.supercli/connector-keys/<id>.key/.pub)
   unpeel connector pack <name> [--out <dir>] [--key-id <id>] [--json]
-                                  build a signed .unpeel-connector bundle
+                                  build a signed .supercli-connector bundle
   unpeel connector publish <name> --registry <dir> [--key-id <id>] [--json]
                                   pack and publish to a registry (first
                                   publish pins the publisher key)
@@ -121,10 +121,10 @@ unpeel connector — Host-side connectors (plugins)
                                   (discovery → policy → keychain → connector
                                   link)
 
-Connectors live in ~/.unpeel/connectors/<name>/ (connector.toml plus the
+Connectors live in ~/.supercli/connectors/<name>/ (connector.toml plus the
 `connector` MCP executable for mcp-stdio, or config.json's `mcp_url` for
-mcp-http). UNPEEL_CONNECTORS_DIR overrides the scan roots;
-UNPEEL_CONNECTORS_INSTALL_DIR overrides the install dir (both for tests
+mcp-http). SUPERCLI_CONNECTORS_DIR overrides the scan roots;
+SUPERCLI_CONNECTORS_INSTALL_DIR overrides the install dir (both for tests
 and dev).
 
 `run` is non-interactive: it only invokes tools whose effective approval
@@ -141,10 +141,10 @@ const SPAWN_TIMEOUT: Duration = Duration::from_secs(10);
 /// dance before giving up.
 const DANCE_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Scan roots: `UNPEEL_CONNECTORS_DIR` (colon-separated, for tests and dev)
+/// Scan roots: `SUPERCLI_CONNECTORS_DIR` (colon-separated, for tests and dev)
 /// wins over the default registrar sources.
 fn roots() -> Vec<PathBuf> {
-    let mut scan = if let Some(dirs) = std::env::var_os("UNPEEL_CONNECTORS_DIR") {
+    let mut scan = if let Some(dirs) = std::env::var_os("SUPERCLI_CONNECTORS_DIR") {
         let roots: Vec<PathBuf> = std::env::split_paths(&dirs).collect();
         if !roots.is_empty() {
             roots
@@ -164,18 +164,18 @@ fn roots() -> Vec<PathBuf> {
     scan
 }
 
-/// Install target: `UNPEEL_CONNECTORS_INSTALL_DIR` (for tests and dev)
-/// wins over `~/.unpeel/connectors`.
+/// Install target: `SUPERCLI_CONNECTORS_INSTALL_DIR` (for tests and dev)
+/// wins over `~/.supercli/connectors`.
 fn install_root() -> PathBuf {
-    if let Some(dir) = std::env::var_os("UNPEEL_CONNECTORS_INSTALL_DIR") {
+    if let Some(dir) = std::env::var_os("SUPERCLI_CONNECTORS_INSTALL_DIR") {
         let path = PathBuf::from(dir);
         if !path.as_os_str().is_empty() {
             return path;
         }
     }
     match std::env::var_os("HOME") {
-        Some(home) => PathBuf::from(home).join(".unpeel").join("connectors"),
-        None => PathBuf::from(".unpeel-connectors"),
+        Some(home) => PathBuf::from(home).join(".supercli").join("connectors"),
+        None => PathBuf::from(".supercli-connectors"),
     }
 }
 
@@ -945,7 +945,7 @@ fn doctor_one(store: &dyn CredentialStore, connector: &DiscoveredConnector) -> D
         Err(e) => (
             String::new(),
             false,
-            if matches!(e, unpeel_connector::OAuthError::NotConnected) {
+            if matches!(e, supercli_connector::OAuthError::NotConnected) {
                 format!("not connected — run `unpeel connector connect {name}` first")
             } else {
                 format!("token unavailable: {e}")
@@ -1365,7 +1365,7 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
 
 fn install_cmd(opts: &InstallOptions, json: bool) -> i32 {
     // Registry installs resolve a signed bundle; a path ending in
-    // .unpeel-connector is a bundle file; everything else is a directory
+    // .supercli-connector is a bundle file; everything else is a directory
     // or a discovered connector name.
     if let Some(registry) = &opts.registry {
         return install_from_registry(&opts.source, registry, opts, json);
@@ -1479,7 +1479,7 @@ fn install_from_dir(source: &str, opts: &InstallOptions, json: bool) -> i32 {
     if opts.require_signature {
         eprintln!(
             "refusing: --require-signature cannot verify a loose directory — \
-             install from a registry or a signed .unpeel-connector bundle instead"
+             install from a registry or a signed .supercli-connector bundle instead"
         );
         return 1;
     }
@@ -1576,7 +1576,7 @@ fn bundle_trust_key(opts: &InstallOptions) -> Result<String, String> {
     Ok(public_key_base64(&key))
 }
 
-/// Install from a signed `.unpeel-connector` bundle file, verifying the
+/// Install from a signed `.supercli-connector` bundle file, verifying the
 /// `.sig` sidecar against the trusted publisher key before unpacking.
 fn install_from_bundle(bundle_path: &Path, opts: &InstallOptions, json: bool) -> i32 {
     if !bundle_path.is_file() {
@@ -2133,7 +2133,7 @@ fn session_dir(session_id: &str) -> Result<PathBuf, String> {
             "bad session id {session_id:?}: expected [A-Za-z0-9_-]+"
         ));
     }
-    let dir = unpeel_core::app_paths::app_sessions_root().join(session_id);
+    let dir = supercli_core::app_paths::app_sessions_root().join(session_id);
     if !dir.join("manifest.json").is_file() {
         return Err(format!(
             "no session {session_id:?} (expected {})",
@@ -2274,7 +2274,7 @@ fn disable_cmd(name: &str, session_id: &str, json: bool) -> i32 {
 /// Best-effort detach from every session dir (for `disconnect`'s
 /// revocation contract). Returns the number of sessions detached.
 fn detach_from_all_sessions(name: &str) -> usize {
-    let root = unpeel_core::app_paths::app_sessions_root();
+    let root = supercli_core::app_paths::app_sessions_root();
     let Ok(entries) = std::fs::read_dir(&root) else {
         return 0;
     };
@@ -2387,7 +2387,7 @@ fn run_cmd(name: &str, tool: &str, rest: &[&str], json: bool) -> i32 {
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
-    use unpeel_connector::CONNECTORS_KEYCHAIN_ENV;
+    use supercli_connector::CONNECTORS_KEYCHAIN_ENV;
 
     const MANIFEST: &str = r#"
 [connector]
@@ -2449,7 +2449,7 @@ for line in sys.stdin:
     /// so tests can prove the keychain token reaches the process.
     const STUB_TOKEN_ECHO: &str = r#"import json, os, sys
 TOOL = sys.argv[1]
-TOKEN = os.environ.get("UNPEEL_CONNECTOR_TOKEN", "")
+TOKEN = os.environ.get("SUPERCLI_CONNECTOR_TOKEN", "")
 TOOLS = [{"name": TOOL, "description": "echo", "inputSchema": {"type": "object"}}]
 def respond(mid, result):
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}) + "\n")
@@ -2550,14 +2550,14 @@ provides = ["{tool}"]
             Self::write_connector(&dir, "allowy", MANIFEST_ALLOW, "allowy.echo", STUB);
             // Point the CLI at the fixture roots for the duration of the test.
             // The memory keychain override keeps tokens out of the real
-            // keychain; the install dir keeps installs out of ~/.unpeel;
-            // UNPEEL_HOME keeps session dirs out of the real ~/.unpeel; the
-            // keys dir keeps publisher keys out of the real ~/.unpeel.
-            std::env::set_var("UNPEEL_CONNECTORS_DIR", dir.as_os_str());
-            std::env::set_var("UNPEEL_CONNECTORS_INSTALL_DIR", install_dir.as_os_str());
+            // keychain; the install dir keeps installs out of ~/.supercli;
+            // SUPERCLI_HOME keeps session dirs out of the real ~/.supercli; the
+            // keys dir keeps publisher keys out of the real ~/.supercli.
+            std::env::set_var("SUPERCLI_CONNECTORS_DIR", dir.as_os_str());
+            std::env::set_var("SUPERCLI_CONNECTORS_INSTALL_DIR", install_dir.as_os_str());
             std::env::set_var(CONNECTORS_KEYCHAIN_ENV, "memory");
-            std::env::set_var("UNPEEL_HOME", home_dir.as_os_str());
-            std::env::set_var("UNPEEL_CONNECTOR_KEYS_DIR", keys_dir.as_os_str());
+            std::env::set_var("SUPERCLI_HOME", home_dir.as_os_str());
+            std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", keys_dir.as_os_str());
             Self {
                 dir,
                 install_dir,
@@ -2571,14 +2571,14 @@ provides = ["{tool}"]
         /// parallel test's `Fixture::new` can clobber them between our
         /// calls — pin right before any env-dependent operation.
         fn pin_env(&self) {
-            std::env::set_var("UNPEEL_CONNECTORS_DIR", self.dir.as_os_str());
+            std::env::set_var("SUPERCLI_CONNECTORS_DIR", self.dir.as_os_str());
             std::env::set_var(
-                "UNPEEL_CONNECTORS_INSTALL_DIR",
+                "SUPERCLI_CONNECTORS_INSTALL_DIR",
                 self.install_dir.as_os_str(),
             );
             std::env::set_var(CONNECTORS_KEYCHAIN_ENV, "memory");
-            std::env::set_var("UNPEEL_HOME", self.home_dir.as_os_str());
-            std::env::set_var("UNPEEL_CONNECTOR_KEYS_DIR", self.keys_dir.as_os_str());
+            std::env::set_var("SUPERCLI_HOME", self.home_dir.as_os_str());
+            std::env::set_var("SUPERCLI_CONNECTOR_KEYS_DIR", self.keys_dir.as_os_str());
         }
 
         /// Scaffold a fake session dir: `app-sessions/<id>/manifest.json`.
@@ -2591,9 +2591,9 @@ provides = ["{tool}"]
         }
 
         /// Read back the attachment record for a session dir.
-        fn attachments(&self, session_dir: &Path) -> unpeel_connector::SessionAttachments {
+        fn attachments(&self, session_dir: &Path) -> supercli_connector::SessionAttachments {
             self.pin_env();
-            unpeel_connector::read_attachments(session_dir).unwrap()
+            supercli_connector::read_attachments(session_dir).unwrap()
         }
 
         /// A uniquely named api-key connector (the shared memory keychain
@@ -2611,11 +2611,11 @@ provides = ["{tool}"]
     impl Drop for Fixture {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
-            std::env::remove_var("UNPEEL_CONNECTORS_DIR");
-            std::env::remove_var("UNPEEL_CONNECTORS_INSTALL_DIR");
+            std::env::remove_var("SUPERCLI_CONNECTORS_DIR");
+            std::env::remove_var("SUPERCLI_CONNECTORS_INSTALL_DIR");
             std::env::remove_var(CONNECTORS_KEYCHAIN_ENV);
-            std::env::remove_var("UNPEEL_HOME");
-            std::env::remove_var("UNPEEL_CONNECTOR_KEYS_DIR");
+            std::env::remove_var("SUPERCLI_HOME");
+            std::env::remove_var("SUPERCLI_CONNECTOR_KEYS_DIR");
         }
     }
 
@@ -3533,7 +3533,7 @@ provides = ["httpy.echo"]
         // config — must survive untouched.
         write_version("0.3.0", r#"{"custom":"bundle-v3"}"#);
         publish_next("0.3.0");
-        let bundle_path = registry.join(format!("bundles/{name}-0.3.0.unpeel-connector"));
+        let bundle_path = registry.join(format!("bundles/{name}-0.3.0.supercli-connector"));
         let mut bytes = std::fs::read(&bundle_path).unwrap();
         bytes.extend_from_slice(b"tampered");
         std::fs::write(&bundle_path, &bytes).unwrap();

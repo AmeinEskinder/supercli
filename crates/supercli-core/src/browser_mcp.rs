@@ -12,11 +12,11 @@
 //! Engine mode is the native CDP daemon (`AGENT_BROWSER_NATIVE=1`). By default
 //! it drives system Chrome/Chromium with zero runtime dependencies (no Node,
 //! no Playwright, no Chromium download). A Host provisioner may instead write
-//! an owner-only `~/.unpeel/browser/remote-cdp.json`; the same agent-browser
+//! an owner-only `~/.supercli/browser/remote-cdp.json`; the same agent-browser
 //! daemon then attaches to that provider-owned browser over authenticated WSS
 //! CDP or a bare loopback port. Each Unpeel session still gets an isolated
 //! engine daemon/socket (`unpeel-<session-id>`) under
-//! `~/.unpeel/browser/sockets`.
+//! `~/.supercli/browser/sockets`.
 
 use crate::mcp_host::{self_session_id, strip_ansi};
 use crate::session_host;
@@ -400,7 +400,7 @@ struct BrowserOptions {
 }
 
 fn load_options() -> BrowserOptions {
-    let path = crate::app_paths::unpeel_home().join("app-state.json");
+    let path = crate::app_paths::supercli_home().join("app-state.json");
     let value = std::fs::read(&path)
         .ok()
         .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
@@ -456,7 +456,7 @@ impl BrowserOptions {
             .collect();
         let digest = format!("{:x}", Sha256::digest(root.as_bytes()));
         let key = digest.chars().take(16).collect::<String>();
-        let browser_root = crate::app_paths::unpeel_home().join("browser");
+        let browser_root = crate::app_paths::supercli_home().join("browser");
         Some(ProjectBrowserScope {
             root_id: root,
             safe_root: safe.clone(),
@@ -508,13 +508,13 @@ impl ProjectBrowserScope {
 // ---------------------------------------------------------------------------
 
 /// Locate the `agent-browser` engine binary — the shared order in
-/// `browser_engine::resolve`: `UNPEEL_AGENT_BROWSER_BIN` (or the older
-/// `UNPEEL_BROWSER_BIN`) → the Host-installed, hash-verified
-/// `~/.unpeel/browser/bin/agent-browser` → next to `unpeel-host` (the app
+/// `browser_engine::resolve`: `SUPERCLI_AGENT_BROWSER_BIN` (or the older
+/// `SUPERCLI_BROWSER_BIN`) → the Host-installed, hash-verified
+/// `~/.supercli/browser/bin/agent-browser` → next to `unpeel-host` (the app
 /// bundle, a compatibility candidate until the repo split) → PATH. A missing
 /// engine names the `unpeel browser install` fix.
 fn resolve_engine_binary() -> Result<PathBuf, String> {
-    crate::browser_engine::resolve(&crate::app_paths::unpeel_home())
+    crate::browser_engine::resolve(&crate::app_paths::supercli_home())
 }
 
 fn engine_session_key(session_id: &str) -> String {
@@ -522,7 +522,7 @@ fn engine_session_key(session_id: &str) -> String {
 }
 
 fn engine_socket_dir() -> PathBuf {
-    crate::app_paths::unpeel_home()
+    crate::app_paths::supercli_home()
         .join("browser")
         .join("sockets")
 }
@@ -540,7 +540,7 @@ struct RemoteCdpBinding {
 }
 
 fn remote_cdp_config_path() -> PathBuf {
-    crate::app_paths::unpeel_home()
+    crate::app_paths::supercli_home()
         .join("browser")
         .join("remote-cdp.json")
 }
@@ -875,7 +875,7 @@ fn read_project_browser_scope(key: &str) -> Option<(ProjectBrowserScope, String)
     if key.len() != 16 || !key.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
     }
-    let state_dir = crate::app_paths::unpeel_home()
+    let state_dir = crate::app_paths::supercli_home()
         .join("browser")
         .join("projects")
         .join(key);
@@ -896,7 +896,7 @@ fn read_project_browser_scope(key: &str) -> Option<(ProjectBrowserScope, String)
     }
     let endpoint = value.get("endpoint")?.as_str()?.to_string();
     validate_project_cdp_endpoint(&endpoint).ok()?;
-    let browser_root = crate::app_paths::unpeel_home().join("browser");
+    let browser_root = crate::app_paths::supercli_home().join("browser");
     Some((
         ProjectBrowserScope {
             root_id,
@@ -1689,11 +1689,11 @@ browser may still be starting; try again, or browser_close and retry.",
 
 /// Per-install key for encrypting the engine's saved login state (64 hex
 /// chars = AES-256, the engine's expected format). Created on first use at
-/// `~/.unpeel/browser/state-key` (0600), same pattern as the MCP auth token.
+/// `~/.supercli/browser/state-key` (0600), same pattern as the MCP auth token.
 /// None only when the key can neither be read nor created — the engine then
 /// falls back to plaintext state, which still works, just unencrypted.
 fn ensure_state_encryption_key() -> Option<String> {
-    let path = crate::app_paths::unpeel_home()
+    let path = crate::app_paths::supercli_home()
         .join("browser")
         .join("state-key");
     if let Ok(existing) = std::fs::read_to_string(&path) {
@@ -1868,7 +1868,7 @@ fn maybe_show_cursor(target: &str) {
     // top-left), later calls glide it; a click ripple fires as it arrives.
     let travel = CURSOR_TRAVEL_MS;
     let js = format!(
-        r##"(()=>{{let c=document.getElementById('__unpeel_cursor');if(!c){{c=document.createElement('div');c.id='__unpeel_cursor';c.style.cssText='position:fixed;left:24px;top:24px;z-index:2147483647;pointer-events:none;transition:left {travel}ms cubic-bezier(.25,.7,.35,1),top {travel}ms cubic-bezier(.25,.7,.35,1);filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))';c.innerHTML='<svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 1l13 7.5-5.5 1.3L6.5 16z" fill="#fff" stroke="#111" stroke-width="1.1"/></svg>';document.documentElement.appendChild(c);}}c.getBoundingClientRect();c.style.left='{cx}px';c.style.top='{cy}px';setTimeout(()=>{{let r=document.createElement('div');r.style.cssText='position:fixed;left:{cx}px;top:{cy}px;width:6px;height:6px;margin:-3px;border-radius:50%;border:2px solid rgba(59,130,246,.9);z-index:2147483646;pointer-events:none;opacity:.9;transition:transform .35s ease-out,opacity .35s ease-out';document.documentElement.appendChild(r);requestAnimationFrame(()=>{{r.style.transform='scale(5)';r.style.opacity='0';}});setTimeout(()=>r.remove(),400);}},{travel});}})()"##,
+        r##"(()=>{{let c=document.getElementById('__supercli_cursor');if(!c){{c=document.createElement('div');c.id='__supercli_cursor';c.style.cssText='position:fixed;left:24px;top:24px;z-index:2147483647;pointer-events:none;transition:left {travel}ms cubic-bezier(.25,.7,.35,1),top {travel}ms cubic-bezier(.25,.7,.35,1);filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))';c.innerHTML='<svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 1l13 7.5-5.5 1.3L6.5 16z" fill="#fff" stroke="#111" stroke-width="1.1"/></svg>';document.documentElement.appendChild(c);}}c.getBoundingClientRect();c.style.left='{cx}px';c.style.top='{cy}px';setTimeout(()=>{{let r=document.createElement('div');r.style.cssText='position:fixed;left:{cx}px;top:{cy}px;width:6px;height:6px;margin:-3px;border-radius:50%;border:2px solid rgba(59,130,246,.9);z-index:2147483646;pointer-events:none;opacity:.9;transition:transform .35s ease-out,opacity .35s ease-out';document.documentElement.appendChild(r);requestAnimationFrame(()=>{{r.style.transform='scale(5)';r.style.opacity='0';}});setTimeout(()=>r.remove(),400);}},{travel});}})()"##,
     );
     if exec_engine_with(
         &binary,
@@ -2010,7 +2010,7 @@ pub(crate) fn tool_browser_context() -> Result<String, String> {
     let mut lines = vec![format!(
         "browser_access: {}",
         match (&session_id, access) {
-            (None, _) => "unknown caller (no UNPEEL_SESSION_ID)".to_string(),
+            (None, _) => "unknown caller (no SUPERCLI_SESSION_ID)".to_string(),
             (Some(_), BrowserAccess::On) => "on".to_string(),
             (Some(id), BrowserAccess::Ask) => {
                 if load_security().approvals.iter().any(|entry| entry == id) {
@@ -2341,7 +2341,7 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
 }
 
 fn trace(message: &str) {
-    let path = crate::app_paths::unpeel_home()
+    let path = crate::app_paths::supercli_home()
         .join("hooks")
         .join("trace.log");
     if let Some(parent) = path.parent() {

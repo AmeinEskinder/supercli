@@ -1,7 +1,7 @@
 //! Persisted cross-frontend session activity history.
 //!
 //! The native app and the TUI share an append-only JSONL feed at
-//! `<UNPEEL_HOME>/activity-log.jsonl`. Entry metadata is snapshotted when an
+//! `<SUPERCLI_HOME>/activity-log.jsonl`. Entry metadata is snapshotted when an
 //! event happens so the feed remains renderable after its session or project
 //! is removed.
 
@@ -71,7 +71,7 @@ impl Default for ActivityLogStore {
 }
 
 impl ActivityLogStore {
-    /// Load the feed for the current `UNPEEL_HOME`.
+    /// Load the feed for the current `SUPERCLI_HOME`.
     pub fn load_default() -> io::Result<Self> {
         Self::load_from(default_path())
     }
@@ -79,7 +79,7 @@ impl ActivityLogStore {
     /// Load a feed from an explicit path.
     ///
     /// This is public so workspace-aware callers and tests do not need to
-    /// mutate the process-global `UNPEEL_HOME` environment variable.
+    /// mutate the process-global `SUPERCLI_HOME` environment variable.
     pub fn load_from(path: impl Into<PathBuf>) -> io::Result<Self> {
         let mut store = Self::empty_at(path.into());
         store.refresh()?;
@@ -193,7 +193,7 @@ impl ActivityLogStore {
 }
 
 fn default_path() -> PathBuf {
-    crate::app_paths::unpeel_home().join(FILE_NAME)
+    crate::app_paths::supercli_home().join(FILE_NAME)
 }
 
 fn append_collapsing(entries: &mut Vec<ActivityLogEntry>, entry: ActivityLogEntry) {
@@ -247,7 +247,7 @@ fn create_compaction_file(path: &Path) -> io::Result<(PathBuf, File)> {
         let sequence = NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed);
         let mut temporary_name = OsString::from(file_name);
         temporary_name.push(format!(
-            ".unpeel-tmp.{}.{}.{}",
+            ".supercli-tmp.{}.{}.{}",
             std::process::id(),
             now,
             sequence

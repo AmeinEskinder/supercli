@@ -1,4 +1,4 @@
-# Android APK assembly for the Unpeel Dioxus mobile launcher.
+# Android APK assembly for the Supercli Dioxus mobile launcher.
 #
 # The Rust code cross-compiles to Android (libmain.so) via `dx bundle`.
 # This workflow assembles the signed APK on an Ubuntu runner where the
@@ -19,12 +19,12 @@ on:
     branches: ['track-b*', main]
     paths:
       - 'clients/dioxus/**'
-      - 'crates/unpeel-client/**'
+      - 'crates/supercli-client/**'
       - '.github/workflows/android.yml'
   pull_request:
     paths:
       - 'clients/dioxus/**'
-      - 'crates/unpeel-client/**'
+      - 'crates/supercli-client/**'
 
 env:
   RUST_VERSION: "1.88.0"
@@ -58,7 +58,7 @@ jobs:
 
       - name: Cross-compile Rust (validates libmain.so)
         working-directory: clients/dioxus
-        run: dx bundle --platform android --package unpeel-mobile
+        run: dx bundle --platform android --package supercli-mobile
 
       - name: Assemble APK (no daemon, isolated Gradle home)
         working-directory: clients/dioxus
@@ -82,6 +82,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: unpeel-mobile-debug-apk
+          name: supercli-mobile-debug-apk
           path: clients/dioxus/target/dx/**/*.apk
           if-no-files-found: error

@@ -1,15 +1,15 @@
 # Unpeel Host service, one workspace — Linux systemd user template unit.
 #
-# The scoped single-workspace shape (`unpeel --workspace NAME serve`) for
+# The scoped single-workspace shape (`supercli --workspace NAME serve`) for
 # containers and explicitly scoped units. Most machines want the plain
-# unpeel-serve.service instead, which supervises every registered workspace.
+# supercli-serve.service instead, which supervises every registered workspace.
 #
-#   cp unpeel-serve@.service ~/.config/systemd/user/
+#   cp supercli-serve@.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
-#   systemctl --user enable --now unpeel-serve@NAME.service
+#   systemctl --user enable --now supercli-serve@NAME.service
 #
-# Requires `unpeel` at /usr/local/bin/unpeel (the install.sh default) and a
-# registered workspace NAME (`unpeel workspaces add NAME`). Headless boxes
+# Requires `supercli` at /usr/local/bin/supercli (the install.sh default) and a
+# registered workspace NAME (`supercli workspaces add NAME`). Headless boxes
 # need `sudo loginctl enable-linger <user>`. Do not run the plain machine
 # unit and a scoped unit for the same workspace at once; the workspace lease
 # makes the second owner report it as external rather than compete.
@@ -18,7 +18,7 @@
 Description=Unpeel Host service (workspace %i)
 
 [Service]
-ExecStart=/usr/local/bin/unpeel --workspace %i serve
+ExecStart=/usr/local/bin/supercli --workspace %i serve
 Restart=on-failure
 RestartSec=5
 

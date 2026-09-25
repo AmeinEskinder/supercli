@@ -1,32 +1,32 @@
 #!/bin/sh
-# Unpeel CLI installer — served at https://unpeel.com/install.sh by the
-# unpeel-release-updates worker (which substitutes __DEFAULT_CHANNEL__).
+# Unpeel CLI installer — served at https://supercli.com/install.sh by the
+# supercli-release-updates worker (which substitutes __DEFAULT_CHANNEL__).
 #
-#   curl -fsSL https://unpeel.com/install.sh | sh
+#   curl -fsSL https://supercli.com/install.sh | sh
 #
-# Installs the `unpeel` CLI (the `unpeel serve` Host service plus scriptable
-# session verbs) and its `unpeel-host` sibling (Sessions are hosted through
+# Installs the `supercli` CLI (the `supercli serve` Host service plus scriptable
+# session verbs) and its `supercli-host` sibling (Sessions are hosted through
 # it — resolve_host_binary looks for a sibling first)
-# and, when the archive carries it (0.4.5+), the `unpeel-attach` terminal
+# and, when the archive carries it (0.4.5+), the `supercli-attach` terminal
 # client; older archives without it still install.
 # Tarballs live in the same R2 release bucket as the Mac app, under
 # /releases/<channel>/cli/, published by scripts/release-cli.mjs.
 #
 # Overrides:
-#   UNPEEL_CHANNEL      alpha | beta | stable   (default: __DEFAULT_CHANNEL__)
-#   UNPEEL_INSTALL_DIR  target directory        (default: /usr/local/bin if
+#   SUPERCLI_CHANNEL      alpha | beta | stable   (default: __DEFAULT_CHANNEL__)
+#   SUPERCLI_INSTALL_DIR  target directory        (default: /usr/local/bin if
 #                       writable, else ~/.local/bin)
 set -eu
 
-CHANNEL="${UNPEEL_CHANNEL:-__DEFAULT_CHANNEL__}"
+CHANNEL="${SUPERCLI_CHANNEL:-__DEFAULT_CHANNEL__}"
 # __BASE_URL__ is substituted by the worker with the origin the script was
-# fetched from, so v1.unpeel.com hands out a script that installs from
-# v1.unpeel.com — the whole preview lane stays self-contained.
-BASE="${UNPEEL_INSTALL_BASE:-__BASE_URL__}"
+# fetched from, so v1.supercli.com hands out a script that installs from
+# v1.supercli.com — the whole preview lane stays self-contained.
+BASE="${SUPERCLI_INSTALL_BASE:-__BASE_URL__}"
 
 case "$CHANNEL" in
   alpha|beta|stable) ;;
-  *) echo "error: UNPEEL_CHANNEL must be alpha, beta, or stable (got: $CHANNEL)" >&2; exit 1 ;;
+  *) echo "error: SUPERCLI_CHANNEL must be alpha, beta, or stable (got: $CHANNEL)" >&2; exit 1 ;;
 esac
 
 os="$(uname -s)"
@@ -46,25 +46,25 @@ esac
 command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "error: tar is required" >&2; exit 1; }
 
-url="$BASE/releases/$CHANNEL/cli/unpeel-latest-$target.tar.gz"
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/unpeel-install.XXXXXX")"
+url="$BASE/releases/$CHANNEL/cli/supercli-latest-$target.tar.gz"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/supercli-install.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-echo "Downloading unpeel ($CHANNEL, $target)…"
-if ! curl -fsSL -o "$tmp/unpeel.tar.gz" "$url"; then
+echo "Downloading supercli ($CHANNEL, $target)…"
+if ! curl -fsSL -o "$tmp/supercli.tar.gz" "$url"; then
   echo "error: no prebuilt binary for $target on the $CHANNEL channel yet ($url)" >&2
-  echo "       building from source: cargo build --release -p unpeel-cli -p unpeel-host" >&2
+  echo "       building from source: cargo build --release -p supercli-cli -p supercli-host" >&2
   exit 1
 fi
 
 # Integrity is mandatory: every release upload publishes this sidecar next to
 # the mutable `-latest` alias. A missing/malformed sidecar must never turn into
 # an unverified install.
-if ! curl -fsSL -o "$tmp/unpeel.tar.gz.sha256" "$url.sha256"; then
+if ! curl -fsSL -o "$tmp/supercli.tar.gz.sha256" "$url.sha256"; then
   echo "error: checksum sidecar is unavailable for $url" >&2
   exit 1
 fi
-expected="$(awk 'NR == 1 { print $1 }' "$tmp/unpeel.tar.gz.sha256")"
+expected="$(awk 'NR == 1 { print $1 }' "$tmp/supercli.tar.gz.sha256")"
 case "$expected" in
   *[!0-9a-fA-F]*|'')
     echo "error: invalid checksum sidecar for $url" >&2
@@ -76,9 +76,9 @@ if [ "${#expected}" -ne 64 ]; then
   exit 1
 fi
 if command -v sha256sum >/dev/null 2>&1; then
-  actual="$(sha256sum "$tmp/unpeel.tar.gz" | awk '{print $1}')"
+  actual="$(sha256sum "$tmp/supercli.tar.gz" | awk '{print $1}')"
 elif command -v shasum >/dev/null 2>&1; then
-  actual="$(shasum -a 256 "$tmp/unpeel.tar.gz" | awk '{print $1}')"
+  actual="$(shasum -a 256 "$tmp/supercli.tar.gz" | awk '{print $1}')"
 else
   echo "error: sha256sum or shasum is required to verify $url" >&2
   exit 1
@@ -90,15 +90,15 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-tar -xzf "$tmp/unpeel.tar.gz" -C "$tmp"
-for bin in unpeel unpeel-host; do
+tar -xzf "$tmp/supercli.tar.gz" -C "$tmp"
+for bin in supercli supercli-host; do
   [ -f "$tmp/$bin" ] || { echo "error: $bin missing from archive" >&2; exit 1; }
 done
 extra_bins=""
-[ -f "$tmp/unpeel-attach" ] && extra_bins="$tmp/unpeel-attach"
+[ -f "$tmp/supercli-attach" ] && extra_bins="$tmp/supercli-attach"
 
-if [ -n "${UNPEEL_INSTALL_DIR:-}" ]; then
-  dir="$UNPEEL_INSTALL_DIR"
+if [ -n "${SUPERCLI_INSTALL_DIR:-}" ]; then
+  dir="$SUPERCLI_INSTALL_DIR"
   mkdir -p "$dir"
 elif [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
   dir=/usr/local/bin
@@ -108,19 +108,19 @@ else
 fi
 
 # shellcheck disable=SC2086
-install -m 755 "$tmp/unpeel" "$tmp/unpeel-host" $extra_bins "$dir"
+install -m 755 "$tmp/supercli" "$tmp/supercli-host" $extra_bins "$dir"
 
 # Record where this install came from: the CLI's update check reads the
 # channel from this marker (and stays silent for from-source builds, which
 # never have one).
-unpeel_home="${UNPEEL_HOME:-$HOME/.unpeel}"
-mkdir -p "$unpeel_home"
+supercli_home="${SUPERCLI_HOME:-$HOME/.supercli}"
+mkdir -p "$supercli_home"
 printf '{"channel":"%s","install_dir":"%s","installed_at":"%s"}\n' \
-  "$CHANNEL" "$dir" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$unpeel_home/cli-install.json"
+  "$CHANNEL" "$dir" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$supercli_home/cli-install.json"
 
-ver="$("$dir/unpeel" --version 2>/dev/null || echo unpeel)"
+ver="$("$dir/supercli" --version 2>/dev/null || echo supercli)"
 
-# The canonical seated mascot from the unpeel-mascot repository. Interactive
+# The canonical seated mascot from the supercli-mascot repository. Interactive
 # terminals get its agent-color gradient; piped/dumb terminals get the same
 # silhouette in three monochrome shades and no escape sequences.
 mascot_color=false
@@ -221,8 +221,8 @@ esac
 
 echo ""
 echo "Start it:"
-echo "  unpeel serve    run the Host service on this machine (or open the Unpeel app)"
-echo "  unpeel pair     pair a phone or another Mac with this Host"
-echo "  unpeel --help   every command and flag"
+echo "  supercli serve    run the Host service on this machine (or open the Unpeel app)"
+echo "  supercli pair     pair a phone or another Mac with this Host"
+echo "  supercli --help   every command and flag"
 echo ""
-echo "Docs: https://unpeel.com/docs/cli"
+echo "Docs: https://supercli.com/docs/cli"

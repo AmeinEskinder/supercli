@@ -2,7 +2,7 @@
 #
 # Headless end-to-end verification of the Browser MCP pipeline:
 #
-#   unpeel-host __browser_mcp__ (tool → argv/env translation, grants)
+#   supercli-host __browser_mcp__ (tool → argv/env translation, grants)
 #     → agent-browser native daemon (CDP)
 #       → system Chrome/Chromium
 #
@@ -21,35 +21,35 @@
 #   4. profile   — persistent project-profile cookies survive a full restart
 #   5. mcp       — __browser_mcp__ end to end: grant gate, one project browser,
 #                  independent pinned tabs, per-tab close, session screenshot
-#   6. remote    — when UNPEEL_TEST_REMOTE_CDP_URL is set, the same MCP tools
+#   6. remote    — when SUPERCLI_TEST_REMOTE_CDP_URL is set, the same MCP tools
 #                  attach to that authenticated WSS endpoint without local Chrome
 #
 # This is a SERVER-side check: it needs only this repo's crates (it builds
-# `unpeel-host` debug itself), an agent-browser engine, and a system Chrome.
+# `supercli-host` debug itself), an agent-browser engine, and a system Chrome.
 # No app checkout, GhosttyKit, or Swift toolchain is involved.
 #
 # Usage: scripts/verify-browser.sh
-#        UNPEEL_TEST_REMOTE_CDP_URL='wss://…' scripts/verify-browser.sh
-#        UNPEEL_BROWSER_BIN=/path/to/agent-browser scripts/verify-browser.sh
+#        SUPERCLI_TEST_REMOTE_CDP_URL='wss://…' scripts/verify-browser.sh
+#        SUPERCLI_BROWSER_BIN=/path/to/agent-browser scripts/verify-browser.sh
 # Exit:  0 = all checks pass; non-zero with a FAIL line otherwise.
 #        Exits 0 with a SKIP line when no engine or no Chrome is available
-#        (set UNPEEL_VERIFY_BROWSER_STRICT=1 to turn that into a failure).
+#        (set SUPERCLI_VERIFY_BROWSER_STRICT=1 to turn that into a failure).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST_BIN="$REPO_ROOT/crates/target/debug/unpeel-host"
+HOST_BIN="$REPO_ROOT/crates/target/debug/supercli-host"
 
 step() { printf '\n==> %s\n' "$1"; }
 pass() { printf 'PASS: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 
 # --- engine resolution (same order as browser_mcp.rs / build-app.sh) --------
-ENGINE="${UNPEEL_BROWSER_BIN:-}"
+ENGINE="${SUPERCLI_BROWSER_BIN:-}"
 if [ -z "$ENGINE" ]; then
   for candidate in \
     "$REPO_ROOT/node_modules/.bin/agent-browser" \
-    "$HOME/.unpeel/browser/bin/agent-browser" \
+    "$HOME/.supercli/browser/bin/agent-browser" \
     "$(command -v agent-browser 2>/dev/null || true)"; do
     [ -n "$candidate" ] && [ -e "$candidate" ] || continue
     resolved="$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")"
@@ -60,16 +60,16 @@ if [ -z "$ENGINE" ]; then
     fi
     # bun/npm sometimes install the native slice without the exec bit; a
     # non-executable candidate is skipped so the next one (or
-    # UNPEEL_BROWSER_BIN) can win instead of failing every engine call.
+    # SUPERCLI_BROWSER_BIN) can win instead of failing every engine call.
     [ -f "$resolved" ] && [ -x "$resolved" ] && { ENGINE="$resolved"; break; }
   done
 fi
 skip() {
-  if [ "${UNPEEL_VERIFY_BROWSER_STRICT:-0}" = "1" ]; then fail "$1"; fi
+  if [ "${SUPERCLI_VERIFY_BROWSER_STRICT:-0}" = "1" ]; then fail "$1"; fi
   printf 'SKIP: %s\n' "$1"
   exit 0
 }
-[ -n "$ENGINE" ] && [ -x "$ENGINE" ] || skip "no executable agent-browser engine found (bun install; chmod +x the native slice, or set UNPEEL_BROWSER_BIN)"
+[ -n "$ENGINE" ] && [ -x "$ENGINE" ] || skip "no executable agent-browser engine found (bun install; chmod +x the native slice, or set SUPERCLI_BROWSER_BIN)"
 pass "engine resolved: $ENGINE"
 chrome_found=0
 for candidate in "/Applications/Google Chrome.app" "/Applications/Chromium.app" \
@@ -82,13 +82,13 @@ if [ "$chrome_found" = 0 ] \
   skip "no system Chrome/Chromium found for the native engine"
 fi
 
-step "building unpeel-host (debug)"
-(cd "$REPO_ROOT/crates" && cargo build -q -p unpeel-host)
+step "building supercli-host (debug)"
+(cd "$REPO_ROOT/crates" && cargo build -q -p supercli-host)
 
 # Keep these under /tmp: agent-browser uses Unix-domain sockets, whose macOS
-# path limit is only 103 bytes. The real ~/.unpeel path is similarly short.
-SCRATCH="$(mktemp -d /tmp/unpeel-browser-mcp.XXXXXX)"
-ENGINE_HOME="$(mktemp -d /tmp/unpeel-browser-engine.XXXXXX)"
+# path limit is only 103 bytes. The real ~/.supercli path is similarly short.
+SCRATCH="$(mktemp -d /tmp/supercli-browser-mcp.XXXXXX)"
+ENGINE_HOME="$(mktemp -d /tmp/supercli-browser-engine.XXXXXX)"
 cleanup() {
   for sess in vb-core vb-rules vb-state vb-keychain; do
     env -i HOME="$ENGINE_HOME" PATH=/usr/bin:/bin \
@@ -96,12 +96,12 @@ cleanup() {
       "$ENGINE" close >/dev/null 2>&1 || true
   done
   for sess in vb-session-a vb-session-b; do
-    UNPEEL_HOME="$SCRATCH" UNPEEL_BROWSER_BIN="$ENGINE" \
+    SUPERCLI_HOME="$SCRATCH" SUPERCLI_BROWSER_BIN="$ENGINE" \
       "$HOST_BIN" __browser_cleanup__ "$sess" >/dev/null 2>&1 || true
   done
   # The MCP check's engine daemon runs with the real HOME, so its login-state
   # file lands in the real ~/.agent-browser — remove the test project's.
-  rm -f "$HOME/.agent-browser/sessions/unpeel-proj-vb-proj-"* 2>/dev/null || true
+  rm -f "$HOME/.agent-browser/sessions/supercli-proj-vb-proj-"* 2>/dev/null || true
   rm -rf "$SCRATCH" "$ENGINE_HOME"
 }
 trap cleanup EXIT
@@ -179,8 +179,8 @@ done
 cat > "$SCRATCH/app-state.json" <<'EOF'
 {"projects":[{"id":"vb-proj","name":"VB","path":"/tmp"}],"presets":[],"active_tabs":{},"browser_access":{"vb-session-a":"off","vb-session-b":"off"}}
 EOF
-mcp() { local sess="$1"; UNPEEL_HOME="$SCRATCH" UNPEEL_SESSION_ID="$sess" \
-  UNPEEL_BROWSER_BIN="$ENGINE" "$HOST_BIN" __browser_mcp__; }
+mcp() { local sess="$1"; SUPERCLI_HOME="$SCRATCH" SUPERCLI_SESSION_ID="$sess" \
+  SUPERCLI_BROWSER_BIN="$ENGINE" "$HOST_BIN" __browser_mcp__; }
 
 refused="$(printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"browser_open","arguments":{"url":"https://example.com"}}}' \
@@ -214,7 +214,7 @@ url_b="$(printf '%s\n' \
 echo "$url_a" | grep -q 'agent=a' || fail "session A lost its pinned tab: $url_a"
 echo "$url_b" | grep -q 'agent=b' || fail "session B lost its pinned tab: $url_b"
 
-owner_pid_file="$(find "$SCRATCH/browser/sockets" -name 'unpeel-project-*.pid' -print -quit)"
+owner_pid_file="$(find "$SCRATCH/browser/sockets" -name 'supercli-project-*.pid' -print -quit)"
 [ -n "$owner_pid_file" ] || fail "shared project browser owner was not created"
 [ "$(find "$SCRATCH/browser/projects" -name browser.json | wc -l | tr -d ' ')" = "1" ] \
   || fail "expected exactly one browser owner for the project"
@@ -240,7 +240,7 @@ done
 pass "one project window, independent pinned tabs, per-tab close, session artifact"
 
 # --- 6. optional provider-owned remote CDP -----------------------------------
-if [ -n "${UNPEEL_TEST_REMOTE_CDP_URL:-}" ]; then
+if [ -n "${SUPERCLI_TEST_REMOTE_CDP_URL:-}" ]; then
   step "remote CDP MCP"
   mkdir -p "$SCRATCH/browser"
   python3 - "$SCRATCH/browser/remote-cdp.json" <<'EOF'
@@ -249,7 +249,7 @@ path = sys.argv[1]
 with open(path, "w") as f:
     json.dump({
         "schema": 1,
-        "endpoint": os.environ["UNPEEL_TEST_REMOTE_CDP_URL"],
+        "endpoint": os.environ["SUPERCLI_TEST_REMOTE_CDP_URL"],
         "provider": "test",
     }, f)
 os.chmod(path, 0o600)
@@ -262,11 +262,11 @@ EOF
   echo "$remote_result" | grep -q "Saved screenshot to" \
     || fail "remote CDP MCP screenshot failed: $remote_result"
   case "$remote_result" in
-    *"$UNPEEL_TEST_REMOTE_CDP_URL"*) fail "remote CDP credential leaked into MCP output" ;;
+    *"$SUPERCLI_TEST_REMOTE_CDP_URL"*) fail "remote CDP credential leaked into MCP output" ;;
   esac
   pass "browser MCP attaches to provider-owned remote CDP and redacts its credential"
 else
-  echo "note: remote CDP check skipped (set UNPEEL_TEST_REMOTE_CDP_URL to run it)"
+  echo "note: remote CDP check skipped (set SUPERCLI_TEST_REMOTE_CDP_URL to run it)"
 fi
 
 printf '\nAll browser MCP checks passed.\n'

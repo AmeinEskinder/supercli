@@ -13,7 +13,7 @@
 //!
 //! Append a `grant_created` chain entry (actor, scope, tool) with write-ahead
 //! fsync BEFORE writing `grants.json`. The grant audit log
-//! (`~/.unpeel/grant-audit.jsonl`) has its own hash chain, separate from the
+//! (`~/.supercli/grant-audit.jsonl`) has its own hash chain, separate from the
 //! per-session review logs.
 //!
 //! ## Startup reconciliation
@@ -123,11 +123,11 @@ pub struct GrantAuditEntry {
 }
 
 fn audit_path() -> PathBuf {
-    crate::app_paths::unpeel_home().join(AUDIT_FILE)
+    crate::app_paths::supercli_home().join(AUDIT_FILE)
 }
 
 fn quarantine_path() -> PathBuf {
-    crate::app_paths::unpeel_home().join(QUARANTINE_FILE)
+    crate::app_paths::supercli_home().join(QUARANTINE_FILE)
 }
 
 fn sha256_hex(data: &[u8]) -> String {
@@ -447,7 +447,7 @@ pub fn doctor_check_grants_subset() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_paths::TEST_UNPEEL_HOME_LOCK;
+    use crate::app_paths::TEST_SUPERCLI_HOME_LOCK;
 
     fn test_home(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -463,19 +463,19 @@ mod tests {
         dir
     }
 
-    /// Run `f` with UNPEEL_HOME pointed at a scratch dir, serialized against
-    /// all other UNPEEL_HOME-mutating tests, restoring the previous value.
+    /// Run `f` with SUPERCLI_HOME pointed at a scratch dir, serialized against
+    /// all other SUPERCLI_HOME-mutating tests, restoring the previous value.
     fn with_test_home(label: &str, f: impl for<'a> FnOnce(&'a PathBuf)) {
-        let _lock = TEST_UNPEEL_HOME_LOCK
+        let _lock = TEST_SUPERCLI_HOME_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         let dir = test_home(label);
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
         f(&dir);
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
         std::fs::remove_dir_all(&dir).ok();
     }

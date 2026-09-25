@@ -5,7 +5,7 @@
 The native terminal is a **libghostty** surface (GhosttyKit), Metal-rendered, not xterm.js.
 
 - The Swift app embeds a Ghostty terminal surface per visible session.
-- The surface runs `unpeel-attach <session-id>` (see `crates/unpeel-attach`), which:
+- The surface runs `supercli-attach <session-id>` (see `crates/supercli-attach`), which:
   - **snapshot attach (2026-09-02, Round 2):** after the startup resize it
     sends the additive `{"type":"snapshot"}` control command; the Host renders
     its resident libghostty-vt state (cells, styles, wide chars, scrollback,
@@ -24,9 +24,9 @@ The native terminal is a **libghostty** surface (GhosttyKit), Metal-rendered, no
     flag (see `SnapshotVt` docs).
   - **fallback:** a Host that predates the command closes the connection
     without a reply (serde rejects the variant), the manifest is `exited`, or
-    `UNPEEL_ATTACH_SNAPSHOT=0` is set → today's path unchanged: replay a
+    `SUPERCLI_ATTACH_SNAPSHOT=0` is set → today's path unchanged: replay a
     boundary-aligned tail of `output.bin` (`--replay-bytes`) after the
-    manifest's `terminal_modes` preamble. `UNPEEL_ATTACH_TIMING_FILE` appends
+    manifest's `terminal_modes` preamble. `SUPERCLI_ATTACH_TIMING_FILE` appends
     one `attach_us=… path=snapshot|tail` line per attach for measurement.
   - then bridges stdio ↔ `session.sock` for live I/O and resize.
   - The remote `__remote__` WS streamer still replays a journal tail on
@@ -62,9 +62,9 @@ The native terminal is a **libghostty** surface (GhosttyKit), Metal-rendered, no
   surface's size). Live application is a config overlay
   (`GhosttyTerminalPane.surfaceOverlayConfiguration`: opacity, `font-size`,
   and `font-family` cleared then re-named because the key is repeatable)
-  pushed through `applyPaneStyle` — SurfaceCache on `unpeelTerminalFontChanged`
+  pushed through `applyPaneStyle` — SurfaceCache on `supercliTerminalFontChanged`
   for local panes, the SwiftUI style re-resolve for remote panes. The user's
-  `~/.config/ghostty/config` is still not read: Unpeel generates its own
+  `~/.config/ghostty/config` is still not read: Supercli generates its own
   config so its theme, keybind clearing, and padding stay in control.
 - **Line height (2026-09-17).** The same section has a Line height stepper (−20 % … +100 % in 5 % steps, default 0) stored as `terminal_line_height` beside the font keys and emitted as Ghostty's `adjust-cell-height` into the base and overlay configs, so a change re-lays every live pane (community #14).
 - Agent TUIs that repaint the screen in place can still appear to "crop" or "overwrite" detail while streaming — normal terminal behavior; intermediate full-screen redraw states are not guaranteed to survive as scrollback.
@@ -97,7 +97,7 @@ parentheses and query punctuation survive cleanup.
 Before the interactive terminal UI's removal, it composited sessions through
 its own in-memory ghostty-vt, which rendered text — not images. Since
 2026-08-22 the live-streamed pane (the selected, running, TUI-owned-grid
-session — `crates/unpeel-cli/src/stream.rs`, deleted with the TUI) forwarded
+session — `crates/supercli-cli/src/stream.rs`, deleted with the TUI) forwarded
 kitty graphics instead of dropping them, so a graphics app hosted in a
 session (the Surface runtime, icat-style tools) displayed inside the TUI
 when the outer terminal spoke the kitty protocol (Ghostty, kitty, herdr):
@@ -106,7 +106,7 @@ when the outer terminal spoke the kitty protocol (Ghostty, kitty, herdr):
   strips `ESC _ G … ESC \` from the VT feed, but the opt-in capture
   (`set_graphics_capture`) it used to enable for the TUI's live stream has no
   remaining consumer now that the TUI is gone.
-- `crates/unpeel-cli/src/graphics.rs` (`GraphicsForwarder`), which drained
+- `crates/supercli-cli/src/graphics.rs` (`GraphicsForwarder`), which drained
   captures each frame and emitted between the ratatui draw and
   `EndSynchronizedUpdate`, was deleted with the TUI.
 - This entire passthrough mechanism (placement anchoring, delete rewriting,
@@ -125,7 +125,7 @@ Do not replace the phone detail view with a semantic chat UI yet.
 Semantic transcript reads are still useful, but as a shared supporting API:
 session previews, future chat experiments behind a feature flag, debug views,
 search/indexing, and MCP `read_transcript`. The implementation lives in
-`crates/unpeel-core/src/transcripts/`.
+`crates/supercli-core/src/transcripts/`.
 
 #### Keyboard focus shortens the terminal from the bottom
 
@@ -157,7 +157,7 @@ restores its rows when the keyboard closes.
   metrics are ignored until the exact requested grid arrives and a timeout
   never applies a fallback canvas. On the Mac, a mounted pane is the sole
   resize owner (the endpoint does not also raw-resize it), and
-  `unpeel-attach` coalesces AppKit's settling SIGWINCH burst for 60 ms
+  `supercli-attach` coalesces AppKit's settling SIGWINCH burst for 60 ms
   before forwarding the final grid. Each show/hide transition therefore
   reaches the workload as one PTY resize and one TUI redraw.
 - **Other keyboards do nothing.** `keyboardOwnsInset` latches only when the
@@ -220,7 +220,7 @@ control bar instead.
 
 The phone's gallery (`BrowserGalleryPanel`, opened from the terminal's photo
 button) is a **unified per-session image view**, not just the agent's browser
-captures. It lists four artifact kinds under `~/.unpeel/app-sessions/<id>/
+captures. It lists four artifact kinds under `~/.supercli/app-sessions/<id>/
 artifacts/`, newest-first: `browser/screenshots` and `browser/downloads`
 (browser-MCP output), legacy `computer/screenshots`, and `uploads` (images the user,
 phone, or Sessions `add_to_gallery` action added). Settings ▸ Agent access can
@@ -232,7 +232,7 @@ gallery** (`SessionGalleryPanel.swift`): a photo button at the trailing edge
 of the terminal title bar (next to the workspace-open menu in
 `TerminalArea.swift`) opens a popover reading the artifact dirs straight off
 disk. On desktop the whole chip is **optional and off by default**
-(Appearance ▸ "Session gallery", `UnpeelStore.showSessionGallery`) — some
+(Appearance ▸ "Session gallery", `SupercliStore.showSessionGallery`) — some
 users have their own screenshot tooling; disabling it also disables Session ▸
 Take Screenshot… (⇧⌘S greys out via `AppDelegate.validateMenuItem`, since the
 chip owns the capture flow). The phone gallery and artifact dirs are

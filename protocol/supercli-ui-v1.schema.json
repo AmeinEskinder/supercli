@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unpeel.com/protocol/unpeel-ui-v1.schema.json",
+  "$id": "https://supercli.com/protocol/supercli-ui-v1.schema.json",
   "title": "Unpeel UI protocol v1 message",
   "description": "One newline-delimited message exchanged by an Unpeel App and Host. Unknown properties are permitted and ignored as an additive-compatibility allowance; message, node, primitive, color, constraint, spacing, and event-value discriminators are closed for v1. An omitted optional field uses the default stated on its definition. Optional values accept either omission or explicit JSON null; canonical Rust output omits them. Revisions and event integers stay within JavaScript's exactly representable safe-integer range for future web renderers.",
   "$ref": "#/$defs/message",
@@ -16,7 +16,7 @@
     "protocolHeader": {
       "type": "object",
       "properties": {
-        "protocol": { "const": "unpeel.ui" },
+        "protocol": { "const": "supercli.ui" },
         "protocolVersion": { "const": 1 }
       },
       "required": ["protocol", "protocolVersion"],
@@ -27,7 +27,7 @@
       "allOf": [{ "$ref": "#/$defs/protocolHeader" }],
       "properties": {
         "type": { "const": "clientHello" },
-        "protocol": { "const": "unpeel.ui" },
+        "protocol": { "const": "supercli.ui" },
         "protocolVersion": { "const": 1 },
         "app": { "$ref": "#/$defs/appMetadata" }
       },
@@ -39,7 +39,7 @@
       "allOf": [{ "$ref": "#/$defs/protocolHeader" }],
       "properties": {
         "type": { "const": "hostHello" },
-        "protocol": { "const": "unpeel.ui" },
+        "protocol": { "const": "supercli.ui" },
         "protocolVersion": { "const": 1 },
         "renderMode": { "$ref": "#/$defs/renderMode" }
       },
@@ -51,7 +51,7 @@
       "allOf": [{ "$ref": "#/$defs/protocolHeader" }],
       "properties": {
         "type": { "const": "snapshot" },
-        "protocol": { "const": "unpeel.ui" },
+        "protocol": { "const": "supercli.ui" },
         "protocolVersion": { "const": 1 },
         "revision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "root": { "$ref": "#/$defs/node" }
@@ -64,7 +64,7 @@
       "allOf": [{ "$ref": "#/$defs/protocolHeader" }],
       "properties": {
         "type": { "const": "event" },
-        "protocol": { "const": "unpeel.ui" },
+        "protocol": { "const": "supercli.ui" },
         "protocolVersion": { "const": 1 },
         "revision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "nodeId": { "$ref": "#/$defs/nonEmptyString" },

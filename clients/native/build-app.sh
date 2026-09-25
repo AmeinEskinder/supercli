@@ -3,7 +3,7 @@
 # build-app.sh — assemble an installable Unpeel.app from release builds.
 #
 # Produces clients/native/dist/Unpeel.app containing:
-#   - the release UnpeelNative binary (GhosttyKit is statically linked)
+#   - the release SupercliNative binary (GhosttyKit is statically linked)
 #   - unpeel-host + unpeel-attach release binaries (embedded helpers the app
 #     spawns; LaunchConfig resolves them via Bundle.main auxiliary executables)
 #   - Sparkle.framework for Cloudflare/R2 appcast updates
@@ -34,7 +34,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NATIVE_DIR="$REPO_ROOT/clients/native"
-SWIFT_DIR="$NATIVE_DIR/UnpeelNative"
+SWIFT_DIR="$NATIVE_DIR/SupercliNative"
 DIST="$NATIVE_DIR/dist"
 APP="$DIST/Unpeel.app"
 # One version number for the app, the bridge, and the server binaries: the
@@ -117,7 +117,7 @@ verify_release_architectures() {
   # The native app's declared support floor is Apple silicon. A release may
   # become universal later, but it must never silently inherit an Intel build
   # host's architecture and publish without an arm64 slice.
-  for binary in UnpeelNative unpeel-host unpeel unpeel-attach; do
+  for binary in SupercliNative unpeel-host unpeel unpeel-attach; do
     if ! lipo "$APP/Contents/MacOS/$binary" -verify_arch arm64 >/dev/null 2>&1; then
       echo "FAIL: release binary does not contain the required arm64 slice: $binary" >&2
       lipo -info "$APP/Contents/MacOS/$binary" >&2 || true
@@ -134,13 +134,13 @@ step "building native Rust bridge (release)"
 # so it is always built from the same tree as the server binaries below.
 "$NATIVE_DIR/build-rust-bridge.sh" release
 
-step "building UnpeelNative (release)"
+step "building SupercliNative (release)"
 # SwiftPM's generated Bundle.module accessor bakes its absolute .build path
 # into executable targets. Packaged resources must go through
 # ModuleResources so release binaries neither leak the checkout path nor fall
 # back to a directory that exists only on the build Mac.
 if grep -R --include='*.swift' -nE 'Bundle\.module\.' \
-  "$SWIFT_DIR/Sources/UnpeelNative"
+  "$SWIFT_DIR/Sources/SupercliNative"
 then
   echo "FAIL: native app source must use ModuleResources instead of Bundle.module" >&2
   exit 1
@@ -246,11 +246,11 @@ for bin in "${SERVER_BINARIES[@]}"; do
 done
 
 SWIFT_BIN_DIR="$(cd "$SWIFT_DIR" && swift build -c release --show-bin-path "${SWIFT_PATH_REMAP_FLAGS[@]}")"
-APP_BIN="$SWIFT_BIN_DIR/UnpeelNative"
+APP_BIN="$SWIFT_BIN_DIR/SupercliNative"
 HOST_BIN="$SERVER_BIN_DIR/unpeel-host"
 CLI_BIN="$SERVER_BIN_DIR/unpeel"
 ATTACH_BIN="$SERVER_BIN_DIR/unpeel-attach"
-RES_BUNDLE="$SWIFT_BIN_DIR/UnpeelNative_UnpeelNative.bundle"
+RES_BUNDLE="$SWIFT_BIN_DIR/SupercliNative_SupercliNative.bundle"
 SPARKLE_FRAMEWORK="$SWIFT_DIR/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
 for f in "$APP_BIN" "$HOST_BIN" "$CLI_BIN" "$ATTACH_BIN"; do
@@ -274,7 +274,7 @@ done
 # AppIcon.icns for macOS < 26. The solid fill matches the icon's dark base.
 
 step "preparing AppIcon.icon"
-SRC_PNG="$SWIFT_DIR/Sources/UnpeelNative/Resources/AppIcon.png"
+SRC_PNG="$SWIFT_DIR/Sources/SupercliNative/Resources/AppIcon.png"
 ICON_DIR="$(mktemp -d)/AppIcon.icon"
 mkdir -p "$ICON_DIR/Assets"
 cp "$SRC_PNG" "$ICON_DIR/Assets/AppIcon.png"
@@ -302,7 +302,7 @@ step "assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
-cp "$APP_BIN"    "$APP/Contents/MacOS/UnpeelNative"
+cp "$APP_BIN"    "$APP/Contents/MacOS/SupercliNative"
 cp "$HOST_BIN"   "$APP/Contents/MacOS/unpeel-host"
 cp "$CLI_BIN"    "$APP/Contents/MacOS/unpeel"
 cp "$ATTACH_BIN" "$APP/Contents/MacOS/unpeel-attach"
@@ -314,7 +314,7 @@ cp "$ATTACH_BIN" "$APP/Contents/MacOS/unpeel-attach"
 # by SWIFT_PATH_REMAP_FLAGS above.
 if [ "$UNPEEL_DEV_BUILD" != "1" ]; then
   step "stripping native release debug symbols"
-  strip -S "$APP/Contents/MacOS/UnpeelNative"
+  strip -S "$APP/Contents/MacOS/SupercliNative"
 fi
 
 # Browser MCP engine: NOT bundled (since 0.5.0). The Host installs and
@@ -347,8 +347,8 @@ sh "$NATIVE_DIR/collect-swift-notices.sh" \
   "$APP/Contents/Resources/THIRD_PARTY_NOTICES_SWIFT.txt"
 
 chmod +x "$APP/Contents/MacOS/"*
-if ! otool -l "$APP/Contents/MacOS/UnpeelNative" | grep -q "@loader_path/../Frameworks"; then
-  install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP/Contents/MacOS/UnpeelNative"
+if ! otool -l "$APP/Contents/MacOS/SupercliNative" | grep -q "@loader_path/../Frameworks"; then
+  install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP/Contents/MacOS/SupercliNative"
 fi
 # SwiftPM resource bundle: Contents/Resources keeps codesign treating it as a
 # resource, not stray code in MacOS/. Code must resolve it via ModuleResources
@@ -387,7 +387,7 @@ fi
 DEV_BUILD_PLIST_KEYS=""
 # Dev builds are named "Unpeel Dev" (menu bar, Dock tooltip, force-quit list)
 # so they're tellable from the installed release app; the bundle id stays
-# com.unpeel.native either way. Quit them with `osascript -e 'quit app
+# com.supercli.native either way. Quit them with `osascript -e 'quit app
 # "Unpeel Dev"'` — plain "Unpeel" targets the installed app.
 APP_NAME="Unpeel"
 if [ "$UNPEEL_DEV_BUILD" = "1" ]; then
@@ -402,8 +402,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key>            <string>$APP_NAME</string>
     <key>CFBundleDisplayName</key>     <string>$APP_NAME</string>
-    <key>CFBundleExecutable</key>      <string>UnpeelNative</string>
-    <key>CFBundleIdentifier</key>      <string>com.unpeel.native</string>
+    <key>CFBundleExecutable</key>      <string>SupercliNative</string>
+    <key>CFBundleIdentifier</key>      <string>com.supercli.native</string>
     <key>CFBundleIconName</key>        <string>AppIcon</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>

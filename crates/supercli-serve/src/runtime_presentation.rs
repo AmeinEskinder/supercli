@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use unpeel_core::runtime_catalog::{builtin_runtime_catalog, RuntimeDescriptor, RuntimeLifecycle};
+use supercli_core::runtime_catalog::{builtin_runtime_catalog, RuntimeDescriptor, RuntimeLifecycle};
 
 fn runtime_for_identity(identity: &str) -> Option<&'static RuntimeDescriptor> {
     let catalog = builtin_runtime_catalog();
@@ -17,7 +17,7 @@ fn runtime_for_identity(identity: &str) -> Option<&'static RuntimeDescriptor> {
 }
 
 fn runtime_for_command(command: &str) -> Option<&'static RuntimeDescriptor> {
-    let head = unpeel_core::integrations::command_head(command);
+    let head = supercli_core::integrations::command_head(command);
     let alias = Path::new(head)
         .file_name()
         .and_then(|value| value.to_str())
@@ -52,7 +52,7 @@ pub fn lifecycle(command: &str) -> Option<&'static RuntimeLifecycle> {
 /// Built-ins win — `app_runtime` never indexes a reserved alias — and this
 /// is presentation data only.
 fn app_tint_for_command(command: &str, spinner: bool) -> Option<u32> {
-    let app = unpeel_core::app_runtime::app_for_launch_command(command)?;
+    let app = supercli_core::app_runtime::app_for_launch_command(command)?;
     let hex = if spinner {
         app.spinner_tint.or(app.tint)
     } else {

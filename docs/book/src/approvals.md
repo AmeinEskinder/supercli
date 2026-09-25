@@ -38,7 +38,7 @@ Every decision lands in `app-sessions/<id>/action-reviews.jsonl`, hash-chained
 (each entry carries the hash of the previous one). Verify the chain with:
 
 ```sh
-unpeel doctor
+supercli doctor
 ```
 
 See [Doctor and troubleshooting](doctor.md) for what to do when the chain

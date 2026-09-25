@@ -47,7 +47,7 @@ use std::time::{Duration, Instant};
         let output = std::process::Command::new("/bin/sh")
             .args(["-c", update])
             .env("PATH", root.path())
-            .env("UNPEEL_HOME", root.path().join("state"))
+            .env("SUPERCLI_HOME", root.path().join("state"))
             .output().unwrap();
         assert!(output.status.success(), "{output:?}");
         assert_eq!(String::from_utf8(output.stdout).unwrap(), "update\n");
@@ -84,11 +84,11 @@ fn claude_hook_script_ignores_grok_compat_session_start() {
     let output = Command::new("bash")
         .arg(&script)
         .env("HOME", hook_env_home("claude-ignore-grok"))
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "unpeel-route-session")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "unpeel-route-session")
         .env("GROK_SESSION_ID", "grok-provider-session")
         .env(
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_HOOK_TRACE_FILE",
             hook_trace_file("claude-ignore-grok"),
         )
         .stdin(Stdio::piped())
@@ -119,12 +119,12 @@ fn claude_hook_script_ignores_grok_compat_session_start() {
 #[test]
 fn stale_tmp_claude_hooks_are_pruned() {
     let current = "/Users/me/.unpeel/hooks/claude-hooks.sh";
-    assert!(!crate::hook_assets::is_stale_unpeel_claude_hook(current, current));
-    assert!(crate::hook_assets::is_stale_unpeel_claude_hook(
+    assert!(!crate::hook_assets::is_stale_supercli_claude_hook(current, current));
+    assert!(crate::hook_assets::is_stale_supercli_claude_hook(
         "/tmp/ur-c8eem28y/hooks/claude-hooks.sh",
         current
     ));
-    assert!(!crate::hook_assets::is_stale_unpeel_claude_hook(
+    assert!(!crate::hook_assets::is_stale_supercli_claude_hook(
         "/usr/bin/echo hello",
         current
     ));
@@ -134,7 +134,7 @@ fn stale_tmp_claude_hooks_are_pruned() {
         crate::hook_assets::build_hook_entry("SessionStart", current),
         json!({"hooks":[{"type":"command","command":"echo keep-me"}]}),
     ];
-    assert!(crate::hook_assets::prune_stale_unpeel_claude_hooks(&mut array, current));
+    assert!(crate::hook_assets::prune_stale_supercli_claude_hooks(&mut array, current));
     assert_eq!(array.len(), 2);
     assert_eq!(array[0]["hooks"][0]["command"].as_str(), Some(current));
     assert_eq!(
@@ -217,8 +217,8 @@ fn claude_hook_script_records_permission_tool_name() {
 
 #[test]
 fn claude_hook_script_posts_to_registered_app_ports() {
-    assert!(CLAUDE_HOOK_SCRIPT.contains("UNPEEL_PORT_REGISTRY_FILE"));
-    assert!(CLAUDE_HOOK_SCRIPT.contains("current_unpeel_ports"));
+    assert!(CLAUDE_HOOK_SCRIPT.contains("SUPERCLI_PORT_REGISTRY_FILE"));
+    assert!(CLAUDE_HOOK_SCRIPT.contains("current_supercli_ports"));
     assert!(CLAUDE_HOOK_SCRIPT.contains("post_hook_payload_to_current_ports"));
     assert!(crate::hook_assets::HOOK_EVENTS.contains(&"StopFailure"));
 }
@@ -261,8 +261,8 @@ fn live_claude_print_emits_start_and_stop() {
     let mut command = Command::new("claude");
     command
         .current_dir(repo_root())
-        .env("UNPEEL_APP_PORT", capture.port.to_string())
-        .env("UNPEEL_SESSION_ID", "live-claude")
+        .env("SUPERCLI_APP_PORT", capture.port.to_string())
+        .env("SUPERCLI_SESSION_ID", "live-claude")
         .arg("-p")
         .arg("--settings")
         .arg(&settings_path)

@@ -2,7 +2,7 @@
 //! run the MCP handshake over JSON-RPC 2.0 on stdio, and expose its tools.
 //!
 //! Security properties enforced here (see `docs/connectors.md`):
-//! - the keychain token is injected as `UNPEEL_CONNECTOR_TOKEN` env; the
+//! - the keychain token is injected as `SUPERCLI_CONNECTOR_TOKEN` env; the
 //!   harness never passes it on the command line;
 //! - the connector's advertised tool list is filtered against the
 //!   manifest's closed `tools.provides` — a connector that starts
@@ -25,7 +25,7 @@ use crate::link::{now_ms, CallTelemetry};
 use crate::manifest::{ConnectorKind, ConnectorManifest};
 
 /// Env var carrying the connector's keychain token to its process.
-pub const CONNECTOR_TOKEN_ENV: &str = "UNPEEL_CONNECTOR_TOKEN";
+pub const CONNECTOR_TOKEN_ENV: &str = "SUPERCLI_CONNECTOR_TOKEN";
 
 #[derive(Debug, Error)]
 pub enum ConnectorError {
@@ -366,7 +366,7 @@ mod tests {
         .unwrap();
         let script = r#"import json, os, sys
 TOOLS = json.loads(sys.argv[1])
-TOKEN = os.environ.get("UNPEEL_CONNECTOR_TOKEN", "")
+TOKEN = os.environ.get("SUPERCLI_CONNECTOR_TOKEN", "")
 def respond(id, result):
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": id, "result": result}) + "\n")
     sys.stdout.flush()

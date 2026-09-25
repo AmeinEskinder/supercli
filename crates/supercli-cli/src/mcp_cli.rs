@@ -1,7 +1,7 @@
 //! The `unpeel` CLI as a full peer of the unified `unpeel` MCP server.
 //!
 //! Every verb here runs the same in-process tool dispatcher the MCP server
-//! uses (`unpeel_core::mcp_host::call_tool`): the same caller identity from
+//! uses (`supercli_core::mcp_host::call_tool`): the same caller identity from
 //! the hosted environment, the same per-call grants, and the same
 //! cooperative write policy with its approval prompt. `unpeel mcp <tool>
 //! <action> key=value…` reaches every action of every domain; the family
@@ -20,7 +20,7 @@ unpeel mcp — every Unpeel MCP action from the shell
 Arguments are key=value pairs; a value that parses as JSON (true, 42,
 [\"down\",\"enter\"], {\"a\":1}) is passed as JSON, anything else as a string.
 --json merges a whole JSON object. The call runs as the session you are in
-(UNPEEL_SESSION_ID or process ancestry), with the same grants and approval
+(SUPERCLI_SESSION_ID or process ancestry), with the same grants and approval
 prompts an agent's MCP call gets. Outside an Unpeel session most actions
 refuse, exactly like the MCP server.
 
@@ -80,7 +80,7 @@ pub fn call(tool: &str, mut arguments: Map<String, Value>, action: Option<&str>)
     if let Some(action) = action {
         arguments.insert("action".into(), Value::String(action.to_string()));
     }
-    match unpeel_core::mcp_host::call_tool(tool, &Value::Object(arguments)) {
+    match supercli_core::mcp_host::call_tool(tool, &Value::Object(arguments)) {
         Ok(text) => {
             println!("{text}");
             0
@@ -112,7 +112,7 @@ pub fn run(args: &[String]) -> i32 {
     let words: Vec<&str> = positional.iter().map(String::as_str).collect();
     match words.as_slice() {
         [] => {
-            for name in unpeel_core::mcp_host::tool_names() {
+            for name in supercli_core::mcp_host::tool_names() {
                 println!("{name}");
             }
             0
@@ -350,7 +350,7 @@ pub fn apps(args: &[String]) -> i32 {
 /// Whether this process runs inside a hosted Unpeel session, in which case
 /// writes to other sessions must go through the cooperative policy.
 pub fn inside_session() -> bool {
-    unpeel_core::mcp_host::self_session_id().is_some()
+    supercli_core::mcp_host::self_session_id().is_some()
 }
 
 /// `unpeel send <id> <text…> [--enter]` from inside a session: the MCP

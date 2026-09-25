@@ -1,4 +1,4 @@
-# First-party Unpeel Apps + App Kit (crates/apps, their own workspace).
+# First-party Supercli Apps + App Kit (crates/apps, their own workspace).
 name: Apps
 
 on:
@@ -42,6 +42,6 @@ jobs:
           set -e
           for slug in $(python3 -c "import json;print(' '.join(json.load(open('protocol/app-registry.json'))))"); do
             if [ -f "crates/apps/$slug/Cargo.toml" ]; then
-              test -x "crates/apps/target/release/unpeel-$slug"
+              test -x "crates/apps/target/release/supercli-$slug"
             fi
           done

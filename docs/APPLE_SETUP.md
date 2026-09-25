@@ -1,6 +1,6 @@
 # Apple setup for the Dioxus mobile launchers
 
-This covers everything needed to get `clients/dioxus/unpeel-mobile` onto a
+This covers everything needed to get `clients/dioxus/supercli-mobile` onto a
 real iPhone, from a Rust checkout to TestFlight. The Rust side is done and
 verified; every step below needs a Mac with Xcode (the Linux VM cannot do
 any of it).
@@ -9,19 +9,19 @@ any of it).
 
 - `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `aarch64-apple-darwin`
   installed via rustup.
-- `unpeel-client`'s full Apple-target check needs the Apple SDK (it pulls
+- `supercli-client`'s full Apple-target check needs the Apple SDK (it pulls
   `ring` through rustls/tungstenite/ureq), so those checks run on macOS
   only — `apple.yml`'s `rust-apple-checks` job.
-- `unpeel-ios-bridge` is ring-free and builds on Linux too:
-  `cargo build -p unpeel-ios-bridge --target aarch64-apple-ios` produces
-  `libunpeel_ios_bridge.a`.
+- `supercli-ios-bridge` is ring-free and builds on Linux too:
+  `cargo build -p supercli-ios-bridge --target aarch64-apple-ios` produces
+  `libsupercli_ios_bridge.a`.
 
 ## 2. Link the objc2 bridge staticlib (Mac, Xcode)
 
-`clients/dioxus/unpeel-ios-bridge/` exposes nine `extern "C"` functions
+`clients/dioxus/supercli-ios-bridge/` exposes nine `extern "C"` functions
 (speech auth/start/stop, notification auth/register/delegate install,
 APNs token/error ingestion, callback install). Link
-`libunpeel_ios_bridge.a` into the shell app target, add the header
+`libsupercli_ios_bridge.a` into the shell app target, add the header
 declarations from `clients/dioxus/native-shell/README.md`, and install
 the callbacks before the webview pump starts. One owner per framework:
 never run the Rust and Swift speech/notification drivers together.
@@ -31,10 +31,10 @@ never run the Rust and Swift speech/notification drivers together.
 `clients/dioxus/native-shell/README.md` is the exact recipe — status:
 **nothing there has been compiled on Xcode**. Drop-in pieces:
 
-- `UnpeelPushBridge.swift` — APNs token acquisition + tap handoff
-- `UnpeelSpeechBridge.swift` — `SFSpeechRecognizer` / `SpeechAnalyzer`
-- `UnpeelReflectBridge.swift` — FoundationModels reflection
-- `Unpeel.entitlements` — Push Notifications capability
+- `SupercliPushBridge.swift` — APNs token acquisition + tap handoff
+- `SupercliSpeechBridge.swift` — `SFSpeechRecognizer` / `SpeechAnalyzer`
+- `SupercliReflectBridge.swift` — FoundationModels reflection
+- `Supercli.entitlements` — Push Notifications capability
 - `InfoPlistAdditions.plist` — background modes, mic/speech usage strings
 
 Minimum deployment iOS 17; iOS 26 unlocks `SpeechAnalyzer` + FoundationModels.
@@ -46,13 +46,13 @@ environment variables — nothing is committed:
 
 | Variable | What it is |
 | --- | --- |
-| `UNPEEL_APPLE_ID` | Apple ID for the Developer account |
-| `UNPEEL_TEAM_ID` | 10-char Developer Team ID |
-| `UNPEEL_APP_IDENTIFIER` | Bundle ID, e.g. `com.unpeel.controller` |
+| `SUPERCLI_APPLE_ID` | Apple ID for the Developer account |
+| `SUPERCLI_TEAM_ID` | 10-char Developer Team ID |
+| `SUPERCLI_APP_IDENTIFIER` | Bundle ID, e.g. `com.supercli.controller` |
 | `APP_STORE_CONNECT_API_KEY_ID` | App Store Connect API key ID |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | Issuer ID |
 | `APP_STORE_CONNECT_API_KEY_BASE64` | Base64 of the .p8 key |
-| `UNPEEL_PROVISIONING_PROFILE_NAME` | Optional; defaults to `match AppStore <bundle id>` |
+| `SUPERCLI_PROVISIONING_PROFILE_NAME` | Optional; defaults to `match AppStore <bundle id>` |
 
 Lanes:
 
@@ -60,8 +60,8 @@ Lanes:
 - `fastlane ios testflight` — release staticlib → `dx bundle` → Xcode
   archive → TestFlight (internal testers; no external distribution).
 
-The existing upstream Swift iOS app uses `UNPEEL_DEVELOPMENT_TEAM` from
-`clients/ios/UnpeelIOS/project.yml`; keep the two apps' bundle IDs and
+The existing upstream Swift iOS app uses `SUPERCLI_DEVELOPMENT_TEAM` from
+`clients/ios/SupercliIOS/project.yml`; keep the two apps' bundle IDs and
 provisioning separate.
 
 ## 5. Device testing

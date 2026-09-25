@@ -16,24 +16,24 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use unpeel_core::controller_api::{
+use supercli_core::controller_api::{
     self, ControllerRequest, HostBootstrapContext, HostRouteContext,
 };
-use unpeel_core::controller_protocol::HostProtocolDescriptor;
-use unpeel_core::direct_connection::{DirectHostConnection, DirectHostEndpoint};
-use unpeel_core::host_connection::{DeliveryState, HostConnectionError};
-use unpeel_core::relay_connection::{
+use supercli_core::controller_protocol::HostProtocolDescriptor;
+use supercli_core::direct_connection::{DirectHostConnection, DirectHostEndpoint};
+use supercli_core::host_connection::{DeliveryState, HostConnectionError};
+use supercli_core::relay_connection::{
     RelayHostConnection, RelayRequestExecutor, RelayTransportError, RelayTransportReply,
 };
-use unpeel_core::remote_session_backend::{
+use supercli_core::remote_session_backend::{
     RemoteBootstrapSnapshot, RemoteCreatedSession, RemoteDesktopResize, RemoteEffectFailure,
     RemoteEffectFailureKind, RemoteOutputPage, RemoteOutputPollOptions, RemotePresetPatch,
     RemoteProjectOrganizationPatch, RemoteSessionBackend, RemoteSessionBackendError,
     RemoteSessionCreateRequest, RemoteSessionMetrics, RemoteSessionSummary, RemoteTextSubmitMode,
     RemoteTranscriptMarkdown, RemoteWorkspaceSettingsPatch,
 };
-use unpeel_core::ssh_connection::{
-    install_unpeel_over_ssh, LocalProcessConnection, SshAskpass, SshConnectionOptions,
+use supercli_core::ssh_connection::{
+    install_supercli_over_ssh, LocalProcessConnection, SshAskpass, SshConnectionOptions,
     SshHostConnection, SshLaunchMode, SshTarget,
 };
 
@@ -453,7 +453,7 @@ impl From<RemoteCreatedSession> for NativeCreatedSession {
 
 enum RegisteredRemoteTransport {
     Ssh { target_uri: String },
-    LocalGateway { unpeel_home: String },
+    LocalGateway { supercli_home: String },
     Direct { endpoint_uri: String },
     Link,
 }
@@ -462,7 +462,7 @@ impl RegisteredRemoteTransport {
     fn target(&self) -> &str {
         match self {
             Self::Ssh { target_uri } => target_uri,
-            Self::LocalGateway { unpeel_home } => unpeel_home,
+            Self::LocalGateway { supercli_home } => supercli_home,
             Self::Direct { endpoint_uri } => endpoint_uri,
             Self::Link => "Unpeel Link",
         }
@@ -838,7 +838,7 @@ fn lock_remote_output_pages(
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NativePlatformAdapterConfig {
-    unpeel_home: String,
+    supercli_home: String,
     #[serde(rename = "instanceID")]
     instance_id: String,
     callback_port: u16,
@@ -898,7 +898,7 @@ fn platform_adapter_control_call(
     request_id: u64,
     body: serde_json::Value,
 ) -> Result<(), String> {
-    let request = unpeel_core::relay_wire::TunnelRequest {
+    let request = supercli_core::relay_wire::TunnelRequest {
         id: request_id,
         method: "POST".into(),
         path: "/_unpeel/platform-adapter".into(),
@@ -907,17 +907,17 @@ fn platform_adapter_control_call(
         content_type: Some("application/json".into()),
         body: serde_json::to_vec(&body).map_err(|error| error.to_string())?,
     };
-    unpeel_core::remote_stdio::write_frame(
+    supercli_core::remote_stdio::write_frame(
         stream,
-        unpeel_core::remote_stdio::FRAME_KIND_REQUEST,
-        &unpeel_core::relay_wire::encode_tunnel_request(&request),
+        supercli_core::remote_stdio::FRAME_KIND_REQUEST,
+        &supercli_core::relay_wire::encode_tunnel_request(&request),
     )?;
-    let frame = unpeel_core::remote_stdio::read_frame(stream)?
+    let frame = supercli_core::remote_stdio::read_frame(stream)?
         .ok_or_else(|| "workspace Host closed the adapter connection".to_string())?;
-    if frame.kind != unpeel_core::remote_stdio::FRAME_KIND_RESPONSE {
+    if frame.kind != supercli_core::remote_stdio::FRAME_KIND_RESPONSE {
         return Err("workspace Host returned an invalid adapter frame".into());
     }
-    let response = unpeel_core::relay_wire::parse_tunnel_response(&frame.payload)?;
+    let response = supercli_core::relay_wire::parse_tunnel_response(&frame.payload)?;
     if response.id != request_id || response.status != 200 {
         return Err("workspace Host rejected the platform adapter".into());
     }
@@ -926,8 +926,8 @@ fn platform_adapter_control_call(
 
 #[cfg(unix)]
 fn run_platform_adapter_client(config: NativePlatformAdapterConfig, stop: Arc<AtomicBool>) {
-    let socket = unpeel_core::remote_stdio::local_host_socket_path(std::path::Path::new(
-        &config.unpeel_home,
+    let socket = supercli_core::remote_stdio::local_host_socket_path(std::path::Path::new(
+        &config.supercli_home,
     ));
     let registration = serde_json::json!({
         "action": "register",
@@ -982,11 +982,11 @@ fn start_platform_adapter_client(
             format!("Platform adapter configuration is invalid: {error}"),
         )
     })?;
-    let home = std::path::Path::new(&config.unpeel_home);
-    if !home.is_absolute() || config.unpeel_home.contains('\0') {
+    let home = std::path::Path::new(&config.supercli_home);
+    if !home.is_absolute() || config.supercli_home.contains('\0') {
         return Err(NativeRemoteError::invalid_input(
             "invalid_platform_adapter_home",
-            "Platform adapter UNPEEL_HOME must be an absolute path",
+            "Platform adapter SUPERCLI_HOME must be an absolute path",
         ));
     }
     if config.callback_port == 0 || config.capabilities.is_empty() {
@@ -1443,7 +1443,7 @@ fn open_ssh_remote_config(config: &[u8]) -> Result<RemoteHandle, NativeRemoteErr
 
 fn install_ssh_remote(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
     let (_, target, options) = parse_native_ssh_config(config)?;
-    let result = install_unpeel_over_ssh(target, options)
+    let result = install_supercli_over_ssh(target, options)
         .map_err(|error| NativeRemoteError::remote("ssh_install_failed", error))?;
     serde_json::to_vec(&serde_json::json!({
         "mode": match result.launch_mode {
@@ -1463,7 +1463,7 @@ fn install_ssh_remote(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NativeLocalGatewayOpenConfig {
     host_program: String,
-    unpeel_home: String,
+    supercli_home: String,
     #[serde(default)]
     require_host_service: bool,
 }
@@ -1471,7 +1471,7 @@ struct NativeLocalGatewayOpenConfig {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NativeLocalHostControlConfig {
-    unpeel_home: String,
+    supercli_home: String,
     request: serde_json::Value,
 }
 
@@ -1488,11 +1488,11 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
             format!("Local Host control configuration is invalid: {error}"),
         )
     })?;
-    let home = std::path::Path::new(&config.unpeel_home);
-    if !home.is_absolute() || config.unpeel_home.contains('\0') || !config.request.is_object() {
+    let home = std::path::Path::new(&config.supercli_home);
+    if !home.is_absolute() || config.supercli_home.contains('\0') || !config.request.is_object() {
         return Err(NativeRemoteError::invalid_input(
             "invalid_local_host_control_config",
-            "Local Host control requires an absolute UNPEEL_HOME and an object request",
+            "Local Host control requires an absolute SUPERCLI_HOME and an object request",
         ));
     }
     #[cfg(not(unix))]
@@ -1505,7 +1505,7 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
     }
     #[cfg(unix)]
     {
-        let socket = unpeel_core::remote_stdio::local_host_socket_path(home);
+        let socket = supercli_core::remote_stdio::local_host_socket_path(home);
         let mut stream = std::os::unix::net::UnixStream::connect(&socket).map_err(|error| {
             NativeRemoteError::remote(
                 "local_host_control_unavailable",
@@ -1520,7 +1520,7 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
                 error.to_string(),
             )
         })?;
-        let request = unpeel_core::relay_wire::TunnelRequest {
+        let request = supercli_core::relay_wire::TunnelRequest {
             id: 1,
             method: "POST".into(),
             path: "/_unpeel/pairing".into(),
@@ -1529,15 +1529,15 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
             content_type: Some("application/json".into()),
             body,
         };
-        unpeel_core::remote_stdio::write_frame(
+        supercli_core::remote_stdio::write_frame(
             &mut stream,
-            unpeel_core::remote_stdio::FRAME_KIND_REQUEST,
-            &unpeel_core::relay_wire::encode_tunnel_request(&request),
+            supercli_core::remote_stdio::FRAME_KIND_REQUEST,
+            &supercli_core::relay_wire::encode_tunnel_request(&request),
         )
         .map_err(|error| {
             NativeRemoteError::remote("local_host_control_failed", error.to_string())
         })?;
-        let frame = unpeel_core::remote_stdio::read_frame(&mut stream)
+        let frame = supercli_core::remote_stdio::read_frame(&mut stream)
             .map_err(|error| {
                 NativeRemoteError::remote("local_host_control_failed", error.to_string())
             })?
@@ -1547,14 +1547,14 @@ fn local_host_control(config: &[u8]) -> Result<Vec<u8>, NativeRemoteError> {
                     "Workspace Host closed the control connection",
                 )
             })?;
-        if frame.kind != unpeel_core::remote_stdio::FRAME_KIND_RESPONSE {
+        if frame.kind != supercli_core::remote_stdio::FRAME_KIND_RESPONSE {
             return Err(NativeRemoteError::remote(
                 "local_host_control_failed",
                 "Workspace Host returned an invalid control frame",
             ));
         }
         let response =
-            unpeel_core::relay_wire::parse_tunnel_response(&frame.payload).map_err(|error| {
+            supercli_core::relay_wire::parse_tunnel_response(&frame.payload).map_err(|error| {
                 NativeRemoteError::remote("local_host_control_failed", error.to_string())
             })?;
         if response.id != 1 {
@@ -1591,9 +1591,9 @@ fn open_local_gateway_remote(config: &[u8]) -> Result<RemoteHandle, NativeRemote
         )
     })?;
     let connection = if config.require_host_service {
-        LocalProcessConnection::local_host_service(&config.host_program, &config.unpeel_home)
+        LocalProcessConnection::local_host_service(&config.host_program, &config.supercli_home)
     } else {
-        LocalProcessConnection::local_gateway(&config.host_program, &config.unpeel_home)
+        LocalProcessConnection::local_gateway(&config.host_program, &config.supercli_home)
     }
     .map_err(|error| {
         NativeRemoteError::invalid_input("invalid_local_gateway_config", error.to_string())
@@ -1601,7 +1601,7 @@ fn open_local_gateway_remote(config: &[u8]) -> Result<RemoteHandle, NativeRemote
     let backend = RemoteSessionBackend::new(Arc::new(connection));
     register_remote_backend(Arc::new(RegisteredCoreBackend {
         transport: RegisteredRemoteTransport::LocalGateway {
-            unpeel_home: config.unpeel_home,
+            supercli_home: config.supercli_home,
         },
         backend,
     }))
@@ -2091,7 +2091,7 @@ struct NativeWorkspaceSettingsWire {
     #[serde(rename = "pluginOrder")]
     plugin_order: Option<Vec<String>>,
     #[serde(rename = "pluginActivation")]
-    plugin_activation: Option<unpeel_core::remote_session_backend::RemotePluginActivationPatch>,
+    plugin_activation: Option<supercli_core::remote_session_backend::RemotePluginActivationPatch>,
     #[serde(rename = "transcriptSettings")]
     transcript_settings: Option<NativeTranscriptSettingsWire>,
     #[serde(rename = "appearanceSettings")]
@@ -2186,7 +2186,7 @@ fn set_remote_workspace_settings(
         plugin_order: wire.plugin_order,
         plugin_activation: wire.plugin_activation,
         transcript_settings: wire.transcript_settings.map(|nested| {
-            unpeel_core::remote_session_backend::RemoteTranscriptSettingsUpdate {
+            supercli_core::remote_session_backend::RemoteTranscriptSettingsUpdate {
                 include_user: nested.include_user,
                 include_assistant: nested.include_assistant,
                 include_reasoning: nested.include_reasoning,
@@ -2198,7 +2198,7 @@ fn set_remote_workspace_settings(
             }
         }),
         appearance_settings: wire.appearance_settings.map(|nested| {
-            unpeel_core::remote_session_backend::RemoteAppearanceSettingsUpdate {
+            supercli_core::remote_session_backend::RemoteAppearanceSettingsUpdate {
                 theme: nested.theme,
                 app_tint: nested.app_tint,
                 background_opacity: nested.background_opacity,
@@ -2209,12 +2209,12 @@ fn set_remote_workspace_settings(
             }
         }),
         notification_settings: wire.notification_settings.map(|nested| {
-            unpeel_core::remote_session_backend::RemoteNotificationSettingsUpdate {
+            supercli_core::remote_session_backend::RemoteNotificationSettingsUpdate {
                 menu_attention_detection: nested.menu_attention_detection,
             }
         }),
         experimental_settings: wire.experimental_settings.map(|nested| {
-            unpeel_core::remote_session_backend::RemoteExperimentalSettingsUpdate {
+            supercli_core::remote_session_backend::RemoteExperimentalSettingsUpdate {
                 worktrees: nested.worktrees,
                 sessions_mcp: nested.sessions_mcp,
                 browser_mcp: nested.browser_mcp,
@@ -2879,7 +2879,7 @@ unsafe fn finish_remote_effect_ffi(
 }
 
 #[no_mangle]
-pub extern "C" fn unpeel_native_bridge_abi_version() -> u32 {
+pub extern "C" fn supercli_native_bridge_abi_version() -> u32 {
     ABI_VERSION
 }
 
@@ -2888,9 +2888,9 @@ pub extern "C" fn unpeel_native_bridge_abi_version() -> u32 {
 /// do, and a negative bridge error on failure. No Rust error allocation
 /// crosses this small startup/scan helper.
 #[no_mangle]
-pub extern "C" fn unpeel_native_bridge_migrate_legacy_pins() -> i32 {
+pub extern "C" fn supercli_native_bridge_migrate_legacy_pins() -> i32 {
     match catch_unwind(AssertUnwindSafe(|| {
-        unpeel_core::session_ops::migrate_legacy_pins_to_groups()
+        supercli_core::session_ops::migrate_legacy_pins_to_groups()
     })) {
         Ok(Ok(count)) => i32::try_from(count).unwrap_or(i32::MAX),
         Ok(Err(_)) => ERROR_INVALID_INPUT,
@@ -2902,7 +2902,7 @@ pub extern "C" fn unpeel_native_bridge_migrate_legacy_pins() -> i32 {
 ///
 /// Return values: `1` handled, `0` unhandled (Swift compatibility fallback),
 /// negative for a bridge error. When output is non-empty, the caller owns it
-/// and must call `unpeel_native_bridge_free` exactly once.
+/// and must call `supercli_native_bridge_free` exactly once.
 ///
 /// The optional context input accepts the generalized route-context envelope;
 /// a legacy top-level bootstrap object remains valid. Its position and C types
@@ -2913,7 +2913,7 @@ pub extern "C" fn unpeel_native_bridge_migrate_legacy_pins() -> i32 {
 /// Every non-empty input must point to a readable allocation of its declared
 /// length. Output pointers must both be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_route(
+pub unsafe extern "C" fn supercli_native_bridge_route(
     request_pointer: *const u8,
     request_length: usize,
     context_pointer: *const u8,
@@ -2964,7 +2964,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_route(
 /// Success returns `1`, writes a non-zero registry handle, and leaves the
 /// output buffer empty. A negative result leaves the handle at zero and may
 /// return an owned, UTF-8 JSON error buffer. Opening validates only the
-/// target; [`unpeel_native_bridge_remote_bootstrap`] performs the first SSH
+/// target; [`supercli_native_bridge_remote_bootstrap`] performs the first SSH
 /// request so the caller can schedule network work away from the main thread.
 ///
 /// # Safety
@@ -2972,7 +2972,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_route(
 /// A non-empty target must point to a readable allocation of its declared
 /// length. All three output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_ssh_open(
     target_pointer: *const u8,
     target_length: usize,
     out_handle: *mut RemoteHandle,
@@ -3018,7 +3018,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_open(
 /// A non-empty config must point to readable UTF-8 JSON. All output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_config_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_ssh_config_open(
     config_pointer: *const u8,
     config_length: usize,
     out_handle: *mut RemoteHandle,
@@ -3064,7 +3064,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_config_open(
 /// A non-empty config must point to readable UTF-8 JSON. Both output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_install(
+pub unsafe extern "C" fn supercli_native_bridge_remote_ssh_install(
     config_pointer: *const u8,
     config_length: usize,
     out_pointer: *mut *mut u8,
@@ -3100,16 +3100,16 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_ssh_install(
 }
 
 /// Open the loopback workspace gateway from UTF-8 JSON containing the
-/// absolute `unpeel-host` program path and the workspace's `UNPEEL_HOME`.
+/// absolute `unpeel-host` program path and the workspace's `SUPERCLI_HOME`.
 /// Opening validates only the configuration; the child is spawned by the
-/// first [`unpeel_native_bridge_remote_bootstrap`].
+/// first [`supercli_native_bridge_remote_bootstrap`].
 ///
 /// # Safety
 ///
 /// A non-empty config must point to readable UTF-8 JSON. All output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_local_gateway_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_local_gateway_open(
     config_pointer: *const u8,
     config_length: usize,
     out_handle: *mut RemoteHandle,
@@ -3155,7 +3155,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_local_gateway_open(
 /// A non-empty config must point to readable UTF-8 JSON. All output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_platform_adapter_start(
+pub unsafe extern "C" fn supercli_native_bridge_platform_adapter_start(
     config_pointer: *const u8,
     config_length: usize,
     out_handle: *mut PlatformAdapterHandle,
@@ -3198,7 +3198,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_platform_adapter_start(
 ///
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_platform_adapter_stop(
+pub unsafe extern "C" fn supercli_native_bridge_platform_adapter_stop(
     handle: PlatformAdapterHandle,
     out_pointer: *mut *mut u8,
     out_length: *mut usize,
@@ -3232,7 +3232,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_platform_adapter_stop(
 /// A non-empty config must point to readable UTF-8 JSON. Both output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_local_host_control(
+pub unsafe extern "C" fn supercli_native_bridge_local_host_control(
     config_pointer: *const u8,
     config_length: usize,
     out_pointer: *mut *mut u8,
@@ -3272,14 +3272,14 @@ pub unsafe extern "C" fn unpeel_native_bridge_local_host_control(
 /// pairing and is suitable only for a trusted LAN or VPN. The bearer remains
 /// inside the Rust transport; it is never included in output or error JSON.
 /// The first network request occurs in
-/// [`unpeel_native_bridge_remote_bootstrap`].
+/// [`supercli_native_bridge_remote_bootstrap`].
 ///
 /// # Safety
 ///
 /// Non-empty inputs must point to readable allocations of their declared
 /// lengths. All three output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_direct_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_direct_open(
     endpoint_pointer: *const u8,
     endpoint_length: usize,
     bearer_pointer: *const u8,
@@ -3326,7 +3326,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_direct_open(
 /// # Safety
 /// All input buffers must be readable and all output pointers writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_direct_open_pinned(
+pub unsafe extern "C" fn supercli_native_bridge_remote_direct_open_pinned(
     endpoint_pointer: *const u8,
     endpoint_length: usize,
     bearer_pointer: *const u8,
@@ -3393,7 +3393,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_direct_open_pinned(
 /// retained object for every callback. All output pointers must be non-null and
 /// writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_relay_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_relay_open(
     bearer_pointer: *const u8,
     bearer_length: usize,
     context: *mut c_void,
@@ -3490,7 +3490,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_relay_open(
 ///
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_bootstrap(
+pub unsafe extern "C" fn supercli_native_bridge_remote_bootstrap(
     handle: RemoteHandle,
     out_pointer: *mut *mut u8,
     out_length: *mut usize,
@@ -3598,9 +3598,9 @@ unsafe fn remote_output_poll_ffi(
 ///
 /// A non-empty Session id must point to readable UTF-8 bytes. Every output
 /// pointer must be non-null and writable. Both returned buffers are freed
-/// independently with [`unpeel_native_bridge_free`].
+/// independently with [`supercli_native_bridge_free`].
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_output_poll(
+pub unsafe extern "C" fn supercli_native_bridge_remote_output_poll(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3634,9 +3634,9 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_output_poll(
 ///
 /// # Safety
 ///
-/// Pointer ownership matches [`unpeel_native_bridge_remote_output_poll`].
+/// Pointer ownership matches [`supercli_native_bridge_remote_output_poll`].
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_output_poll_from(
+pub unsafe extern "C" fn supercli_native_bridge_remote_output_poll_from(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3673,7 +3673,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_output_poll_from(
 ///
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_output_commit(
+pub unsafe extern "C" fn supercli_native_bridge_remote_output_commit(
     handle: RemoteHandle,
     page_handle: RemoteOutputPageHandle,
     out_pointer: *mut *mut u8,
@@ -3708,7 +3708,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_output_commit(
 ///
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_output_discard(
+pub unsafe extern "C" fn supercli_native_bridge_remote_output_discard(
     handle: RemoteHandle,
     page_handle: RemoteOutputPageHandle,
     out_pointer: *mut *mut u8,
@@ -3745,7 +3745,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_output_discard(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_output_reset(
+pub unsafe extern "C" fn supercli_native_bridge_remote_output_reset(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3790,7 +3790,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_output_reset(
 /// Non-empty inputs must point to readable UTF-8 bytes. Both output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_terminal_write(
+pub unsafe extern "C" fn supercli_native_bridge_remote_terminal_write(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3853,7 +3853,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_terminal_write(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_desktop_fit(
+pub unsafe extern "C" fn supercli_native_bridge_remote_desktop_fit(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3889,7 +3889,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_desktop_fit(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_desktop_clear(
+pub unsafe extern "C" fn supercli_native_bridge_remote_desktop_clear(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3923,7 +3923,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_desktop_clear(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_mark_read(
+pub unsafe extern "C" fn supercli_native_bridge_remote_mark_read(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -3993,7 +3993,7 @@ unsafe fn remote_session_effect_ffi(
 /// Non-empty inputs must point to readable UTF-8 bytes. Both output pointers
 /// must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_title_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_title_set(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4031,7 +4031,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_title_set(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_pinned_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_pinned_set(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4059,7 +4059,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_pinned_set(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_notify_when_done_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_notify_when_done_set(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4086,7 +4086,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_notify_when_done_se
 /// A non-empty approval id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_approval_answer(
+pub unsafe extern "C" fn supercli_native_bridge_remote_approval_answer(
     handle: RemoteHandle,
     approval_id_pointer: *const u8,
     approval_id_length: usize,
@@ -4113,7 +4113,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_approval_answer(
 /// Non-empty Session and project ids must point to readable UTF-8 bytes.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_project_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_project_set(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4158,7 +4158,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_project_set(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_archive(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_archive(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4183,7 +4183,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_archive(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restore(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_restore(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4209,7 +4209,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restore(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_stop(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_stop(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4234,7 +4234,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_stop(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_remove(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_remove(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4260,7 +4260,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_remove(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restart(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_restart(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4286,7 +4286,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restart(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restart_agent(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_restart_agent(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4316,7 +4316,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_restart_agent(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_reload(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_reload(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4343,7 +4343,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_reload(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_resume_agent(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_resume_agent(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4372,7 +4372,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_resume_agent(
 /// Non-empty inputs must point to readable bytes of their declared lengths.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_order_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_order_set(
     handle: RemoteHandle,
     project_id_pointer: *const u8,
     project_id_length: usize,
@@ -4420,7 +4420,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_order_set(
 /// A non-empty patch must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_preset_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_preset_set(
     handle: RemoteHandle,
     patch_json_pointer: *const u8,
     patch_json_length: usize,
@@ -4454,7 +4454,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_preset_set(
 /// A non-empty patch must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_workspace_settings_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_workspace_settings_set(
     handle: RemoteHandle,
     patch_json_pointer: *const u8,
     patch_json_length: usize,
@@ -4486,7 +4486,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_workspace_settings_set(
 /// A non-empty body must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_opener_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_opener_set(
     handle: RemoteHandle,
     body_json_pointer: *const u8,
     body_json_length: usize,
@@ -4518,7 +4518,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_opener_set(
 /// A non-empty body must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_integration_install(
+pub unsafe extern "C" fn supercli_native_bridge_remote_integration_install(
     handle: RemoteHandle,
     body_json_pointer: *const u8,
     body_json_length: usize,
@@ -4548,7 +4548,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_integration_install(
 /// A non-empty body must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_app_install(
+pub unsafe extern "C" fn supercli_native_bridge_remote_app_install(
     handle: RemoteHandle,
     body_json_pointer: *const u8,
     body_json_length: usize,
@@ -4581,7 +4581,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_app_install(
 /// A non-empty body must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_app_open(
+pub unsafe extern "C" fn supercli_native_bridge_remote_app_open(
     handle: RemoteHandle,
     body_json_pointer: *const u8,
     body_json_length: usize,
@@ -4616,7 +4616,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_app_open(
 /// Non-empty inputs must point to readable bytes of their declared lengths.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_project_organization_set(
+pub unsafe extern "C" fn supercli_native_bridge_remote_project_organization_set(
     handle: RemoteHandle,
     project_id_pointer: *const u8,
     project_id_length: usize,
@@ -4662,7 +4662,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_project_organization_set(
 /// A non-empty request must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_create(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_create(
     handle: RemoteHandle,
     request_json_pointer: *const u8,
     request_json_length: usize,
@@ -4698,7 +4698,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_create(
 /// A non-empty request must point to readable bytes of its declared length.
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_pairing_invitation(
+pub unsafe extern "C" fn supercli_native_bridge_remote_pairing_invitation(
     handle: RemoteHandle,
     request_json_pointer: *const u8,
     request_json_length: usize,
@@ -4728,7 +4728,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_pairing_invitation(
 /// # Safety
 /// All input buffers must be readable and both output pointers writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_resource(
+pub unsafe extern "C" fn supercli_native_bridge_remote_resource(
     handle: RemoteHandle,
     request_pointer: *const u8,
     request_length: usize,
@@ -4778,7 +4778,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_resource(
 /// (the Session id and content type additionally to UTF-8). Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_upload_attachment(
+pub unsafe extern "C" fn supercli_native_bridge_remote_upload_attachment(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4839,7 +4839,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_upload_attachment(
 /// A non-empty project id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_archived_sessions(
+pub unsafe extern "C" fn supercli_native_bridge_remote_archived_sessions(
     handle: RemoteHandle,
     project_id_pointer: *const u8,
     project_id_length: usize,
@@ -4890,7 +4890,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_archived_sessions(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_transcript_markdown(
+pub unsafe extern "C" fn supercli_native_bridge_remote_transcript_markdown(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4942,7 +4942,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_transcript_markdown(
 /// A non-empty Session id must point to readable UTF-8 bytes. Both output
 /// pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_session_metrics(
+pub unsafe extern "C" fn supercli_native_bridge_remote_session_metrics(
     handle: RemoteHandle,
     session_id_pointer: *const u8,
     session_id_length: usize,
@@ -4987,7 +4987,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_session_metrics(
 /// # Safety
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_plugin_updates(
+pub unsafe extern "C" fn supercli_native_bridge_remote_plugin_updates(
     handle: RemoteHandle,
     out_pointer: *mut *mut u8,
     out_length: *mut usize,
@@ -5027,7 +5027,7 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_plugin_updates(
 ///
 /// Both output pointers must be non-null and writable.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_remote_close(
+pub unsafe extern "C" fn supercli_native_bridge_remote_close(
     handle: RemoteHandle,
     out_pointer: *mut *mut u8,
     out_length: *mut usize,
@@ -5053,14 +5053,14 @@ pub unsafe extern "C" fn unpeel_native_bridge_remote_close(
     }
 }
 
-/// Free a byte buffer returned by any `unpeel_native_bridge_*` function.
+/// Free a byte buffer returned by any `supercli_native_bridge_*` function.
 ///
 /// # Safety
 ///
 /// The pointer/length pair must be an outstanding buffer returned by this
 /// library and must not have been freed before.
 #[no_mangle]
-pub unsafe extern "C" fn unpeel_native_bridge_free(pointer: *mut u8, length: usize) {
+pub unsafe extern "C" fn supercli_native_bridge_free(pointer: *mut u8, length: usize) {
     if pointer.is_null() || length == 0 {
         return;
     }
@@ -5073,11 +5073,11 @@ mod tests {
     #[test]
     fn plugin_activation_is_not_dropped_at_the_ffi_json_boundary() {
         let patch: super::NativeWorkspaceSettingsWire = serde_json::from_slice(
-            br#"{"pluginActivation":{"id":"unpeel.app.markdown","active":false}}"#,
+            br#"{"pluginActivation":{"id":"supercli.app.markdown","active":false}}"#,
         )
         .unwrap();
         let activation = patch.plugin_activation.unwrap();
-        assert_eq!(activation.id, "unpeel.app.markdown");
+        assert_eq!(activation.id, "supercli.app.markdown");
         assert!(!activation.active);
     }
     use super::*;
@@ -5087,7 +5087,7 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::atomic::AtomicBool;
     use std::thread;
-    use unpeel_core::controller_api::{ControllerPrincipal, ControllerResponse};
+    use supercli_core::controller_api::{ControllerPrincipal, ControllerResponse};
 
     #[test]
     fn platform_adapter_config_accepts_the_swift_id_spelling_and_stops_cleanly() {
@@ -5109,7 +5109,7 @@ mod tests {
     #[test]
     fn platform_adapter_reregisters_and_callbacks_succeed_after_worker_restart() {
         use std::os::unix::net::{UnixListener, UnixStream};
-        use unpeel_serve::platform_adapter::{PlatformAdapterHub, PlatformAdapterRegistration};
+        use supercli_serve::platform_adapter::{PlatformAdapterHub, PlatformAdapterRegistration};
 
         struct AdapterGuard(Option<PlatformAdapterHandle>);
         impl Drop for AdapterGuard {
@@ -5182,11 +5182,11 @@ mod tests {
             expected_token: &str,
         ) -> String {
             let mut stream = accept_with_timeout(&listener);
-            let frame = unpeel_core::remote_stdio::read_frame(&mut stream)
+            let frame = supercli_core::remote_stdio::read_frame(&mut stream)
                 .unwrap()
                 .expect("platform adapter registration frame");
-            assert_eq!(frame.kind, unpeel_core::remote_stdio::FRAME_KIND_REQUEST);
-            let request = unpeel_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
+            assert_eq!(frame.kind, supercli_core::remote_stdio::FRAME_KIND_REQUEST);
+            let request = supercli_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
             assert_eq!(request.path, "/_unpeel/platform-adapter");
             let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
             assert_eq!(body["action"], "register");
@@ -5197,10 +5197,10 @@ mod tests {
             let hub = PlatformAdapterHub::default();
             hub.register(generation, registration).unwrap();
             let response =
-                unpeel_core::relay_wire::encode_tunnel_response(request.id, 200, br#"{"ok":true}"#);
-            unpeel_core::remote_stdio::write_frame(
+                supercli_core::relay_wire::encode_tunnel_response(request.id, 200, br#"{"ok":true}"#);
+            supercli_core::remote_stdio::write_frame(
                 &mut stream,
-                unpeel_core::remote_stdio::FRAME_KIND_RESPONSE,
+                supercli_core::remote_stdio::FRAME_KIND_RESPONSE,
                 &response,
             )
             .unwrap();
@@ -5219,7 +5219,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&home).unwrap();
-        let socket = unpeel_core::remote_stdio::local_host_socket_path(&home);
+        let socket = supercli_core::remote_stdio::local_host_socket_path(&home);
         if let Some(parent) = socket.parent() {
             std::fs::create_dir_all(parent).unwrap();
         }
@@ -5290,21 +5290,21 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&home).unwrap();
-        let socket = unpeel_core::remote_stdio::local_host_socket_path(&home);
+        let socket = supercli_core::remote_stdio::local_host_socket_path(&home);
         let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
         let worker = std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
-            let frame = unpeel_core::remote_stdio::read_frame(&mut stream)
+            let frame = supercli_core::remote_stdio::read_frame(&mut stream)
                 .unwrap()
                 .unwrap();
-            assert_eq!(frame.kind, unpeel_core::remote_stdio::FRAME_KIND_REQUEST);
-            let request = unpeel_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
+            assert_eq!(frame.kind, supercli_core::remote_stdio::FRAME_KIND_REQUEST);
+            let request = supercli_core::relay_wire::parse_tunnel_request(&frame.payload).unwrap();
             assert_eq!(request.path, "/_unpeel/pairing");
             assert_eq!(request.body, br#"{"action":"devices"}"#);
-            unpeel_core::remote_stdio::write_frame(
+            supercli_core::remote_stdio::write_frame(
                 &mut stream,
-                unpeel_core::remote_stdio::FRAME_KIND_RESPONSE,
-                &unpeel_core::relay_wire::encode_tunnel_response(
+                supercli_core::remote_stdio::FRAME_KIND_RESPONSE,
+                &supercli_core::relay_wire::encode_tunnel_response(
                     request.id,
                     200,
                     br#"{"devices":[]}"#,
@@ -5925,9 +5925,9 @@ mod tests {
             "projects": [],
             "presets": [],
             "availableApps": [{
-                "id": "unpeel.app.markdown",
+                "id": "supercli.app.markdown",
                 "name": "Markdown",
-                "command": "unpeel-markdown",
+                "command": "supercli-markdown",
                 "mediaTypes": ["text/markdown"],
                 "fileExtensions": {"md": "text/markdown"},
                 "resourceKinds": ["folder"],
@@ -5935,21 +5935,21 @@ mod tests {
                 "installed": true
             }],
             "installedApps": [{
-                "id": "unpeel.app.markdown",
+                "id": "supercli.app.markdown",
                 "name": "Markdown",
-                "command": "unpeel-markdown",
+                "command": "supercli-markdown",
                 "mediaTypes": ["text/markdown"],
                 "fileExtensions": {"md": "text/markdown"},
                 "resourceKinds": ["folder"],
                 "defaultFor": ["file:text/markdown"],
                 "installed": true
             }],
-            "openers": {"file:text/markdown": "app:unpeel.app.markdown"},
+            "openers": {"file:text/markdown": "app:supercli.app.markdown"},
             "appPresentations": {
                 "version": 1,
                 "instances": [{
                     "id": "instance-1",
-                    "app_id": "unpeel.app.markdown",
+                    "app_id": "supercli.app.markdown",
                     "companion_session_id": "companion-1"
                 }],
                 "presentations": [{
@@ -5986,7 +5986,7 @@ mod tests {
         assert!(!pointer.is_null());
         assert!(length > 0);
         let bytes = std::slice::from_raw_parts(pointer, length).to_vec();
-        unpeel_native_bridge_free(pointer, length);
+        supercli_native_bridge_free(pointer, length);
         serde_json::from_slice(&bytes).unwrap()
     }
 
@@ -5996,7 +5996,7 @@ mod tests {
             return Vec::new();
         }
         let bytes = std::slice::from_raw_parts(pointer, length).to_vec();
-        unpeel_native_bridge_free(pointer, length);
+        supercli_native_bridge_free(pointer, length);
         bytes
     }
 
@@ -6009,7 +6009,7 @@ mod tests {
         let mut metadata_length = 0;
         let mut bytes_pointer = ptr::null_mut();
         let mut bytes_length = 0;
-        let code = unpeel_native_bridge_remote_output_poll(
+        let code = supercli_native_bridge_remote_output_poll(
             handle,
             session_id.as_ptr(),
             session_id.len(),
@@ -6041,7 +6041,7 @@ mod tests {
         let mut metadata_length = 0;
         let mut bytes_pointer = ptr::null_mut();
         let mut bytes_length = 0;
-        let code = unpeel_native_bridge_remote_output_poll_from(
+        let code = supercli_native_bridge_remote_output_poll_from(
             handle,
             session_id.as_ptr(),
             session_id.len(),
@@ -6073,14 +6073,14 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = if commit {
-            unpeel_native_bridge_remote_output_commit(
+            supercli_native_bridge_remote_output_commit(
                 handle,
                 page_handle,
                 &mut pointer,
                 &mut length,
             )
         } else {
-            unpeel_native_bridge_remote_output_discard(
+            supercli_native_bridge_remote_output_discard(
                 handle,
                 page_handle,
                 &mut pointer,
@@ -6093,7 +6093,7 @@ mod tests {
     unsafe fn close_ffi(handle: RemoteHandle) -> (i32, *mut u8, usize) {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
-        let code = unpeel_native_bridge_remote_close(handle, &mut pointer, &mut length);
+        let code = supercli_native_bridge_remote_close(handle, &mut pointer, &mut length);
         (code, pointer, length)
     }
 
@@ -6104,7 +6104,7 @@ mod tests {
         let mut handle = 0;
         let mut pointer = ptr::null_mut();
         let mut length = 0;
-        let code = unpeel_native_bridge_remote_direct_open(
+        let code = supercli_native_bridge_remote_direct_open(
             endpoint.as_ptr(),
             endpoint.len(),
             bearer.as_ptr(),
@@ -6208,7 +6208,7 @@ mod tests {
         let mut handle = 0;
         let mut pointer = ptr::null_mut();
         let mut length = 0;
-        let code = unpeel_native_bridge_remote_relay_open(
+        let code = supercli_native_bridge_remote_relay_open(
             bearer.as_ptr(),
             bearer.len(),
             context,
@@ -6377,7 +6377,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_route(
+            supercli_native_bridge_route(
                 request.as_ptr(),
                 request.len(),
                 ptr::null(),
@@ -6394,7 +6394,7 @@ mod tests {
             serde_json::from_slice::<Value>(response).unwrap()["status"],
             400
         );
-        unsafe { unpeel_native_bridge_free(pointer, length) };
+        unsafe { supercli_native_bridge_free(pointer, length) };
     }
 
     #[test]
@@ -6404,7 +6404,7 @@ mod tests {
         let mut pointer = std::ptr::dangling_mut::<u8>();
         let mut length = usize::MAX;
         let code = unsafe {
-            unpeel_native_bridge_remote_ssh_open(
+            supercli_native_bridge_remote_ssh_open(
                 target.as_ptr(),
                 target.len(),
                 &mut handle,
@@ -6441,7 +6441,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_ssh_open(
+            supercli_native_bridge_remote_ssh_open(
                 target.as_ptr(),
                 target.len(),
                 &mut handle,
@@ -6471,7 +6471,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_ssh_config_open(
+            supercli_native_bridge_remote_ssh_config_open(
                 config.as_ptr(),
                 config.len(),
                 &mut handle,
@@ -6490,13 +6490,13 @@ mod tests {
     fn remote_local_gateway_open_validates_paths_and_registers_lazily() {
         let config = br#"{
             "hostProgram":"/bundle/Contents/MacOS/unpeel-host",
-            "unpeelHome":"/homes/.unpeel/profiles/writing"
+            "unpeelHome":"/homes/.supercli/profiles/writing"
         }"#;
         let mut handle = 0;
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_local_gateway_open(
+            supercli_native_bridge_remote_local_gateway_open(
                 config.as_ptr(),
                 config.len(),
                 &mut handle,
@@ -6514,14 +6514,14 @@ mod tests {
 
         let required = br#"{
             "hostProgram":"/bundle/Contents/MacOS/unpeel-host",
-            "unpeelHome":"/homes/.unpeel/profiles/writing",
+            "unpeelHome":"/homes/.supercli/profiles/writing",
             "requireHostService":true
         }"#;
         let mut required_handle = 0;
         let mut required_pointer = ptr::null_mut();
         let mut required_length = 0;
         let required_code = unsafe {
-            unpeel_native_bridge_remote_local_gateway_open(
+            supercli_native_bridge_remote_local_gateway_open(
                 required.as_ptr(),
                 required.len(),
                 &mut required_handle,
@@ -6544,7 +6544,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let code = unsafe {
-                unpeel_native_bridge_remote_local_gateway_open(
+                supercli_native_bridge_remote_local_gateway_open(
                     config.as_ptr(),
                     config.len(),
                     &mut handle,
@@ -6758,7 +6758,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code =
-            unsafe { unpeel_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
+            unsafe { supercli_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
         assert_eq!(code, RESULT_OK);
         let snapshot = unsafe { take_owned_json(pointer, length) };
         assert_eq!(snapshot["macID"], "host-1");
@@ -6801,7 +6801,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code =
-            unsafe { unpeel_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
+            unsafe { supercli_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
         assert_eq!(code, RESULT_HANDLED);
 
         // The allocation is independent of the registry entry and remains
@@ -6825,10 +6825,10 @@ mod tests {
         assert_eq!(snapshot["paneGroups"][0]["sessionIDs"][1], "session-2");
         assert!(snapshot["sessions"][0]["providerID"].is_null());
         assert!(snapshot["hostProtocol"]["capabilities"].is_array());
-        assert_eq!(snapshot["availableApps"][0]["id"], "unpeel.app.markdown");
+        assert_eq!(snapshot["availableApps"][0]["id"], "supercli.app.markdown");
         assert_eq!(
             snapshot["openers"]["file:text/markdown"],
-            "app:unpeel.app.markdown"
+            "app:supercli.app.markdown"
         );
         assert_eq!(
             snapshot["appPresentations"]["instances"][0]["companion_session_id"],
@@ -6849,7 +6849,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code =
-            unsafe { unpeel_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
+            unsafe { supercli_native_bridge_remote_bootstrap(handle, &mut pointer, &mut length) };
         assert_eq!(code, ERROR_PANIC);
         let error = unsafe { take_owned_json(pointer, length) };
         assert_eq!(error["code"], "remote_bridge_panicked");
@@ -7004,7 +7004,7 @@ mod tests {
         let mut length = 0;
         let session_id = b"s1";
         let code = unsafe {
-            unpeel_native_bridge_remote_output_reset(
+            supercli_native_bridge_remote_output_reset(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7144,7 +7144,7 @@ mod tests {
         let mut length = 0;
 
         let code = unsafe {
-            unpeel_native_bridge_remote_terminal_write(
+            supercli_native_bridge_remote_terminal_write(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7160,7 +7160,7 @@ mod tests {
         pointer = ptr::null_mut();
         length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_desktop_fit(
+            supercli_native_bridge_remote_desktop_fit(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7176,7 +7176,7 @@ mod tests {
         pointer = ptr::null_mut();
         length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_desktop_clear(
+            supercli_native_bridge_remote_desktop_clear(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7190,7 +7190,7 @@ mod tests {
         pointer = ptr::null_mut();
         length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_mark_read(
+            supercli_native_bridge_remote_mark_read(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7215,8 +7215,8 @@ mod tests {
         unsafe {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let opener = br#"{"selector":"file:text/markdown","opener":"app:unpeel.app.markdown"}"#;
-            let code = unpeel_native_bridge_remote_opener_set(
+            let opener = br#"{"selector":"file:text/markdown","opener":"app:supercli.app.markdown"}"#;
+            let code = supercli_native_bridge_remote_opener_set(
                 handle,
                 opener.as_ptr(),
                 opener.len(),
@@ -7228,8 +7228,8 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let install = br#"{"appID":"unpeel.app.markdown"}"#;
-            let code = unpeel_native_bridge_remote_app_install(
+            let install = br#"{"appID":"supercli.app.markdown"}"#;
+            let code = supercli_native_bridge_remote_app_install(
                 handle,
                 install.as_ptr(),
                 install.len(),
@@ -7241,8 +7241,8 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let open = br#"{"callerSessionID":"s1","appID":"unpeel.app.markdown","resourceKind":"file","mediaType":"text/markdown","resourceID":"/tmp/hello world.md","requestID":"open-1"}"#;
-            let code = unpeel_native_bridge_remote_app_open(
+            let open = br#"{"callerSessionID":"s1","appID":"supercli.app.markdown","resourceKind":"file","mediaType":"text/markdown","resourceID":"/tmp/hello world.md","requestID":"open-1"}"#;
+            let code = supercli_native_bridge_remote_app_open(
                 handle,
                 open.as_ptr(),
                 open.len(),
@@ -7256,9 +7256,9 @@ mod tests {
         assert_eq!(
             *controls.effects.lock().unwrap(),
             vec![
-                "opener:file:text/markdown:app:unpeel.app.markdown",
-                "app-install:unpeel.app.markdown",
-                "app-open:s1:unpeel.app.markdown:file:text/markdown:/tmp/hello world.md:open-1",
+                "opener:file:text/markdown:app:supercli.app.markdown",
+                "app-install:supercli.app.markdown",
+                "app-open:s1:supercli.app.markdown:file:text/markdown:/tmp/hello world.md:open-1",
             ]
         );
         assert_eq!(unsafe { close_ffi(handle) }.0, RESULT_OK);
@@ -7274,7 +7274,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let title = b"Renamed";
-            let code = unpeel_native_bridge_remote_session_title_set(
+            let code = supercli_native_bridge_remote_session_title_set(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7288,7 +7288,7 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let code = unpeel_native_bridge_remote_session_pinned_set(
+            let code = supercli_native_bridge_remote_session_pinned_set(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7301,7 +7301,7 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let code = unpeel_native_bridge_remote_session_notify_when_done_set(
+            let code = supercli_native_bridge_remote_session_notify_when_done_set(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7313,7 +7313,7 @@ mod tests {
             assert_eq!(take_owned_json(pointer, length)["requestID"], 51);
 
             for verb_ffi in [
-                unpeel_native_bridge_remote_session_archive
+                supercli_native_bridge_remote_session_archive
                     as unsafe extern "C" fn(
                         RemoteHandle,
                         *const u8,
@@ -7321,12 +7321,12 @@ mod tests {
                         *mut *mut u8,
                         *mut usize,
                     ) -> i32,
-                unpeel_native_bridge_remote_session_restore,
-                unpeel_native_bridge_remote_session_stop,
-                unpeel_native_bridge_remote_session_remove,
-                unpeel_native_bridge_remote_session_restart,
-                unpeel_native_bridge_remote_session_restart_agent,
-                unpeel_native_bridge_remote_session_resume_agent,
+                supercli_native_bridge_remote_session_restore,
+                supercli_native_bridge_remote_session_stop,
+                supercli_native_bridge_remote_session_remove,
+                supercli_native_bridge_remote_session_restart,
+                supercli_native_bridge_remote_session_restart_agent,
+                supercli_native_bridge_remote_session_resume_agent,
             ] {
                 let mut pointer = ptr::null_mut();
                 let mut length = 0;
@@ -7344,7 +7344,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let ids = br#"["s2","s1"]"#;
-            let code = unpeel_native_bridge_remote_session_order_set(
+            let code = supercli_native_bridge_remote_session_order_set(
                 handle,
                 project_id.as_ptr(),
                 project_id.len(),
@@ -7359,7 +7359,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let patch = br#"{"sortOrder":1,"dateSorted":false}"#;
-            let code = unpeel_native_bridge_remote_project_organization_set(
+            let code = supercli_native_bridge_remote_project_organization_set(
                 handle,
                 project_id.as_ptr(),
                 project_id.len(),
@@ -7374,7 +7374,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let create = br#"{"projectID":"project-1","presetID":"preset-1","initialText":"hi","initialTextSubmitMode":"pasteAndSubmit"}"#;
-            let code = unpeel_native_bridge_remote_session_create(
+            let code = supercli_native_bridge_remote_session_create(
                 handle,
                 create.as_ptr(),
                 create.len(),
@@ -7390,7 +7390,7 @@ mod tests {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
             let invitation = br#"{"action":"create","endpoint":"http://controller:1234/mobile/pairing-proxy/INVITE"}"#;
-            let code = unpeel_native_bridge_remote_pairing_invitation(
+            let code = supercli_native_bridge_remote_pairing_invitation(
                 handle,
                 invitation.as_ptr(),
                 invitation.len(),
@@ -7403,7 +7403,7 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let code = unpeel_native_bridge_remote_archived_sessions(
+            let code = supercli_native_bridge_remote_archived_sessions(
                 handle,
                 project_id.as_ptr(),
                 project_id.len(),
@@ -7417,7 +7417,7 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let code = unpeel_native_bridge_remote_transcript_markdown(
+            let code = supercli_native_bridge_remote_transcript_markdown(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7432,7 +7432,7 @@ mod tests {
 
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let code = unpeel_native_bridge_remote_session_metrics(
+            let code = supercli_native_bridge_remote_session_metrics(
                 handle,
                 session_id.as_ptr(),
                 session_id.len(),
@@ -7479,7 +7479,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_session_restart(
+            supercli_native_bridge_remote_session_restart(
                 handle,
                 b"s1".as_ptr(),
                 2,
@@ -7500,7 +7500,7 @@ mod tests {
         let mut pointer = ptr::null_mut();
         let mut length = 0;
         let code = unsafe {
-            unpeel_native_bridge_remote_terminal_write(
+            supercli_native_bridge_remote_terminal_write(
                 handle,
                 b"s1".as_ptr(),
                 2,
@@ -7524,7 +7524,7 @@ mod tests {
         length = 0;
         let invalid_utf8 = [0xff];
         let code = unsafe {
-            unpeel_native_bridge_remote_terminal_write(
+            supercli_native_bridge_remote_terminal_write(
                 handle,
                 invalid_utf8.as_ptr(),
                 invalid_utf8.len(),

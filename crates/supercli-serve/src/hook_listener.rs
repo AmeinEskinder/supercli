@@ -1,6 +1,6 @@
 //! Live hook-event ingestion, the TUI's half of the multi-instance hook
 //! broadcast: provider hook scripts POST every lifecycle event to every port
-//! in `~/.unpeel/app-ports`, so the TUI registers its own port there and runs
+//! in `~/.supercli/app-ports`, so the TUI registers its own port there and runs
 //! the same minimal HTTP contract as the native `HookServer.swift` — 200
 //! `{"ok":true}` for sessions whose manifest exists in this home, 404
 //! otherwise (foreign instances must not swallow events).
@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 
 use std::sync::Arc;
 
-use unpeel_core::app_paths;
+use supercli_core::app_paths;
 
 use crate::approvals::{
     already_granted, connector_grant_exists, persist_connector_grant, persist_grant, ApprovalHub,
@@ -76,7 +76,7 @@ impl HookEventMessage {
 /// Human-readable name for an approval dialog: the Session's label when its
 /// manifest is readable, else the short id. The raw ids stay in the body.
 fn session_display_name(session_id: &str) -> String {
-    let label = unpeel_core::session_host::load_manifest(session_id)
+    let label = supercli_core::session_host::load_manifest(session_id)
         .map(|manifest| manifest.session.label.trim().to_owned())
         .unwrap_or_default();
     if label.is_empty() {
@@ -117,7 +117,7 @@ fn app_alert_from_json(json: &serde_json::Value) -> Result<AppAlertMessage, ()> 
 
 fn runtime_generation_from_json(json: &serde_json::Value) -> Option<u64> {
     let value = json
-        .get("unpeel_runtime_generation")
+        .get("supercli_runtime_generation")
         .or_else(|| json.get("unpeelRuntimeGeneration"))?;
     value.as_u64()
 }
@@ -128,7 +128,7 @@ pub struct HookListener {
 }
 
 fn registry_path() -> std::path::PathBuf {
-    app_paths::unpeel_home().join("app-ports")
+    app_paths::supercli_home().join("app-ports")
 }
 
 fn read_registry_at(path: &std::path::Path) -> Vec<u16> {
@@ -242,7 +242,7 @@ fn handle_mcp(
     body: &[u8],
     hub: &Arc<ApprovalHub>,
 ) {
-    if !unpeel_core::mcp_auth::verify_auth(headers.get("x-unpeel-auth").map(String::as_str)) {
+    if !supercli_core::mcp_auth::verify_auth(headers.get("x-unpeel-auth").map(String::as_str)) {
         respond(stream, "401 Unauthorized", r#"{"error":"unauthorized"}"#);
         return;
     }
@@ -412,7 +412,7 @@ fn handle_app_theme(
     body: &[u8],
     overlay: &crate::overlay::SharedNativeOverlay,
 ) {
-    let Some(manifest) = unpeel_core::session_host::load_manifest(session_id) else {
+    let Some(manifest) = supercli_core::session_host::load_manifest(session_id) else {
         respond(stream, "404 Not Found", r#"{"error":"unknown session"}"#);
         return;
     };
@@ -440,7 +440,7 @@ fn handle_app_theme(
         // Headless Hosts have no native UserDefaults overlay, but may opt
         // into the same workspace-level contract through their environment.
         .or_else(|| {
-            std::env::var("UNPEEL_APP_ACCENT")
+            std::env::var("SUPERCLI_APP_ACCENT")
                 .ok()
                 .as_deref()
                 .and_then(normalized_hex_accent)
@@ -457,7 +457,7 @@ fn handle_app_context(
     session_id: &str,
     overlay: &crate::overlay::SharedNativeOverlay,
 ) {
-    let Some(manifest) = unpeel_core::session_host::load_manifest(session_id) else {
+    let Some(manifest) = supercli_core::session_host::load_manifest(session_id) else {
         respond(stream, "404 Not Found", r#"{"error":"unknown session"}"#);
         return;
     };
@@ -475,7 +475,7 @@ fn handle_open_in_editor(
     body: &[u8],
     platform_adapters: &crate::platform_adapter::PlatformAdapterHub,
 ) {
-    let Some(manifest) = unpeel_core::session_host::load_manifest(session_id) else {
+    let Some(manifest) = supercli_core::session_host::load_manifest(session_id) else {
         respond(
             stream,
             "404 Not Found",
@@ -483,7 +483,7 @@ fn handle_open_in_editor(
         );
         return;
     };
-    if manifest.state != unpeel_core::session_host::HostedSessionState::Running
+    if manifest.state != supercli_core::session_host::HostedSessionState::Running
         || manifest.active_app.is_none()
     {
         respond(
@@ -579,7 +579,7 @@ fn handle_connection(
     // The cross-frontend change ping: another Unpeel wrote shared state and
     // is telling us to re-read it now rather than on our next poll. Carries
     // no session id.
-    let is_state = path == unpeel_core::state_bus::ROUTE;
+    let is_state = path == supercli_core::state_bus::ROUTE;
     let is_app_notify = path.starts_with("/notify/");
     let is_app_theme = path.starts_with("/app-theme/");
     let is_app_context = path.starts_with("/app-context/");
@@ -679,7 +679,7 @@ fn handle_connection(
     };
 
     if is_app_notify {
-        let Some(manifest) = unpeel_core::session_host::load_manifest(&session_id) else {
+        let Some(manifest) = supercli_core::session_host::load_manifest(&session_id) else {
             respond(
                 &mut stream,
                 "404 Not Found",
@@ -689,7 +689,7 @@ fn handle_connection(
         };
         // Alerts are an Unpeel App surface, not a general-purpose local
         // notification socket. A stopped or non-App session cannot use it.
-        if manifest.state != unpeel_core::session_host::HostedSessionState::Running
+        if manifest.state != supercli_core::session_host::HostedSessionState::Running
             || manifest.active_app.is_none()
         {
             respond(
@@ -736,7 +736,7 @@ fn handle_connection(
 
     let runtime_generation = runtime_generation_from_json(&json);
 
-    let Some(manifest) = unpeel_core::session_host::load_manifest(&session_id) else {
+    let Some(manifest) = supercli_core::session_host::load_manifest(&session_id) else {
         respond(
             &mut stream,
             "404 Not Found",
@@ -789,10 +789,10 @@ fn handle_connection(
     if provider_id.is_some() || transcript.is_some() {
         // Record which runtime is speaking, from the Host's foreground
         // observation: a hand-typed agent has no launch command naming it.
-        let runtime = unpeel_core::session_host::load_manifest(&session_id).and_then(|manifest| {
-            unpeel_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
+        let runtime = supercli_core::session_host::load_manifest(&session_id).and_then(|manifest| {
+            supercli_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
         });
-        let changed = unpeel_core::session_ops::set_provider_session_with_runtime(
+        let changed = supercli_core::session_ops::set_provider_session_with_runtime(
             &session_id,
             provider_id.as_deref(),
             transcript.as_deref(),
@@ -806,7 +806,7 @@ fn handle_connection(
             // storage and must not stall the hook listener.
             let session_id = session_id.clone();
             std::thread::spawn(move || {
-                let _ = unpeel_core::transcripts::auto_title_session_from_transcript(&session_id);
+                let _ = supercli_core::transcripts::auto_title_session_from_transcript(&session_id);
             });
         }
     }
@@ -866,7 +866,7 @@ pub fn start_with_platform(
                         .map(|s| s.to_string())
                         .or_else(|| payload.downcast_ref::<String>().cloned())
                         .unwrap_or_else(|| "<non-string panic>".to_string());
-                    unpeel_core::json_log::error_fields(
+                    supercli_core::json_log::error_fields(
                         "hook listener connection panicked",
                         serde_json::json!({"panic": msg}),
                     );
@@ -908,9 +908,9 @@ mod tests {
         String::from_utf8_lossy(&response).into_owned()
     }
 
-    /// Private UNPEEL_HOME + the real MCP auth token for this process.
-    /// Serialized on APP_STATE_LOCK with the other UNPEEL_HOME-mutating
-    /// tests. The caller must restore UNPEEL_HOME with `restore_home`
+    /// Private SUPERCLI_HOME + the real MCP auth token for this process.
+    /// Serialized on APP_STATE_LOCK with the other SUPERCLI_HOME-mutating
+    /// tests. The caller must restore SUPERCLI_HOME with `restore_home`
     /// before the guard drops.
     fn mcp_test_token() -> (
         std::sync::MutexGuard<'static, ()>,
@@ -922,16 +922,16 @@ mod tests {
             std::env::temp_dir().join(format!("unpeel-hook-mcp-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let prev = std::env::var_os("UNPEEL_HOME");
-        std::env::set_var("UNPEEL_HOME", &dir);
-        let token = unpeel_core::mcp_auth::ensure_auth_token().expect("mcp auth token");
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        std::env::set_var("SUPERCLI_HOME", &dir);
+        let token = supercli_core::mcp_auth::ensure_auth_token().expect("mcp auth token");
         (guard, token, prev)
     }
 
     fn restore_home(prev: Option<std::ffi::OsString>) {
         match &prev {
-            Some(p) => std::env::set_var("UNPEEL_HOME", p),
-            None => std::env::remove_var("UNPEEL_HOME"),
+            Some(p) => std::env::set_var("SUPERCLI_HOME", p),
+            None => std::env::remove_var("SUPERCLI_HOME"),
         }
     }
 
@@ -1032,7 +1032,7 @@ mod tests {
     #[test]
     fn parses_numeric_runtime_generation_and_legacy_shapes() {
         assert_eq!(
-            runtime_generation_from_json(&serde_json::json!({"unpeel_runtime_generation": 7})),
+            runtime_generation_from_json(&serde_json::json!({"supercli_runtime_generation": 7})),
             Some(7)
         );
         assert_eq!(
@@ -1040,7 +1040,7 @@ mod tests {
             Some(8)
         );
         assert_eq!(
-            runtime_generation_from_json(&serde_json::json!({"unpeel_runtime_generation": "8"})),
+            runtime_generation_from_json(&serde_json::json!({"supercli_runtime_generation": "8"})),
             None
         );
         assert_eq!(

@@ -5,9 +5,9 @@
 //!
 //! The process is spawned by provider CLIs (Claude via `--mcp-config`, Codex via
 //! the wrapper's `-c mcp_servers...` overrides) and inherits the session env, so
-//! `UNPEEL_SESSION_ID` identifies the calling session without any handshake.
+//! `SUPERCLI_SESSION_ID` identifies the calling session without any handshake.
 //! Session control goes directly through the per-session control socket
-//! (`~/.unpeel/app-sessions/<id>/session.sock`); no running desktop app is
+//! (`~/.supercli/app-sessions/<id>/session.sock`); no running desktop app is
 //! required beyond the hosts themselves.
 
 use crate::session_host::{self, HostedSessionManifest, HostedSessionState, SessionHostCommand};
@@ -120,7 +120,7 @@ pub(crate) const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
 // Renamed from `unpeel-mcp` 2026-07-25; the old name survives only as pruned
 // legacy config entries and the pre-rename config-file names (kept stable so
 // restart commands recorded by older sessions keep resolving).
-const SERVER_NAME: &str = "unpeel";
+const SERVER_NAME: &str = "supercli";
 const KEY_DELAY_DEFAULT_MS: u64 = 60;
 const KEY_DELAY_MAX_MS: u64 = 1_000;
 const MAX_KEYS_PER_CALL: usize = 40;
@@ -586,7 +586,7 @@ fn initialize_result(params: &Value) -> Value {
     the open receipt does not prove panel side, geometry, focus, or current visibility; resolve \
     a later caller-relative layout snapshot with sessions current or apps context. 'skills' discovers \
     and reads narrowly scoped guidance by stable namespaced id. A token like \
-    [mcp:unpeel.app.<id> ...] in your input is a reference from that app — use the skill id \
+    [mcp:supercli.app.<id> ...] in your input is a reference from that app — use the skill id \
     returned by apps to learn how to act on it.",
     })
 }
@@ -1133,7 +1133,7 @@ fn tool_apps_open(args: &Value) -> Result<String, String> {
 /// launched with (the same worker, seen from the caller's environment).
 fn companion_hook_port() -> Option<u16> {
     serve_hook_port().or_else(|| {
-        std::env::var("UNPEEL_APP_PORT")
+        std::env::var("SUPERCLI_APP_PORT")
             .ok()
             .and_then(|value| value.trim().parse().ok())
             .filter(|port| *port != 0)
@@ -1233,7 +1233,7 @@ fn worktree_access_enabled(state: &Value) -> bool {
 }
 
 fn require_worktree_access() -> Result<(), String> {
-    let path = crate::app_paths::unpeel_home().join("app-state.json");
+    let path = crate::app_paths::supercli_home().join("app-state.json");
     let state = std::fs::read(&path)
         .ok()
         .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
@@ -1322,7 +1322,7 @@ struct McpSecurity {
 /// can never wipe the project list. An unparseable grant entry is dropped,
 /// which falls back to the default grant rather than erroring.
 fn load_security() -> McpSecurity {
-    let path = crate::app_paths::unpeel_home().join("app-state.json");
+    let path = crate::app_paths::supercli_home().join("app-state.json");
     let value = std::fs::read(&path)
         .ok()
         .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
@@ -1496,7 +1496,7 @@ impl McpSecurity {
 }
 
 fn known_project_ids() -> HashSet<String> {
-    let path = crate::app_paths::unpeel_home().join("app-state.json");
+    let path = crate::app_paths::supercli_home().join("app-state.json");
     std::fs::read(&path)
         .ok()
         .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
@@ -2548,7 +2548,7 @@ fn pane_neighbor_context_json(
         .as_ref()
         .and_then(|manifest| manifest.session.role.as_deref());
     let kind = if app_binding.is_some() || runtime_app.is_some() || role == Some("app-panel") {
-        "unpeel_app"
+        "supercli_app"
     } else if runtime_id.is_some() {
         "agent"
     } else if manifest.is_some() {
@@ -2595,7 +2595,7 @@ fn pane_neighbor_context_json(
     // the neighbor entry only while the pane is currently branded as an App,
     // so a marker left behind by an exited App never speaks for the shell
     // that remains. Read fresh per call; app-authored data, not instructions.
-    let app_context = if kind == "unpeel_app" {
+    let app_context = if kind == "supercli_app" {
         session_host::read_app_context_marker(session_id).unwrap_or(Value::Null)
     } else {
         Value::Null
@@ -3570,7 +3570,7 @@ pub(crate) fn app_request_with_timeout(
     let ports = candidate_app_ports();
     if ports.is_empty() {
         return Err(
-            "Unpeel desktop app is not reachable (no UNPEEL_APP_PORT and no ~/.unpeel/app-ports)"
+            "Unpeel desktop app is not reachable (no SUPERCLI_APP_PORT and no ~/.supercli/app-ports)"
                 .into(),
         );
     }
@@ -3708,7 +3708,7 @@ fn candidate_app_ports() -> Vec<u16> {
     if let Some(port) = serve_hook_port() {
         ports.push(port);
     }
-    if let Ok(value) = std::env::var("UNPEEL_APP_PORT") {
+    if let Ok(value) = std::env::var("SUPERCLI_APP_PORT") {
         let trimmed = value.trim();
         if !trimmed.is_empty() && !trimmed.starts_with("${") {
             if let Ok(port) = trimmed.parse() {
@@ -3718,7 +3718,7 @@ fn candidate_app_ports() -> Vec<u16> {
     }
     // The native app registers in the app-ports broadcast registry; try the
     // newest registration first.
-    if let Ok(raw) = std::fs::read_to_string(crate::app_paths::unpeel_home().join("app-ports")) {
+    if let Ok(raw) = std::fs::read_to_string(crate::app_paths::supercli_home().join("app-ports")) {
         for line in raw.lines().rev() {
             if let Ok(port) = line.trim().parse() {
                 if !ports.contains(&port) {
@@ -3732,7 +3732,7 @@ fn candidate_app_ports() -> Vec<u16> {
 
 /// Hook port of the workspace Host worker, from its `serve.json`.
 fn serve_hook_port() -> Option<u16> {
-    let raw = std::fs::read_to_string(crate::app_paths::unpeel_home().join("serve.json")).ok()?;
+    let raw = std::fs::read_to_string(crate::app_paths::supercli_home().join("serve.json")).ok()?;
     let value: Value = serde_json::from_str(&raw).ok()?;
     let port = value.get("hookPort")?.as_u64()?;
     u16::try_from(port).ok().filter(|port| *port != 0)
@@ -3882,9 +3882,9 @@ pub fn self_session_id() -> Option<String> {
 }
 
 fn env_session_id() -> Option<String> {
-    let value = std::env::var("UNPEEL_SESSION_ID").ok()?;
+    let value = std::env::var("SUPERCLI_SESSION_ID").ok()?;
     let trimmed = value.trim();
-    // An unexpanded "${UNPEEL_SESSION_ID}" literal means the launcher did not
+    // An unexpanded "${SUPERCLI_SESSION_ID}" literal means the launcher did not
     // substitute the variable; treat it as unknown rather than a real id.
     if trimmed.is_empty() || trimmed.starts_with("${") {
         return None;
@@ -3893,7 +3893,7 @@ fn env_session_id() -> Option<String> {
 }
 
 /// Some launchers (cursor-agent) spawn MCP stdio servers with a stripped
-/// environment, so `UNPEEL_SESSION_ID` never reaches this process even though
+/// environment, so `SUPERCLI_SESSION_ID` never reaches this process even though
 /// the agent itself runs inside a hosted session. Recover the identity from
 /// process ancestry instead: the hosted login shell (`manifest.pid`) is an
 /// ancestor of every process the session's agent starts. Only a
@@ -4081,7 +4081,7 @@ pub(crate) fn strip_ansi(text: &str) -> String {
 }
 
 fn trace(message: &str) {
-    let path = crate::app_paths::unpeel_home()
+    let path = crate::app_paths::supercli_home()
         .join("hooks")
         .join("trace.log");
     if let Some(parent) = path.parent() {
@@ -4166,7 +4166,7 @@ mod tests {
         assert!(!apps_action_names().contains(&"install"));
         let error = run_apps_action(
             "install",
-            &serde_json::json!({ "app": "unpeel.app.markdown" }),
+            &serde_json::json!({ "app": "supercli.app.markdown" }),
         )
         .unwrap_err();
         assert!(
@@ -4293,7 +4293,7 @@ mod tests {
             caller_session_id: "caller".into(),
             companion_session_id: "design-session".into(),
             instance_id: "instance".into(),
-            app_id: "unpeel.app.design".into(),
+            app_id: "supercli.app.design".into(),
             view_id: "main".into(),
             target: crate::app_presentations::AppPresentationTarget::Panel,
             reveal_revision: 1,
@@ -4305,9 +4305,9 @@ mod tests {
             &[],
             &HashMap::new(),
         );
-        assert_eq!(context["kind"], "unpeel_app");
+        assert_eq!(context["kind"], "supercli_app");
         assert_eq!(context["session_id"], "design-session");
-        assert_eq!(context["app"]["id"], "unpeel.app.design");
+        assert_eq!(context["app"]["id"], "supercli.app.design");
         assert_eq!(context["app"]["attached_to_self"], true);
         // A binding whose App is no longer installed still identifies the
         // pane but carries no declared capabilities.
@@ -4318,7 +4318,7 @@ mod tests {
     #[test]
     fn neighboring_app_pane_carries_declared_tools_and_skill_inline() {
         let installed = crate::apps_mcp::InstalledApp {
-            id: "unpeel.app.design".into(),
+            id: "supercli.app.design".into(),
             name: "Unpeel Design".into(),
             version: Some("0.1.0".into()),
             description: "Visual React designer".into(),
@@ -4345,7 +4345,7 @@ mod tests {
             caller_session_id: "caller".into(),
             companion_session_id: "design-session".into(),
             instance_id: "instance".into(),
-            app_id: "unpeel.app.design".into(),
+            app_id: "supercli.app.design".into(),
             view_id: "main".into(),
             target: crate::app_presentations::AppPresentationTarget::Panel,
             reveal_revision: 1,
@@ -4365,7 +4365,7 @@ mod tests {
             "Replace a selected element's text"
         );
         assert_eq!(context["app"]["tools"][0]["kind"], "roomstore");
-        assert_eq!(context["app"]["skill"], "app/unpeel.app.design");
+        assert_eq!(context["app"]["skill"], "app/supercli.app.design");
     }
 
     #[test]
@@ -4375,7 +4375,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("app-context.json"),
-            br#"{"app":"unpeel.app.design","context":{"file":"hero.html","lines":[12,32]},"updated_at":1}"#,
+            br#"{"app":"supercli.app.design","context":{"file":"hero.html","lines":[12,32]},"updated_at":1}"#,
         )
         .unwrap();
 
@@ -4384,14 +4384,14 @@ mod tests {
             caller_session_id: "caller".into(),
             companion_session_id: companion.clone(),
             instance_id: "instance".into(),
-            app_id: "unpeel.app.design".into(),
+            app_id: "supercli.app.design".into(),
             view_id: "main".into(),
             target: crate::app_presentations::AppPresentationTarget::Panel,
             reveal_revision: 1,
         };
         let context =
             pane_neighbor_context_json(&companion, "caller", &[binding], &[], &HashMap::new());
-        assert_eq!(context["kind"], "unpeel_app");
+        assert_eq!(context["kind"], "supercli_app");
         assert_eq!(context["app_context"]["context"]["file"], "hero.html");
         assert_eq!(context["app_context"]["context"]["lines"][1], 32);
 
@@ -4399,7 +4399,7 @@ mod tests {
         // exposed: a marker left behind by an exited App must not speak for
         // whatever occupies the pane now.
         let plain = pane_neighbor_context_json(&companion, "caller", &[], &[], &HashMap::new());
-        assert_ne!(plain["kind"], "unpeel_app");
+        assert_ne!(plain["kind"], "supercli_app");
         assert_eq!(plain["app_context"], Value::Null);
 
         std::fs::remove_dir_all(&dir).unwrap();
@@ -4487,7 +4487,7 @@ mod tests {
         }))
         .expect("initialize must produce a response");
         assert_eq!(response["result"]["protocolVersion"], "2025-03-26");
-        assert_eq!(response["result"]["serverInfo"]["name"], "unpeel");
+        assert_eq!(response["result"]["serverInfo"]["name"], "supercli");
         assert!(response["result"]["capabilities"]["tools"].is_object());
         assert!(response["result"].get("resultType").is_none());
     }

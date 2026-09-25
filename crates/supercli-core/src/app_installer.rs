@@ -23,13 +23,13 @@ pub fn install_dir(home: &Path) -> PathBuf {
 }
 
 /// Where this home resolves installed Apps from, in order: its own slot,
-/// then the machine's default home (`~/.unpeel/apps/bin`) when this is an
+/// then the machine's default home (`~/.supercli/apps/bin`) when this is an
 /// isolated workspace home. Apps are per-Mac installs: a sibling workspace
 /// on the same machine sees — and runs — what the default workspace
 /// installed or dev-linked, instead of reporting it missing.
 pub fn install_dirs(home: &Path) -> Vec<PathBuf> {
     let mut dirs = vec![install_dir(home)];
-    let machine = install_dir(&crate::app_paths::real_unpeel_home());
+    let machine = install_dir(&crate::app_paths::real_supercli_home());
     if machine != dirs[0] {
         dirs.push(machine);
     }
@@ -49,7 +49,7 @@ pub fn binary_path(home: &Path, app: &CatalogApp) -> PathBuf {
     install_dir(home).join(&app.binary)
 }
 
-/// What the Host knows about each installed App (`~/.unpeel/apps/installed.json`,
+/// What the Host knows about each installed App (`~/.supercli/apps/installed.json`,
 /// keyed by App id). Written by the installer and by `link`; a copy that
 /// predates this record reads as version-unknown and is offered an update.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -108,7 +108,7 @@ pub(crate) fn release_target() -> Option<&'static str> {
 }
 
 fn base_url() -> String {
-    std::env::var("UNPEEL_INSTALL_BASE")
+    std::env::var("SUPERCLI_INSTALL_BASE")
         .ok()
         .map(|value| value.trim_end_matches('/').to_owned())
         .filter(|value| value.starts_with("https://") || value.starts_with("http://localhost"))
@@ -116,7 +116,7 @@ fn base_url() -> String {
 }
 
 pub(crate) fn release_url(app: &CatalogApp, target: &str) -> String {
-    let channel = std::env::var("UNPEEL_CHANNEL")
+    let channel = std::env::var("SUPERCLI_CHANNEL")
         .ok()
         .filter(|value| matches!(value.as_str(), "alpha" | "beta" | "stable"))
         .unwrap_or_else(|| app.channel.clone());
@@ -296,7 +296,7 @@ pub fn install(home: &Path, app_id: &str) -> Result<PathBuf, String> {
 
 /// Development mode: point the Host's managed slot for an official App at a
 /// local build instead of a downloaded release. The Host resolves
-/// `~/.unpeel/apps/bin/<binary>` first, so a symlink there wins over PATH
+/// `~/.supercli/apps/bin/<binary>` first, so a symlink there wins over PATH
 /// and over any installed copy — and follows every `cargo build`, since
 /// the toolchain replaces the target as a new inode. Nothing is verified:
 /// this is the developer's own binary on the developer's own machine.
@@ -450,12 +450,12 @@ pub fn catalog_wire() -> Value {
         .into_iter()
         .map(|app| app.id)
         .collect::<std::collections::HashSet<_>>();
-    let home = crate::app_paths::unpeel_home();
+    let home = crate::app_paths::supercli_home();
     // Shell startup files may put an older CLI first in PATH. Use the CLI
     // shipped beside this Host, including a remote Host's own absolute path.
     let cli = std::env::current_exe()
         .ok()
-        .and_then(|path| path.parent().map(|parent| parent.join("unpeel")))
+        .and_then(|path| path.parent().map(|parent| parent.join("supercli")))
         .filter(|path| path.is_file());
     Value::Array(
         apps_mcp::catalog_apps()
@@ -518,7 +518,7 @@ mod tests {
     fn link_points_the_managed_slot_at_a_local_build_and_unlink_only_removes_links() {
         let home = tempfile::tempdir().unwrap();
         let build = tempfile::tempdir().unwrap();
-        let exe = build.path().join("unpeel-filetree");
+        let exe = build.path().join("supercli-filetree");
         std::fs::write(&exe, "#!/bin/sh\nexit 0\n").unwrap();
         #[cfg(unix)]
         {
@@ -526,45 +526,45 @@ mod tests {
             std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let linked = link(home.path(), "unpeel.app.filetree", &exe).unwrap();
-        assert_eq!(linked, home.path().join("apps/bin/unpeel-filetree"));
+        let linked = link(home.path(), "supercli.app.filetree", &exe).unwrap();
+        assert_eq!(linked, home.path().join("apps/bin/supercli-filetree"));
         assert_eq!(std::fs::read_link(&linked).unwrap(), exe);
-        let app = apps_mcp::catalog_app("unpeel.app.filetree").unwrap();
+        let app = apps_mcp::catalog_app("supercli.app.filetree").unwrap();
         assert!(is_linked(home.path(), &app));
         assert_eq!(status(home.path(), &app).state, "linked");
 
         // Relinking replaces in place; a relative or missing target is refused.
-        link(home.path(), "unpeel.app.filetree", &exe).unwrap();
+        link(home.path(), "supercli.app.filetree", &exe).unwrap();
         assert!(link(
             home.path(),
-            "unpeel.app.filetree",
+            "supercli.app.filetree",
             Path::new("target/release/x")
         )
         .is_err());
         assert!(link(
             home.path(),
-            "unpeel.app.filetree",
+            "supercli.app.filetree",
             &build.path().join("nope")
         )
         .is_err());
-        assert!(link(home.path(), "unpeel.app.nope", &exe).is_err());
+        assert!(link(home.path(), "supercli.app.nope", &exe).is_err());
 
-        assert!(unlink(home.path(), "unpeel.app.filetree").unwrap());
+        assert!(unlink(home.path(), "supercli.app.filetree").unwrap());
         assert!(!linked.exists());
-        assert!(!unlink(home.path(), "unpeel.app.filetree").unwrap());
+        assert!(!unlink(home.path(), "supercli.app.filetree").unwrap());
 
         // A real (non-link) file in the slot is never removed by unlink.
         std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
         std::fs::write(&linked, b"release").unwrap();
-        assert!(unlink(home.path(), "unpeel.app.filetree").is_err());
+        assert!(unlink(home.path(), "supercli.app.filetree").is_err());
         assert!(linked.exists());
     }
 
     fn app() -> CatalogApp {
         CatalogApp {
             slug: "markdown".into(),
-            id: "unpeel.app.markdown".into(),
-            binary: "unpeel-markdown".into(),
+            id: "supercli.app.markdown".into(),
+            binary: "supercli-markdown".into(),
             name: "Markdown".into(),
             version: Some("0.1.0".into()),
             channel: "stable".into(),
@@ -603,7 +603,7 @@ mod tests {
     fn verified_archive_installs_only_the_allowlisted_binary() {
         let root = tempfile::tempdir().unwrap();
         let source = tempfile::tempdir().unwrap();
-        std::fs::write(source.path().join("unpeel-markdown"), b"new binary").unwrap();
+        std::fs::write(source.path().join("supercli-markdown"), b"new binary").unwrap();
         std::fs::write(source.path().join("ignored"), b"not installed").unwrap();
         let archive = source.path().join("release.tar.gz");
         assert!(Command::new("tar")
@@ -611,7 +611,7 @@ mod tests {
             .arg(&archive)
             .args(["-C"])
             .arg(source.path())
-            .args(["unpeel-markdown", "ignored"])
+            .args(["supercli-markdown", "ignored"])
             .status()
             .unwrap()
             .success());
@@ -642,9 +642,9 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .find(|item| item["id"] == "unpeel.app.markdown")
+            .find(|item| item["id"] == "supercli.app.markdown")
             .unwrap();
-        assert_eq!(markdown["command"], "unpeel-markdown");
+        assert_eq!(markdown["command"], "supercli-markdown");
         assert_eq!(markdown["mediaTypes"][0], "text/markdown");
         assert_eq!(markdown["fileExtensions"]["md"], "text/markdown");
     }

@@ -1,4 +1,4 @@
-# UnpeelShared
+# SupercliShared
 
 Swift package with the client-side protocol and crypto shared by the Mac app
 (`clients/native`) and the iPhone/iPad app (`clients/ios`) — one implementation so
@@ -17,12 +17,12 @@ the two clients can never drift on wire behavior:
 - `ToolIcons.swift` / `ChromeIcons.swift` — shared provider/browser icon art
 
 Tests include the relay known-answer vectors
-(`Tests/UnpeelSharedTests/RelayCryptoVectorTests.swift`), which consume
+(`Tests/SupercliSharedTests/RelayCryptoVectorTests.swift`), which consume
 `protocol/relay-kat-vectors-v1.json` — the same fixtures the relay's own
 JS tests run, keeping both ends of the E2E protocol pinned to identical
 bytes.
 
-Run tests: `swift test --package-path clients/shared/UnpeelShared` (this one
+Run tests: `swift test --package-path clients/shared/SupercliShared` (this one
 works with plain `swift test`, unlike the iOS package).
 
 Everything here is open source and must stay free of closed-service

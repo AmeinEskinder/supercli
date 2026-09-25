@@ -146,7 +146,7 @@ pub(crate) fn build_hook_entry(event: &str, command: &str) -> Value {
 /// workspaces. Grok also runs Claude settings hooks, so a stale `/tmp/...`
 /// copy that still posts `session_start` as busy will spin every Grok
 /// session even after the live script is fixed.
-pub(crate) fn is_stale_unpeel_claude_hook(command: &str, current: &str) -> bool {
+pub(crate) fn is_stale_supercli_claude_hook(command: &str, current: &str) -> bool {
     let path = command.split_whitespace().next().unwrap_or(command);
     if path == current {
         return false;
@@ -157,7 +157,7 @@ pub(crate) fn is_stale_unpeel_claude_hook(command: &str, current: &str) -> bool 
     path.starts_with("/tmp/") || path.starts_with("/var/folders/") || !Path::new(path).is_file()
 }
 
-pub(crate) fn prune_stale_unpeel_claude_hooks(array: &mut Vec<Value>, current: &str) -> bool {
+pub(crate) fn prune_stale_supercli_claude_hooks(array: &mut Vec<Value>, current: &str) -> bool {
     let mut changed = false;
     array.retain_mut(|entry| {
         let Some(hooks) = entry
@@ -170,7 +170,7 @@ pub(crate) fn prune_stale_unpeel_claude_hooks(array: &mut Vec<Value>, current: &
         hooks.retain(|hook| {
             hook.get("command")
                 .and_then(|value| value.as_str())
-                .is_none_or(|command| !is_stale_unpeel_claude_hook(command, current))
+                .is_none_or(|command| !is_stale_supercli_claude_hook(command, current))
         });
         if hooks.len() != before {
             changed = true;
@@ -231,7 +231,7 @@ fn reconcile_claude_hooks(settings: &mut Value, command: &str) -> bool {
             *entries = json!([]);
         }
         let array = entries.as_array_mut().unwrap();
-        if prune_stale_unpeel_claude_hooks(array, command) {
+        if prune_stale_supercli_claude_hooks(array, command) {
             changed = true;
         }
         let mut already_installed = false;

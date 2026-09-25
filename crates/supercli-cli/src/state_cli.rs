@@ -4,8 +4,8 @@
 //! disk-contract code and every write goes through `app_state::edit`, which
 //! announces on the state bus so the app and every Host see it at once.
 
-use unpeel_serve::overlay;
-use unpeel_serve::sessions::SessionRow;
+use supercli_serve::overlay;
+use supercli_serve::sessions::SessionRow;
 
 /// Result of registering a folder as a project.
 pub enum AddProject {
@@ -15,7 +15,7 @@ pub enum AddProject {
 
 pub fn add_project_to_app_state(name: &str, path: &str) -> Result<AddProject, String> {
     // The app's own projects live in ITS UserDefaults, not in app-state.json,
-    // so checking the file alone cheerfully adds a second "unpeel" pointing
+    // so checking the file alone cheerfully adds a second "supercli" pointing
     // at the same folder — which then shows up in the desktop as an empty
     // duplicate of a project full of sessions.
     if let Some(overlay) = overlay::load() {
@@ -33,7 +33,7 @@ pub fn add_project_to_app_state(name: &str, path: &str) -> Result<AddProject, St
             return Ok(AddProject::Existing { name: label });
         }
     }
-    unpeel_core::app_state::edit(|state| {
+    supercli_core::app_state::edit(|state| {
         let projects = state
             .entry("projects".to_string())
             .or_insert_with(|| serde_json::json!([]))
@@ -114,7 +114,7 @@ fn preset_selector_index(list: &[serde_json::Value], selector: &str) -> Result<u
 }
 
 fn set_preset_cli_flag(selector: &str, field: &str, value: bool) -> Result<String, String> {
-    unpeel_core::app_state::edit(|state| {
+    supercli_core::app_state::edit(|state| {
         let presets = stored_presets_mut(state)?;
         let index = preset_selector_index(presets, selector)?;
         let preset = presets[index]
@@ -134,7 +134,7 @@ pub(crate) fn resume_unavailable_message(session: &SessionRow) -> &'static str {
     if !session.running {
         return "this session cannot be resumed";
     }
-    if !unpeel_core::resume::can_resume(&session.command) {
+    if !supercli_core::resume::can_resume(&session.command) {
         return "this live terminal has no managed agent to resume";
     }
     if session.active_runtime_id.is_some() {
@@ -149,7 +149,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("list") | None => {
             let mut shown = 0usize;
-            let state = unpeel_core::app_state::load()?;
+            let state = supercli_core::app_state::load()?;
             let overlay_superseded = state
                 .get("native_preset_overlay_migrated")
                 .and_then(|v| v.as_bool())
@@ -198,7 +198,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
                 "enabled": true,
                 "quick_launch": false,
             });
-            unpeel_core::app_state::edit(|state| {
+            supercli_core::app_state::edit(|state| {
                 stored_presets_mut(state)?.push(preset);
                 Ok(())
             })?;
@@ -209,7 +209,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
             let Some(needle) = args.get(1) else {
                 return Err("usage: unpeel presets remove <label>".into());
             };
-            unpeel_core::app_state::edit(|state| {
+            supercli_core::app_state::edit(|state| {
                 let presets = stored_presets_mut(state)?;
                 let before = presets.len();
                 presets.retain(|preset| {
@@ -256,7 +256,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
                 .ok()
                 .filter(|position| *position > 0)
                 .ok_or("preset position must be a positive, 1-based integer")?;
-            let label = unpeel_core::app_state::edit(|state| {
+            let label = supercli_core::app_state::edit(|state| {
                 let presets = stored_presets_mut(state)?;
                 if position > presets.len() {
                     return Err(format!(
@@ -301,7 +301,7 @@ pub fn presets_cli(args: &[String]) -> Result<(), String> {
             }
             // Edit in place: the id, star, enabled flag, and position all
             // survive, which remove+add would lose.
-            let label = unpeel_core::app_state::edit(|state| {
+            let label = supercli_core::app_state::edit(|state| {
                 let presets = stored_presets_mut(state)?;
                 let index = preset_selector_index(presets, selector)?;
                 let preset = presets[index]

@@ -12,7 +12,7 @@ snapshot). Since 2026-09-03 the app ingests no hook events itself: the
 deleted; every edge below describes the worker.
 
 Animated Busy has one exact authority: explicit lifecycle events from the
-runtime's installed Unpeel integration. Below it sits one fallback tier, the
+runtime's installed Supercli integration. Below it sits one fallback tier, the
 Herdr-style **screen tier**: a recognized agent whose runtime declares
 `[screen]` rules (`lifecycle.fallback = "screen"`; Claude, Codex, Gemini)
 takes a busy/idle verdict the Host derives from the bottom of its parsed
@@ -31,7 +31,7 @@ The Host's live foreground-runtime observation also grants hook authority
 (2026-08-21). A hook-capable agent the user starts by hand inside a blank or
 custom-command terminal becomes hook-owned once a live hook event latches:
 provider hook installs are global and the hosted shell exports the session's
-hook env (`UNPEEL_SESSION_ID`, `UNPEEL_APP_PORT`, the port registry), so a
+hook env (`SUPERCLI_SESSION_ID`, `SUPERCLI_APP_PORT`, the port registry), so a
 typed `claude` reports exactly like a launched one. Until that first live
 event the Session stays neutral: observing a hook-capable process is identity,
 not proof that it is working.
@@ -40,11 +40,11 @@ shell is tied to the observed foreground process (`id:pid:pid_started_at` —
 the kernel start time closes the pid-recycle window): a new observed
 identity drops the previous latch (both frontends — `observe_foreground_runtime`
 in the serve `ActivityEngine`, `observedForegroundIdentities` in
-`UnpeelStore`), so a stale busy/attention latch from a killed run can never
+`SupercliStore`), so a stale busy/attention latch from a killed run can never
 speak for its replacement, and an old Claude latch never crosses to a later
 Codex in the same shell. Observation never installs anything: hooks come
-from the runtime's Unpeel integration, which the user installs once per Host
-(`unpeel integrations install`, Settings ▸ Agents ▸ Install integration) into the
+from the runtime's Supercli integration, which the user installs once per Host
+(`supercli integrations install`, Settings ▸ Agents ▸ Install integration) into the
 provider's own global configuration, so a hand-typed agent reports through
 hooks exactly when that integration is installed — the same as a preset
 launch. The first sighting after an engine/app start is
@@ -89,8 +89,8 @@ Hook-driven sessions:
   the Mac startup seed, including after a restart.
 - The latch survives app restarts via a durable seed: every provider hook
   script also writes its last lifecycle event to
-  `~/.unpeel/app-sessions/<id>/last-hook-event.json` (atomic write; path from
-  `UNPEEL_SESSION_DIR`, exported by the host next to `UNPEEL_SESSION_ID`).
+  `~/.supercli/app-sessions/<id>/last-hook-event.json` (atomic write; path from
+  `SUPERCLI_SESSION_DIR`, exported by the host next to `SUPERCLI_SESSION_ID`).
   Hook scripts keep firing while no app instance is listening — the port POST
   just fails — so the file records transitions that happen with the app
   closed. On every rescan the Host checks this file for missed transitions.
@@ -135,7 +135,7 @@ Agent-drawn select menus (attention, host-side):
   `manifest.json`. Because it lives in the host, it covers **every** session,
   not just ones with a warm Ghostty surface.
 - Native reads the flag during `rescan()` and overrides `status → .attention`
-  (in `UnpeelStore`), which swaps the busy spinner for the existing yellow
+  (in `SupercliStore`), which swaps the busy spinner for the existing yellow
   `AttentionDot` and rolls up to collapsed folders + the iOS `blocked` status
   for free. A generation-bound false → true edge also emits the ordinary
   needs-input notification exactly once; a matching `PermissionRequest` hook
@@ -144,7 +144,7 @@ Agent-drawn select menus (attention, host-side):
   its first sample is already active. False re-arms the next menu. Both the
   badge and visual-edge notification are gated by
   `menuAttentionDetectionEnabled` (Settings ▸ Notifications, default on;
-  the `unpeel.native.menuAttentionDetection` UserDefaults overlay).
+  the `supercli.native.menuAttentionDetection` UserDefaults overlay).
 - The iOS terminal's on-screen menu control bar keeps its own Swift viewport
   scan (it needs the option count + real-time keys); this host flag is the
   desktop badge path, not a replacement for it. Claude's persistent subagent
@@ -222,13 +222,13 @@ does not kill hook processes or uninstall hooks, and does not infer completion
 from terminal text. Unrecognized provider modes that repurpose Escape remain
 a limitation; menu detection only excludes the prompts it can identify.
 
-Shell reporters are inert outside a hosted Session, honor `UNPEEL_HOME`, and
+Shell reporters are inert outside a hosted Session, honor `SUPERCLI_HOME`, and
 bypass HTTP proxy settings for loopback delivery. They finish delivery before
 returning by default: the direct port gets a bounded attempt, then registry
 ports are contacted concurrently and awaited. Invalid and duplicate registry
 ports are ignored. Claude's installer migrates its owned `async: true` entries
 to synchronous reporting while preserving unrelated user hooks. The explicit
-`UNPEEL_HOOK_POST_SYNC=0` legacy opt-out forfeits ordering guarantees.
+`SUPERCLI_HOOK_POST_SYNC=0` legacy opt-out forfeits ordering guarantees.
 Script installation uses a locked, atomic replacement with executable
 permissions set before publication; unchanged scripts keep their inode.
 Concurrent writers use distinct temporary files, and shared hook settings
@@ -246,10 +246,10 @@ CLI PTY matrix (input fallback and installed native hooks), the attach test `lon
 parser/marker tests, activity reducer tests, and runtime reporter conformance
 tests (broadcast delivery, proxy isolation, silent peers, and no-op behavior).
 The PTY harness isolates `HOME` and provider/XDG config roots as well as
-`UNPEEL_HOME`: a private Unpeel directory alone does not prevent a real
+`SUPERCLI_HOME`: a private Supercli directory alone does not prevent a real
 provider settings file from receiving temporary hook registrations.
-Set `UNPEEL_MUSE_TEST_BINARY` to an installed Muse binary when running
-`crates/unpeel-cli/tests/run.sh muse_cancellation` to exercise the real echo
+Set `SUPERCLI_MUSE_TEST_BINARY` to an installed Muse binary when running
+`crates/supercli-cli/tests/run.sh muse_cancellation` to exercise the real echo
 provider instead of the deterministic substitute, still in a private HOME.
 
 ### Background agents

@@ -18,14 +18,14 @@ on:
       - 'clients/native/**'
       - 'clients/ios/**'
       - 'clients/shared/**'
-      - 'crates/unpeel-native-bridge/**'
+      - 'crates/supercli-native-bridge/**'
       - '.github/workflows/clients.yml'
   pull_request:
     paths:
       - 'clients/native/**'
       - 'clients/ios/**'
       - 'clients/shared/**'
-      - 'crates/unpeel-native-bridge/**'
+      - 'crates/supercli-native-bridge/**'
       - '.github/workflows/clients.yml'
 
 permissions:
@@ -56,13 +56,13 @@ jobs:
         with:
           workspaces: |
             crates
-            crates/unpeel-attach
+            crates/supercli-attach
       - name: Cache SwiftPM
         uses: actions/cache@v4
         with:
           path: |
-            clients/native/UnpeelNative/.build
-            clients/shared/UnpeelShared/.build
+            clients/native/SupercliNative/.build
+            clients/shared/SupercliShared/.build
             ~/Library/Caches/org.swift.swiftpm
             ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
           key: swiftpm-${{ runner.os }}-${{ hashFiles('clients/**/Package.resolved', 'clients/native/vendor/libghostty-spm/Package.swift') }}
@@ -70,23 +70,23 @@ jobs:
             swiftpm-${{ runner.os }}-
       - name: Runtime catalog copies agree
         run: bun run check:runtimes
-      - name: UnpeelShared tests
-        run: swift test --package-path clients/shared/UnpeelShared
+      - name: SupercliShared tests
+        run: swift test --package-path clients/shared/SupercliShared
       - name: Unsigned Mac app (server + bridge built from this tree)
         env:
           CODESIGN_IDENTITY: '-'
-          UNPEEL_DEV_BUILD: '0'
-          UNPEEL_BUILD: ${{ github.run_number }}
+          SUPERCLI_DEV_BUILD: '0'
+          SUPERCLI_BUILD: ${{ github.run_number }}
         run: clients/native/build-app.sh
       - name: iOS package tests (simulator)
         # Pick whatever iPhone simulator the image ships (device names change
         # with every iOS runtime; the image had no "iPhone 16 Pro" under iOS 26).
         env:
-          UNPEEL_IOS_TEST_DERIVED_DATA: ${{ runner.temp }}/unpeel-ios-tests
+          SUPERCLI_IOS_TEST_DERIVED_DATA: ${{ runner.temp }}/supercli-ios-tests
         run: |
           UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; c=sorted([x for rt,xs in d.items() if "iOS" in rt for x in xs if x.get("isAvailable") and x["name"].startswith("iPhone")], key=lambda x: x["name"]); print(c[-1]["udid"] if c else "")')"
           test -n "$UDID" || { echo "no available iPhone simulator on this image"; xcrun simctl list devices available; exit 1; }
           xcrun simctl boot "$UDID" || true
-          export UNPEEL_IOS_TEST_DESTINATION="platform=iOS Simulator,id=$UDID"
-          echo "destination: $UNPEEL_IOS_TEST_DESTINATION"
+          export SUPERCLI_IOS_TEST_DESTINATION="platform=iOS Simulator,id=$UDID"
+          echo "destination: $SUPERCLI_IOS_TEST_DESTINATION"
           clients/ios/test-ios.sh

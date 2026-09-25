@@ -1,5 +1,5 @@
 [package]
-name = "unpeel-apps"
+name = "supercli-apps"
 description = "The Unpeel Apps API: agent-pane integration and host MCP access for terminal apps"
 version.workspace = true
 edition.workspace = true

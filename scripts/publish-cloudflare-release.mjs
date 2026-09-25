@@ -62,8 +62,8 @@ const args = parseArgs(process.argv)
 const channel = String(args.channel ?? 'beta').toLowerCase()
 const version = String(args.version ?? '')
 const build = args.build == null ? undefined : String(args.build)
-const bucket = String(args.bucket ?? process.env.UNPEEL_RELEASE_BUCKET ?? configBucket ?? 'unpeel-releases')
-const baseUrl = String(args['base-url'] ?? process.env.UNPEEL_RELEASE_BASE_URL ?? 'https://unpeel.com')
+const bucket = String(args.bucket ?? process.env.SUPERCLI_RELEASE_BUCKET ?? configBucket ?? 'supercli-releases')
+const baseUrl = String(args['base-url'] ?? process.env.SUPERCLI_RELEASE_BASE_URL ?? 'https://supercli.com')
 const dryRun = Boolean(args['dry-run'])
 const force = Boolean(args.force)
 
@@ -224,7 +224,7 @@ if (appcast) {
   newFields.appcast = fileInfo(appcast, key)
 }
 
-const tmp = mkdtempSync(resolve(tmpdir(), 'unpeel-release-'))
+const tmp = mkdtempSync(resolve(tmpdir(), 'supercli-release-'))
 const latest = mergeAppLatest({
   channel,
   version,

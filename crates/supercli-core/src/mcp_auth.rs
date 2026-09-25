@@ -4,7 +4,7 @@
 //! that the MCP host (same user) reads; a malicious webpage doing
 //! cross-origin POSTs to localhost cannot read it.
 
-use crate::app_paths::unpeel_home;
+use crate::app_paths::supercli_home;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -12,7 +12,7 @@ use std::sync::Mutex;
 pub const MCP_AUTH_HEADER: &str = "x-unpeel-auth";
 
 pub fn auth_token_path() -> PathBuf {
-    unpeel_home().join("mcp").join("auth-token")
+    supercli_home().join("mcp").join("auth-token")
 }
 
 fn token_cache() -> &'static Mutex<Option<String>> {

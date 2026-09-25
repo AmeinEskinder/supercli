@@ -3,7 +3,7 @@
 //! list the same worktrees the desktop does.
 //!
 //! Layout is a shared contract and must match byte for byte:
-//! `~/.unpeel/worktrees/<repo-slug>-<fnv1a:08x>/<name-slug>`, where the hash
+//! `~/.supercli/worktrees/<repo-slug>-<fnv1a:08x>/<name-slug>`, where the hash
 //! is FNV-1a over the repo's canonical toplevel path. New branches fork from
 //! the mainline (`origin/HEAD`, else `origin/main`/`origin/master`, else a
 //! local `main`/`master`), not from HEAD.
@@ -65,7 +65,7 @@ fn canonical_or_self(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// `~/.unpeel/worktrees/<repo-slug>-<hash>` for a repo toplevel.
+/// `~/.supercli/worktrees/<repo-slug>-<hash>` for a repo toplevel.
 pub fn repo_worktrees_dir(toplevel: &str) -> PathBuf {
     let repo_name = Path::new(toplevel)
         .file_name()
@@ -266,10 +266,10 @@ mod tests {
 
     #[test]
     fn repo_dir_is_slug_plus_padded_hash() {
-        let dir = repo_worktrees_dir("/Users/x/Dev/unpeel");
+        let dir = repo_worktrees_dir("/Users/x/Dev/supercli");
         let name = dir.file_name().unwrap().to_string_lossy().to_string();
         let (repo, hex) = name.rsplit_once('-').expect("slug-hash");
-        assert_eq!(repo, "unpeel");
+        assert_eq!(repo, "supercli");
         assert!(hex.len() >= 8, "hash zero-pads to at least 8: {hex}");
         assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
     }

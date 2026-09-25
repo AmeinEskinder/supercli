@@ -7,7 +7,7 @@ everything the Mac side needs: drop-in sources, capability declarations, and
 the exact wiring.
 
 **Status: nothing in this directory has been compiled.** The Swift was
-adapted from the working Swift client (`clients/ios/UnpeelIOS/Sources/`)
+adapted from the working Swift client (`clients/ios/SupercliIOS/Sources/`)
 and follows its verified patterns (auth chains, engine guards, fallback
 order), but it must be built in Xcode before it ships.
 

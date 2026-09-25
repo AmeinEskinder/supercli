@@ -17,7 +17,7 @@
 //!    [`TokenSet`] in the keychain.
 //!
 //! The connector process never sees any of this — it only ever gets the
-//! current access token via `UNPEEL_CONNECTOR_TOKEN` (stdio) or the
+//! current access token via `SUPERCLI_CONNECTOR_TOKEN` (stdio) or the
 //! `Authorization: Bearer` header (HTTP). [`ensure_fresh`] refreshes an
 //! expiring token before a spawn/call, so `doctor`'s "token fresh"
 //! check and every tool call see a live token.

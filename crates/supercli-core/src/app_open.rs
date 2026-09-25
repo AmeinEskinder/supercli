@@ -339,8 +339,8 @@ mod tests {
             id: "/tmp/a file's notes.md".into(),
         };
         assert_eq!(
-            launch_command("/opt/unpeel apps/unpeel-markdown", Some(&resource)).unwrap(),
-            "'/opt/unpeel apps/unpeel-markdown' '/tmp/a file'\"'\"'s notes.md'"
+            launch_command("/opt/supercli apps/supercli-markdown", Some(&resource)).unwrap(),
+            "'/opt/supercli apps/supercli-markdown' '/tmp/a file'\"'\"'s notes.md'"
         );
     }
 
@@ -351,8 +351,8 @@ mod tests {
             id: "/tmp/project".into(),
         };
         assert_eq!(
-            launch_command("/opt/unpeel-design", Some(&resource)).unwrap(),
-            "'/opt/unpeel-design' '/tmp/project'"
+            launch_command("/opt/supercli-design", Some(&resource)).unwrap(),
+            "'/opt/supercli-design' '/tmp/project'"
         );
     }
 }

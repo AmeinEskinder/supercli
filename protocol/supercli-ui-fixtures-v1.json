@@ -1,14 +1,14 @@
 {
-  "protocol": "unpeel.ui",
+  "protocol": "supercli.ui",
   "protocolVersion": 1,
   "description": "Conformance frame corpus, not one executable dialogue. Events after snapshot revision 2 are independent alternatives against that snapshot.",
   "validMessages": [
     {
       "type": "clientHello",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "app": {
-        "id": "dev.unpeel.portable-gallery",
+        "id": "dev.supercli.portable-gallery",
         "name": "Portable Gallery",
         "version": "0.1.0",
         "description": "Canonical Unpeel UI v1 fixture"
@@ -16,13 +16,13 @@
     },
     {
       "type": "hostHello",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "renderMode": "structured"
     },
     {
       "type": "snapshot",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 1,
       "root": {
@@ -320,7 +320,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 1,
       "nodeId": "main-tabs",
@@ -330,7 +330,7 @@
     },
     {
       "type": "snapshot",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "root": {
@@ -519,7 +519,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "nodeId": "root",
@@ -532,7 +532,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "nodeId": "main-tabs",
@@ -542,7 +542,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "nodeId": "task-list",
@@ -552,7 +552,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "nodeId": "task-table",
@@ -562,7 +562,7 @@
     },
     {
       "type": "event",
-      "protocol": "unpeel.ui",
+      "protocol": "supercli.ui",
       "protocolVersion": 1,
       "revision": 2,
       "nodeId": "task-table",
@@ -649,7 +649,7 @@
       "expectedError": "unsupportedVersion",
       "message": {
         "type": "hostHello",
-        "protocol": "unpeel.ui",
+        "protocol": "supercli.ui",
         "protocolVersion": 2,
         "renderMode": "structured"
       }
@@ -659,7 +659,7 @@
       "expectedError": "unknownDiscriminator",
       "message": {
         "type": "snapshot",
-        "protocol": "unpeel.ui",
+        "protocol": "supercli.ui",
         "protocolVersion": 1,
         "revision": 3,
         "root": {

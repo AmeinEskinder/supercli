@@ -1,23 +1,23 @@
 #!/usr/bin/env node
-// Build and publish the Unpeel CLI (`unpeel` + `unpeel-host` + `unpeel-attach`) tarballs that
-// back `curl -fsSL https://unpeel.com/install.sh | sh`.
+// Build and publish the Unpeel CLI (`supercli` + `supercli-host` + `supercli-attach`) tarballs that
+// back `curl -fsSL https://supercli.com/install.sh | sh`.
 //
 // Operator/CI script, same transport as publish-cloudflare-release.mjs
-// (wrangler r2 object put into the unpeel-releases bucket). R2 key layout,
+// (wrangler r2 object put into the supercli-releases bucket). R2 key layout,
 // under the same channel roots the app releases use:
-//   <channel>/cli/unpeel-<version>-<target>.tar.gz         (immutable)
-//   <channel>/cli/unpeel-<version>-<revision>-<target>.tar.gz(.sha256)
+//   <channel>/cli/supercli-<version>-<target>.tar.gz         (immutable)
+//   <channel>/cli/supercli-<version>-<revision>-<target>.tar.gz(.sha256)
 //                                                         (immutable recovery)
-//   <channel>/cli/unpeel-latest-<target>.tar.gz            (5-min cache)
-//   <channel>/cli/unpeel-latest-<target>.tar.gz.sha256     (integrity sidecar)
+//   <channel>/cli/supercli-latest-<target>.tar.gz            (5-min cache)
+//   <channel>/cli/supercli-latest-<target>.tar.gz.sha256     (integrity sidecar)
 //   <channel>/cli/latest.json                              (60-s manifest)
 //
 // Usage (from a Mac — builds the macos-universal tarball itself):
 //   node scripts/release-cli.mjs --channel beta [--version 0.1.0] [--dry-run]
 // Linux tarballs are built elsewhere (a Linux box or CI) and attached:
 //   node scripts/release-cli.mjs --channel beta \
-//     --linux-x86_64 path/to/unpeel-linux-x86_64.tar.gz \
-//     --linux-aarch64 path/to/unpeel-linux-aarch64.tar.gz
+//     --linux-x86_64 path/to/supercli-linux-x86_64.tar.gz \
+//     --linux-aarch64 path/to/supercli-linux-aarch64.tar.gz
 // Targets not provided are left untouched in the bucket (a Linux-only publish
 // does not disturb the macOS artifacts, and vice versa). Same-version staged
 // publishes merge their target entries into latest.json. The first publish of
@@ -65,7 +65,7 @@ import {
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const cratesDir = resolve(repoRoot, 'crates')
-const attachDir = resolve(repoRoot, 'crates', 'unpeel-attach')
+const attachDir = resolve(repoRoot, 'crates', 'supercli-attach')
 const protocolDir = resolve(repoRoot, CLI_ARCHIVE_PROTOCOL_DIR)
 const generatedDir = resolve(repoRoot, CLI_ARCHIVE_GENERATED_DIR)
 // Publishing coordinates live in scripts/r2.jsonc (no dependency on the
@@ -102,8 +102,8 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv)
 const channel = String(args.channel ?? 'beta').toLowerCase()
-const bucket = String(args.bucket ?? process.env.UNPEEL_RELEASE_BUCKET ?? configBucket ?? 'unpeel-releases')
-const baseUrl = String(args['base-url'] ?? process.env.UNPEEL_RELEASE_BASE_URL ?? 'https://unpeel.com')
+const bucket = String(args.bucket ?? process.env.SUPERCLI_RELEASE_BUCKET ?? configBucket ?? 'supercli-releases')
+const baseUrl = String(args['base-url'] ?? process.env.SUPERCLI_RELEASE_BASE_URL ?? 'https://supercli.com')
 const dryRun = Boolean(args['dry-run'])
 const force = Boolean(args.force)
 const skipBuild = Boolean(args['skip-build'])
@@ -150,7 +150,7 @@ function rustReleaseEnvironment() {
   }
   const cargoHome = process.env.CARGO_HOME ?? resolve(homedir(), '.cargo')
   const remapFlags = [
-    `--remap-path-prefix=${repoRoot}=/unpeel/source`,
+    `--remap-path-prefix=${repoRoot}=/supercli/source`,
     `--remap-path-prefix=${cargoHome}=/cargo`,
     `--remap-path-prefix=${sysroot.stdout.trim()}=/rust/toolchain`
   ]
@@ -177,10 +177,10 @@ if (args['macos-universal']) {
     run('cargo', [
       'build', '--release', '--locked',
       '--manifest-path', resolve(cratesDir, 'Cargo.toml'),
-      '-p', 'unpeel-cli', '-p', 'unpeel-host',
+      '-p', 'supercli-cli', '-p', 'supercli-host',
       '--target', triple
     ], { env: rustEnv })
-    // unpeel-attach is a standalone crate (its own [workspace]; never a
+    // supercli-attach is a standalone crate (its own [workspace]; never a
     // crates/ member), so it builds from its own manifest and target dir.
     run('cargo', [
       'build', '--release', '--locked',
@@ -188,10 +188,10 @@ if (args['macos-universal']) {
       '--target', triple
     ], { env: rustEnv })
   }
-  const stage = mkdtempSync(resolve(tmpdir(), 'unpeel-cli-'))
+  const stage = mkdtempSync(resolve(tmpdir(), 'supercli-cli-'))
   for (const bin of CLI_BINARIES) {
     const out = resolve(stage, bin)
-    const targetRoot = bin === 'unpeel-attach' ? attachDir : cratesDir
+    const targetRoot = bin === 'supercli-attach' ? attachDir : cratesDir
     run('lipo', [
       '-create', '-output', out,
       ...triples.map((t) => resolve(targetRoot, 'target', t, 'release', bin))
@@ -204,12 +204,12 @@ if (args['macos-universal']) {
   run('cargo', [
     'run', '--quiet', '--locked',
     '--manifest-path', resolve(cratesDir, 'Cargo.toml'),
-    '-p', 'unpeel-license-notices', '--',
+    '-p', 'supercli-license-notices', '--',
     '--manifest-path', resolve(cratesDir, 'Cargo.toml'),
-    '--package', 'unpeel-cli',
-    '--package', 'unpeel-host',
+    '--package', 'supercli-cli',
+    '--package', 'supercli-host',
     '--manifest-path', resolve(attachDir, 'Cargo.toml'),
-    '--package', 'unpeel-attach',
+    '--package', 'supercli-attach',
     ...triples.flatMap((triple) => ['--target', triple]),
     '--output', resolve(stage, 'THIRD_PARTY_NOTICES.txt')
   ], { env: rustEnv })
@@ -225,7 +225,7 @@ if (args['macos-universal']) {
   cpSync(protocolDir, resolve(stage, CLI_ARCHIVE_PROTOCOL_DIR), { recursive: true })
   // generated/ (the client-safe runtime catalog) rides along the same way.
   cpSync(generatedDir, resolve(stage, CLI_ARCHIVE_GENERATED_DIR), { recursive: true })
-  const tarPath = resolve(stage, `unpeel-${version}-macos-universal.tar.gz`)
+  const tarPath = resolve(stage, `supercli-${version}-macos-universal.tar.gz`)
   run('tar', [
     '-czf', tarPath, '-C', stage,
     ...CLI_BINARIES, 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'BUILD_PROVENANCE.json',
@@ -253,7 +253,7 @@ for (const [target, file] of Object.entries(tarballs)) {
   const unsafe = entries.find((entry) => entry.startsWith('/') || entry.split('/').includes('..'))
   if (unsafe) throw new Error(`Tarball for ${target} contains an unsafe path: ${unsafe}`)
   assertCliArchiveEntries(entries, target)
-  const inspectDir = mkdtempSync(resolve(tmpdir(), 'unpeel-cli-inspect-'))
+  const inspectDir = mkdtempSync(resolve(tmpdir(), 'supercli-cli-inspect-'))
   try {
     const extraction = spawnSync('tar', [
       '-xzf', file, '-C', inspectDir,
@@ -411,7 +411,7 @@ if (!dryRun) {
   })
 }
 
-const tmp = mkdtempSync(resolve(tmpdir(), 'unpeel-cli-publish-'))
+const tmp = mkdtempSync(resolve(tmpdir(), 'supercli-cli-publish-'))
 const newTargetEntries = {}
 const uploadEntries = []
 for (const [target, file] of Object.entries(tarballs)) {
@@ -421,7 +421,7 @@ for (const [target, file] of Object.entries(tarballs)) {
     target,
     artifactRevision
   )
-  const latestKey = `${channel}/cli/unpeel-latest-${target}.tar.gz`
+  const latestKey = `${channel}/cli/supercli-latest-${target}.tar.gz`
   const versionedFilename = basename(versionedKey)
   const info = fileInfo(
     file,
@@ -430,7 +430,7 @@ for (const [target, file] of Object.entries(tarballs)) {
   )
   // The versioned key always gets an immutable `.sha256` sidecar: a Mac
   // app build that bundles a published archive (`clients/native/build-app.sh`
-  // with UNPEEL_SERVER_ARCHIVE) verifies the exact versioned archive
+  // with SUPERCLI_SERVER_ARCHIVE) verifies the exact versioned archive
   // against this sidecar, never against the mutable `-latest`.
   const versionedShaKey = `${versionedKey}.sha256`
   const versionedShaPath = resolve(tmp, `${target}-versioned.sha256`)
@@ -487,7 +487,7 @@ for (const entry of uploadEntries) {
     entry.latestKey,
     'application/gzip',
     downloadCache,
-    `unpeel-${entry.target}.tar.gz`
+    `supercli-${entry.target}.tar.gz`
   )
   wranglerPut(
     entry.latestShaPath,
@@ -526,4 +526,4 @@ console.log(
   `Published cli ${channel} ${version}` +
     `${artifactRevision ? ` revision ${artifactRevision}` : ''} (${targets.join(', ')}) to ${bucket}`
 )
-console.log('Install with: curl -fsSL https://unpeel.com/install.sh | sh')
+console.log('Install with: curl -fsSL https://supercli.com/install.sh | sh')

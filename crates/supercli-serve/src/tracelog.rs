@@ -1,4 +1,4 @@
-//! Timestamped append to `~/.unpeel/hooks/trace.log` for serve-side
+//! Timestamped append to `~/.supercli/hooks/trace.log` for serve-side
 //! components. Undated trace lines proved undiagnosable in the 2026-08-30
 //! relay-disconnect investigation (a reconnect burst could not be placed in
 //! time); every serve trace line now carries UTC time + unix seconds.
@@ -10,12 +10,12 @@ pub(crate) fn trace(component: &str, message: &str) {
     // trace writer so diagnostics are directory-safe and bounded at 10 MiB
     // with one rotated `trace.log.1` generation.
     #[cfg(not(test))]
-    unpeel_core::hook_assets::append_trace_log_line(&line);
-    // Unit tests run with the developer's real `UNPEEL_HOME` (unset), so the
+    supercli_core::hook_assets::append_trace_log_line(&line);
+    // Unit tests run with the developer's real `SUPERCLI_HOME` (unset), so the
     // fake platform adapters and relay-recovery replays used to append their
-    // lines to the operator's own `~/.unpeel/hooks/trace.log` (seen 2026-09-04).
+    // lines to the operator's own `~/.supercli/hooks/trace.log` (seen 2026-09-04).
     // Every unit test in this crate shares one per-process scratch trace log
-    // instead; process cases set an isolated `UNPEEL_HOME` and keep the real
+    // instead; process cases set an isolated `SUPERCLI_HOME` and keep the real
     // writer above.
     #[cfg(test)]
     test_sink::append(&line);

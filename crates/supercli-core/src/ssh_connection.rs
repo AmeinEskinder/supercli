@@ -586,11 +586,11 @@ enum ProcessLaunch {
         options: SshConnectionOptions,
     },
     /// Loopback workspace gateway: `<unpeel-host> __remote_stdio__` spawned
-    /// directly with `UNPEEL_HOME=<workspace home>`. The Controller supplies
+    /// directly with `SUPERCLI_HOME=<workspace home>`. The Controller supplies
     /// both absolute paths; this layer never guesses install locations.
     LocalGateway {
         host_program: PathBuf,
-        unpeel_home: PathBuf,
+        supercli_home: PathBuf,
         require_host_service: bool,
     },
 }
@@ -617,14 +617,14 @@ impl SshHostConnection {
 
     /// Loopback gateway to another LOCAL workspace: spawn the caller-supplied
     /// `unpeel-host` binary in `__remote_stdio__` mode with the workspace's
-    /// `UNPEEL_HOME`. Inherited `UNPEEL_*`/`HERDR_*` env is stripped (same
+    /// `SUPERCLI_HOME`. Inherited `SUPERCLI_*`/`HERDR_*` env is stripped (same
     /// containment as hosted-child spawns) so the gateway serves exactly the
     /// selected home, never this process's own state dir.
     pub fn local_gateway(
         host_program: impl AsRef<Path>,
-        unpeel_home: impl AsRef<Path>,
+        supercli_home: impl AsRef<Path>,
     ) -> Result<Self, HostConnectionError> {
-        Self::local_gateway_with_service_requirement(host_program, unpeel_home, false)
+        Self::local_gateway_with_service_requirement(host_program, supercli_home, false)
     }
 
     /// Local Controller transport that must reach the persistent workspace
@@ -633,14 +633,14 @@ impl SshHostConnection {
     /// compatibility child when `host.sock` is unavailable.
     pub fn local_host_service(
         host_program: impl AsRef<Path>,
-        unpeel_home: impl AsRef<Path>,
+        supercli_home: impl AsRef<Path>,
     ) -> Result<Self, HostConnectionError> {
-        Self::local_gateway_with_service_requirement(host_program, unpeel_home, true)
+        Self::local_gateway_with_service_requirement(host_program, supercli_home, true)
     }
 
     fn local_gateway_with_service_requirement(
         host_program: impl AsRef<Path>,
-        unpeel_home: impl AsRef<Path>,
+        supercli_home: impl AsRef<Path>,
         require_host_service: bool,
     ) -> Result<Self, HostConnectionError> {
         let host_program = host_program.as_ref();
@@ -649,15 +649,15 @@ impl SshHostConnection {
                 "workspace gateway executable must be an absolute path".to_string(),
             ));
         }
-        let unpeel_home = unpeel_home.as_ref();
-        if !unpeel_home.is_absolute() {
+        let supercli_home = supercli_home.as_ref();
+        if !supercli_home.is_absolute() {
             return Err(HostConnectionError::Configuration(
                 "workspace home must be an absolute path".to_string(),
             ));
         }
         Ok(Self::with_launch(ProcessLaunch::LocalGateway {
             host_program: host_program.to_owned(),
-            unpeel_home: unpeel_home.to_owned(),
+            supercli_home: supercli_home.to_owned(),
             require_host_service,
         }))
     }
@@ -808,7 +808,7 @@ impl SshHostConnection {
             } => (target, ssh_program, options),
             ProcessLaunch::LocalGateway {
                 host_program,
-                unpeel_home,
+                supercli_home,
                 require_host_service,
             } => {
                 let mut command = Command::new(host_program);
@@ -821,17 +821,17 @@ impl SshHostConnection {
                 // this Controller may itself be a workspace instance or run
                 // inside a Herdr pane; the gateway must resolve ONLY the
                 // selected workspace home and report to no outer supervisor.
-                strip_env_prefix_from_command(&mut command, std::env::vars_os(), "UNPEEL_");
+                strip_env_prefix_from_command(&mut command, std::env::vars_os(), "SUPERCLI_");
                 strip_env_prefix_from_command(&mut command, std::env::vars_os(), "HERDR_");
                 command
-                    .env("UNPEEL_HOME", unpeel_home)
+                    .env("SUPERCLI_HOME", supercli_home)
                     // `__remote_stdio__` is shared with SSH, whose managed
                     // PTYs need an idle reaper. This direct child has reliable
                     // EOF ownership and may remain quiet in the workspace
                     // pool, so it must not inherit the SSH watchdog.
-                    .env("UNPEEL_LOCAL_GATEWAY", "1");
+                    .env("SUPERCLI_LOCAL_GATEWAY", "1");
                 if *require_host_service {
-                    command.env("UNPEEL_LOCAL_HOST_REQUIRED", "1");
+                    command.env("SUPERCLI_LOCAL_HOST_REQUIRED", "1");
                 }
                 return command;
             }
@@ -900,7 +900,7 @@ impl SshHostConnection {
                 // no live local socket exists, preserving older installs.
                 command
                     .arg("env")
-                    .arg("UNPEEL_LOCAL_GATEWAY=1")
+                    .arg("SUPERCLI_LOCAL_GATEWAY=1")
                     .arg("unpeel-host")
                     .arg(REMOTE_STDIO_ARG);
             }
@@ -910,7 +910,7 @@ impl SshHostConnection {
                 .env("SSH_ASKPASS", &askpass.program)
                 .env("SSH_ASKPASS_REQUIRE", "force")
                 .env("DISPLAY", "unpeel-ssh")
-                .env("UNPEEL_SSH_ASKPASS_SECRET", &askpass.secret);
+                .env("SUPERCLI_SSH_ASKPASS_SECRET", &askpass.secret);
         }
         command
     }
@@ -959,10 +959,10 @@ impl SshHostConnection {
                 if options.launch_mode == SshLaunchMode::InteractiveShell
         );
         let stdout = if interactive {
-            let marker = format!("UNPEEL_GATEWAY_READY_{}", uuid::Uuid::new_v4().simple());
+            let marker = format!("SUPERCLI_GATEWAY_READY_{}", uuid::Uuid::new_v4().simple());
             let command = format!(
                 "stty -echo; printf '\\n{marker}\\n'; stty raw -echo; exec env \
-UNPEEL_LOCAL_GATEWAY=1 unpeel-host {REMOTE_STDIO_ARG}\n"
+SUPERCLI_LOCAL_GATEWAY=1 unpeel-host {REMOTE_STDIO_ARG}\n"
             );
             if let Err(error) = stdin
                 .write_all(command.as_bytes())
@@ -1150,15 +1150,15 @@ impl Drop for SshHostConnection {
 /// Install the released Unpeel CLI on an SSH destination using the same
 /// system-SSH policy and optional askpass credential as Host connections.
 /// The remote script is fixed by Unpeel; callers cannot supply shell text.
-pub fn install_unpeel_over_ssh(
+pub fn install_supercli_over_ssh(
     target: SshTarget,
     options: SshConnectionOptions,
 ) -> Result<SshInstallResult, String> {
-    install_unpeel_over_ssh_with_program(target, options, SYSTEM_SSH_PATH)
+    install_supercli_over_ssh_with_program(target, options, SYSTEM_SSH_PATH)
 }
 
 #[doc(hidden)]
-pub fn install_unpeel_over_ssh_with_program(
+pub fn install_supercli_over_ssh_with_program(
     target: SshTarget,
     options: SshConnectionOptions,
     ssh_program: impl AsRef<Path>,
@@ -1543,7 +1543,7 @@ mod tests {
                 "--",
                 "studio",
                 "env",
-                "UNPEEL_LOCAL_GATEWAY=1",
+                "SUPERCLI_LOCAL_GATEWAY=1",
                 "unpeel-host",
                 REMOTE_STDIO_ARG,
             ]
@@ -1553,7 +1553,7 @@ mod tests {
     #[test]
     fn local_gateway_command_is_direct_scoped_and_env_contained() {
         // Present in this test process; must be stripped from the child.
-        std::env::set_var("UNPEEL_TEST_LEAK_PROBE", "leak");
+        std::env::set_var("SUPERCLI_TEST_LEAK_PROBE", "leak");
         std::env::set_var("HERDR_TEST_LEAK_PROBE", "leak");
         let connection =
             SshHostConnection::local_gateway("/bundle/unpeel-host", "/homes/writing").unwrap();
@@ -1575,15 +1575,15 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            environment.get("UNPEEL_HOME"),
+            environment.get("SUPERCLI_HOME"),
             Some(&Some("/homes/writing".to_string()))
         );
         assert_eq!(
-            environment.get("UNPEEL_LOCAL_GATEWAY"),
+            environment.get("SUPERCLI_LOCAL_GATEWAY"),
             Some(&Some("1".to_string()))
         );
-        assert!(!environment.contains_key("UNPEEL_LOCAL_HOST_REQUIRED"));
-        assert_eq!(environment.get("UNPEEL_TEST_LEAK_PROBE"), Some(&None));
+        assert!(!environment.contains_key("SUPERCLI_LOCAL_HOST_REQUIRED"));
+        assert_eq!(environment.get("SUPERCLI_TEST_LEAK_PROBE"), Some(&None));
         assert_eq!(environment.get("HERDR_TEST_LEAK_PROBE"), Some(&None));
 
         let required =
@@ -1600,10 +1600,10 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            required_environment.get("UNPEEL_LOCAL_HOST_REQUIRED"),
+            required_environment.get("SUPERCLI_LOCAL_HOST_REQUIRED"),
             Some(&Some("1".to_string()))
         );
-        std::env::remove_var("UNPEEL_TEST_LEAK_PROBE");
+        std::env::remove_var("SUPERCLI_TEST_LEAK_PROBE");
         std::env::remove_var("HERDR_TEST_LEAK_PROBE");
 
         for (program, home) in [
@@ -1697,12 +1697,12 @@ mod tests {
 
     #[test]
     fn interactive_marker_must_occupy_its_own_line() {
-        let marker = b"UNPEEL_READY";
+        let marker = b"SUPERCLI_READY";
         assert_eq!(
-            isolated_marker_end(b"banner\r\nUNPEEL_READY\r\nframe", marker),
-            Some(22)
+            isolated_marker_end(b"banner\r\nSUPERCLI_READY\r\nframe", marker),
+            Some(24)
         );
-        assert!(isolated_marker_end(b"echo printf UNPEEL_READY suffix\r\n", marker).is_none());
+        assert!(isolated_marker_end(b"echo printf SUPERCLI_READY suffix\r\n", marker).is_none());
     }
 
     #[test]

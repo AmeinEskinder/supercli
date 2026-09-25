@@ -90,13 +90,13 @@ test('CLI binary headers must match the archive target', () => {
   assert.doesNotThrow(() => validateCliBinaryTarget({
     header: x86Elf,
     target: 'linux-x86_64',
-    binary: 'unpeel'
+    binary: 'supercli'
   }))
   assert.throws(
     () => validateCliBinaryTarget({
       header: x86Elf,
       target: 'linux-aarch64',
-      binary: 'unpeel'
+      binary: 'supercli'
     }),
     /ELF machine 62, expected 183/
   )
@@ -109,14 +109,14 @@ test('CLI binary headers must match the archive target', () => {
   assert.doesNotThrow(() => validateCliBinaryTarget({
     header: universal,
     target: 'macos-universal',
-    binary: 'unpeel-host'
+    binary: 'supercli-host'
   }))
   universal.writeUInt32BE(0x01000007, 28)
   assert.throws(
     () => validateCliBinaryTarget({
       header: universal,
       target: 'macos-universal',
-      binary: 'unpeel-host'
+      binary: 'supercli-host'
     }),
     /both arm64 and x86_64 slices/
   )

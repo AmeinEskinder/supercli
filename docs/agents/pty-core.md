@@ -1,11 +1,11 @@
 # The shared PTY core
 
-`unpeel-host __pty_core__` hosts **N Sessions in one process**. Each Session
+`supercli-host __pty_core__` hosts **N Sessions in one process**. Each Session
 still runs the unchanged `session_host::run_host` loop, just on its own thread
 of the core instead of in its own `__session_host__` process. Everything a
 Session publishes is byte-for-byte what a per-process Host publishes:
 `manifest.json`, `session.sock`, `output.bin`, the attach protocol, the hook
-env. Only the process boundary moves, so the app, the CLI, `unpeel-attach`,
+env. Only the process boundary moves, so the app, the CLI, `supercli-attach`,
 serve, and the phone need no changes to consume a core-hosted Session.
 
 Why: an empty per-process Host costs ~3.1 MiB phys_footprint (six threads,
@@ -13,29 +13,29 @@ malloc arenas, a VT grid). In the core the same empty `sh` Session costs
 ~0.6 MiB, and the process-level fixed cost is paid once (measured 2026-09-02:
 core alone 1.2 MiB, 50 empty `sh` Sessions 32 MiB total).
 
-Code: `crates/unpeel-core/src/pty_core.rs` (core process + client),
+Code: `crates/supercli-core/src/pty_core.rs` (core process + client),
 `session_host::spawn_host_process_from_launch_file` (routing),
-`unpeel-host/src/main.rs` (argv dispatch).
+`supercli-host/src/main.rs` (argv dispatch).
 
 ## Contract
 
 - **Process shape.** Started detached (setsid, stdio null) exactly like a
   session host, so it outlives the app and the serve worker. The core never
   exits on its own while it hosts a Session.
-- **One instance per home.** flock on `$UNPEEL_HOME/pty-core.lock`; a second
+- **One instance per home.** flock on `$SUPERCLI_HOME/pty-core.lock`; a second
   instance exits 0 immediately, which keeps "start a core, then launch"
   idempotent for every launcher.
-- **Record.** `$UNPEEL_HOME/pty-core.json` =
+- **Record.** `$SUPERCLI_HOME/pty-core.json` =
   `{"pid","pid_started_at","socket","host_build_id","protocol":1}`, written
   after bind, removed on clean exit. `pid_started_at` comes from
   `process_start_time_ms`; readers must verify it before trusting the pid.
-- **Socket.** `$UNPEEL_HOME/pty-core.sock`, mode 0600, one request per
+- **Socket.** `$SUPERCLI_HOME/pty-core.sock`, mode 0600, one request per
   connection, newline-delimited JSON:
   - `{"op":"ping"}` → `{"ok":true,"pid":N,"sessions":K,"host_build_id":"…"}`
   - `{"op":"launch","launch_file":"/abs/path"}` →
     `{"ok":true,"session_id":"…"}` **only after the Session's preliminary
     manifest is on disk** (the same moment a per-process Host has it, so
-    `unpeel-attach`'s ~2 s manifest wait still holds), or
+    `supercli-attach`'s ~2 s manifest wait still holds), or
     `{"ok":false,"error":"…"}`. The core reads and deletes the launch file
     exactly like `run_from_args`; a relaunch of an id it already hosts is
     refused.
@@ -43,13 +43,13 @@ Code: `crates/unpeel-core/src/pty_core.rs` (core process + client),
     `{"ok":false,"error":"busy","sessions":K}`. **Nothing may ever stop a core
     that hosts live Sessions.**
 - **Routing.** `spawn_host_process_from_launch_file` (the one choke point
-  every launcher reaches through `unpeel-host <launch-file>`) tries the core
-  when `pty-core.sock` exists and `UNPEEL_PTY_CORE` is not `0` (connect
+  every launcher reaches through `supercli-host <launch-file>`) tries the core
+  when `pty-core.sock` exists and `SUPERCLI_PTY_CORE` is not `0` (connect
   timeout 2 s, launch reply timeout 10 s). On any failure it logs a
   `pty-core launch fallback` line to `hooks/trace.log` and spawns today's
-  per-process Host. `UNPEEL_PTY_CORE=0` forces per-process hosting
+  per-process Host. `SUPERCLI_PTY_CORE=0` forces per-process hosting
   everywhere. Starting the core is the serve worker's job (the default
-  since 0.4.4; only `UNPEEL_PTY_CORE=0` opts out, matching routing); the
+  since 0.4.4; only `SUPERCLI_PTY_CORE=0` opts out, matching routing); the
   core itself does not start anything.
 - **Failure isolation.** Each Session thread runs under `catch_unwind`. A
   panic or an `Err` from `run_host` marks that Session's manifest exited and
@@ -82,7 +82,7 @@ Rules for readers:
 - Readers that key liveness solely on `manifest.pid` show a core-hosted
   Session as stopped for the sub-second launch window and, on the kill side,
   do nothing (there is no pid) — safe, just briefly pessimistic. At the time
-  of writing that is `crates/unpeel-serve/src/sessions.rs` (`running =`,
+  of writing that is `crates/supercli-serve/src/sessions.rs` (`running =`,
   one-liner: use `manifest_is_live`) and the Swift `killAndCleanup` /
   `replacementRestartAllowsState` paths, which fail closed on a nil pid.
 
@@ -143,10 +143,10 @@ per-process `__session_host__` runs the same services with N = 1 and just
 blocks its main thread on that callback. After a teardown the reactor's
 next idle tick hands freed heap back to the OS
 (`malloc_zone_pressure_relief` / `malloc_trim`), so the core shrinks again
-after `unpeel rm`.
+after `supercli rm`.
 
 Measured 2026-09-02 (release, this Mac, `scripts/bench-memory.sh` with
-`UNPEEL_PTY_CORE=1`): per empty `sh` Session 0.42 MiB (0.56 before), per
+`SUPERCLI_PTY_CORE=1`): per empty `sh` Session 0.42 MiB (0.56 before), per
 attached client ~0 KiB (102 KiB before), core alone with 4 threads
 regardless of Session count. The remaining per-Session bytes are heap:
 ~258 KiB of small-object malloc and ~176 KiB in the VT's own pages
@@ -171,7 +171,7 @@ broadcaster, journal, and command state together are ~17 KiB.
 
 ## Handoff: upgrading the core without restarting a terminal
 
-`unpeel-host __pty_core__ --takeover` replaces the running core in place.
+`supercli-host __pty_core__ --takeover` replaces the running core in place.
 Nothing on disk changes and no socket closes: the new core receives every
 kernel object the old one held, over one connection on `pty-core.sock`,
 with `SCM_RIGHTS` (`session_host::fd_pass`, raw `libc`):
@@ -187,7 +187,7 @@ with `SCM_RIGHTS` (`session_host::fd_pass`, raw `libc`):
    PTY input, and each client's kind, `answers_queries`, offset, unsent
    `outbuf` and unconsumed `inbuf`), then the snapshot VT bytes
    (`TerminalViewportState::snapshot_vt`, the same formatter output
-   `unpeel-attach` applies), with fds `[pty master, session.sock listener,
+   `supercli-attach` applies), with fds `[pty master, session.sock listener,
    clients…]`.
 4. new → old: `{"ok":true}` after every Session is registered on its reactor
    and `pty-core.json` names the new pid; or `{"ok":false,"error":…}`.
@@ -220,7 +220,7 @@ handoff waits up to 15 s for it), `handing_off` for a second concurrent
 request, `shutting_down`. Launches and `shutdown` arriving during a handoff
 answer `handing_off`.
 
-**Serve supervisor.** With `UNPEEL_PTY_CORE=1`, an adopted core whose
+**Serve supervisor.** With `SUPERCLI_PTY_CORE=1`, an adopted core whose
 `host_build_id` differs from the binary the worker would launch
 (`session_host::host_build_id_for(resolve_host_binary())`) gets exactly one
 `--takeover` spawn per (old pid, expected build). `serve.json.ptyCore.state`
@@ -229,7 +229,7 @@ the new pid and it answers `ping`. A takeover child that exits, or does not
 publish within 30 s, returns the state to `adopted`; neither core is ever
 signalled.
 
-Gates: `cargo test -p unpeel-core --lib fd_pass`, `cargo test -p unpeel-serve
+Gates: `cargo test -p supercli-core --lib fd_pass`, `cargo test -p supercli-serve
 --lib pty_core_supervisor`, and the PTY case `pty_core_handoff` (five
 Sessions with output in flight and an attached stream client, byte-equal
 screens, journal continuity, the client still streaming, old core exited).
@@ -237,21 +237,21 @@ screens, journal continuity, the client still streaming, old core exited).
 ## Operating it by hand
 
 ```sh
-export UNPEEL_HOME=$HOME/some-short-home       # socket paths must stay short
-nohup unpeel-host __pty_core__ </dev/null >/dev/null 2>&1 &
-echo '{"op":"ping"}'     | nc -U $UNPEEL_HOME/pty-core.sock
-unpeel new …                                   # routes to the core
-echo '{"op":"shutdown"}' | nc -U $UNPEEL_HOME/pty-core.sock   # busy until 0 sessions
+export SUPERCLI_HOME=$HOME/some-short-home       # socket paths must stay short
+nohup supercli-host __pty_core__ </dev/null >/dev/null 2>&1 &
+echo '{"op":"ping"}'     | nc -U $SUPERCLI_HOME/pty-core.sock
+supercli new …                                   # routes to the core
+echo '{"op":"shutdown"}' | nc -U $SUPERCLI_HOME/pty-core.sock   # busy until 0 sessions
 ```
 
-Gates: `cargo test -p unpeel-core pty_core`, the PTY case
-`crates/unpeel-cli/tests/run.sh pty_core_parity`, and
-`UNPEEL_HOME=<home-with-a-core> scripts/verify-attach.sh`.
+Gates: `cargo test -p supercli-core pty_core`, the PTY case
+`crates/supercli-cli/tests/run.sh pty_core_parity`, and
+`SUPERCLI_HOME=<home-with-a-core> scripts/verify-attach.sh`.
 
 ## Memory gate
 
 `scripts/bench-memory.sh` is the source of truth for the per-terminal
-numbers (the private "pty-core" design record "Measurement recipe", private); `UNPEEL_PTY_CORE=1`
+numbers (the private "pty-core" design record "Measurement recipe", private); `SUPERCLI_PTY_CORE=1`
 measures the core. CI runs it on macOS with the core off and on and on
 Ubuntu headless (`.github/workflows/bench-memory.yml`), publishes each table
 to the job summary, and fails when reclamation is not total or a row exceeds

@@ -2172,6 +2172,157 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "supercli-apps"
+version = "0.9.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde_json",
+]
+
+[[package]]
+name = "supercli-cli"
+version = "0.9.0"
+dependencies = [
+ "libc",
+ "semver",
+ "serde",
+ "serde_json",
+ "supercli-client",
+ "supercli-connector",
+ "supercli-core",
+ "supercli-serve",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "supercli-client"
+version = "0.9.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "hkdf",
+ "hmac",
+ "http",
+ "keyring",
+ "percent-encoding",
+ "rcgen",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "subtle",
+ "thiserror 2.0.21",
+ "tungstenite",
+ "ureq",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "supercli-connector"
+version = "0.9.0"
+dependencies = [
+ "base64 0.23.1",
+ "ed25519-dalek",
+ "flate2",
+ "getrandom 0.4.3",
+ "libc",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "supercli-client",
+ "tar",
+ "thiserror 2.0.21",
+ "toml",
+ "ureq",
+]
+
+[[package]]
+name = "supercli-core"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "dirs",
+ "libc",
+ "libmimalloc-sys",
+ "log",
+ "md5",
+ "portable-pty",
+ "rcgen",
+ "ring",
+ "rusqlite",
+ "rustls",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.9",
+ "supercli-connector",
+ "tar",
+ "tempfile",
+ "toml",
+ "uuid",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "supercli-host"
+version = "0.9.0"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "mimalloc",
+ "serde_json",
+ "supercli-core",
+ "supercli-serve",
+]
+
+[[package]]
+name = "supercli-load"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "hdrhistogram",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "supercli-native-bridge"
+version = "0.9.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "supercli-core",
+ "supercli-serve",
+]
+
+[[package]]
+name = "supercli-serve"
+version = "0.9.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.23.1",
+ "hkdf",
+ "libc",
+ "plist",
+ "qrcode",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "supercli-core",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2569,162 +2720,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "unpeel-apps"
-version = "0.9.0"
-dependencies = [
- "base64 0.22.1",
- "serde_json",
-]
-
-[[package]]
-name = "unpeel-cli"
-version = "0.9.0"
-dependencies = [
- "libc",
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "unpeel-client",
- "unpeel-connector",
- "unpeel-core",
- "unpeel-serve",
- "uuid",
-]
-
-[[package]]
-name = "unpeel-client"
-version = "0.9.0"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "getrandom 0.2.17",
- "hkdf",
- "hmac",
- "http",
- "keyring",
- "percent-encoding",
- "rcgen",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "subtle",
- "thiserror 2.0.21",
- "tungstenite",
- "ureq",
- "x25519-dalek",
-]
-
-[[package]]
-name = "unpeel-connector"
-version = "0.9.0"
-dependencies = [
- "base64 0.23.1",
- "ed25519-dalek",
- "flate2",
- "getrandom 0.4.3",
- "libc",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tar",
- "thiserror 2.0.21",
- "toml",
- "unpeel-client",
- "ureq",
-]
-
-[[package]]
-name = "unpeel-core"
-version = "0.9.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs",
- "libc",
- "libmimalloc-sys",
- "log",
- "md5",
- "portable-pty",
- "rcgen",
- "ring",
- "rusqlite",
- "rustls",
- "semver",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "toml",
- "unpeel-connector",
- "uuid",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
-name = "unpeel-host"
-version = "0.9.0"
-dependencies = [
- "base64 0.22.1",
- "libc",
- "mimalloc",
- "serde_json",
- "unpeel-core",
- "unpeel-serve",
-]
-
-[[package]]
 name = "unpeel-license-notices"
 version = "0.9.0"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
-]
-
-[[package]]
-name = "unpeel-load"
-version = "0.9.0"
-dependencies = [
- "anyhow",
- "clap",
- "hdrhistogram",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "unpeel-native-bridge"
-version = "0.9.0"
-dependencies = [
- "serde",
- "serde_json",
- "unpeel-core",
- "unpeel-serve",
-]
-
-[[package]]
-name = "unpeel-serve"
-version = "0.9.0"
-dependencies = [
- "aes-gcm",
- "base64 0.23.1",
- "hkdf",
- "libc",
- "plist",
- "qrcode",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "unpeel-core",
- "uuid",
 ]
 
 [[package]]

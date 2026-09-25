@@ -1,7 +1,7 @@
 //! `unpeel browser` — the Host-owned Browser MCP engine, scripted.
 //!
 //! The only browser verb the CLI carries: it delegates every decision to
-//! `unpeel_core::browser_engine` (the pinned manifest, hash verification,
+//! `supercli_core::browser_engine` (the pinned manifest, hash verification,
 //! the locked install, the shared resolution order), so the headless Host,
 //! the workspace worker's start-time install, and the MCP server can never
 //! disagree about which engine is "the" engine.
@@ -12,18 +12,18 @@
 
 use std::path::PathBuf;
 
-use unpeel_core::browser_engine as engine;
+use supercli_core::browser_engine as engine;
 
 pub const HELP: &str = "\
 unpeel browser — Host-owned Browser MCP engine (agent-browser)
 
   unpeel browser install [--check] [--json]
-      install (or confirm) the pinned engine under ~/.unpeel/browser/bin
+      install (or confirm) the pinned engine under ~/.supercli/browser/bin
       after sha256 verification against protocol/browser-engine-v1.json.
       --check only reports: exit 0 ready, 3 missing/stale, 4 no browser.
 
 The engine drives a system Chrome/Chromium; Unpeel never installs one.
-Override the engine with UNPEEL_AGENT_BROWSER_BIN=<path>.";
+Override the engine with SUPERCLI_AGENT_BROWSER_BIN=<path>.";
 
 /// `args` are the raw words after `browser` (flags parsed here so this verb
 /// owns its own `--check` / `--json` without touching the shared parser).
@@ -48,9 +48,9 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 fn install(check_only: bool, json: bool) -> i32 {
-    let home = unpeel_core::app_paths::unpeel_home();
+    let home = supercli_core::app_paths::supercli_home();
     let pinned = engine::pinned();
-    let path_dirs = unpeel_core::setup::search_dirs();
+    let path_dirs = supercli_core::setup::search_dirs();
     let (status, code) = if check_only {
         match engine::resolve(&home) {
             Ok(path) => (engine::Status::ready(path), 0),

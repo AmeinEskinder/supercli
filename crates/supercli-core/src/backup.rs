@@ -1,5 +1,5 @@
 //! `unpeel backup` / `unpeel restore` — consistent, verifiable snapshots of a
-//! workspace home (`UNPEEL_HOME`).
+//! workspace home (`SUPERCLI_HOME`).
 //!
 //! A backup is a single `.tar` archive plus a manifest (`manifest.json`,
 //! the last entry) carrying the SHA-256 of every archived file. Restore
@@ -97,7 +97,7 @@ pub struct ManifestEntry {
 pub struct BackupManifest {
     pub format_version: u32,
     pub created_unix_ms: u64,
-    pub unpeel_version: String,
+    pub supercli_version: String,
     pub files: Vec<ManifestEntry>,
 }
 
@@ -206,7 +206,7 @@ fn hex_sha256(bytes: &[u8]) -> String {
 }
 
 /// True while another process holds this workspace's serve lease.
-/// Mirrors `unpeel_serve::driver::is_running_at` (which lives downstream
+/// Mirrors `supercli_serve::driver::is_running_at` (which lives downstream
 /// of this crate): a non-blocking exclusive `flock` probe on
 /// `<home>/serve.lock`. A stale lockfile never counts — only the kernel
 /// lock state matters.
@@ -407,7 +407,7 @@ fn write_archive(dest: &Path, files: &[(String, Vec<u8>)]) -> Result<BackupManif
     let manifest = BackupManifest {
         format_version: BACKUP_FORMAT_VERSION,
         created_unix_ms: now_ms(),
-        unpeel_version: env!("CARGO_PKG_VERSION").to_string(),
+        supercli_version: env!("CARGO_PKG_VERSION").to_string(),
         files: entries,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)
@@ -724,15 +724,15 @@ pub fn restore_backup(
         {
             let audit_path = staging.join("grant-audit.jsonl");
             if audit_path.exists() {
-                // Temporarily set UNPEEL_HOME to staging for verification.
-                // (verify_grant_audit uses audit_path() which reads UNPEEL_HOME.)
-                let old_home = std::env::var("UNPEEL_HOME").ok();
-                std::env::set_var("UNPEEL_HOME", &staging);
+                // Temporarily set SUPERCLI_HOME to staging for verification.
+                // (verify_grant_audit uses audit_path() which reads SUPERCLI_HOME.)
+                let old_home = std::env::var("SUPERCLI_HOME").ok();
+                std::env::set_var("SUPERCLI_HOME", &staging);
                 let result = crate::grant_audit::verify_grant_audit();
                 if let Some(old) = old_home {
-                    std::env::set_var("UNPEEL_HOME", old);
+                    std::env::set_var("SUPERCLI_HOME", old);
                 } else {
-                    std::env::remove_var("UNPEEL_HOME");
+                    std::env::remove_var("SUPERCLI_HOME");
                 }
                 result.map_err(|e| BackupError::ChainInvalid {
                     session: "grant-audit".to_string(),
@@ -743,7 +743,7 @@ pub fn restore_backup(
         // Install: tmp-file + rename per file, so a crash or IO error
         // leaves old-or-new, never a torn file. Restored state can carry
         // device tokens, so everything lands 0600 (the home itself is
-        // expected to be 0700, enforced by ensure_unpeel_home).
+        // expected to be 0700, enforced by ensure_supercli_home).
         fs::create_dir_all(home)?;
         let mut files = 0usize;
         for entry in &manifest.files {
@@ -1132,7 +1132,7 @@ mod tests {
 
         // S2: Grant writers also run concurrently. Each writes a unique
         // grant; the backup must capture a self-consistent grants.json.
-        std::env::set_var("UNPEEL_HOME", &home);
+        std::env::set_var("SUPERCLI_HOME", &home);
         let grant_stop = stop.clone();
         let grant_writer = std::thread::spawn(move || {
             let mut i = 0u32;

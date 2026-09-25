@@ -2,7 +2,7 @@
 //!
 //! The native app and the TUI can enrich the shared router with in-process UI
 //! state. An on-demand SSH gateway has neither frontend, so this adapter builds
-//! the authoritative subset from `~/.unpeel`: app state, session manifests,
+//! the authoritative subset from `~/.supercli`: app state, session manifests,
 //! markers, output logs, and control sockets. Platform-only capabilities such
 //! as pairing and approval prompts are deliberately not advertised here.
 
@@ -589,7 +589,7 @@ pub fn app_install_response(body: &Value) -> (u16, Value) {
             json!({ "error": format!("Unpeel Apps publish no build for {}-{}", std::env::consts::OS, std::env::consts::ARCH) }),
         );
     }
-    match crate::app_installer::install(&crate::app_paths::unpeel_home(), app_id) {
+    match crate::app_installer::install(&crate::app_paths::supercli_home(), app_id) {
         Ok(path) => (200, json!({ "ok": true, "path": path })),
         Err(error) => (502, json!({ "error": error })),
     }
@@ -2844,7 +2844,7 @@ mod tests {
     fn session_summary_advertises_running_app_identity_as_data() {
         let mut manifest = manifest_with_runtime(HostedSessionState::Running, "");
         manifest.active_app = Some(session_host::ObservedAppIdentity {
-            id: "unpeel.app.design".into(),
+            id: "supercli.app.design".into(),
             name: "Unpeel Design".into(),
             tint: Some("#8B5CF6".into()),
             spinner_tint: None,
@@ -2859,7 +2859,7 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(summary["activeAppID"], "unpeel.app.design");
+        assert_eq!(summary["activeAppID"], "supercli.app.design");
         assert_eq!(summary["activeAppName"], "Unpeel Design");
         assert_eq!(summary["activeAppTintHex"], 0x8B5CF6);
         // The launch cwd travels additively so a Controller pane can resolve
@@ -2872,7 +2872,7 @@ mod tests {
             kind: crate::activity_log::ActivityLogKind::Alert,
             at: 500,
             title: "Usage".into(),
-            command: "unpeel-usage".into(),
+            command: "supercli-usage".into(),
             project_id: "project-1".into(),
             project_name: "Project".into(),
             message: Some("Close to the weekly limit".into()),
@@ -3330,12 +3330,12 @@ mod tests {
     fn opener_projection_migrates_legacy_file_keys_and_keeps_typed_resources() {
         let wire = wire_openers(&json!({
             "file_openers": {
-                "text/markdown": "app:unpeel.app.markdown",
+                "text/markdown": "app:supercli.app.markdown",
                 "text/html": "system",
                 "text/unknown": "editor"
             }
         }));
-        assert_eq!(wire["file:text/markdown"], "app:unpeel.app.markdown");
+        assert_eq!(wire["file:text/markdown"], "app:supercli.app.markdown");
         // Only media types some catalog App declares survive migration; since
         // the Design App left the catalog (2026-09-07) text/html is as unknown
         // as text/unknown.
@@ -3344,11 +3344,11 @@ mod tests {
 
         let typed = wire_openers(&json!({
             "openers": {
-                "resource:git.working-tree": "app:unpeel.app.diffs",
+                "resource:git.working-tree": "app:supercli.app.diffs",
                 "resource:folder": "editor"
             }
         }));
-        assert_eq!(typed["resource:git.working-tree"], "app:unpeel.app.diffs");
+        assert_eq!(typed["resource:git.working-tree"], "app:supercli.app.diffs");
         assert!(typed.get("resource:folder").is_none());
     }
 
@@ -3358,7 +3358,7 @@ mod tests {
         assert_eq!(missing_status, 400);
 
         let (unknown_status, unknown_body) =
-            app_install_response(&json!({ "appID": "unpeel.app.unknown" }));
+            app_install_response(&json!({ "appID": "supercli.app.unknown" }));
         assert_eq!(unknown_status, 404);
         assert!(unknown_body["error"]
             .as_str()

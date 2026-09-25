@@ -2,8 +2,8 @@
 # Phase 8 S2 — real-binary end-to-end scenario.
 #
 # Runs the whole loop against real built binaries on a private short-path
-# UNPEEL_HOME (never the real ~/.unpeel, never /Applications/Unpeel.app):
-#   1. start the Host (`unpeel serve`)
+# SUPERCLI_HOME (never the real ~/.supercli, never /Applications/Unpeel.app):
+#   1. start the Host (`supercli serve`)
 #   2. pair a client through the real pairing protocol
 #   3. run a scheduled session (`schedule add` + `schedule run-once`)
 #   4. exercise an Ask tool and approve it from the paired controller path
@@ -37,19 +37,19 @@ if [ "$PROFILE" != "debug" ] && [ "$PROFILE" != "release" ]; then
     echo "Usage: $0 [debug|release]" >&2
     exit 1
 fi
-UNPEEL="$ROOT/crates/target/$PROFILE/unpeel"
-UNPEEL_HOST="$ROOT/crates/target/$PROFILE/unpeel-host"
+SUPERCLI="$ROOT/crates/target/$PROFILE/supercli"
+SUPERCLI_HOST="$ROOT/crates/target/$PROFILE/supercli-host"
 HELPER="$ROOT/scripts/e2e-scenario-helpers.py"
 
-E2E_HOME="/home/hatch/e2e-unpeel-$$"
+E2E_HOME="/home/hatch/e2e-supercli-$$"
 CONN_DIR="$E2E_HOME/connectors"
 LOG_DIR="$E2E_HOME/logs"
 
-export UNPEEL_HOME="$E2E_HOME"
-export UNPEEL_CONNECTORS_DIR="$CONN_DIR"
-export UNPEEL_CONNECTORS_KEYCHAIN=memory
-export UNPEEL_TEST=1
-export UNPEEL_HOST_BIN="$UNPEEL_HOST"
+export SUPERCLI_HOME="$E2E_HOME"
+export SUPERCLI_CONNECTORS_DIR="$CONN_DIR"
+export SUPERCLI_CONNECTORS_KEYCHAIN=memory
+export SUPERCLI_TEST=1
+export SUPERCLI_HOST_BIN="$SUPERCLI_HOST"
 export E2E_TOKEN=""
 
 PASS=0
@@ -58,7 +58,7 @@ FAIL=0
 # --- Process identity before any signal (repo invariant) ---
 # A bare pid can be reused by the kernel after the original process exits,
 # so every kill in this script verifies the recorded kernel start time
-# (ms since the epoch — the same definition as unpeel-core's
+# (ms since the epoch — the same definition as supercli-core's
 # `process_start_time_ms`: /proc/<pid>/stat field 22 in clock ticks since
 # boot, plus /proc/stat btime) before signaling. Ambiguous ownership fails
 # closed: no signal is sent.
@@ -149,15 +149,15 @@ cleanup() {
     # The session host: stop the session properly, then reap its
     # __pty_core__/__remote__ children (orphaned when the host dies).
     if [ -n "${SID:-}" ]; then
-        "$UNPEEL" stop "$SID" >/dev/null 2>&1 || true
+        "$SUPERCLI" stop "$SID" >/dev/null 2>&1 || true
     fi
-    pkill_bounded "unpeel-host (__pty_core__|__remote__)" -9
+    pkill_bounded "supercli-host (__pty_core__|__remote__)" -9
     sleep 1
 }
 trap cleanup EXIT
 
-[ -x "$UNPEEL" ] || die "unpeel binary missing at $UNPEEL (build first)"
-[ -x "$UNPEEL_HOST" ] || die "unpeel-host binary missing at $UNPEEL_HOST (build first)"
+[ -x "$SUPERCLI" ] || die "supercli binary missing at $SUPERCLI (build first)"
+[ -x "$SUPERCLI_HOST" ] || die "supercli-host binary missing at $SUPERCLI_HOST (build first)"
 
 mkdir -p "$E2E_HOME/pids" "$LOG_DIR" "$CONN_DIR" "$E2E_HOME/mobile" "$E2E_HOME/mcp"
 chmod 700 "$E2E_HOME"
@@ -234,14 +234,14 @@ pass "connector fixtures written (asky/Ask, allowy/Allow, slowy/Allow-slow)"
 # writes the real devices.json.
 MOBILE_PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
 echo "$MOBILE_PORT" > "$E2E_HOME/mobile/server-port"
-# The shared MCP auth token is minted by unpeel-host on first use; pre-write
+# The shared MCP auth token is minted by supercli-host on first use; pre-write
 # it here so the hook listener and the sidecar trivially agree.
 python3 -c 'import secrets;print(secrets.token_hex(32))' > "$E2E_HOME/mcp/auth-token"
 chmod 600 "$E2E_HOME/mcp/auth-token"
 
 # ------------------------------------------------------------------ 1. serve
 echo "== S2 step 1: start the Host"
-"$UNPEEL" serve >"$LOG_DIR/serve.log" 2>&1 &
+"$SUPERCLI" serve >"$LOG_DIR/serve.log" 2>&1 &
 SERVE_PID=$!
 record_pid "$SERVE_PID" > "$E2E_HOME/pids/serve.pid"
 
@@ -262,24 +262,24 @@ pass "Host started (pid from serve.json, hookPort present)"
 # opens the pairing window first, then waits for the listener.
 
 # ------------------------------------------------------- 2. pair the client
-# Genuine sealed /mobile/pair exchange: `unpeel pair` opens the pairing
+# Genuine sealed /mobile/pair exchange: `supercli pair` opens the pairing
 # window on the running Host via the local gateway (Unix socket) and prints
 # the QR code; the Host then starts the mobile listener. The pair_client
-# example (unpeel-client) runs the controller half of the sealed exchange
+# example (supercli-client) runs the controller half of the sealed exchange
 # (HKDF-SHA256 + AES-256-GCM, phone-to-mac / mac-to-phone) and returns the
 # Host-issued auth token. The Host's pairing route writes devices.json.
 echo "== S2 step 2: pair a client (genuine sealed /mobile/pair exchange)"
-"$UNPEEL" pair --advertise-host 127.0.0.1 --advertise-port "$MOBILE_PORT" >"$LOG_DIR/pair.log" 2>&1 &
+"$SUPERCLI" pair --advertise-host 127.0.0.1 --advertise-port "$MOBILE_PORT" >"$LOG_DIR/pair.log" 2>&1 &
 PAIR_PID=$!
 record_pid "$PAIR_PID" > "$E2E_HOME/pids/pair.pid"
 # Wait for the QR code line, then extract it.
 QR=""
 for _ in $(seq 1 40); do
-    QR="$(grep -m1 '^UNPEEL:' "$LOG_DIR/pair.log" 2>/dev/null || true)"
+    QR="$(grep -m1 '^SUPERCLI:' "$LOG_DIR/pair.log" 2>/dev/null || true)"
     [ -n "$QR" ] && break
     sleep 0.5
 done
-[ -n "$QR" ] || die "unpeel pair produced no QR code (see $LOG_DIR/pair.log)"
+[ -n "$QR" ] || die "supercli pair produced no QR code (see $LOG_DIR/pair.log)"
 pass "pairing window opened, QR code captured"
 # The Host starts the mobile listener once the pairing window is open.
 READY=0
@@ -305,7 +305,7 @@ pass "mobile HTTPS listener up with certificate"
 # Build the pairing client if needed, then run the sealed exchange.
 PAIR_CLIENT_BIN="$ROOT/crates/target/$PROFILE/examples/pair_client"
 if [ ! -x "$PAIR_CLIENT_BIN" ]; then
-    (cd "$ROOT/crates" && cargo build --profile "$PROFILE" -p unpeel-client --example pair_client \
+    (cd "$ROOT/crates" && cargo build --profile "$PROFILE" -p supercli-client --example pair_client \
         >"$LOG_DIR/pair-client-build.log" 2>&1) \
         || die "pair_client build failed (see $LOG_DIR/pair-client-build.log)"
 fi
@@ -315,7 +315,7 @@ E2E_TOKEN="$(echo "$PAIR_OUT" | python3 -c 'import json,sys;print(json.load(sys.
 [ -n "$E2E_TOKEN" ] || die "pairing returned no auth token: $PAIR_OUT"
 export E2E_TOKEN
 pass "sealed /mobile/pair exchange completed, Host-issued auth token received"
-# The `unpeel pair` process should exit on its own once pairing completes.
+# The `supercli pair` process should exit on its own once pairing completes.
 for _ in $(seq 1 20); do
     kill -0 "$PAIR_PID" 2>/dev/null || break
     sleep 0.5
@@ -336,14 +336,14 @@ pass "paired controller authenticated to /mobile/bootstrap (200)"
 
 # ------------------------------------------------------- create the session
 echo "== S2: create session + attach connectors"
-NEW_OUT="$("$UNPEEL" new --command "sleep 600" --json 2>"$LOG_DIR/new.log")"
+NEW_OUT="$("$SUPERCLI" new --command "sleep 600" --json 2>"$LOG_DIR/new.log")"
 SID="$(echo "$NEW_OUT" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
-[ -n "$SID" ] || die "unpeel new produced no session id: $NEW_OUT"
+[ -n "$SID" ] || die "supercli new produced no session id: $NEW_OUT"
 SESSION_DIR="$E2E_HOME/app-sessions/$SID"
 [ -f "$SESSION_DIR/manifest.json" ] || die "no session manifest for $SID"
 pass "session created: $SID"
 for c in asky allowy slowy; do
-    "$UNPEEL" connector enable "$c" --session "$SID" >"$LOG_DIR/enable-$c.log" 2>&1 \
+    "$SUPERCLI" connector enable "$c" --session "$SID" >"$LOG_DIR/enable-$c.log" 2>&1 \
         || die "connector enable $c failed (see $LOG_DIR/enable-$c.log)"
 done
 pass "connectors attached via real CLI (asky, allowy, slowy)"
@@ -402,11 +402,11 @@ EOF
 
 # ---------------------------------------------------- 3. scheduled session
 echo "== S2 step 3: scheduled session (run-once, autonomous, no human)"
-"$UNPEEL" schedule add --id e2e-sched --session "$SID" --interval 60 \
+"$SUPERCLI" schedule add --id e2e-sched --session "$SID" --interval 60 \
     --tool allowy.echo --arg msg=sched-hello >"$LOG_DIR/sched-add.log" 2>&1 \
     || die "schedule add failed (see $LOG_DIR/sched-add.log)"
 pass "schedule armed (interval 60, explicit --tool)"
-"$UNPEEL" schedule run-once e2e-sched >"$LOG_DIR/sched-run.log" 2>&1 \
+"$SUPERCLI" schedule run-once e2e-sched >"$LOG_DIR/sched-run.log" 2>&1 \
     || die "schedule run-once failed (see $LOG_DIR/sched-run.log)"
 pass "schedule run-once completed"
 SCHED_ACTOR="$(python3 - "$SESSION_DIR" <<'EOF'
@@ -492,13 +492,13 @@ fi
 
 # ------------------------------------------------------- 7. worker takeover
 echo "== S2 step 7: worker takeover across two real daemon processes"
-"$UNPEEL" schedule add --id e2e-takeover --session "$SID" --interval 60 \
+"$SUPERCLI" schedule add --id e2e-takeover --session "$SID" --interval 60 \
     --tool slowy.sleep --arg seconds=90 >"$LOG_DIR/sched-add2.log" 2>&1 \
     || die "schedule add (takeover) failed"
-"$UNPEEL" schedule pause e2e-sched >"$LOG_DIR/sched-pause.log" 2>&1 \
+"$SUPERCLI" schedule pause e2e-sched >"$LOG_DIR/sched-pause.log" 2>&1 \
     || die "schedule pause failed"
 pass "takeover schedule armed; first schedule paused"
-"$UNPEEL" schedule daemon >"$LOG_DIR/daemon-a.log" 2>&1 &
+"$SUPERCLI" schedule daemon >"$LOG_DIR/daemon-a.log" 2>&1 &
 DAEMON_A=$!
 DAEMON_A_START="$(proc_start_ms "$DAEMON_A")"
 record_pid "$DAEMON_A" > "$E2E_HOME/pids/daemon-a.pid"
@@ -515,7 +515,7 @@ sleep 1
 "$HELPER" expire-lease e2e-takeover >"$LOG_DIR/expire.log" 2>&1 \
     || die "could not expire the lease (see $LOG_DIR/expire.log)"
 pass "worker A SIGKILLed; its lease forced to lapse (real lease DB row)"
-"$UNPEEL" schedule daemon >"$LOG_DIR/daemon-b.log" 2>&1 &
+"$SUPERCLI" schedule daemon >"$LOG_DIR/daemon-b.log" 2>&1 &
 DAEMON_B=$!
 DAEMON_B_START="$(proc_start_ms "$DAEMON_B")"
 record_pid "$DAEMON_B" > "$E2E_HOME/pids/daemon-b.pid"

@@ -61,7 +61,7 @@ pub(crate) const KIMI_MANAGED_HOOKS_START: &str = "# BEGIN UNPEEL MANAGED KIMI H
 pub(crate) const KIMI_MANAGED_HOOKS_END: &str = "# END UNPEEL MANAGED KIMI HOOKS";
 
 pub(crate) fn kimi_hook_command(event: &str) -> String {
-    format!("\"${{UNPEEL_HOME:-$HOME/.unpeel}}/hooks/kimi-hook.sh\" {event}")
+    format!("\"${{SUPERCLI_HOME:-$HOME/.unpeel}}/hooks/kimi-hook.sh\" {event}")
 }
 
 pub(crate) fn toml_basic_string(value: &str) -> String {

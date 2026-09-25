@@ -2,7 +2,7 @@
 # Shared GLIBC release helpers. This file is sourced by build-cli-linux.sh;
 # keep it POSIX so the version tests also run on macOS release workstations.
 
-unpeel_highest_glibc_version() {
+supercli_highest_glibc_version() {
   sed -n 's/.*GLIBC_\([0-9][0-9.]*\).*/\1/p' \
     | awk '
       function newer(left, right, left_n, right_n, count, i, left_v, right_v) {
@@ -23,7 +23,7 @@ unpeel_highest_glibc_version() {
     '
 }
 
-unpeel_glibc_version_at_most() {
+supercli_glibc_version_at_most() {
   actual=$1
   ceiling=$2
   awk -v actual="$actual" -v ceiling="$ceiling" '

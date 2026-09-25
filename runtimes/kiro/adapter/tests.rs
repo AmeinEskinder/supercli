@@ -26,7 +26,7 @@ fn kiro_hook_maps_v3_and_v2_lifecycle_events() {
     assert!(KIRO_HOOK_SCRIPT.contains("PreToolUse|preToolUse|PostToolUse|postToolUse"));
     assert!(KIRO_HOOK_SCRIPT.contains("messages.jsonl"));
     assert!(KIRO_HOOK_SCRIPT.contains("sessions/cli/$_provider_session_id.jsonl"));
-    assert!(KIRO_HOOK_SCRIPT.contains("UNPEEL_SESSION_ID"));
+    assert!(KIRO_HOOK_SCRIPT.contains("SUPERCLI_SESSION_ID"));
 }
 
 #[test]
@@ -37,8 +37,8 @@ fn kiro_mcp_config_explicitly_maps_session_identity() {
     // Kiro v3 passes only the declared block to MCP children; the generic
     // hosted-shell variables carry identity, and grants come from the
     // Session manifest inside the gate — never from an env grant.
-    assert_eq!(server["env"]["UNPEEL_SESSION_ID"], "${UNPEEL_SESSION_ID}");
-    assert_eq!(server["env"]["UNPEEL_HOME"], "${UNPEEL_HOME}");
-    assert_eq!(server["env"]["UNPEEL_HOST_BIN"], "${UNPEEL_HOST_BIN}");
-    assert!(server["env"].get("UNPEEL_SESSIONS_MCP_ENABLED").is_none());
+    assert_eq!(server["env"]["SUPERCLI_SESSION_ID"], "${SUPERCLI_SESSION_ID}");
+    assert_eq!(server["env"]["SUPERCLI_HOME"], "${SUPERCLI_HOME}");
+    assert_eq!(server["env"]["SUPERCLI_HOST_BIN"], "${SUPERCLI_HOST_BIN}");
+    assert!(server["env"].get("SUPERCLI_SESSIONS_MCP_ENABLED").is_none());
 }

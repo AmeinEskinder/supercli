@@ -1,20 +1,20 @@
 #!/bin/bash
 INPUT=$(cat)
 # Global provider hooks must be inert outside a hosted Unpeel Session.
-[ -n "${UNPEEL_SESSION_ID:-}" ] || exit 0
-TRACE_FILE="${UNPEEL_HOOK_TRACE_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/hooks/trace.log}"
+[ -n "${SUPERCLI_SESSION_ID:-}" ] || exit 0
+TRACE_FILE="${SUPERCLI_HOOK_TRACE_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/trace.log}"
 mkdir -p "$(dirname "$TRACE_FILE")" >/dev/null 2>&1 || true
-UNPEEL_PORT_REGISTRY_FILE="${UNPEEL_APP_PORT_REGISTRY_FILE:-${UNPEEL_HOME:-$HOME/.unpeel}/app-ports}"
+SUPERCLI_PORT_REGISTRY_FILE="${SUPERCLI_APP_PORT_REGISTRY_FILE:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-ports}"
 
 json_escape_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
 runtime_generation_json_field() {
-  case "${UNPEEL_RUNTIME_GENERATION:-}" in
+  case "${SUPERCLI_RUNTIME_GENERATION:-}" in
     ''|*[!0-9]*) return 0 ;;
   esac
-  printf ',"unpeel_runtime_generation":%s' "$UNPEEL_RUNTIME_GENERATION"
+  printf ',"supercli_runtime_generation":%s' "$SUPERCLI_RUNTIME_GENERATION"
 }
 
 # Persist the last lifecycle event into the session dir so a restarted app can
@@ -22,8 +22,8 @@ runtime_generation_json_field() {
 record_last_hook_event() {
   _record_event_name="$1"
   _record_tool_name="$2"
-  [ -n "${UNPEEL_SESSION_ID:-}" ] || return 0
-  _record_dir="${UNPEEL_SESSION_DIR:-${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$UNPEEL_SESSION_ID}"
+  [ -n "${SUPERCLI_SESSION_ID:-}" ] || return 0
+  _record_dir="${SUPERCLI_SESSION_DIR:-${SUPERCLI_HOME:-$HOME/.unpeel}/app-sessions/$SUPERCLI_SESSION_ID}"
   [ -d "$_record_dir" ] || return 0
   _record_name_json="$(json_escape_string "$_record_event_name")"
   _record_generation="$(runtime_generation_json_field)"
@@ -98,10 +98,10 @@ post_hook_event() {
   esac
 }
 
-current_unpeel_ports() {
-  [ -f "$UNPEEL_PORT_REGISTRY_FILE" ] || return 1
+current_supercli_ports() {
+  [ -f "$SUPERCLI_PORT_REGISTRY_FILE" ] || return 1
   awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ && $1 > 0 && $1 <= 65535 && !seen[$1 + 0]++ { print $1 + 0 }' \
-    "$UNPEEL_PORT_REGISTRY_FILE" 2>/dev/null
+    "$SUPERCLI_PORT_REGISTRY_FILE" 2>/dev/null
 }
 
 post_hook_event_to_current_ports() {
@@ -109,7 +109,7 @@ post_hook_event_to_current_ports() {
   _hook_session_id="$2"
   _hook_skip_port="$3"
   _hook_post_pids=""
-  for _hook_candidate_port in $(current_unpeel_ports); do
+  for _hook_candidate_port in $(current_supercli_ports); do
     [ -n "$_hook_candidate_port" ] || continue
     [ "$_hook_candidate_port" = "$_hook_skip_port" ] && continue
     ( post_hook_event "$_hook_event_name" "$_hook_session_id" "$_hook_candidate_port" || true ) &
@@ -156,28 +156,28 @@ esac
 
 HOOK_PAYLOAD="$(hook_payload "$EVENT_TYPE")"
 _hook_post_results=""
-if [ -n "$UNPEEL_SESSION_ID" ]; then
+if [ -n "$SUPERCLI_SESSION_ID" ]; then
   # Posts go out synchronously and in order: backgrounded fire-and-forget
   # posts could be reaped when the hook process exited (silently losing the
   # event), and concurrent posts could arrive out of order. The registry
   # fan-out covers a second Unpeel instance (e.g. a dev build next to the
-  # installed app). Set UNPEEL_HOOK_POST_SYNC=0 to restore backgrounded
+  # installed app). Set SUPERCLI_HOOK_POST_SYNC=0 to restore backgrounded
   # posts.
-  if [ "${UNPEEL_HOOK_POST_SYNC:-1}" = "1" ]; then
-    post_hook_event "$EVENT_TYPE" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
-    post_hook_event_to_current_ports "$EVENT_TYPE" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
+  if [ "${SUPERCLI_HOOK_POST_SYNC:-1}" = "1" ]; then
+    post_hook_event "$EVENT_TYPE" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
+    post_hook_event_to_current_ports "$EVENT_TYPE" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
   else
     (
-      post_hook_event "$EVENT_TYPE" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
-      post_hook_event_to_current_ports "$EVENT_TYPE" "$UNPEEL_SESSION_ID" "$UNPEEL_APP_PORT" || true
+      post_hook_event "$EVENT_TYPE" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
+      post_hook_event_to_current_ports "$EVENT_TYPE" "$SUPERCLI_SESSION_ID" "$SUPERCLI_APP_PORT" || true
     ) &
   fi
 fi
 
 printf '%s gemini-hook session=%s port=%s event=%s post=%s\n' \
   "$(date '+%Y-%m-%d %H:%M:%S')" \
-  "${UNPEEL_SESSION_ID:-}" \
-  "${UNPEEL_APP_PORT:-}" \
+  "${SUPERCLI_SESSION_ID:-}" \
+  "${SUPERCLI_APP_PORT:-}" \
   "${EVENT_TYPE:-}" \
   "${_hook_post_results:-none}" >> "$TRACE_FILE" 2>/dev/null || true
 

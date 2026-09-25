@@ -13,7 +13,7 @@ MCP tools; to the owner it looks like one connected account; to a developer
 it looks like a manifest plus a small executable.
 
 ```
-~/.unpeel/connectors/
+~/.supercli/connectors/
   gmail/
     connector.toml        # manifest (this spec)
     connector             # executable: the connector's MCP server
@@ -74,22 +74,22 @@ account_hint = { type = "string", title = "Account label" }
 
 | Verb | What happens |
 |---|---|
-| `unpeel connector discover` | Scan registrar sources for connector manifests (built-in dir, user dir, registries). |
-| `unpeel connector keygen [--key-id <id>]` | Generate an Ed25519 publisher keypair (secret stays `0600` in the keys dir, refuses to overwrite). |
-| `unpeel connector pack <name> [--out <dir>] [--key-id <id>]` | Build a signed `.unpeel-connector` bundle: gzip tar of the connector dir (only `connector.toml`, `connector`, `config.json`, `README*`, `LICENSE*`, `icon.*` allowed) plus a detached Ed25519 `.sig` sidecar. |
-| `unpeel connector publish <name> --registry <dir> [--key-id <id>]` | Verify the signature, pin the publisher key on first publish (a later publish with a different key is refused), record the semver version, SHA-256 digest, and trusted-timestamp in the registry's `index.json`. |
-| `unpeel connector install <source> [key=value ...] [--form] [--require-signature]` | Install from a signed bundle (signature verified against the publisher key; wrong/missing key refused), from a registry (latest semver, digest re-checked), or from a directory (unsigned — reported honestly; `--require-signature` refuses it). `--form` renders `config_schema` interactively; `key=value` pairs and `config` are schema-validated and coerced into `config.json` (non-secrets only). |
-| `unpeel connector config <name> [key=value ...]` | Show or schema-validated update of `config.json`. |
-| `unpeel connector connect <name> [--token]` | Run the auth flow: `api-key` reads `--token` or prompts, `none` is a no-op, `oauth2` runs the authorization-code + PKCE (S256) browser dance against `[oauth]` endpoints with a loopback redirect and stores the TokenSet. Tokens go to the keychain under `connector:<name>`. |
-| `unpeel connector disconnect <name>` | Revocation is one verb: delete the keychain token and detach the connector from every session's `connectors.json` (reported as `detached_sessions`). |
-| `unpeel connector enable <name> --session <id> [--policy tool=ask ...]` | Attach the connector's tools to a session (writes `<session-dir>/connectors.json`, flock + atomic rename). Requires the connector to be connected when its auth flow needs a token. `--policy` may only tighten the manifest ceiling. `disable <name> --session <id>` detaches (idempotent). The Host consumes the record: the session's MCP server advertises attached non-Deny tools in `tools/list` and dispatches `tools/call` through a per-session link (stdio process with `UNPEEL_CONNECTOR_TOKEN` injected, or MCP-over-HTTP via `mcp_url` in `config.json`), enforces Allow/Ask/Deny (Ask prompts via `/mcp/approve-connector`, grants persist per session+tool in `app-state.json`), re-reads the record on every call so detach takes effect without restart, fails closed on corrupt records or missing/revoked tokens, and appends an audit entry per call to `<session-dir>/connectors-audit.jsonl`. OAuth2 access tokens are refreshed automatically before expiry and rotated back into the keychain. |
-| `unpeel connector doctor` | Every connector: manifest valid, executable present (stdio) or `mcp_url` reachable (http), token present when auth needs one (OAuth2 tokens refreshed when expiring), tools responding. `auth.flow = "none"` never needs a token. |
-| `unpeel connector run <name> <tool> [key=value ...]` | Invoke one tool through the full path (policy → keychain → MCP). Non-interactive: Allow tools only. Works for stdio and HTTP connectors; OAuth2 tokens refresh first. |
-| `unpeel connector audit --session <id> [--tool <t>]` | Query the session's `connectors-audit.jsonl` (filter by tool, JSON output). |
-| `unpeel connector sync [--registry <dir>]` / `unpeel registrar sync [--registry <dir>]` | Install/update every registry connector to its latest version (digest-checked fetch, signature verified against the pinned key before anything is written), then verify everything installed: transport present, token present when auth requires one. Updates are staged beside the install dir and swapped in atomically — a failed update leaves the old version untouched, and the user's local `config.json` is preserved over the bundle's. With no `--registry` it only verifies. |
+| `supercli connector discover` | Scan registrar sources for connector manifests (built-in dir, user dir, registries). |
+| `supercli connector keygen [--key-id <id>]` | Generate an Ed25519 publisher keypair (secret stays `0600` in the keys dir, refuses to overwrite). |
+| `supercli connector pack <name> [--out <dir>] [--key-id <id>]` | Build a signed `.supercli-connector` bundle: gzip tar of the connector dir (only `connector.toml`, `connector`, `config.json`, `README*`, `LICENSE*`, `icon.*` allowed) plus a detached Ed25519 `.sig` sidecar. |
+| `supercli connector publish <name> --registry <dir> [--key-id <id>]` | Verify the signature, pin the publisher key on first publish (a later publish with a different key is refused), record the semver version, SHA-256 digest, and trusted-timestamp in the registry's `index.json`. |
+| `supercli connector install <source> [key=value ...] [--form] [--require-signature]` | Install from a signed bundle (signature verified against the publisher key; wrong/missing key refused), from a registry (latest semver, digest re-checked), or from a directory (unsigned — reported honestly; `--require-signature` refuses it). `--form` renders `config_schema` interactively; `key=value` pairs and `config` are schema-validated and coerced into `config.json` (non-secrets only). |
+| `supercli connector config <name> [key=value ...]` | Show or schema-validated update of `config.json`. |
+| `supercli connector connect <name> [--token]` | Run the auth flow: `api-key` reads `--token` or prompts, `none` is a no-op, `oauth2` runs the authorization-code + PKCE (S256) browser dance against `[oauth]` endpoints with a loopback redirect and stores the TokenSet. Tokens go to the keychain under `connector:<name>`. |
+| `supercli connector disconnect <name>` | Revocation is one verb: delete the keychain token and detach the connector from every session's `connectors.json` (reported as `detached_sessions`). |
+| `supercli connector enable <name> --session <id> [--policy tool=ask ...]` | Attach the connector's tools to a session (writes `<session-dir>/connectors.json`, flock + atomic rename). Requires the connector to be connected when its auth flow needs a token. `--policy` may only tighten the manifest ceiling. `disable <name> --session <id>` detaches (idempotent). The Host consumes the record: the session's MCP server advertises attached non-Deny tools in `tools/list` and dispatches `tools/call` through a per-session link (stdio process with `SUPERCLI_CONNECTOR_TOKEN` injected, or MCP-over-HTTP via `mcp_url` in `config.json`), enforces Allow/Ask/Deny (Ask prompts via `/mcp/approve-connector`, grants persist per session+tool in `app-state.json`), re-reads the record on every call so detach takes effect without restart, fails closed on corrupt records or missing/revoked tokens, and appends an audit entry per call to `<session-dir>/connectors-audit.jsonl`. OAuth2 access tokens are refreshed automatically before expiry and rotated back into the keychain. |
+| `supercli connector doctor` | Every connector: manifest valid, executable present (stdio) or `mcp_url` reachable (http), token present when auth needs one (OAuth2 tokens refreshed when expiring), tools responding. `auth.flow = "none"` never needs a token. |
+| `supercli connector run <name> <tool> [key=value ...]` | Invoke one tool through the full path (policy → keychain → MCP). Non-interactive: Allow tools only. Works for stdio and HTTP connectors; OAuth2 tokens refresh first. |
+| `supercli connector audit --session <id> [--tool <t>]` | Query the session's `connectors-audit.jsonl` (filter by tool, JSON output). |
+| `supercli connector sync [--registry <dir>]` / `supercli registrar sync [--registry <dir>]` | Install/update every registry connector to its latest version (digest-checked fetch, signature verified against the pinned key before anything is written), then verify everything installed: transport present, token present when auth requires one. Updates are staged beside the install dir and swapped in atomically — a failed update leaves the old version untouched, and the user's local `config.json` is preserved over the bundle's. With no `--registry` it only verifies. |
 
-`UNPEEL_CONNECTORS_DIR` overrides the scan roots; `UNPEEL_CONNECTORS_INSTALL_DIR`
-overrides the install dir (both exist for tests/dev). `UNPEEL_CONNECTORS_KEYCHAIN=memory`
+`SUPERCLI_CONNECTORS_DIR` overrides the scan roots; `SUPERCLI_CONNECTORS_INSTALL_DIR`
+overrides the install dir (both exist for tests/dev). `SUPERCLI_CONNECTORS_KEYCHAIN=memory`
 forces the in-process token store (tests); otherwise the OS keychain is used when it
 answers, with a process-lifetime in-memory fallback and a stderr warning. Note: on
 headless Linux the keyring backend may accept writes without persisting them across
@@ -98,17 +98,17 @@ sessions — the same limitation the Controller pairing store already has.
 ## Developer story
 
 ```sh
-unpeel connector keygen --key-id me        # Ed25519 publisher keypair
-unpeel connector pack myservice            # signed .unpeel-connector bundle
-unpeel connector publish myservice --registry my-registry
-unpeel registrar sync --registry my-registry   # install/update + verify
+supercli connector keygen --key-id me        # Ed25519 publisher keypair
+supercli connector pack myservice            # signed .supercli-connector bundle
+supercli connector publish myservice --registry my-registry
+supercli registrar sync --registry my-registry   # install/update + verify
 ```
 
 A connector executable is **just an MCP server** on stdio (or HTTP). No SDK
 required: any language that speaks MCP works. The harness:
 
 1. spawns it per session that enabled the connector,
-2. injects the keychain token as an env var (`UNPEEL_CONNECTOR_TOKEN`),
+2. injects the keychain token as an env var (`SUPERCLI_CONNECTOR_TOKEN`),
 3. filters its tool list to `tools.provides` (a connector that starts
    offering new tools fails closed),
 4. wraps every call in the session's approval policy.
@@ -128,7 +128,7 @@ required: any language that speaks MCP works. The harness:
 - **Auditability.** Every connector tool call is appended to the session
   transcript with the connector name, so the owner can see exactly what
   left the machine.
-- **Revocation is one verb.** `unpeel connector disconnect gmail` deletes
+- **Revocation is one verb.** `supercli connector disconnect gmail` deletes
   the keychain entry and detaches the tools from all sessions.
 
 ## Relationship to other tracks
@@ -149,7 +149,7 @@ required: any language that speaks MCP works. The harness:
   Key rotation policy: `publish` pins the publisher key on first publish
   and refuses any later publish signed by a different key — rotating
   means publishing under a new key id and re-pinning the registry entry.
-- **Bundles:** `.unpeel-connector` is a gzip tar of the connector dir
+- **Bundles:** `.supercli-connector` is a gzip tar of the connector dir
   (allowed files only: `connector.toml`, `connector`, `config.json`,
   `README*`, `LICENSE*`, `icon.*`; extraction is path-traversal safe)
   with a detached Ed25519 `.sig` sidecar.

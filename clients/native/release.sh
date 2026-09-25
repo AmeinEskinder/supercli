@@ -55,7 +55,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NATIVE_DIR="$REPO_ROOT/clients/native"
-SWIFT_DIR="$NATIVE_DIR/UnpeelNative"
+SWIFT_DIR="$NATIVE_DIR/SupercliNative"
 DIST="$NATIVE_DIR/dist"
 
 CHANNEL="${UNPEEL_CHANNEL:-beta}"

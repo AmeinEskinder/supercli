@@ -41,7 +41,7 @@ pub fn minutes_from_state(state: &serde_json::Value) -> u64 {
 }
 
 pub fn minutes_from_disk() -> u64 {
-    let state: serde_json::Value = std::fs::read(unpeel_core::app_paths::app_state_path())
+    let state: serde_json::Value = std::fs::read(supercli_core::app_paths::app_state_path())
         .ok()
         .and_then(|raw| serde_json::from_slice(&raw).ok())
         .unwrap_or_default();
@@ -177,7 +177,7 @@ impl Sweeper {
         std::thread::Builder::new()
             .name("unpeel-auto-archive".into())
             .spawn(move || {
-                let error = unpeel_core::session_ops::archive_session(&id).err();
+                let error = supercli_core::session_ops::archive_session(&id).err();
                 let _ = outcomes.send(Outcome {
                     session_id: id,
                     error,

@@ -3,11 +3,11 @@
 //! terminal output, send input, and kill sessions.
 //!
 //! Runs as `unpeel-host __remote__` — like the Sessions MCP it talks directly
-//! to `~/.unpeel/app-sessions/<id>/{manifest.json,output.bin,session.sock}`
+//! to `~/.supercli/app-sessions/<id>/{manifest.json,output.bin,session.sock}`
 //! and does not need the app window to be open.
 //!
 //! Security model (see the private "remote-control-server" design record):
-//! - TLS always on: self-signed cert generated into `~/.unpeel/remote/tls/`,
+//! - TLS always on: self-signed cert generated into `~/.supercli/remote/tls/`,
 //!   its SHA-256 fingerprint is surfaced so clients can pin it.
 //! - Bearer token (regenerated per server start, constant-time compared)
 //!   required on every `/api/*` request; WebSocket upgrades pass it as a
@@ -15,14 +15,14 @@
 //! - Persistent paired-device tokens are accepted as an alternative
 //!   credential: the native app's pairing flow (`MobilePairingStore` in
 //!   `MobileRemoteServer.swift`) stores SHA-256 token hashes in
-//!   `~/.unpeel/mobile/devices.json`, and this server verifies against that
+//!   `~/.supercli/mobile/devices.json`, and this server verifies against that
 //!   same file on every request — so devices paired in the app work here,
 //!   and revoking a device in the app cuts it off live.
 //! - Per-IP rate limiting on failed auth, with a hard block after repeated
 //!   consecutive failures.
 //! - Connected clients tracked (IP, timestamps, permissions) and expired
 //!   after 30 minutes idle.
-//! - Everything auditable: `~/.unpeel/remote/audit.log` (JSON lines).
+//! - Everything auditable: `~/.supercli/remote/audit.log` (JSON lines).
 //!
 //! The transport is intentionally synchronous (thread per connection,
 //! `Connection: close`) to match the rest of this crate — a remote controller
@@ -117,7 +117,7 @@ const WEBSOCKET_ACCEPT_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 // ---------------------------------------------------------------------------
 
 pub fn remote_dir() -> PathBuf {
-    app_paths::unpeel_home().join("remote")
+    app_paths::supercli_home().join("remote")
 }
 
 pub fn tls_dir() -> PathBuf {
@@ -134,15 +134,15 @@ pub fn presence_path() -> PathBuf {
     remote_dir().join("presence.json")
 }
 
-/// `~/.unpeel/remote.json` — the connection info the app/QR flow reads.
+/// `~/.supercli/remote.json` — the connection info the app/QR flow reads.
 pub fn remote_state_path() -> PathBuf {
-    app_paths::unpeel_home().join("remote.json")
+    app_paths::supercli_home().join("remote.json")
 }
 
 /// The native app's paired-device store (`MobilePairingStore`); shared so a
 /// device paired through the app UI is a valid credential here too.
 pub fn paired_devices_path() -> PathBuf {
-    app_paths::unpeel_home().join("mobile").join("devices.json")
+    app_paths::supercli_home().join("mobile").join("devices.json")
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ pub fn ensure_tls_material() -> Result<TlsMaterial, String> {
 }
 
 /// [`ensure_tls_material`] against an explicit directory (tests and tools
-/// that address a specific `UNPEEL_HOME`).
+/// that address a specific `SUPERCLI_HOME`).
 pub fn ensure_tls_material_in(dir: &std::path::Path) -> Result<TlsMaterial, String> {
     let cert_path = dir.join("cert.pem");
     let key_path = dir.join("key.pem");
@@ -518,7 +518,7 @@ impl ClientRegistry {
     }
 
     /// Presence grouped by session, for the on-disk contract the native app
-    /// watches (`~/.unpeel/remote/presence.json`).
+    /// watches (`~/.supercli/remote/presence.json`).
     fn presence(&mut self, now_ms: u64) -> Value {
         self.prune(now_ms);
         let mut sessions: HashMap<String, Vec<Value>> = HashMap::new();

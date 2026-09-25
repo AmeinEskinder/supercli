@@ -19,7 +19,7 @@ function artifact(channel, key, overrides = {}) {
   return {
     key,
     path: `/releases/${key}`,
-    url: `https://unpeel.com/releases/${key}`,
+    url: `https://supercli.com/releases/${key}`,
     filename: key.split('/').at(-1),
     bytes: 123,
     sha256: 'a'.repeat(64),
@@ -41,7 +41,7 @@ test('direct checks catch immutable artifacts omitted from latest.json', async (
       assert.equal(options.method, 'HEAD')
       return response(url.includes('.zip') ? 200 : 404)
     },
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'beta',
     version: '0.2.0',
     artifactKinds: ['dmg', 'zip'],
@@ -50,7 +50,7 @@ test('direct checks catch immutable artifacts omitted from latest.json', async (
 
   assert.deepEqual(found, [{
     kind: 'zip',
-    url: 'https://unpeel.com/releases/beta/Unpeel-0.2.0.zip'
+    url: 'https://supercli.com/releases/beta/Unpeel-0.2.0.zip'
   }])
 })
 
@@ -58,7 +58,7 @@ test('manifest HTTP and shape errors fail closed', async () => {
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(503),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -67,7 +67,7 @@ test('manifest HTTP and shape errors fail closed', async () => {
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(200, { channel: 'beta', version: '0.1.0' }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -93,7 +93,7 @@ test('published artifact metadata is fully validated before preservation', async
 
   await assert.doesNotReject(readPublishedAppLatest({
     fetchImpl: async () => response(200, manifest),
-    baseUrl: 'https://unpeel.com',
+    baseUrl: 'https://supercli.com',
     channel: 'beta',
     timeoutMs: 0
   }))
@@ -104,7 +104,7 @@ test('published artifact metadata is fully validated before preservation', async
         ...manifest,
         dmg: { ...dmg, sha256: 'not-a-digest' }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -116,7 +116,7 @@ test('published artifact metadata is fully validated before preservation', async
         ...manifest,
         latest_dmg: { ...latestDmg, bytes: latestDmg.bytes + 1 }
       }),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -126,7 +126,7 @@ test('published artifact metadata is fully validated before preservation', async
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(200, missingMutableAlias),
-      baseUrl: 'https://unpeel.com',
+      baseUrl: 'https://supercli.com',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -274,8 +274,8 @@ test('CLI publisher rejects misspelled and equals-form dry-run flags', () => {
 })
 
 test('the app release reads the changelog from the website sibling, then the monorepo, then fails', () => {
-  const root = '/work/unpeel'
-  const sibling = resolve(root, '..', 'unpeel-cloud', 'apps', 'website', 'app', 'changelog.md')
+  const root = '/work/supercli'
+  const sibling = resolve(root, '..', 'supercli-cloud', 'apps', 'website', 'app', 'changelog.md')
   const monorepo = resolve(root, 'apps', 'website', 'app', 'changelog.md')
   const present = (paths) => (path) => paths.includes(path)
 
@@ -289,41 +289,41 @@ test('the app release reads the changelog from the website sibling, then the mon
   )
   assert.throws(
     () => resolveChangelogPath({ repoRoot: root, env: {}, exists: present([]) }),
-    /Clone unpeel-cloud next to this repo, or set UNPEEL_CHANGELOG/
+    /Clone supercli-cloud next to this repo, or set SUPERCLI_CHANGELOG/
   )
   assert.deepEqual(
     resolveChangelogPath({
       repoRoot: root,
-      env: { UNPEEL_CHANGELOG: '/elsewhere/changelog.md' },
+      env: { SUPERCLI_CHANGELOG: '/elsewhere/changelog.md' },
       exists: present(['/elsewhere/changelog.md'])
     }),
     { path: '/elsewhere/changelog.md', source: 'override' }
   )
   assert.throws(
-    () => resolveChangelogPath({ repoRoot: root, env: { UNPEEL_CHANGELOG: '/gone.md' }, exists: present([]) }),
-    /UNPEEL_CHANGELOG points at a missing file/
+    () => resolveChangelogPath({ repoRoot: root, env: { SUPERCLI_CHANGELOG: '/gone.md' }, exists: present([]) }),
+    /SUPERCLI_CHANGELOG points at a missing file/
   )
 })
 
 test('the changelog resolver CLI prints the resolved path and fails without a changelog', () => {
   // The website is a separate repository, so a checkout of this one may or
-  // may not have a `../unpeel-cloud` sibling: drive the CLI through the
-  // UNPEEL_CHANGELOG override so the test is independent of the machine.
-  const dir = mkdtempSync(resolve(tmpdir(), 'unpeel-changelog-'))
+  // may not have a `../supercli-cloud` sibling: drive the CLI through the
+  // SUPERCLI_CHANGELOG override so the test is independent of the machine.
+  const dir = mkdtempSync(resolve(tmpdir(), 'supercli-changelog-'))
   const changelog = resolve(dir, 'changelog.md')
   writeFileSync(changelog, '## 0.0.0 — test\n')
   const ok = spawnSync('node', [
     resolve(repoRoot, 'scripts/release-changelog.mjs'),
     '--repo-root', repoRoot
-  ], { encoding: 'utf8', env: { ...process.env, UNPEEL_CHANGELOG: changelog } })
+  ], { encoding: 'utf8', env: { ...process.env, SUPERCLI_CHANGELOG: changelog } })
   assert.equal(ok.status, 0, ok.stderr)
   assert.equal(ok.stdout.trim(), changelog)
 
   const missing = spawnSync('node', [
     resolve(repoRoot, 'scripts/release-changelog.mjs'),
     '--repo-root', repoRoot
-  ], { encoding: 'utf8', env: { ...process.env, UNPEEL_CHANGELOG: resolve(dir, 'gone.md') } })
+  ], { encoding: 'utf8', env: { ...process.env, SUPERCLI_CHANGELOG: resolve(dir, 'gone.md') } })
   assert.equal(missing.status, 1)
-  assert.match(missing.stderr, /UNPEEL_CHANGELOG points at a missing file/)
+  assert.match(missing.stderr, /SUPERCLI_CHANGELOG points at a missing file/)
   rmSync(dir, { recursive: true, force: true })
 })

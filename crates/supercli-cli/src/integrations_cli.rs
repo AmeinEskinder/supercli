@@ -6,7 +6,7 @@
 //! Host, explicitly, into the provider's own global configuration, and kept
 //! current by the Host after upgrades.
 
-use unpeel_core::integrations::install;
+use supercli_core::integrations::install;
 
 pub const HELP: &str = "\
 unpeel integrations — Unpeel's integration with each agent CLI
@@ -103,7 +103,7 @@ fn install_one(runtime: &str, project: Option<&str>, json: bool) -> Result<i32, 
 }
 
 fn install_all(json: bool) -> Result<i32, String> {
-    let inventory = unpeel_core::plugins::agents_wire();
+    let inventory = supercli_core::plugins::agents_wire();
     let present: std::collections::HashSet<String> = inventory
         .as_array()
         .into_iter()
@@ -136,8 +136,8 @@ fn install_project_file(runtime: &str, dir: &str) -> Result<(), String> {
         .to_string_lossy()
         .to_string();
     match runtime {
-        "amp" => unpeel_core::hook_assets::prepare_amp_project_plugin(&dir),
-        "copilot" => unpeel_core::hook_assets::prepare_copilot_project_hooks(&dir),
+        "amp" => supercli_core::hook_assets::prepare_amp_project_plugin(&dir),
+        "copilot" => supercli_core::hook_assets::prepare_copilot_project_hooks(&dir),
         other => Err(format!(
             "{other} reads its hooks globally; --project applies to amp and github-copilot only"
         )),
@@ -147,8 +147,8 @@ fn install_project_file(runtime: &str, dir: &str) -> Result<(), String> {
 fn finish(statuses: Vec<install::IntegrationStatus>, json: bool) {
     // Bootstrap publishes integration state to every Controller; ping the
     // worker so an open Settings window refreshes without waiting for a poll.
-    unpeel_core::state_bus::announce(unpeel_core::state_bus::Change::AppState, None);
-    unpeel_core::state_bus::flush();
+    supercli_core::state_bus::announce(supercli_core::state_bus::Change::AppState, None);
+    supercli_core::state_bus::flush();
     if json {
         println!(
             "{}",

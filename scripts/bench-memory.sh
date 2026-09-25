@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # Reproduce the four memory comparison-chart numbers (macOS phys_footprint)
 # for Unpeel's session Host, plus a teardown leak check, on a blank,
-# short-path UNPEEL_HOME using release binaries.
+# short-path SUPERCLI_HOME using release binaries.
 #
 #   (a) serve + first session        serve tree + one `sh` session host
 #   (b) per empty session            N more `sh` sessions, delta / N
 #   (c) per filled 10k-line session  fill every session with 10k 72-col
-#                                    numbered prose lines via `unpeel send`,
+#                                    numbered prose lines via `supercli send`,
 #                                    delta / N
-#   (d) server-side per client       attach C pty clients (`unpeel-attach`
+#   (d) server-side per client       attach C pty clients (`supercli-attach`
 #                                    under a Python `pty.fork` helper) to one
 #                                    filled session, host delta / C
-#   (e) leftovers after `unpeel rm`  processes and bytes still around
+#   (e) leftovers after `supercli rm`  processes and bytes still around
 #
 # The script only ever touches processes and files under its own
-# UNPEEL_HOME: every pid it signals was started by it and is matched by that
-# home path. Nothing here looks at ~/.unpeel or /Applications.
+# SUPERCLI_HOME: every pid it signals was started by it and is matched by that
+# home path. Nothing here looks at ~/.supercli or /Applications.
 #
 # Usage:
 #   scripts/bench-memory.sh                      # release binaries of this tree
-#   UNPEEL_PTY_CORE=1 scripts/bench-memory.sh    # measure the shared PTY core
-#   UNPEEL_BIN_DIR=/path/to/release scripts/bench-memory.sh
+#   SUPERCLI_PTY_CORE=1 scripts/bench-memory.sh    # measure the shared PTY core
+#   SUPERCLI_BIN_DIR=/path/to/release scripts/bench-memory.sh
 #   BENCH_SESSIONS=50 BENCH_CLIENTS=10 BENCH_LINES=10000 scripts/bench-memory.sh
-#   BENCH_CLIENTS=0 skips the attached-client row (Linux: unpeel-attach is
+#   BENCH_CLIENTS=0 skips the attached-client row (Linux: supercli-attach is
 #   kqueue-based and does not build there yet).
 #   BENCH_KEEP_HOME=1 keeps the home for inspection (serve is still stopped).
 #   BENCH_JSON=path also writes the raw numbers (KiB) as JSON.
@@ -43,10 +43,10 @@ case "$OS" in
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN_DIR="${UNPEEL_BIN_DIR:-$REPO_ROOT/crates/target/release}"
-UNPEEL="${UNPEEL_BIN:-$BIN_DIR/unpeel}"
-UNPEEL_HOST="${UNPEEL_HOST_BIN:-$BIN_DIR/unpeel-host}"
-ATTACH="${UNPEEL_ATTACH_BIN:-$REPO_ROOT/crates/unpeel-attach/target/release/unpeel-attach}"
+BIN_DIR="${SUPERCLI_BIN_DIR:-$REPO_ROOT/crates/target/release}"
+SUPERCLI="${SUPERCLI_BIN:-$BIN_DIR/supercli}"
+SUPERCLI_HOST="${SUPERCLI_HOST_BIN:-$BIN_DIR/supercli-host}"
+ATTACH="${SUPERCLI_ATTACH_BIN:-$REPO_ROOT/crates/supercli-attach/target/release/supercli-attach}"
 SESSIONS="${BENCH_SESSIONS:-50}"
 CLIENTS="${BENCH_CLIENTS:-10}"
 LINES="${BENCH_LINES:-10000}"
@@ -62,13 +62,13 @@ LEFTOVER_GRACE="${BENCH_LEFTOVER_GRACE_SECONDS:-20}"
 PROFILE="${BENCH_PROFILE:-}"
 if [[ -z "$PROFILE" ]]; then
   if [[ "$OS" == "Linux" ]]; then
-    if [[ "${UNPEEL_PTY_CORE:-1}" != "0" ]]; then PROFILE=linux_core_on; else PROFILE=linux_core_off; fi
-  elif [[ "${UNPEEL_PTY_CORE:-1}" != "0" ]]; then PROFILE=core_on
+    if [[ "${SUPERCLI_PTY_CORE:-1}" != "0" ]]; then PROFILE=linux_core_on; else PROFILE=linux_core_off; fi
+  elif [[ "${SUPERCLI_PTY_CORE:-1}" != "0" ]]; then PROFILE=core_on
   else PROFILE=core_off
   fi
 fi
 
-for bin in "$UNPEEL" "$UNPEEL_HOST"; do
+for bin in "$SUPERCLI" "$SUPERCLI_HOST"; do
   [[ -x "$bin" ]] || { echo "missing release binary: $bin" >&2; exit 2; }
 done
 if (( CLIENTS > 0 )) && [[ ! -x "$ATTACH" ]]; then
@@ -78,22 +78,22 @@ fi
 
 # Unix socket paths must stay short (sockaddr_un ~104 bytes), so the home is
 # a short directory directly under $HOME, never under TMPDIR.
-export UNPEEL_HOME="${BENCH_HOME:-$HOME/ubench-$$}"
+export SUPERCLI_HOME="${BENCH_HOME:-$HOME/ubench-$$}"
 # The worker installs the Browser MCP engine at start (a ~12 MB download):
 # a benchmark must neither depend on the network nor measure that download
 # in (a), so opt out — serve.json.browserEngine reads "disabled".
-export UNPEEL_BROWSER_ENGINE_INSTALL="${UNPEEL_BROWSER_ENGINE_INSTALL:-0}"
+export SUPERCLI_BROWSER_ENGINE_INSTALL="${SUPERCLI_BROWSER_ENGINE_INSTALL:-0}"
 # Same for the Computer Use engine (installed on demand once the experiment
 # is on; a benchmark home never turns it on, but keep the gate explicit).
-export UNPEEL_COMPUTER_ENGINE_INSTALL="${UNPEEL_COMPUTER_ENGINE_INSTALL:-0}"
-if [[ -e "$UNPEEL_HOME" ]]; then
-  echo "refusing to reuse existing home $UNPEEL_HOME" >&2
+export SUPERCLI_COMPUTER_ENGINE_INSTALL="${SUPERCLI_COMPUTER_ENGINE_INSTALL:-0}"
+if [[ -e "$SUPERCLI_HOME" ]]; then
+  echo "refusing to reuse existing home $SUPERCLI_HOME" >&2
   exit 2
 fi
-mkdir -p "$UNPEEL_HOME"
-chmod 700 "$UNPEEL_HOME"
+mkdir -p "$SUPERCLI_HOME"
+chmod 700 "$SUPERCLI_HOME"
 # The session Host resolves its binary from PATH-independent config in the
-# app, but the CLI spawns `unpeel-host` next to itself; make sure the pair
+# app, but the CLI spawns `supercli-host` next to itself; make sure the pair
 # under test is the one on PATH for anything that re-resolves by name.
 export PATH="$BIN_DIR:$PATH"
 
@@ -153,16 +153,16 @@ tree_footprint_kib() {
 }
 
 # Host process pids for sessions of THIS home only: the launch-file argv
-# lives under $UNPEEL_HOME/app-sessions/<id>/.
+# lives under $SUPERCLI_HOME/app-sessions/<id>/.
 session_host_pids() {
-  pgrep -f "__session_host__ $UNPEEL_HOME/app-sessions/" 2>/dev/null || true
+  pgrep -f "__session_host__ $SUPERCLI_HOME/app-sessions/" 2>/dev/null || true
 }
 
-# The shared PTY core of THIS home (UNPEEL_PTY_CORE=1), if one is alive. It
+# The shared PTY core of THIS home (SUPERCLI_PTY_CORE=1), if one is alive. It
 # carries no home in its argv, so it is found through its record file.
 core_pid() {
   local pid
-  pid="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('pid') or '')" "$UNPEEL_HOME/pty-core.json" 2>/dev/null || true)"
+  pid="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('pid') or '')" "$SUPERCLI_HOME/pty-core.json" 2>/dev/null || true)"
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && echo "$pid" || true
 }
 
@@ -174,7 +174,7 @@ host_pids() {
 
 host_pid_for() {
   local pid
-  pid="$(pgrep -f "__session_host__ $UNPEEL_HOME/app-sessions/$1/" 2>/dev/null | head -1 || true)"
+  pid="$(pgrep -f "__session_host__ $SUPERCLI_HOME/app-sessions/$1/" 2>/dev/null | head -1 || true)"
   [[ -n "$pid" ]] && { echo "$pid"; return; }
   core_pid
 }
@@ -190,21 +190,21 @@ hosts_footprint_kib() {
 kib_to_mib() { awk -v k="$1" 'BEGIN { printf "%.2f MiB", k/1024 }'; }
 kib_to_kib() { awk -v k="$1" 'BEGIN { printf "%d KiB", k }'; }
 
-# `unpeel new` waits 10 s for the host to publish a running manifest. On a
+# `supercli new` waits 10 s for the host to publish a running manifest. On a
 # loaded machine (parallel builds, other agents) a login-shell start can miss
 # that even though the host comes up fine a moment later, so take the id from
 # either the JSON or the timeout message and wait for the manifest ourselves.
 new_sh_session() {
   local attempt out id
   for attempt in 1 2 3; do
-    out="$("$UNPEEL" new --command sh --cwd "$UNPEEL_HOME" --json 2>&1 || true)"
+    out="$("$SUPERCLI" new --command sh --cwd "$SUPERCLI_HOME" --json 2>&1 || true)"
     id="$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' <<<"$out" | head -1 || true)"
     if [[ -n "$id" ]] && wait_for_running "$id" 90; then
       echo "$id"
       return 0
     fi
-    log "unpeel new failed (attempt $attempt): ${out//$'\n'/ }"
-    [[ -n "$id" ]] && "$UNPEEL" rm "$id" >/dev/null 2>&1
+    log "supercli new failed (attempt $attempt): ${out//$'\n'/ }"
+    [[ -n "$id" ]] && "$SUPERCLI" rm "$id" >/dev/null 2>&1
     sleep 2
   done
   echo "could not create a session after 3 attempts" >&2
@@ -212,7 +212,7 @@ new_sh_session() {
 }
 
 wait_for_running() {
-  local id="$1" deadline=$(( $(date +%s) + ${2:-90} )) manifest="$UNPEEL_HOME/app-sessions/$1/manifest.json"
+  local id="$1" deadline=$(( $(date +%s) + ${2:-90} )) manifest="$SUPERCLI_HOME/app-sessions/$1/manifest.json"
   while (( $(date +%s) < deadline )); do
     grep -q '"state": *"running"' "$manifest" 2>/dev/null && return 0
     sleep 0.25
@@ -221,7 +221,7 @@ wait_for_running() {
 }
 
 wait_for_text() {
-  "$UNPEEL" wait "$1" --text "$2" --timeout "${3:-120}" >/dev/null
+  "$SUPERCLI" wait "$1" --text "$2" --timeout "${3:-120}" >/dev/null
 }
 
 cleanup() {
@@ -231,12 +231,12 @@ cleanup() {
     wait "$CLIENT_HELPER_PID" 2>/dev/null
   fi
   for id in "${SESSION_IDS[@]:-}"; do
-    [[ -n "$id" ]] && "$UNPEEL" rm "$id" >/dev/null 2>&1
+    [[ -n "$id" ]] && "$SUPERCLI" rm "$id" >/dev/null 2>&1
   done
   # Anything still hosting under OUR home after rm is ours to stop. The
   # core first gets the contract's shutdown request (refused while busy).
-  if [[ -S "$UNPEEL_HOME/pty-core.sock" ]]; then
-    python3 - "$UNPEEL_HOME/pty-core.sock" <<'PY' 2>/dev/null || true
+  if [[ -S "$SUPERCLI_HOME/pty-core.sock" ]]; then
+    python3 - "$SUPERCLI_HOME/pty-core.sock" <<'PY' 2>/dev/null || true
 import socket, sys
 s = socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect(sys.argv[1])
 s.sendall(b'{"op":"shutdown"}\n'); s.recv(4096)
@@ -249,21 +249,21 @@ PY
     wait "$SERVE_PID" 2>/dev/null
   fi
   if [[ "${BENCH_KEEP_HOME:-0}" != "1" ]]; then
-    rm -rf "$UNPEEL_HOME"
+    rm -rf "$SUPERCLI_HOME"
   else
-    log "kept $UNPEEL_HOME"
+    log "kept $SUPERCLI_HOME"
   fi
 }
 trap cleanup EXIT INT TERM
 
 # ---------- (a) serve + first session ----------------------------------------
 
-log "home $UNPEEL_HOME; binaries $BIN_DIR; attach $ATTACH"
-"$UNPEEL" serve >"$UNPEEL_HOME/serve.log" 2>&1 &
+log "home $SUPERCLI_HOME; binaries $BIN_DIR; attach $ATTACH"
+"$SUPERCLI" serve >"$SUPERCLI_HOME/serve.log" 2>&1 &
 SERVE_PID=$!
 for _ in $(seq 1 100); do
-  [[ -f "$UNPEEL_HOME/serve.json" ]] && break
-  kill -0 "$SERVE_PID" 2>/dev/null || { echo "serve exited early:"; cat "$UNPEEL_HOME/serve.log"; exit 1; } >&2
+  [[ -f "$SUPERCLI_HOME/serve.json" ]] && break
+  kill -0 "$SERVE_PID" 2>/dev/null || { echo "serve exited early:"; cat "$SUPERCLI_HOME/serve.log"; exit 1; } >&2
   sleep 0.1
 done
 sleep "$SETTLE"
@@ -297,7 +297,7 @@ log "per empty session: $(kib_to_mib "$B_KIB")"
 # ---------- (c) per filled 10k-line session ---------------------------------
 
 # 72 columns: "00001 " + 66 chars of prose. Generated inside the session's
-# own sh so one `unpeel send` fills a terminal; the sentinel line lets us wait
+# own sh so one `supercli send` fills a terminal; the sentinel line lets us wait
 # for completion through the Host's own viewport.
 PROSE="the quick brown fox jumps over the lazy dog while the agent keeps on"
 PROSE="${PROSE:0:66}"
@@ -306,7 +306,7 @@ FILL_IDS=("${SESSION_IDS[@]:1}")
 BEFORE_FILL_KIB=$(hosts_footprint_kib)
 log "filling ${#FILL_IDS[@]} sessions with $LINES lines each"
 for id in "${FILL_IDS[@]}"; do
-  "$UNPEEL" send "$id" "$FILL_CMD" --enter >/dev/null
+  "$SUPERCLI" send "$id" "$FILL_CMD" --enter >/dev/null
 done
 for id in "${FILL_IDS[@]}"; do
   wait_for_text "$id" BENCH-FILL-DONE 300 || { echo "session $id never finished filling" >&2; exit 1; }
@@ -332,7 +332,7 @@ if (( CLIENTS > 0 )); then
 TARGET_ID="${FILL_IDS[0]}"
 TARGET_HOST_PID=$(host_pid_for "$TARGET_ID")
 BEFORE_CLIENTS_KIB=$(footprint_kib "$TARGET_HOST_PID")
-HELPER="$UNPEEL_HOME/attach-clients.py"
+HELPER="$SUPERCLI_HOME/attach-clients.py"
 cat >"$HELPER" <<'PY'
 import fcntl, os, pty, select, signal, struct, sys, termios
 
@@ -341,7 +341,7 @@ children = []
 for _ in range(count):
     pid, fd = pty.fork()
     if pid == 0:
-        # 120x32 like `unpeel new`'s default grid, so attaching never resizes
+        # 120x32 like `supercli new`'s default grid, so attaching never resizes
         # the hosted PTY and the measurement is the client bookkeeping alone.
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 120, 0, 0))
         os.execv(attach, [attach, session_id])
@@ -368,10 +368,10 @@ while fds:
             fds.remove(fd)
 PY
 log "attaching $CLIENTS pty clients to $TARGET_ID"
-python3 "$HELPER" "$CLIENTS" "$ATTACH" "$TARGET_ID" >"$UNPEEL_HOME/clients.log" 2>&1 &
+python3 "$HELPER" "$CLIENTS" "$ATTACH" "$TARGET_ID" >"$SUPERCLI_HOME/clients.log" 2>&1 &
 CLIENT_HELPER_PID=$!
 for _ in $(seq 1 100); do
-  grep -q READY "$UNPEEL_HOME/clients.log" 2>/dev/null && break
+  grep -q READY "$SUPERCLI_HOME/clients.log" 2>/dev/null && break
   sleep 0.1
 done
 sleep "$SETTLE"
@@ -386,7 +386,7 @@ else
   log "skipping the attached-client row (BENCH_CLIENTS=0)"
 fi
 
-# ---------- (e) leftovers after unpeel rm -----------------------------------
+# ---------- (e) leftovers after supercli rm -----------------------------------
 
 log "removing ${#SESSION_IDS[@]} sessions"
 # Reclamation is the number that matters most, so make it diagnosable: record
@@ -396,9 +396,9 @@ log "removing ${#SESSION_IDS[@]} sessions"
 RM_FAILED=()
 RM_RETRIED=0
 for id in "${SESSION_IDS[@]}"; do
-  if ! "$UNPEEL" rm "$id" >>"$UNPEEL_HOME/rm.log" 2>&1; then
+  if ! "$SUPERCLI" rm "$id" >>"$SUPERCLI_HOME/rm.log" 2>&1; then
     RM_FAILED+=("$id")
-    echo "rm failed: $id" >>"$UNPEEL_HOME/rm.log"
+    echo "rm failed: $id" >>"$SUPERCLI_HOME/rm.log"
   fi
 done
 if (( ${#RM_FAILED[@]} > 0 )); then
@@ -406,7 +406,7 @@ if (( ${#RM_FAILED[@]} > 0 )); then
   sleep "$SETTLE"
   for id in "${RM_FAILED[@]}"; do
     RM_RETRIED=$(( RM_RETRIED + 1 ))
-    "$UNPEEL" rm "$id" >>"$UNPEEL_HOME/rm.log" 2>&1 || echo "rm retry failed: $id" >>"$UNPEEL_HOME/rm.log"
+    "$SUPERCLI" rm "$id" >>"$SUPERCLI_HOME/rm.log" 2>&1 || echo "rm retry failed: $id" >>"$SUPERCLI_HOME/rm.log"
   done
 fi
 SESSION_IDS=()
@@ -432,9 +432,9 @@ for pid in $(session_host_pids); do
     if [[ "$OS" == "Darwin" ]]; then
       sample "$pid" 1 2>/dev/null | sed -n '/Call graph/,/Total number/p' | head -40
     fi
-  } >>"$UNPEEL_HOME/leftovers.log" 2>&1
+  } >>"$SUPERCLI_HOME/leftovers.log" 2>&1
 done
-[[ -s "$UNPEEL_HOME/leftovers.log" ]] && cat "$UNPEEL_HOME/leftovers.log" >&2
+[[ -s "$SUPERCLI_HOME/leftovers.log" ]] && cat "$SUPERCLI_HOME/leftovers.log" >&2
 CORE_END_PID="$(core_pid)"
 CORE_END_KIB=0
 CORE_END_INSTANT_KIB=0
@@ -461,10 +461,10 @@ if [[ -n "$CORE_END_PID" ]]; then
     vmmap -summary "$CORE_END_PID" 2>/dev/null | grep -E "^(MALLOC|Stack|VM_ALLOCATE|TOTAL|__DATA|__LINKEDIT|__TEXT)" >&2 || true
   fi
 fi
-LEFT_DIRS=$(find "$UNPEEL_HOME/app-sessions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+LEFT_DIRS=$(find "$SUPERCLI_HOME/app-sessions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 SERVE_END_KIB=$(tree_footprint_kib "$SERVE_PID")
 LEFTOVER_DETAIL=""
-for dir in "$UNPEEL_HOME"/app-sessions/*/; do
+for dir in "$SUPERCLI_HOME"/app-sessions/*/; do
   [[ -d "$dir" ]] || continue
   id="$(basename "$dir")"
   state="$(grep -oE '"state": *"[a-z]+"' "$dir/manifest.json" 2>/dev/null | grep -oE '[a-z]+"$' | tr -d '"' || true)"
@@ -475,7 +475,7 @@ LEFTOVER_DETAIL+="$LEFTOVER_HOST_DETAIL"
 if [[ -n "$LEFTOVER_DETAIL" ]]; then
   log "leftover sessions/hosts:"
   printf '%s' "$LEFTOVER_DETAIL" >&2
-  grep -E 'failed' "$UNPEEL_HOME/rm.log" >&2 || true
+  grep -E 'failed' "$SUPERCLI_HOME/rm.log" >&2 || true
 fi
 log "leftover hosts: $LEFT_PIDS ($(kib_to_mib "$LEFT_KIB")), session dirs: $LEFT_DIRS, slow exits: $SLOW_EXITS, rm failures: ${#RM_FAILED[@]} (retried $RM_RETRIED); serve now $(kib_to_mib "$SERVE_END_KIB")"
 
@@ -490,7 +490,7 @@ VT_FILLED_KIB=""
 VT_FEED_MIB_S=""
 if [[ "${BENCH_VT:-0}" == "1" ]]; then
   log "measuring the VT grid (cargo test --release vt_footprint)"
-  vt_line="$(cd "$REPO_ROOT/crates" && cargo test --release -q -p unpeel-core --lib vt_footprint -- --ignored --nocapture 2>/dev/null | grep -m1 '^VT_ROW ' || true)"
+  vt_line="$(cd "$REPO_ROOT/crates" && cargo test --release -q -p supercli-core --lib vt_footprint -- --ignored --nocapture 2>/dev/null | grep -m1 '^VT_ROW ' || true)"
   if [[ -n "$vt_line" ]]; then
     VT_EMPTY_KIB="$(sed -E 's/.*empty_kib=([0-9]+).*/\1/' <<<"$vt_line")"
     VT_FILLED_KIB="$(sed -E 's/.*filled_kib=([0-9]+).*/\1/' <<<"$vt_line")"
@@ -503,12 +503,12 @@ fi
 
 # ---------- report -----------------------------------------------------------
 
-VERSION=$("$UNPEEL" --version 2>/dev/null | head -1)
+VERSION=$("$SUPERCLI" --version 2>/dev/null | head -1)
 cat <<EOF
 
 ### Unpeel memory benchmark — $VERSION ($(date +%Y-%m-%d))
 
-$METRIC_NAME, blank home, release binaries from \`$BIN_DIR\`, PTY core $( [[ "${UNPEEL_PTY_CORE:-0}" == "1" ]] && echo on || echo off ) (profile \`$PROFILE\`).
+$METRIC_NAME, blank home, release binaries from \`$BIN_DIR\`, PTY core $( [[ "${SUPERCLI_PTY_CORE:-0}" == "1" ]] && echo on || echo off ) (profile \`$PROFILE\`).
 
 | Measurement | Value | Detail |
 | --- | ---: | --- |
@@ -516,8 +516,8 @@ $METRIC_NAME, blank home, release binaries from \`$BIN_DIR\`, PTY core $( [[ "${
 | (b) per empty session | $(kib_to_mib "$B_KIB") | $SESSIONS × \`sh\`, one host process each |
 | (c) per filled $LINES-line session | $(kib_to_mib "$C_KIB") | delta over (b), 72-col numbered prose; all ${#FILL_IDS[@]} filled hosts $(kib_to_mib "$FILLED_TOTAL_KIB") |
 | (c') per filled session after ${IDLE_WAIT}s idle | $(kib_to_mib "$C_IDLE_KIB") | same sessions once quiet; all hosts $(kib_to_mib "$AFTER_IDLE_KIB") |
-| (d) server-side per attached client | $( (( CLIENTS > 0 )) && kib_to_kib "$D_KIB" || echo "skipped" ) | $CLIENTS × \`unpeel-attach\` on one filled session ($ATTACHED live) |
-| (e) leftovers after \`unpeel rm\` | $LEFT_PIDS hosts, $(kib_to_mib "$LEFT_KIB") | $LEFT_DIRS session dirs left; slow exits $SLOW_EXITS; rm failures ${#RM_FAILED[@]} (retried $RM_RETRIED); serve $(kib_to_mib "$SERVE_END_KIB") |
+| (d) server-side per attached client | $( (( CLIENTS > 0 )) && kib_to_kib "$D_KIB" || echo "skipped" ) | $CLIENTS × \`supercli-attach\` on one filled session ($ATTACHED live) |
+| (e) leftovers after \`supercli rm\` | $LEFT_PIDS hosts, $(kib_to_mib "$LEFT_KIB") | $LEFT_DIRS session dirs left; slow exits $SLOW_EXITS; rm failures ${#RM_FAILED[@]} (retried $RM_RETRIED); serve $(kib_to_mib "$SERVE_END_KIB") |
 EOF
 if [[ -n "$CORE_END_PID" ]]; then
   echo "| (f) PTY core after teardown | $(kib_to_mib "$CORE_END_KIB") | settled (instant $(kib_to_mib "$CORE_END_INSTANT_KIB")); zero sessions, $CORE_END_THREADS threads (pid $CORE_END_PID) |"
@@ -537,7 +537,7 @@ NUMBERS_JSON=$(cat <<EOF
   "profile": "$PROFILE",
   "os": "$OS",
   "metric": "$( [[ "$OS" == "Linux" ]] && echo pss || echo phys_footprint )",
-  "pty_core": $( [[ "${UNPEEL_PTY_CORE:-0}" == "1" ]] && echo true || echo false ),
+  "pty_core": $( [[ "${SUPERCLI_PTY_CORE:-0}" == "1" ]] && echo true || echo false ),
   "sessions": $SESSIONS,
   "clients": $CLIENTS,
   "lines": $LINES,

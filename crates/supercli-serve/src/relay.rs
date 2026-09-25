@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use unpeel_core::relay_crypto as proto;
-use unpeel_core::relay_uplink as transport;
+use supercli_core::relay_crypto as proto;
+use supercli_core::relay_uplink as transport;
 
 use crate::mobile::{MobileResizes, Request, SharedSnapshot};
 use crate::platform_adapter::PlatformAdapterHub;
@@ -240,7 +240,7 @@ impl Drop for DispatchPool {
     }
 }
 
-/// Debug goes to the established channel (`~/.unpeel/hooks/trace.log`).
+/// Debug goes to the established channel (`~/.supercli/hooks/trace.log`).
 fn trace(message: &str) {
     crate::tracelog::trace("relay-uplink", message);
 }
@@ -295,7 +295,7 @@ impl From<&str> for RelayRunError {
 }
 
 fn mobile_dir() -> std::path::PathBuf {
-    unpeel_core::app_paths::unpeel_home().join("mobile")
+    supercli_core::app_paths::supercli_home().join("mobile")
 }
 
 /// Link authority is a strict subset of Direct ownership. The canonical file
@@ -548,7 +548,7 @@ fn run_once(
     direct_path: &Arc<crate::direct_path::DirectPathHub>,
 ) -> Result<(), RelayRunError> {
     let Some((entitlement, mac_id)) =
-        unpeel_core::license::allowed_cached_relay_entitlement().map_err(RelayRunError::Other)?
+        supercli_core::license::allowed_cached_relay_entitlement().map_err(RelayRunError::Other)?
     else {
         return Err("no allowed relay entitlement on disk".into());
     };
@@ -560,7 +560,7 @@ fn run_once(
     let authority_cancelled = || {
         stop.load(Ordering::Acquire)
             || !owns_mobile_endpoint(expected_mobile_port)
-            || !unpeel_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
+            || !supercli_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
     };
     let mut socket = transport::connect_cancellable(&mac_id, &entitlement, authority_cancelled)
         .map_err(|error| {
@@ -572,7 +572,7 @@ fn run_once(
         })?;
     if stop.load(Ordering::Acquire)
         || !owns_mobile_endpoint(expected_mobile_port)
-        || !unpeel_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
+        || !supercli_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
     {
         return Ok(());
     }
@@ -601,7 +601,7 @@ fn run_once(
     loop {
         if stop.load(Ordering::Relaxed)
             || !owns_mobile_endpoint(expected_mobile_port)
-            || !unpeel_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
+            || !supercli_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
         {
             return Ok(());
         }
@@ -648,7 +648,7 @@ fn run_once(
         let frame = match socket.receive_timeout_cancellable(SOCKET_POLL_INTERVAL, || {
             stop.load(Ordering::Acquire)
                 || !owns_mobile_endpoint(expected_mobile_port)
-                || !unpeel_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
+                || !supercli_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
         })? {
             transport::ReceiveOutcome::Message(frame) => {
                 since_activity = std::time::Instant::now();
@@ -670,7 +670,7 @@ fn run_once(
         // deactivation/cache replacement wins.
         if stop.load(Ordering::Acquire)
             || !owns_mobile_endpoint(expected_mobile_port)
-            || !unpeel_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
+            || !supercli_core::license::relay_entitlement_is_allowed(&mac_id, &entitlement)
         {
             return Ok(());
         }

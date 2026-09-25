@@ -4,7 +4,7 @@
 # Why this exists: build-app.sh defaults to ad-hoc signing ("-") when no
 # CODESIGN_IDENTITY is set. An ad-hoc signature's designated requirement is the
 # binary's cdhash, which changes on every rebuild, so the macOS keychain ACL for
-# com.unpeel.license never matches the new build and you get the
+# com.supercli.license never matches the new build and you get the
 # "Unpeel wants to access key" password prompt after every rebuild — even after
 # clicking "Always Allow", because that only trusts the old cdhash.
 #
@@ -39,7 +39,7 @@ echo "==> dev build, signing with: $CODESIGN_IDENTITY"
 UNPEEL_DEV_BUILD=1 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" "$HERE/build-app.sh"
 
 APP="$HERE/dist/Unpeel.app"
-EXE="$APP/Contents/MacOS/UnpeelNative"
+EXE="$APP/Contents/MacOS/SupercliNative"
 
 # PIDs whose executable is this dist binary. Never matches
 # /Applications/Unpeel.app — that process must stay running.

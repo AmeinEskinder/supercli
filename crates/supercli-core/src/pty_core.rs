@@ -6,7 +6,7 @@
 //!
 //! Contract (see `docs/agents/pty-core.md`):
 //!
-//! - one instance per `UNPEEL_HOME`, held by an flock on `pty-core.lock`; a
+//! - one instance per `SUPERCLI_HOME`, held by an flock on `pty-core.lock`; a
 //!   second instance exits 0 immediately;
 //! - `pty-core.json` records `{pid, pid_started_at, socket, host_build_id,
 //!   protocol}` after bind and is removed on clean exit;
@@ -20,10 +20,10 @@
 //!
 //! Spawn routing lives in `session_host::spawn_host_process_from_launch_file`:
 //! it tries the core through [`try_launch_via_core`] and falls back to the
-//! per-process spawn on any failure. `UNPEEL_PTY_CORE=0` disables the core
+//! per-process spawn on any failure. `SUPERCLI_PTY_CORE=0` disables the core
 //! path everywhere.
 
-use crate::app_paths::unpeel_home;
+use crate::app_paths::supercli_home;
 use crate::hook_assets::append_trace_log_line;
 use crate::session_host::{self, current_host_build_id, process_start_time_ms, SessionHostLaunch};
 use serde::{Deserialize, Serialize};
@@ -56,21 +56,21 @@ pub fn is_core_process() -> bool {
 }
 
 pub fn lock_path() -> PathBuf {
-    unpeel_home().join(LOCK_FILE)
+    supercli_home().join(LOCK_FILE)
 }
 
 pub fn record_path() -> PathBuf {
-    unpeel_home().join(RECORD_FILE)
+    supercli_home().join(RECORD_FILE)
 }
 
 pub fn socket_path() -> PathBuf {
-    unpeel_home().join(SOCKET_FILE)
+    supercli_home().join(SOCKET_FILE)
 }
 
-/// Whether spawn routing may try the core at all (`UNPEEL_PTY_CORE=0` forces
+/// Whether spawn routing may try the core at all (`SUPERCLI_PTY_CORE=0` forces
 /// per-process hosting everywhere).
 pub fn routing_enabled() -> bool {
-    std::env::var("UNPEEL_PTY_CORE").map_or(true, |value| value.trim() != "0")
+    std::env::var("SUPERCLI_PTY_CORE").map_or(true, |value| value.trim() != "0")
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -406,7 +406,7 @@ pub(crate) type OnExit = Box<dyn FnOnce(Result<(), String>) + Send>;
 /// What the core does with one parsed launch: set the Session up and hand
 /// it to the shared reactor, returning once it is registered. `on_exit`
 /// fires when the Session ends. Production runs the real `start_host`;
-/// unit tests inject a fake so they never touch the global `UNPEEL_HOME`
+/// unit tests inject a fake so they never touch the global `SUPERCLI_HOME`
 /// or spawn PTYs.
 pub(crate) type SessionRunner =
     Arc<dyn Fn(SessionHostLaunch, OnExit) -> Result<(), String> + Send + Sync>;
@@ -441,8 +441,8 @@ impl CoreState {
 /// process was not needed (another core holds the lock) or after a clean
 /// `shutdown`.
 pub fn run_from_args(args: &[String]) -> Result<(), String> {
-    let home = crate::app_paths::ensure_unpeel_home()
-        .map_err(|e| format!("Failed to prepare UNPEEL_HOME: {e}"))?;
+    let home = crate::app_paths::ensure_supercli_home()
+        .map_err(|e| format!("Failed to prepare SUPERCLI_HOME: {e}"))?;
     IN_CORE_PROCESS.store(true, Ordering::Relaxed);
     let sessions_root = crate::app_paths::app_sessions_root();
     let runner: SessionRunner = Arc::new(session_host::start_host);

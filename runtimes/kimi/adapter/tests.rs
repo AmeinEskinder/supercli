@@ -31,7 +31,7 @@ command = "prettier"
 
 [[hooks]]
 event = "Stop"
-command = "\"${UNPEEL_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh\" old"
+command = "\"${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh\" old"
 timeout = 5
 "#;
     let updated = crate::hook_assets::reconcile_kimi_config(raw, true).expect("reconcile Kimi Code config");
@@ -45,7 +45,7 @@ timeout = 5
     assert_eq!(updated.matches("[[hooks]]").count(), 10);
     assert_eq!(
         updated
-            .matches("${UNPEEL_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh")
+            .matches("${SUPERCLI_HOME:-$HOME/.unpeel}/hooks/kimi-hook.sh")
             .count(),
         9
     );

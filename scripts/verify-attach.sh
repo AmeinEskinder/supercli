@@ -2,11 +2,11 @@
 #
 # Headless end-to-end verification of the native terminal pipeline:
 #
-#   unpeel-host (PTY + output.bin + session.sock)
-#     → unpeel-attach (replay + kqueue live follow + stdin relay)
+#   supercli-host (PTY + output.bin + session.sock)
+#     → supercli-attach (replay + kqueue live follow + stdin relay)
 #       → ht (libghostty-vt screen, montanaflynn/headless-terminal)
 #
-# ht renders unpeel-attach through the same VT engine a Ghostty surface
+# ht renders supercli-attach through the same VT engine a Ghostty surface
 # uses, but with no Metal/GUI — so this runs where ghostty_surface_new
 # cannot initialize (CI, agent sandboxes; see memory note from 2026-06-12).
 #
@@ -19,7 +19,7 @@
 #   4. snapshot — attaching while a TUI-style incremental repaint is in
 #                 progress yields a client screen equal to the Host's own
 #                 viewport (VT state snapshot, not journal replay); the raw
-#                 tail control arm (UNPEEL_ATTACH_SNAPSHOT=0, 64-byte tail)
+#                 tail control arm (SUPERCLI_ATTACH_SNAPSHOT=0, 64-byte tail)
 #                 must NOT match, proving the comparison discriminates
 #
 # Usage: scripts/verify-attach.sh
@@ -28,8 +28,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ATTACH_BIN="$REPO_ROOT/crates/unpeel-attach/target/debug/unpeel-attach"
-HOST_BIN="$REPO_ROOT/crates/target/debug/unpeel-host"
+ATTACH_BIN="$REPO_ROOT/crates/supercli-attach/target/debug/supercli-attach"
+HOST_BIN="$REPO_ROOT/crates/target/debug/supercli-host"
 # ht (headless-terminal) lives on PATH, under scripts/tools/ (gitignored, the
 # server-repo home).
 HT="$(command -v ht || true)"
@@ -37,21 +37,21 @@ HT="$(command -v ht || true)"
 
 # Short id: the session dir name feeds a unix socket path (SUN_LEN ≤ ~104).
 SID="vfy-$(uuidgen | cut -c1-8 | tr '[:upper:]' '[:lower:]')"
-# Honour UNPEEL_HOME so the check can run against an isolated home (for
-# example one with a `unpeel-host __pty_core__` running, which then hosts
+# Honour SUPERCLI_HOME so the check can run against an isolated home (for
+# example one with a `supercli-host __pty_core__` running, which then hosts
 # this session through the same launch-file spawn).
-SESSION_DIR="${UNPEEL_HOME:-$HOME/.unpeel}/app-sessions/$SID"
+SESSION_DIR="${SUPERCLI_HOME:-$HOME/.supercli}/app-sessions/$SID"
 # `ht run` hands the command to an ht daemon whose environment is not ours,
 # so forward the override explicitly to the attach client.
 ATTACH_CMD=("$ATTACH_BIN")
-[ -n "${UNPEEL_HOME:-}" ] && ATTACH_CMD=(/usr/bin/env "UNPEEL_HOME=$UNPEEL_HOME" "$ATTACH_BIN")
-LAUNCH_FILE="$(mktemp -t unpeel-verify-launch)"
-REPAINT_SCRIPT="$(mktemp -t unpeel-verify-repaint)"
-TIMING_FILE="$(mktemp -t unpeel-verify-timing)"
-HT_NAME_1="unpeel-verify-1-$$"
-HT_NAME_2="unpeel-verify-2-$$"
-HT_NAME_3="unpeel-verify-3-$$"
-HT_NAME_4="unpeel-verify-4-$$"
+[ -n "${SUPERCLI_HOME:-}" ] && ATTACH_CMD=(/usr/bin/env "SUPERCLI_HOME=$SUPERCLI_HOME" "$ATTACH_BIN")
+LAUNCH_FILE="$(mktemp -t supercli-verify-launch)"
+REPAINT_SCRIPT="$(mktemp -t supercli-verify-repaint)"
+TIMING_FILE="$(mktemp -t supercli-verify-timing)"
+HT_NAME_1="supercli-verify-1-$$"
+HT_NAME_2="supercli-verify-2-$$"
+HT_NAME_3="supercli-verify-3-$$"
+HT_NAME_4="supercli-verify-4-$$"
 
 cleanup() {
   "$HT" kill "$HT_NAME_1" >/dev/null 2>&1 || true
@@ -85,12 +85,12 @@ step() { echo "==> $*"; }
 curl -sL https://github.com/montanaflynn/headless-terminal/releases/download/v0.3.0/ht-v0.3.0-darwin-arm64.tar.gz | tar xz"
 
 if [ ! -x "$ATTACH_BIN" ]; then
-  step "building unpeel-attach"
-  (cd "$REPO_ROOT/crates/unpeel-attach" && cargo build --quiet)
+  step "building supercli-attach"
+  (cd "$REPO_ROOT/crates/supercli-attach" && cargo build --quiet)
 fi
 if [ ! -x "$HOST_BIN" ]; then
-  step "building unpeel-host"
-  (cd "$REPO_ROOT/crates" && cargo build --quiet --bin unpeel-host)
+  step "building supercli-host"
+  (cd "$REPO_ROOT/crates" && cargo build --quiet --bin supercli-host)
 fi
 
 # --- 1. Start a hosted session ----------------------------------------------
@@ -224,7 +224,7 @@ sleep 0.6   # ~6 of 18 lines painted: the frame is mid-repaint
 
 step "snapshot attach mid-repaint (ht session $HT_NAME_3, 64-byte journal tail)"
 "$HT" run --name "$HT_NAME_3" --size 100x30 \
-  /usr/bin/env "UNPEEL_ATTACH_TIMING_FILE=$TIMING_FILE" ${UNPEEL_HOME:+"UNPEEL_HOME=$UNPEEL_HOME"} \
+  /usr/bin/env "SUPERCLI_ATTACH_TIMING_FILE=$TIMING_FILE" ${SUPERCLI_HOME:+"SUPERCLI_HOME=$SUPERCLI_HOME"} \
   "$ATTACH_BIN" --replay-bytes 64 "$SID" >/dev/null
 "$HT" wait "$HT_NAME_3" --text "FRAME LINE 18" \
   || { HT_NAME_1="$HT_NAME_3"; fail "repaint never completed on the snapshot-attached client"; }
@@ -243,8 +243,8 @@ echo "    snapshot attach screen == host viewport OK"
 
 step "control: raw tail attach with the same 64-byte tail must NOT match"
 "$HT" run --name "$HT_NAME_4" --size 100x30 \
-  /usr/bin/env "UNPEEL_ATTACH_SNAPSHOT=0" "UNPEEL_ATTACH_TIMING_FILE=$TIMING_FILE" \
-  ${UNPEEL_HOME:+"UNPEEL_HOME=$UNPEEL_HOME"} \
+  /usr/bin/env "SUPERCLI_ATTACH_SNAPSHOT=0" "SUPERCLI_ATTACH_TIMING_FILE=$TIMING_FILE" \
+  ${SUPERCLI_HOME:+"SUPERCLI_HOME=$SUPERCLI_HOME"} \
   "$ATTACH_BIN" --replay-bytes 64 "$SID" >/dev/null
 sleep 1.5
 CONTROL_VIEW="$(client_screen "$HT_NAME_4")"

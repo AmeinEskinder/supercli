@@ -14,8 +14,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use unpeel_core::controller_host::ControllerHostRuntime;
-use unpeel_core::remote_stdio;
+use supercli_core::controller_host::ControllerHostRuntime;
+use supercli_core::remote_stdio;
 
 use crate::computer::{ComputerAdapter, SharedComputerStatus};
 use crate::platform_adapter::{
@@ -108,7 +108,7 @@ impl LocalGatewayServer {
         let thread_active = Arc::clone(&active);
         let thread_workers = Arc::clone(&workers);
         // Same hook port Direct/Link create uses. `None` unsets
-        // `UNPEEL_APP_PORT` in the hosted PTY, so provider hooks write
+        // `SUPERCLI_APP_PORT` in the hosted PTY, so provider hooks write
         // `last-hook-event.json` but never POST Busy/Idle and the sidebar
         // spinner never starts.
         let runtime = Arc::new(ControllerHostRuntime::owner_transport(
@@ -243,7 +243,7 @@ fn serve_connection(
     };
     let mut writer = stream;
     let namespace = format!("local:{}:{id}", remote_stdio::owner_subject());
-    let handler = |request: unpeel_core::relay_wire::TunnelRequest, cancelled: &AtomicBool| {
+    let handler = |request: supercli_core::relay_wire::TunnelRequest, cancelled: &AtomicBool| {
         if request.path == PAIRING_CONTROL_PATH {
             // R2: catch panics at the local-gateway boundary; return 500.
             let path = request.path.clone();
@@ -257,7 +257,7 @@ fn serve_connection(
                         .map(|s| s.to_string())
                         .or_else(|| payload.downcast_ref::<String>().cloned())
                         .unwrap_or_else(|| "<non-string panic>".to_string());
-                    unpeel_core::json_log::error_fields(
+                    supercli_core::json_log::error_fields(
                         "local gateway handler panicked",
                         serde_json::json!({"panic": msg, "path": path}),
                     );
@@ -278,7 +278,7 @@ fn serve_connection(
                         .map(|s| s.to_string())
                         .or_else(|| payload.downcast_ref::<String>().cloned())
                         .unwrap_or_else(|| "<non-string panic>".to_string());
-                    unpeel_core::json_log::error_fields(
+                    supercli_core::json_log::error_fields(
                         "local gateway handler panicked",
                         serde_json::json!({"panic": msg, "path": path}),
                     );
@@ -303,7 +303,7 @@ fn serve_connection(
                 // No native overlay reaches this workspace: `app-state.json`'s
                 // `project_colors` is the carrier its bootstrap reads back
                 // (flock + announce inside `app_state::edit`).
-                return unpeel_core::session_ops::set_project_folder_color(project_id, color);
+                return supercli_core::session_ops::set_project_folder_color(project_id, color);
             }
             let adapter = platform_adapters
                 .call(
@@ -322,13 +322,13 @@ fn serve_connection(
                     .unwrap_or("native folder-color adapter rejected the write")
                     .to_owned());
             }
-            unpeel_core::state_bus::announce(
-                unpeel_core::state_bus::Change::AppState,
-                unpeel_core::session_ops::own_listener_port_public(),
+            supercli_core::state_bus::announce(
+                supercli_core::state_bus::Change::AppState,
+                supercli_core::session_ops::own_listener_port_public(),
             );
             Ok(())
         };
-        let project_color_writer: Option<unpeel_core::controller_host::ProjectColorWriter<'_>> =
+        let project_color_writer: Option<supercli_core::controller_host::ProjectColorWriter<'_>> =
             Some(&write_project_color);
         let mut response = runtime.handle_tunnel_with_project_color_writer(
             &namespace,
@@ -345,13 +345,13 @@ fn serve_connection(
             }
             if let Some(request) = notify_when_done {
                 response = match platform_adapters.call("session.notify_when_done.set", request) {
-                    Ok(adapter) => unpeel_core::controller_api::ControllerResponse {
+                    Ok(adapter) => supercli_core::controller_api::ControllerResponse {
                         id: response.id,
                         status: adapter.status,
                         body: adapter.body,
                     },
                     Err(PlatformAdapterError::Unavailable) => {
-                        unpeel_core::controller_api::ControllerResponse {
+                        supercli_core::controller_api::ControllerResponse {
                             id: response.id,
                             status: 501,
                             body: serde_json::json!({
@@ -359,7 +359,7 @@ fn serve_connection(
                             }),
                         }
                     }
-                    Err(error) => unpeel_core::controller_api::ControllerResponse {
+                    Err(error) => supercli_core::controller_api::ControllerResponse {
                         id: response.id,
                         status: 503,
                         body: serde_json::json!({ "error": error.to_string() }),
@@ -372,7 +372,7 @@ fn serve_connection(
                 .cloned()
                 .and_then(|value| serde_json::from_value(value).ok())
             {
-                let mut protocol: unpeel_core::controller_protocol::HostProtocolDescriptor =
+                let mut protocol: supercli_core::controller_protocol::HostProtocolDescriptor =
                     protocol;
                 // The disk-backed runtime omits the verbs it cannot serve, but
                 // this socket routes them to the worker's live authorities
@@ -414,7 +414,7 @@ fn serve_connection(
 
 fn handle_platform_adapter_control(
     connection_id: u64,
-    request: unpeel_core::relay_wire::TunnelRequest,
+    request: supercli_core::relay_wire::TunnelRequest,
     hub: &PlatformAdapterHub,
 ) -> (u16, Vec<u8>) {
     if request.method != "POST" {
@@ -473,11 +473,11 @@ fn handle_platform_adapter_control(
 /// All ordinary validation/effects still happen in the shared Host; only a
 /// successful common response may reach the registered native adapter.
 fn platform_session_organization(
-    mut request: unpeel_core::relay_wire::TunnelRequest,
+    mut request: supercli_core::relay_wire::TunnelRequest,
     platform_adapters: &PlatformAdapterHub,
 ) -> Result<
     (
-        unpeel_core::relay_wire::TunnelRequest,
+        supercli_core::relay_wire::TunnelRequest,
         Option<serde_json::Value>,
     ),
     (u16, Vec<u8>),
@@ -517,7 +517,7 @@ fn platform_session_organization(
         })
         .ok_or_else(|| (400, br#"{"error":"invalid session id"}"#.to_vec()))?
         .to_owned();
-    if unpeel_core::session_host::load_manifest(&session_id).is_none() {
+    if supercli_core::session_host::load_manifest(&session_id).is_none() {
         return Err((404, br#"{"error":"unknown session"}"#.to_vec()));
     }
     match body.get("title") {
@@ -566,7 +566,7 @@ fn platform_session_organization(
 }
 
 fn handle_local_control(
-    request: unpeel_core::relay_wire::TunnelRequest,
+    request: supercli_core::relay_wire::TunnelRequest,
     control_tx: &mpsc::Sender<LocalControlRequest>,
 ) -> (u16, Vec<u8>) {
     if request.method != "POST" {
@@ -654,7 +654,7 @@ fn handle_local_control(
 fn pairing_control_call(home: &Path, body: serde_json::Value) -> Result<serde_json::Value, String> {
     let mut stream = UnixStream::connect(remote_stdio::local_host_socket_path(home))
         .map_err(|error| format!("connect to the workspace Host: {error}"))?;
-    let request = unpeel_core::relay_wire::TunnelRequest {
+    let request = supercli_core::relay_wire::TunnelRequest {
         id: 1,
         method: "POST".into(),
         path: PAIRING_CONTROL_PATH.into(),
@@ -666,13 +666,13 @@ fn pairing_control_call(home: &Path, body: serde_json::Value) -> Result<serde_js
     remote_stdio::write_frame(
         &mut stream,
         remote_stdio::FRAME_KIND_REQUEST,
-        &unpeel_core::relay_wire::encode_tunnel_request(&request),
+        &supercli_core::relay_wire::encode_tunnel_request(&request),
     )?;
     let frame = remote_stdio::read_frame(&mut stream)?.ok_or("workspace Host closed")?;
     if frame.kind != remote_stdio::FRAME_KIND_RESPONSE {
         return Err("workspace Host returned an invalid response".into());
     }
-    let response = unpeel_core::relay_wire::parse_tunnel_response(&frame.payload)?;
+    let response = supercli_core::relay_wire::parse_tunnel_response(&frame.payload)?;
     let value = serde_json::from_slice::<serde_json::Value>(&response.body)
         .map_err(|_| "workspace Host returned invalid JSON".to_string())?;
     if response.status == 200 {

@@ -32,13 +32,13 @@ jobs:
         with:
           workspaces: crates
       - name: Build headless Host
-        run: cargo build --quiet --locked --manifest-path crates/Cargo.toml -p unpeel-cli -p unpeel-host
+        run: cargo build --quiet --locked --manifest-path crates/Cargo.toml -p supercli-cli -p supercli-host
       - name: Swift/Rust Relay conformance
         run: |
           command -v swiftc
           swiftc --version
-          cd crates/unpeel-cli/tests
+          cd crates/supercli-cli/tests
           ./run.sh -v relay_conformance
         env:
-          UNPEEL_TUI_SKIP_BUILD: '1'
-          UNPEEL_TUI_BINARY: ${{ github.workspace }}/crates/target/debug/unpeel
+          SUPERCLI_TUI_SKIP_BUILD: '1'
+          SUPERCLI_TUI_BINARY: ${{ github.workspace }}/crates/target/debug/supercli

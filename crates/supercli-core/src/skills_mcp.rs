@@ -174,7 +174,7 @@ pub fn action_docs() -> Vec<Value> {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "id": { "type": "string", "description": "Exact namespaced skill id, for example app/unpeel.app.design" },
+                    "id": { "type": "string", "description": "Exact namespaced skill id, for example app/supercli.app.design" },
                 },
                 "required": ["id"],
             },
@@ -213,14 +213,14 @@ mod tests {
         let apps = vec![
             app(
                 PathBuf::from("/tmp/design"),
-                "unpeel.app.design",
+                "supercli.app.design",
                 "Unpeel Design",
                 "Design interfaces",
                 true,
             ),
             app(
                 PathBuf::from("/tmp/plain"),
-                "unpeel.app.plain",
+                "supercli.app.plain",
                 "Plain",
                 "No guide",
                 false,
@@ -228,10 +228,10 @@ mod tests {
         ];
         let references = skill_references(&apps);
         assert_eq!(references.len(), 1);
-        assert_eq!(references[0]["id"], "app/unpeel.app.design");
+        assert_eq!(references[0]["id"], "app/supercli.app.design");
         assert_eq!(references[0]["owner"]["kind"], "app");
-        assert!(resolve_skill(&apps, "app/unpeel.app.design").is_ok());
-        assert!(resolve_skill(&apps, "unpeel.app.design").is_err());
+        assert!(resolve_skill(&apps, "app/supercli.app.design").is_ok());
+        assert!(resolve_skill(&apps, "supercli.app.design").is_err());
     }
 
     #[test]
@@ -240,13 +240,13 @@ mod tests {
         std::fs::write(temp.path().join("skill.md"), "# Design\nOpen the canvas.").unwrap();
         let app = app(
             temp.path().to_path_buf(),
-            "unpeel.app.design",
+            "supercli.app.design",
             "Unpeel Design",
             "Design interfaces",
             true,
         );
         let text = render_skill(&app).expect("skill renders");
-        assert!(text.contains("Skill 'app/unpeel.app.design'"));
+        assert!(text.contains("Skill 'app/supercli.app.design'"));
         assert!(text.contains("not the user speaking"));
         assert!(text.contains("# Design"));
     }
@@ -255,13 +255,13 @@ mod tests {
     fn description_lists_small_registries_without_loading_skill_bodies() {
         let apps = vec![app(
             PathBuf::from("/tmp/design"),
-            "unpeel.app.design",
+            "supercli.app.design",
             "Unpeel Design",
             "Design interfaces",
             true,
         )];
         let description = tool_description_for(&apps);
-        assert!(description.contains("app/unpeel.app.design"));
+        assert!(description.contains("app/supercli.app.design"));
         assert!(description.contains("grant no permissions"));
         assert!(!description.contains("Open the canvas"));
     }

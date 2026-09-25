@@ -116,7 +116,7 @@ state. Scope switches retain live state for the process even when a
 persistence write could not complete.
 
 `controllerHome` is the Controller process's home. It is never replaced with
-a selected local workspace's `UNPEEL_HOME`, a paired/SSH Host path, or a
+a selected local workspace's `SUPERCLI_HOME`, a paired/SSH Host path, or a
 Session directory. Switching Host scope clears drop/focus/reveal/active/zoom
 state and restores only the current `windowID` + `scopeID` slot.
 Reconciliation must use eligible Session ids from that selected scope, never
@@ -144,7 +144,7 @@ Multi-pane views work in every Host scope:
 - loopback-workspace, paired, and SSH scopes use runtime-owned in-memory
   Ghostty panes with independent output cursor and resize state per visible
   Session; and
-- remote panes never launch a local `unpeel-attach` or local hosted Session.
+- remote panes never launch a local `supercli-attach` or local hosted Session.
 
 Dragging a Session over the content offers **four-sided drop zones on every
 pane** (nearest-edge triangular hit test; short panes refuse up/down) plus a
@@ -192,7 +192,7 @@ for panes. The narrow read-only exception is agent self-context:
 `sessions.current` and `apps.context` re-read this Host's own
 `windows["main"]["local"]` durable tree and return only the caller's direct
 left/right/up/down neighbors. Each neighbor is classified as terminal, agent,
-or Unpeel App and carries the ordinary Session id needed for an open read.
+or Supercli App and carries the ordinary Session id needed for an open read.
 They expose no pane ids, ratios, pixel geometry, focus, zoom, or transient
 visibility. A remote Controller's arrangement is not inferred from Host state;
 that needs an explicit future protocol projection. A Mac frontend serving
@@ -200,7 +200,7 @@ mobile bootstrap may expose only the sidebar projection for its `main`
 window and selected scope; the phone cannot read or mutate the private split
 tree or its geometry.
 
-Unpeel App panels use one deliberate semantic seam without weakening that
+Supercli App panels use one deliberate semantic seam without weakening that
 boundary. `apps.open` records that an App instance is associated with its
 calling Session, a `panel` target, and a monotonic reveal revision. It does not
 record a side, ratio, focus, visibility, or pane id. Local native Controllers
@@ -230,7 +230,7 @@ This is a Controller UI choice, not a limitation of the selected Host.
 Today `AppDelegate` creates one window and one `PaneLayoutController` with
 `windowID = "main"`. Future workspace drag-out and **Open in New Window** must
 move one scope and its saved layout to one destination window with its own
-stable id. Initially reuse `UnpeelWorkspaceLauncher` for local workspaces; do
+stable id. Initially reuse `SupercliWorkspaceLauncher` for local workspaces; do
 not invent another launch path.
 
 The destination window remounts panes from Host-backed Session identities.

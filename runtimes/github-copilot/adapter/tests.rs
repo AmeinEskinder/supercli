@@ -72,5 +72,5 @@ fn copilot_hook_script_maps_lifecycle_and_permission_events() {
     assert!(COPILOT_HOOK_SCRIPT.contains("sessionEnd"));
     assert!(COPILOT_HOOK_SCRIPT.contains("PermissionRequest"));
     assert!(COPILOT_HOOK_SCRIPT.contains("printf '{}\\n'"));
-    assert!(COPILOT_HOOK_SCRIPT.contains("UNPEEL_APP_PORT"));
+    assert!(COPILOT_HOOK_SCRIPT.contains("SUPERCLI_APP_PORT"));
 }

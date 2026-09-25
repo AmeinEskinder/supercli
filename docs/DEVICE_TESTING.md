@@ -1,6 +1,6 @@
 # Device testing with MobAI
 
-How the Dioxus mobile launchers (`clients/dioxus/unpeel-mobile`) get
+How the Dioxus mobile launchers (`clients/dioxus/supercli-mobile`) get
 exercised on real devices and simulators. MobAI is the device-control
 layer; it does **not** replace Xcode, signing, or the Android SDK — those
 still produce the app artifact MobAI installs.
@@ -35,7 +35,7 @@ everything in CI.
 
 Five `.mob` flows, in dependency order:
 
-1. `pair.mob` — fresh install → "Pair with an Unpeel Host" → type the
+1. `pair.mob` — fresh install → "Pair with an Supercli Host" → type the
    pairing code (param `pair_code`) → tap "Pair" → session list appears.
 2. `open-session.mob` — tap a session row (`session_title` param) →
    session detail with "‹ Sessions" back affordance.
@@ -59,13 +59,13 @@ mobai-ci test ./tests/device --output device-reports
 Parameters are passed per flow, e.g.:
 
 ```sh
-mobai-ci test ./tests/device/pair.mob --param pair_code="UNPEEL:1:…" --output device-reports
+mobai-ci test ./tests/device/pair.mob --param pair_code="SUPERCLI:1:…" --output device-reports
 ```
 
 ## What the flows assert — and what they don't
 
-- The flows drive the **real UI copy** ("Pair with an Unpeel Host",
-  "UNPEEL:1:host:port:…", "Browser Gallery", "Draw", "Dictate"). If the
+- The flows drive the **real UI copy** ("Pair with an Supercli Host",
+  "SUPERCLI:1:host:port:…", "Browser Gallery", "Draw", "Dictate"). If the
   UI copy changes, the flows must change with it.
 - The gallery and dictation flows need a **live paired Host**: screenshots
   and dictation go through the Host protocol. CI runs them against a
@@ -97,13 +97,13 @@ Probed whether the Dioxus mobile client can target Android from this VM:
 - Android SDK provisioned manually under `~/workspace/muse-harness/tmp/android-sdk`
   (proxy blocks `sdkmanager`, so components were curled directly):
   platform-tools 37.0.1, build-tools 35.0.0, android-35 platform, NDK r27d.
-- `dx bundle --platform android --package unpeel-mobile` **compiles the full
+- `dx bundle --platform android --package supercli-mobile` **compiles the full
   Rust workspace for Android**: 504/505 crates built, producing a valid
   `libmain.so` (ELF x86-64 PIE, `/system/bin/linker64`).
-- The investigation caught a real manifest bug: `unpeel-mobile` and
-  `unpeel-desktop` called `dioxus::launch(...)` but only enabled the
+- The investigation caught a real manifest bug: `supercli-mobile` and
+  `supercli-desktop` called `dioxus::launch(...)` but only enabled the
   `mobile`/`desktop` features — `launch` is a separate feature in Dioxus 0.7
-  (unpeel-web already had it). Fixed by adding `"launch"` to both crates'
+  (supercli-web already had it). Fixed by adding `"launch"` to both crates'
   feature lists.
 - APK assembly is **environmentally blocked**: the Gradle wrapper's
   distribution download fails (proxy), and even with Gradle 9.1.0 pre-seeded

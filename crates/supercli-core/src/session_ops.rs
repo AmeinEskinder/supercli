@@ -46,7 +46,7 @@ fn lifecycle_lock_target_at(lock_dir: &std::path::Path, session_id: &str) -> Pat
 pub(crate) fn lock_session_lifecycle(
     session_id: &str,
 ) -> Result<crate::app_state::FileLock, String> {
-    let home = app_paths::ensure_unpeel_home().map_err(|e| e.to_string())?;
+    let home = app_paths::ensure_supercli_home().map_err(|e| e.to_string())?;
     let lock_dir = home.join("session-lifecycle-locks");
     std::fs::create_dir_all(&lock_dir).map_err(|e| e.to_string())?;
     crate::app_state::lock_exclusive(&lifecycle_lock_target_at(&lock_dir, session_id))
@@ -89,7 +89,7 @@ fn manifest(session_id: &str) -> Result<HostedSessionManifest, String> {
 /// never point removal outside the active Unpeel home. Older manifests fall
 /// back to the runtime adapter's command parser.
 fn managed_storage_for_manifest(manifest: &HostedSessionManifest) -> Option<PathBuf> {
-    let home = app_paths::unpeel_home();
+    let home = app_paths::supercli_home();
     let candidate = manifest
         .managed_storage_path
         .as_deref()
@@ -1389,20 +1389,20 @@ pub fn recents_recency_ms(session_id: &str, command: &str, created_at: u64) -> u
     latest_lifecycle_ms(session_id, command, created_at, None)
 }
 
-/// Shared manual sidebar order (`~/.unpeel/session-order.json`):
+/// Shared manual sidebar order (`~/.supercli/session-order.json`):
 /// `{ project_id: [session ids] }`. The desktop keeps the same list in its
 /// UserDefaults overlay; this file is how a drag in one frontend reaches
 /// the others. Ids absent from the list keep their natural (newest-first)
 /// position above the hand-ordered block, matching the app.
 fn session_order_path() -> PathBuf {
-    app_paths::unpeel_home().join("session-order.json")
+    app_paths::supercli_home().join("session-order.json")
 }
 
-/// `~/.unpeel/project-order.json` — a flat list of project ids in sidebar
+/// `~/.supercli/project-order.json` — a flat list of project ids in sidebar
 /// order. The sibling of `session-order.json`, and shared for the same
 /// reason: a drag in one frontend has to show up in the other.
 fn project_order_path() -> std::path::PathBuf {
-    app_paths::unpeel_home().join("project-order.json")
+    app_paths::supercli_home().join("project-order.json")
 }
 
 /// This process's own hook-listener port, so `announce` can skip it. Set
@@ -1901,7 +1901,7 @@ fn rewrite_session_order_value(
 }
 
 /// Explicit-path variant keeps the transformation independently testable and
-/// avoids ever swapping process-global `UNPEEL_HOME` in unit tests.
+/// avoids ever swapping process-global `SUPERCLI_HOME` in unit tests.
 fn rewrite_session_order_references_at(
     path: &std::path::Path,
     old_id: &str,
@@ -2110,7 +2110,7 @@ pub fn spawn_session(
         // A TUI/headless Host can set the same workspace accent contract as
         // the native frontend. Validation happens at the PTY environment
         // boundary; absence keeps hosted Apps on their standalone default.
-        app_accent: std::env::var("UNPEEL_APP_ACCENT").ok(),
+        app_accent: std::env::var("SUPERCLI_APP_ACCENT").ok(),
         hook_port,
         execution_scope: crate::session_host::SessionExecutionScope::Local,
         initial_cols: Some(initial_cols.max(2)),
@@ -2194,7 +2194,7 @@ pub fn deliver_initial_text(
 /// themselves (the TUI): env override, then a sibling of the current
 /// executable (dev target dir, app bundle), then PATH.
 pub fn resolve_host_binary() -> Result<PathBuf, String> {
-    if let Some(cmd) = std::env::var_os("UNPEEL_HOST_CMD") {
+    if let Some(cmd) = std::env::var_os("SUPERCLI_HOST_CMD") {
         let path = PathBuf::from(&cmd);
         if path.exists() {
             return Ok(path);
@@ -2711,8 +2711,8 @@ mod tests {
                 "untouched": ["other"]
             },
             "mcp_app_open_approvals": {
-                "old": ["unpeel.app.design"],
-                "other": ["unpeel.app.notes"]
+                "old": ["supercli.app.design"],
+                "other": ["supercli.app.notes"]
             },
             "browser_approvals": ["other", "old", {"future": "kept"}],
             "computer_approvals": ["old", "other"],
@@ -2756,11 +2756,11 @@ mod tests {
         assert!(state["mcp_app_open_approvals"].get("old").is_none());
         assert_eq!(
             state["mcp_app_open_approvals"]["new"],
-            serde_json::json!(["unpeel.app.design"])
+            serde_json::json!(["supercli.app.design"])
         );
         assert_eq!(
             state["mcp_app_open_approvals"]["other"],
-            serde_json::json!(["unpeel.app.notes"])
+            serde_json::json!(["supercli.app.notes"])
         );
         assert_eq!(
             state["browser_approvals"],
@@ -2795,8 +2795,8 @@ mod tests {
                 "mixed": ["old", "other"]
             },
             "mcp_app_open_approvals": {
-                "old": ["unpeel.app.design"],
-                "other": ["unpeel.app.notes"]
+                "old": ["supercli.app.design"],
+                "other": ["supercli.app.notes"]
             },
             "browser_approvals": ["old", "other"],
             "computer_approvals": ["other", "old"],
@@ -2827,7 +2827,7 @@ mod tests {
         assert!(state["mcp_app_open_approvals"].get("old").is_none());
         assert_eq!(
             state["mcp_app_open_approvals"]["other"],
-            serde_json::json!(["unpeel.app.notes"])
+            serde_json::json!(["supercli.app.notes"])
         );
         assert_eq!(state["browser_approvals"], serde_json::json!(["other"]));
         assert_eq!(state["computer_approvals"], serde_json::json!(["other"]));
@@ -3057,7 +3057,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_order_edit_does_not_touch_global_unpeel_home() {
+    fn explicit_order_edit_does_not_touch_global_supercli_home() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("session-order.json");
         std::fs::write(

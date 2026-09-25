@@ -5,7 +5,7 @@
 //! that consumes it. For every attached connector it opens a link — the
 //! connector's MCP stdio process (one per MCP server process) or its
 //! MCP-over-HTTP endpoint — injects the keychain token (env var
-//! `UNPEEL_CONNECTOR_TOKEN` for stdio, `Authorization: Bearer` for HTTP),
+//! `SUPERCLI_CONNECTOR_TOKEN` for stdio, `Authorization: Bearer` for HTTP),
 //! filters the advertised tools to the manifest's closed `tools.provides`
 //! list, and enforces the effective approval policy (manifest default;
 //! the session record may only tighten it) on every call. OAuth2 tokens
@@ -45,7 +45,7 @@ fn panic_message(panic: &Box<dyn std::any::Any + Send + 'static>) -> String {
 #[cfg(test)]
 static EXECUTE_CALL_PANIC_HOOK: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 use sha2::{Digest, Sha256};
-use unpeel_connector::{
+use supercli_connector::{
     default_roots, discover, effective_policy,
     link::{CallOutcome, ConnectorLink},
     open_connector_store, read_attachments, ApprovalPolicy, ConnectorManifest, CredentialStore,
@@ -66,7 +66,7 @@ const AUDIT_FILE: &str = "connectors-audit.jsonl";
 const APPROVE_ROUTE: &str = "/mcp/approve-connector";
 
 fn trace(message: &str) {
-    let path = crate::app_paths::unpeel_home()
+    let path = crate::app_paths::supercli_home()
         .join("hooks")
         .join("trace.log");
     if let Some(parent) = path.parent() {
@@ -89,10 +89,10 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Scan roots: `UNPEEL_CONNECTORS_DIR` (colon-separated, tests and dev)
+/// Scan roots: `SUPERCLI_CONNECTORS_DIR` (colon-separated, tests and dev)
 /// wins over the default registrar sources — the same rule as the CLI.
 fn roots() -> Vec<PathBuf> {
-    if let Some(dirs) = std::env::var_os("UNPEEL_CONNECTORS_DIR") {
+    if let Some(dirs) = std::env::var_os("SUPERCLI_CONNECTORS_DIR") {
         let roots: Vec<PathBuf> = std::env::split_paths(&dirs).collect();
         if !roots.is_empty() {
             return roots;
@@ -119,7 +119,7 @@ impl LiveConnector {
 }
 
 /// Resolve the token to inject for one attached connector through the
-/// shared [`unpeel_connector::resolve_connector_token`] (OAuth2 tokens
+/// shared [`supercli_connector::resolve_connector_token`] (OAuth2 tokens
 /// are refreshed first when expiring). Failures become skip reasons so a
 /// broken attachment produces a diagnosable error instead of a bare
 /// "unknown tool".
@@ -129,7 +129,7 @@ fn resolve_token(
     store: &dyn CredentialStore,
     name: &str,
 ) -> Result<String, String> {
-    unpeel_connector::resolve_connector_token(manifest, dir, store, name, SPAWN_TIMEOUT).map_err(
+    supercli_connector::resolve_connector_token(manifest, dir, store, name, SPAWN_TIMEOUT).map_err(
         |e| match e {
             OAuthError::NotConnected => {
                 format!("{name} is not connected — run `unpeel connector connect {name}`")
@@ -976,7 +976,7 @@ impl SessionConnectors {
                         let retryable = matches!(
                             e,
                             LinkError::Http(
-                                unpeel_connector::http::HttpConnectorError::TransportSetup(_)
+                                supercli_connector::http::HttpConnectorError::TransportSetup(_)
                             )
                         );
                         let err = format!("connector tool {name:?} failed: {err}");
@@ -1334,7 +1334,7 @@ pub(crate) fn call_connector_tool(name: &str, arguments: &Value) -> Result<Strin
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
-    use unpeel_connector::CONNECTORS_KEYCHAIN_ENV;
+    use supercli_connector::CONNECTORS_KEYCHAIN_ENV;
 
     const MANIFEST_ASK: &str = r#"
 [connector]
@@ -1391,11 +1391,11 @@ for line in sys.stdin:
 "#;
 
     /// Counting stub: identical to STUB, but every `tools/call` appends one
-    /// line to the file named by the `UNPEEL_COUNT_FILE` env var. Lets a test
+    /// line to the file named by the `SUPERCLI_COUNT_FILE` env var. Lets a test
     /// prove the mock connector was never invoked (count exactly 0).
     const STUB_COUNTING: &str = r#"import json, sys, os
 TOOL = sys.argv[1]
-COUNT = os.environ.get("UNPEEL_COUNT_FILE", "")
+COUNT = os.environ.get("SUPERCLI_COUNT_FILE", "")
 TOOLS = [{"name": TOOL, "description": "echo it", "inputSchema": {"type": "object"}}]
 def respond(mid, result):
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}) + "\n")
@@ -1481,7 +1481,7 @@ provides = ["county.echo"]
             std::fs::create_dir_all(&dir).unwrap();
             Self::write_connector(&dir, "asky", MANIFEST_ASK, "asky.echo");
             Self::write_connector(&dir, "allowy", MANIFEST_ALLOW, "allowy.echo");
-            std::env::set_var("UNPEEL_CONNECTORS_DIR", dir.as_os_str());
+            std::env::set_var("SUPERCLI_CONNECTORS_DIR", dir.as_os_str());
             std::env::set_var(CONNECTORS_KEYCHAIN_ENV, "memory");
             let session_dir = dir.join("session-1");
             std::fs::create_dir_all(&session_dir).unwrap();
@@ -1493,18 +1493,18 @@ provides = ["county.echo"]
         }
 
         fn attach(&self, name: &str, policy: HashMap<String, ApprovalPolicy>) {
-            unpeel_connector::enable_attachment(&self.session_dir, name, policy).unwrap();
+            supercli_connector::enable_attachment(&self.session_dir, name, policy).unwrap();
         }
 
         fn detach(&self, name: &str) {
-            unpeel_connector::disable_attachment(&self.session_dir, name).unwrap();
+            supercli_connector::disable_attachment(&self.session_dir, name).unwrap();
         }
     }
 
     impl Drop for Fixture {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
-            std::env::remove_var("UNPEEL_CONNECTORS_DIR");
+            std::env::remove_var("SUPERCLI_CONNECTORS_DIR");
             std::env::remove_var(CONNECTORS_KEYCHAIN_ENV);
         }
     }
@@ -1612,7 +1612,7 @@ provides = ["county.echo"]
         let fx = Fixture::new();
         // Counting mock: every tools/call appends one line to this file.
         let count_file = fx.dir.join("call-count.txt");
-        std::env::set_var("UNPEEL_COUNT_FILE", &count_file);
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
         Fixture::write_connector_with_stub(
             &fx.dir,
             "county",
@@ -1681,7 +1681,7 @@ provides = ["county.echo"]
             "hash chain length must be unchanged"
         );
 
-        std::env::remove_var("UNPEEL_COUNT_FILE");
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
     }
 
     #[test]
@@ -1805,7 +1805,7 @@ provides = ["county.echo"]
         let fx = Fixture::new();
         fx.attach("allowy", HashMap::new());
         std::fs::write(
-            unpeel_connector::attachments_path(&fx.session_dir),
+            supercli_connector::attachments_path(&fx.session_dir),
             "{not json",
         )
         .unwrap();
@@ -1819,7 +1819,7 @@ provides = ["county.echo"]
     /// the tool name it serves.
     const STUB_TOKEN_ECHO: &str = r#"import json, sys, os
 TOOL = sys.argv[1]
-TOKEN = os.environ.get("UNPEEL_CONNECTOR_TOKEN", "")
+TOKEN = os.environ.get("SUPERCLI_CONNECTOR_TOKEN", "")
 TOOLS = [{"name": TOOL, "description": "echo it", "inputSchema": {"type": "object"}}]
 def respond(mid, result):
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}) + "\n")
@@ -2051,15 +2051,15 @@ provides = ["oauthy.echo"]
 
         // Store an already-expired token set: the host must refresh it
         // through token_url before the first call.
-        let stale = unpeel_connector::TokenSet {
+        let stale = supercli_connector::TokenSet {
             access_token: "stale-access".to_string(),
             refresh_token: Some("stale-refresh".to_string()),
-            expires_at_unix: Some(unpeel_connector::now_unix() - 60),
+            expires_at_unix: Some(supercli_connector::now_unix() - 60),
             token_url: Some(token_url.clone()),
-            obtained_at_unix: unpeel_connector::now_unix() - 7200,
+            obtained_at_unix: supercli_connector::now_unix() - 7200,
         };
-        let (store, _notice) = unpeel_connector::open_connector_store();
-        unpeel_connector::store_connector_token(store.as_ref(), "oauthy", &stale.to_stored())
+        let (store, _notice) = supercli_connector::open_connector_store();
+        supercli_connector::store_connector_token(store.as_ref(), "oauthy", &stale.to_stored())
             .unwrap();
 
         fx.attach("oauthy", HashMap::new());
@@ -2071,10 +2071,10 @@ provides = ["oauthy.echo"]
         assert!(out.contains("token=fresh-access"), "{out}");
         assert!(!out.contains("stale-access"), "{out}");
         // And the rotated set was persisted back to the keychain.
-        let stored = unpeel_connector::load_connector_token(store.as_ref(), "oauthy")
+        let stored = supercli_connector::load_connector_token(store.as_ref(), "oauthy")
             .unwrap()
             .unwrap();
-        let rotated = unpeel_connector::TokenSet::from_stored(&stored).unwrap();
+        let rotated = supercli_connector::TokenSet::from_stored(&stored).unwrap();
         assert_eq!(rotated.access_token, "fresh-access");
         assert_eq!(rotated.refresh_token.as_deref(), Some("fresh-refresh"));
         token_handle.join().unwrap();
