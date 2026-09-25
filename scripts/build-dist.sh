@@ -53,6 +53,7 @@ DEB_DIR="$(mktemp -d)"
 DEB_PKG="$OUT_DIR/unpeel_${VERSION}_${ARCH}.deb"
 echo "==> Creating $DEB_PKG..."
 mkdir -p "$DEB_DIR/DEBIAN" "$DEB_DIR/usr/bin" "$DEB_DIR/usr/share/doc/unpeel"
+chmod 755 "$DEB_DIR" "$DEB_DIR/DEBIAN"
 cp "$BIN_DIR/unpeel" "$BIN_DIR/unpeel-host" "$ATTACH_BIN" "$DEB_DIR/usr/bin/"
 cp "$REPO_ROOT/CHANGELOG.md" "$DEB_DIR/usr/share/doc/unpeel/" 2>/dev/null || true
 cat > "$DEB_DIR/DEBIAN/control" <<EOF
