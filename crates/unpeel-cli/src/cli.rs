@@ -1009,6 +1009,7 @@ pub fn run(args: &[String]) -> i32 {
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
+        "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
         // The one unified registrar: `sync` delegates to the connector
         // sync pass (install/update from a registry + verify everything).
         "registrar" => match args.get(1).map(String::as_str) {

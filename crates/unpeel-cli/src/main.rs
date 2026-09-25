@@ -13,6 +13,7 @@ mod browser_cli;
 mod cli;
 mod computer_cli;
 mod connectors_cli;
+mod doctor_cli;
 mod integrations_cli;
 mod link_cli;
 mod mcp_cli;
@@ -38,6 +39,30 @@ fn main() {
         Err(error) => {
             eprintln!("unpeel: {error}");
             std::process::exit(2);
+        }
+    }
+    // `--log-level LEVEL` (R4): set the JSON log level for this process.
+    // Claimed early, before any log output. Takes precedence over
+    // UNPEEL_LOG_LEVEL env var.
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--log-level" && i + 1 < args.len() {
+            let level_str = args[i + 1].clone();
+            match unpeel_core::json_log::Level::parse(&level_str) {
+                Some(level) => {
+                    unpeel_core::json_log::set_level(level);
+                }
+                None => {
+                    eprintln!(
+                        "unpeel: invalid --log-level {level_str:?} (expected DEBUG, INFO, WARN, ERROR)"
+                    );
+                    std::process::exit(2);
+                }
+            }
+            args.remove(i);
+            args.remove(i);
+        } else {
+            i += 1;
         }
     }
     // The machine service and each workspace worker re-exec this executable
