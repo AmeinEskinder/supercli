@@ -115,6 +115,11 @@ pub struct HostBootstrapContext {
     pub remote_server_certificate_fingerprint: Option<String>,
     pub pending_approvals: Vec<Value>,
     pub protocol: HostProtocolDescriptor,
+    /// Phase 13 v3 (B): Monotonic counter advancing on every approval
+    /// enqueue/answer. The controller passes this back as
+    /// `?after_approval_generation=` with `?wait_ms=` to long-poll for
+    /// approval changes instead of polling on a timer.
+    pub approval_generation: u64,
 }
 
 impl HostBootstrapContext {
@@ -126,6 +131,7 @@ impl HostBootstrapContext {
             remote_server_certificate_fingerprint: None,
             pending_approvals: Vec::new(),
             protocol: HostProtocolDescriptor::headless_v1(),
+            approval_generation: 0,
         }
     }
 }
@@ -1255,6 +1261,12 @@ fn bootstrap_body(context: &HostBootstrapContext) -> Value {
                 context.pending_approvals.clone().into(),
             );
         }
+        // Phase 13 v3 (B): Always include the approval generation counter so
+        // the controller can long-poll with ?after_approval_generation=.
+        object.insert(
+            "approvalGeneration".into(),
+            context.approval_generation.into(),
+        );
         // A headless Linux host advertises its hardware kind so Controllers show
         // the right icon (native Mac hosts inject these Swift-side instead).
         // Presentation only; a Controller treats a missing value as unknown.

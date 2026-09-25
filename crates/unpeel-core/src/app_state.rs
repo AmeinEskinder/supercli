@@ -28,9 +28,9 @@ use serde_json::{Map, Value};
 /// other's change. It is the strongest argument for a central daemon, and a
 /// flock answers it without one. Held via RAII: released on drop, and by
 /// the OS if the process dies mid-edit.
-pub(crate) struct FileLock(#[allow(dead_code)] std::fs::File);
+pub struct FileLock(#[allow(dead_code)] std::fs::File);
 
-pub(crate) fn lock_exclusive(target: &std::path::Path) -> Result<FileLock, String> {
+pub fn lock_exclusive(target: &std::path::Path) -> Result<FileLock, String> {
     use std::os::fd::AsRawFd;
     let lock_path = target.with_extension("lock");
     let file = std::fs::OpenOptions::new()

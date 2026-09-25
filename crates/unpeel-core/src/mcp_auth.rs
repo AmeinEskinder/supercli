@@ -24,7 +24,10 @@ fn token_cache() -> &'static Mutex<Option<String>> {
 /// shared across Unpeel instances (they all trust the same user) and cached
 /// per process so concurrent callers cannot race the file into regeneration.
 pub fn ensure_auth_token() -> Result<String, String> {
-    let mut cache = token_cache().lock().unwrap();
+    // R2: recover from a poisoned cache instead of dying. If a previous
+    // holder panicked mid-write, the cached value may be stale but the
+    // Host must keep serving; the file on disk is the source of truth.
+    let mut cache = token_cache().lock().unwrap_or_else(|e| e.into_inner());
     if let Some(token) = cache.as_ref() {
         return Ok(token.clone());
     }

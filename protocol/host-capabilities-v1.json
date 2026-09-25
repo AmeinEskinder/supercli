@@ -2,13 +2,21 @@
   "schemaVersion": 1,
   "protocol": {
     "major": 1,
-    "minor": 21,
+    "minor": 22,
     "compatibility": {
       "major": "must-match",
       "minor": "additive",
       "unknownCapabilities": "ignore"
     },
     "history": [
+      {
+        "minor": 22,
+        "release": "0.7.1",
+        "summary": "Host-owned turn cancel: POST /mobile/turn-cancel interrupts the running turn, marks in-flight tool attempts Ambiguous (never failed, never auto-retried), and emits turn.cancelled. Controllers use session.turn.cancel when advertised and keep the Ctrl-C fallback only when it is absent.",
+        "capabilities": [
+          "session.turn.cancel"
+        ]
+      },
       {
         "minor": 21,
         "release": "0.7.0",
@@ -338,6 +346,13 @@
       "id": "session.stop",
       "method": "POST",
       "path": "/mobile/session-action#stop",
+      "native": true,
+      "tui": true
+    },
+    {
+      "id": "session.turn.cancel",
+      "method": "POST",
+      "path": "/mobile/turn-cancel",
       "native": true,
       "tui": true
     },

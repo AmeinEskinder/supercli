@@ -9,6 +9,8 @@
 #![recursion_limit = "256"]
 
 #[cfg(feature = "native-host")]
+pub mod action_reviews;
+#[cfg(feature = "native-host")]
 pub mod activity_log;
 #[cfg(feature = "native-host")]
 pub mod app_installer;
@@ -27,9 +29,13 @@ pub mod app_state;
 #[cfg(feature = "native-host")]
 pub mod apps_mcp;
 #[cfg(feature = "native-host")]
+pub mod backup;
+#[cfg(feature = "native-host")]
 pub mod browser_engine;
 #[cfg(feature = "native-host")]
 pub mod browser_mcp;
+#[cfg(feature = "native-host")]
+pub mod config;
 #[cfg(feature = "native-host")]
 pub mod controller_api;
 #[cfg(feature = "native-host")]
@@ -54,6 +60,12 @@ mod ghostty_vt;
 pub mod hook_assets;
 #[cfg(feature = "native-host")]
 pub mod hook_cancellation;
+#[cfg(feature = "native-host")]
+pub mod grant_store;
+#[cfg(feature = "native-host")]
+pub mod grant_audit;
+#[cfg(feature = "native-host")]
+pub mod grant_writer;
 #[cfg(feature = "controller-core")]
 pub mod host_connection;
 #[cfg(feature = "native-host")]
@@ -64,6 +76,7 @@ pub mod host_resources;
 pub mod http_fetch;
 #[cfg(feature = "native-host")]
 pub mod integrations;
+pub mod json_log;
 #[cfg(feature = "native-host")]
 pub mod license;
 #[cfg(feature = "native-host")]
@@ -92,6 +105,7 @@ mod portable_gating_tests;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
+pub mod rate_limit;
 #[cfg(feature = "native-host")]
 pub mod screen_activity;
 
@@ -125,7 +139,13 @@ pub mod runtime_catalog;
 #[cfg(feature = "native-host")]
 pub mod runtime_observer;
 #[cfg(feature = "native-host")]
+pub mod schedule_leases;
+#[cfg(feature = "native-host")]
+pub mod scheduled;
+#[cfg(feature = "native-host")]
 pub mod session_artifacts;
+#[cfg(feature = "native-host")]
+pub mod session_connectors;
 #[cfg(feature = "native-host")]
 pub mod session_host;
 #[cfg(feature = "native-host")]

@@ -27,6 +27,9 @@ pub(crate) mod fd_pass;
 #[cfg(unix)]
 #[path = "session_io.rs"]
 pub(crate) mod session_io;
+#[cfg(unix)]
+#[path = "write_deliveries.rs"]
+pub(crate) mod write_deliveries;
 
 pub const SESSION_HOST_ARG: &str = "__session_host__";
 pub const COMPACT_OUTPUT_JOURNALS_ARG: &str = "__compact_output_journals__";
@@ -653,12 +656,22 @@ pub enum SessionHostCommand {
     Kill,
 }
 
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionHostResponse {
     pub ok: bool,
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewport: Option<TerminalViewportSnapshot>,
+    /// Set on a Write reply when the write_id has a durable `delivering`
+    /// record with no matching `applied`: the bytes may or may not have
+    /// reached the PTY (crash between delivery and commit). The caller must
+    /// NOT retry; surface for human review instead.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub outcome_unknown: bool,
 }
 
 /// Header line of a [`SessionHostCommand::Snapshot`] reply; the VT bytes
@@ -727,7 +740,10 @@ fn maybe_auto_title_from_input(
     let Ok(text) = std::str::from_utf8(data) else {
         return;
     };
-    let candidate = extract_submitted_prompt(&mut title_buffer.lock().unwrap(), text);
+    let candidate = extract_submitted_prompt(
+        &mut title_buffer.lock().unwrap_or_else(|e| e.into_inner()),
+        text,
+    );
     if let Some(candidate) = candidate {
         if apply_manifest_auto_title(session_id, &candidate) {
             title_done.store(true, Ordering::Relaxed);
@@ -3445,13 +3461,13 @@ fn validate_write_id(write_id: Option<&str>) -> Result<Option<&str>, &'static st
 }
 
 #[derive(Default)]
-struct RecentWriteIds {
+pub(crate) struct RecentWriteIds {
     order: VecDeque<String>,
     seen: HashSet<String>,
 }
 
 impl RecentWriteIds {
-    fn contains(&self, write_id: &str) -> bool {
+    pub(crate) fn contains(&self, write_id: &str) -> bool {
         self.seen.contains(write_id)
     }
 
@@ -3459,7 +3475,12 @@ impl RecentWriteIds {
     /// `HostRuntime` lets the caller serialize check → write → record under
     /// the same runtime lock; a failed first delivery therefore remains
     /// retryable, and two racing transports cannot both apply the bytes.
-    fn record_applied(&mut self, write_id: &str) {
+    ///
+    /// Crash-safety note: this set is in-memory only. The durable half of
+    /// idempotency is `write_deliveries`: a write-ahead `delivering` record
+    /// (fsync) precedes the PTY write, so a crash between delivery and this
+    /// call resolves on retry as OutcomeUnknown, never as a re-delivery.
+    pub(crate) fn record_applied(&mut self, write_id: &str) {
         if !self.seen.insert(write_id.to_string()) {
             return;
         }
@@ -3474,7 +3495,9 @@ impl RecentWriteIds {
 
 fn cache_manifest_health(session_id: &str, manifest: Option<HostedSessionManifest>) {
     let now = current_timestamp_ms();
-    let mut cache = manifest_health_cache().lock().unwrap();
+    let mut cache = manifest_health_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Entries for dead sessions are never explicitly evicted, so drop stale
     // ones once the cache grows past the prune threshold to keep it bounded.
     if cache.len() >= MANIFEST_HEALTH_CACHE_PRUNE_LEN {
@@ -3492,7 +3515,10 @@ fn cache_manifest_health(session_id: &str, manifest: Option<HostedSessionManifes
 }
 
 fn clear_cached_manifest_health(session_id: &str) {
-    manifest_health_cache().lock().unwrap().remove(session_id);
+    manifest_health_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(session_id);
 }
 
 fn refresh_manifest_health_cached(
@@ -5335,7 +5361,10 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
             // authority. Read the current viewport, not a stale scan flag.
             if cancelled_at.is_some()
                 && viewport_has_menu_prompt(
-                    &cancellation_viewport.lock().unwrap().current_screen_text(),
+                    &cancellation_viewport
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .current_screen_text(),
                 )
             {
                 cancelled_at = None;
@@ -5393,7 +5422,9 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
                         .last_runtime_observation = None;
                 }
                 let (current_child_pid, foreground_process_group_id) = {
-                    let runtime = runtime_for_observer.lock().unwrap();
+                    let runtime = runtime_for_observer
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     (
                         runtime.child.process_id(),
                         runtime.master.process_group_leader(),
@@ -5586,7 +5617,7 @@ pub(crate) fn build_session_timer_jobs(inputs: SessionJobInputs) -> Vec<HostTime
             Duration::from_millis(SESSION_MENU_SCAN_INTERVAL_MS),
             move || {
                 let (screen, modes) = {
-                    let mut viewport = viewport_for_menu.lock().unwrap();
+                    let mut viewport = viewport_for_menu.lock().unwrap_or_else(|e| e.into_inner());
                     (
                         viewport.current_screen_text(),
                         viewport.terminal_mode_state(),

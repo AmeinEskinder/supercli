@@ -1290,7 +1290,7 @@ fn run_timer(rx: mpsc::Receiver<TimerMsg>) {
     loop {
         let now = Instant::now();
         let mut next_wake = now + HOST_TIMER_MAX_SLEEP;
-        for (_, session_jobs) in jobs.iter_mut() {
+        for session_jobs in jobs.values_mut() {
             session_jobs.retain_mut(|job| {
                 if now >= job.next_at {
                     let keep =

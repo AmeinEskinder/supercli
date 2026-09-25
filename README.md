@@ -75,6 +75,44 @@ Intel Macs, Linux x86_64 and aarch64; Ubuntu 20.04 / Debian 11 or newer). The
 installer verifies the archive against its SHA-256 sidecar and refuses to
 install otherwise.
 
+## Quickstart
+
+**1. Start the Host and pair your phone.**
+
+```bash
+unpeel serve            # the Host service (leave it running)
+unpeel pair             # shows a one-time code / QR — scan it in the iPhone app
+```
+
+On your own network the phone connects directly; away from home it goes
+through Unpeel Link, the end-to-end encrypted relay. `unpeel serve install`
+registers the per-user boot service (launchd / systemd) so the Host survives
+reboots.
+
+**2. Open your first session.**
+
+```bash
+unpeel new --command "claude" --cwd ~/project
+unpeel ls               # sessions, status, project, command
+```
+
+The agent runs inside a hosted terminal on your machine. Close the window,
+quit the app, drop the connection — the session keeps running.
+
+**3. Approvals.** When the agent tries something gated — using the browser,
+writing into another session — it blocks and your phone (or Mac app) shows
+an approval prompt. Approve or deny; an approved pair is remembered per the
+app-wide policy, a denial writes nothing. Sessions are created and closed by
+people, never by agents.
+
+**4. Cancel a running turn.** If the agent is off the rails, hit Stop in the
+app (or the phone): the Host interrupts the running turn and marks anything
+in flight as ambiguous — never silently failed, never auto-retried — so you
+can see exactly what may or may not have happened. From a terminal attached
+to the session, Ctrl-C does the same where the app's Stop is unavailable.
+
+The full CLI: `unpeel help`.
+
 ## Run a Host
 
 ```bash

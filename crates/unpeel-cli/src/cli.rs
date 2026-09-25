@@ -24,6 +24,17 @@ Pairing always goes through the Host service: a live `unpeel serve` owns the
 window, otherwise one is started in the background first. `--serve` is
 accepted for older scripts and changes nothing.";
 
+pub const REGISTRAR_HELP: &str = "\
+unpeel registrar — the one unified registrar for skills/runtimes/MCP/hooks
+
+  unpeel registrar sync [--registry DIR] [--json]
+      Install or update every connector from the registry (signature
+      verified, digest checked), then verify everything installed:
+      transport present, token present when auth requires one.
+
+      With no --registry, only the verify pass runs over the local
+      connectors. This is the same pass as `unpeel connector sync`.";
+
 pub const USAGE: &str = "\
 unpeel — run and steer CLI agent sessions
 
@@ -48,6 +59,11 @@ unpeel — run and steer CLI agent sessions
   unpeel settings list|get <key>|set <key> <value> [--json]
   unpeel apps list|install <app-id> [--check] [--json]
                                   MCP gates apply to Sessions launched afterward
+  unpeel connector discover|install|connect|disconnect|doctor|run [--json]
+                                  Host-side connectors (plugins)
+  unpeel registrar sync [--registry DIR] [--json]
+                                  the one unified registrar: install/update +
+                                  verify every connector from a registry
   unpeel integrations [list]      Unpeel's hooks + MCP integration per agent CLI
   unpeel integrations install <runtime|--all> [--project DIR]
   unpeel mcp [<tool> [<action> key=value ...]]
@@ -65,6 +81,20 @@ unpeel — run and steer CLI agent sessions
   unpeel browser install [--check] [--json]
                                   install the Host-owned browser engine
   unpeel workspaces [list | add <name> | remove <name>]
+  unpeel schedule add|list|pause|resume|remove|run-once|daemon
+                                  scheduled autonomous sessions (opt-in)
+  unpeel migrate [--apply] [--json]
+                                  upgrade on-disk state (dry-run by default)
+  unpeel backup [--to <path>] [--json]
+                                  snapshot this home into a verifiable archive
+  unpeel restore --from <path> [--force] [--json]
+                                  verify and reinstall a backup archive
+                                  (bare `unpeel restore <session>` still
+                                  restores an archived session)
+  unpeel config check [--json]    validate workspace settings
+                                  (exit 2 when a value is invalid)
+  unpeel init [--json]            first-run setup: private home, defaults,
+                                  pairing code/QR, then doctor
   unpeel add [PATH] [--name N] [--here] [--json]
                                   add a folder (default: here) as a project
   unpeel projects [list | add <name> <path> | remove <name|path>]
@@ -584,11 +614,11 @@ fn pair_through_running_host(
 
 /// Pairing always rides the Host service so the paired device lands in the
 /// worker's live device list, not in a one-shot process that exits.
-fn ensure_host_running() -> Result<(), String> {
+pub(crate) fn ensure_host_running() -> Result<(), String> {
     if unpeel_serve::driver::is_running() {
         return Ok(());
     }
-    println!("{PAIR_STANDALONE_NOTICE}");
+    eprintln!("{PAIR_STANDALONE_NOTICE}");
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     unpeel_serve::service::ensure_background(&executable)?;
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -967,9 +997,17 @@ pub fn run(args: &[String]) -> i32 {
         "archive" => reference_arg()
             .and_then(|reference| resolve(&reference))
             .and_then(|row| unpeel_core::session_ops::archive_session(&row.id).map(|_| 0)),
-        "restore" => reference_arg()
-            .and_then(|reference| resolve(&reference))
-            .and_then(|row| unpeel_core::session_ops::restore_session(&row.id).map(|_| 0)),
+        "restore" => {
+            // Backup archives take `--from`; a bare session reference keeps
+            // the historical archived-session restore.
+            if args.iter().any(|a| a == "--from") {
+                Ok(crate::backup_cli::restore_cmd(&args[1..]))
+            } else {
+                reference_arg()
+                    .and_then(|reference| resolve(&reference))
+                    .and_then(|row| unpeel_core::session_ops::restore_session(&row.id).map(|_| 0))
+            }
+        }
         "rm" | "remove" | "close" => reference_arg()
             .and_then(|reference| resolve(&reference))
             .and_then(|row| unpeel_core::session_ops::remove_session(&row.id).map(|_| 0)),
@@ -985,6 +1023,42 @@ pub fn run(args: &[String]) -> i32 {
         "apps" => match args.get(1).map(String::as_str) {
             Some("describe" | "search" | "context") => Ok(crate::mcp_cli::apps(&args[1..])),
             _ => Ok(crate::apps_cli::run(&args[1..])),
+        },
+        "connector" => Ok(crate::connectors_cli::run(&args[1..])),
+        "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
+        "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
+        "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
+        "init" => Ok(crate::init_cli::run(
+            &parsed.positional[1..],
+            parsed.has("json"),
+        )),
+        "backup" => Ok(crate::backup_cli::backup_cmd(&args[1..])),
+        "config" => match args.get(1).map(String::as_str) {
+            Some("--help" | "-h" | "help") if args.len() == 2 => {
+                println!("{}", crate::config_cli::CONFIG_HELP);
+                Ok(0)
+            }
+            _ => Ok(crate::config_cli::run(
+                &parsed.positional[1..],
+                parsed.has("json"),
+            )),
+        },
+        // The one unified registrar: `sync` delegates to the connector
+        // sync pass (install/update from a registry + verify everything).
+        "registrar" => match args.get(1).map(String::as_str) {
+            None | Some("sync") => {
+                let rest: Vec<String> = std::iter::once("sync".to_string())
+                    .chain(args.iter().skip(2).cloned())
+                    .collect();
+                Ok(crate::connectors_cli::run(&rest))
+            }
+            Some("--help") | Some("-h") | Some("help") => {
+                println!("{REGISTRAR_HELP}");
+                Ok(0)
+            }
+            Some(other) => Err(format!(
+                "unknown registrar subcommand {other:?} (only `sync` exists)"
+            )),
         },
         "integrations" => crate::integrations_cli::run(&args[1..], parsed.has("json")),
         // `install` is the Host-owned engine verb (unpeel_core::browser_engine);
@@ -1138,6 +1212,14 @@ mod tests {
     fn bare_and_unknown_commands_never_open_a_ui() {
         assert_eq!(run(&[]), 0);
         assert_eq!(run(&["definitely-not-a-verb".to_string()]), 2);
+    }
+
+    #[test]
+    fn registrar_routes_to_connector_sync() {
+        // Routing only: `--help` never touches the fs or the env, so this
+        // is safe alongside the connector fixture tests.
+        assert_eq!(run(&["registrar".to_string(), "--help".to_string()]), 0);
+        assert_eq!(run(&["registrar".to_string(), "bogus".to_string()]), 1);
     }
 
     #[test]

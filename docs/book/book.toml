@@ -1,0 +1,8 @@
+[book]
+title = "Unpeel User Guide"
+authors = ["Unpeel contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"

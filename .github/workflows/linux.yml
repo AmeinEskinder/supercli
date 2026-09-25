@@ -1,0 +1,180 @@
+# Linux full-stack CI — the one place the Dioxus launchers get a REAL native
+# compile. This VM's apt is unreliable (407/flaky mirrors), so the desktop
+# and mobile launchers only ever type-check locally; GitHub's ubuntu runners
+# have working apt and provide the GTK/WebKit system libraries the launchers
+# need. Keep this workflow as the source of truth for the Linux system
+# dependency list.
+name: Linux full
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'clients/dioxus/**'
+      - '.github/workflows/linux.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'clients/dioxus/**'
+      - '.github/workflows/linux.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-full-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_NET_RETRY: 10
+
+jobs:
+  rust-workspace:
+    name: Rust workspace (fmt, clippy, tests)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install declared Rust MSRV
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates
+      - name: Check formatting
+        run: cargo fmt --manifest-path crates/Cargo.toml --all -- --check
+      - name: Clippy (strict)
+        run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Workspace tests
+        run: cargo test --manifest-path crates/Cargo.toml --workspace --all-targets --all-features --locked
+
+  dioxus-launchers:
+    name: Dioxus launchers (full native build)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK/WebKit system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libayatana-appindicator3-dev
+      - name: Install declared Rust MSRV
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            clients/dioxus
+      - name: Check formatting
+        run: cargo fmt --manifest-path clients/dioxus/Cargo.toml --all -- --check
+      - name: Clippy (strict)
+        run: cargo clippy --manifest-path clients/dioxus/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Dioxus workspace tests
+        run: cargo test --manifest-path clients/dioxus/Cargo.toml --workspace --all-targets --all-features --locked
+      - name: Full native launcher builds (desktop + mobile)
+        # This is the build step this VM cannot do (no GTK/WebKit system
+        # libs). A green run here is the real proof the launchers compile.
+        run: cargo build --manifest-path clients/dioxus/Cargo.toml --locked -p unpeel-desktop -p unpeel-mobile
+
+  release-size-budget:
+    name: Release size budget (R3)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK/WebKit system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libayatana-appindicator3-dev
+      - name: Install declared Rust MSRV
+        uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates
+            clients/dioxus
+      - name: Release build (Host + launchers)
+        run: |
+          cargo build --release --manifest-path crates/Cargo.toml --locked -p unpeel-host
+          cargo build --release --manifest-path clients/dioxus/Cargo.toml --locked -p unpeel-desktop -p unpeel-mobile
+      - name: Check size budgets
+        run: |
+          # R3: release binaries must stay under budget.
+          # Budgets (bytes), measured 2026-09-25 on the release profile
+          # (thin LTO, 16 codegen units, strip, panic=unwind) + ~35% headroom:
+          # - unpeel-host: measured 16,244,120 -> 21 MiB budget
+          # - unpeel-desktop: measured 9,481,944 -> 12 MiB budget
+          # - unpeel-mobile: measured 8,062,624 -> 11 MiB budget
+          # Debug (before) for reference: unpeel 188,061,600 / unpeel-host 185,019,384.
+          check_size() {
+            local bin="$1"
+            local budget="$2"
+            local size=$(stat -c%s "$bin")
+            local mb=$(awk "BEGIN {printf \"%.1f\", $size/1048576}")
+            echo "$bin: ${mb}MB (budget: $(awk "BEGIN {printf \"%.0f\", $budget/1048576}")MB)"
+            if [ "$size" -gt "$budget" ]; then
+              echo "ERROR: $bin exceeds size budget"
+              exit 1
+            fi
+          }
+          check_size "crates/target/release/unpeel-host" 22020096
+          check_size "clients/dioxus/target/release/unpeel-desktop" 12582912
+          check_size "clients/dioxus/target/release/unpeel-mobile" 11534336
+          echo "All release binaries within budget."
+
+  web:
+    name: Web target + Playwright
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: clients/dioxus/unpeel-web/tests/web/package-lock.json
+      - name: Install declared Rust MSRV
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            clients/dioxus
+      - name: Install dioxus-cli
+        run: |
+          if ! command -v dx >/dev/null; then
+            cargo install dioxus-cli --version 0.7.10 --locked
+          fi
+          dx --version
+      - name: Build the web bundle
+        run: |
+          cd clients/dioxus/unpeel-web
+          dx build --platform web
+      - name: Install Playwright browsers
+        run: |
+          cd clients/dioxus/unpeel-web/tests/web
+          npm ci
+          npx playwright install chromium
+      - name: Run Playwright suite against the real bundle
+        run: |
+          cd clients/dioxus/unpeel-web/tests/web
+          # server.js probes clients/dioxus/target/dx/unpeel-web/debug/web/public
+          npx playwright test

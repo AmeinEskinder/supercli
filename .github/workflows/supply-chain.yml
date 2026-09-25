@@ -1,0 +1,50 @@
+# Supply-chain guard: licenses, bans, duplicate versions (cargo-deny) plus
+# the RustSec advisory database (cargo-audit). Runs on dependency changes,
+# on PRs, and weekly so newly published advisories are caught even when the
+# lockfile does not move.
+name: Supply chain
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**/Cargo.toml'
+      - 'crates/Cargo.lock'
+      - 'crates/deny.toml'
+      - '.github/workflows/supply-chain.yml'
+  pull_request:
+    paths:
+      - 'crates/**/Cargo.toml'
+      - 'crates/Cargo.lock'
+      - 'crates/deny.toml'
+      - '.github/workflows/supply-chain.yml'
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Licenses, bans, duplicate versions, advisories
+        # --config is required: cargo-deny looks for deny.toml in the
+        # working directory (repo root), not next to --manifest-path.
+        run: cargo deny --manifest-path crates/Cargo.toml --config crates/deny.toml check
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: RustSec advisory scan
+        run: cargo audit --file crates/Cargo.lock

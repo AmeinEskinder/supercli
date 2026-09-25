@@ -15,7 +15,9 @@ use std::sync::Arc;
 
 use unpeel_core::app_paths;
 
-use crate::approvals::{already_granted, persist_grant, ApprovalHub};
+use crate::approvals::{
+    already_granted, connector_grant_exists, persist_connector_grant, persist_grant, ApprovalHub,
+};
 
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(125);
 
@@ -250,13 +252,17 @@ fn handle_mcp(
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
+            // Session/connector/tool ids flow into manifest lookups and
+            // grant keys: reject path separators and parent segments here
+            // so no /mcp route can turn a crafted id into a path escape.
+            .filter(|s| !s.contains('/') && !s.contains('\\') && !s.contains(".."))
             .map(str::to_owned)
     };
-    let approve = |ok: bool, stream: &mut TcpStream| {
+    let approve = |ok: bool, answered_by: Option<String>, stream: &mut TcpStream| {
         respond(
             stream,
             "200 OK",
-            &serde_json::json!({ "approved": ok }).to_string(),
+            &serde_json::json!({ "approved": ok, "answered_by": answered_by }).to_string(),
         );
     };
     match path {
@@ -272,10 +278,10 @@ fn handle_mcp(
                 return;
             };
             if already_granted("write", &caller, Some(&target)) {
-                approve(true, stream);
+                approve(true, None, stream);
                 return;
             }
-            let ok = hub.request(
+            let (ok, answered_by) = hub.request(
                 "write",
                 format!(
                     "Allow session {} to write to session {}?",
@@ -288,9 +294,9 @@ fn handle_mcp(
                 APPROVAL_TIMEOUT,
             );
             if ok {
-                persist_grant("write", &caller, Some(&target));
+                persist_grant("write", &caller, Some(&target), answered_by.as_deref());
             }
-            approve(ok, stream);
+            approve(ok, answered_by, stream);
         }
         "/mcp/approve-browser" | "/mcp/approve-computer" => {
             let kind = if path.ends_with("browser") {
@@ -307,10 +313,10 @@ fn handle_mcp(
                 return;
             };
             if already_granted(kind, &session_id, None) {
-                approve(true, stream);
+                approve(true, None, stream);
                 return;
             }
-            let ok = hub.request(
+            let (ok, answered_by) = hub.request(
                 kind,
                 format!(
                     "Allow {kind} access for session {}?",
@@ -322,9 +328,9 @@ fn handle_mcp(
                 APPROVAL_TIMEOUT,
             );
             if ok {
-                persist_grant(kind, &session_id, None);
+                persist_grant(kind, &session_id, None, answered_by.as_deref());
             }
-            approve(ok, stream);
+            approve(ok, answered_by, stream);
         }
         "/mcp/approve-app-open" => {
             let (Some(caller), Some(app_id)) = (field("caller_session_id"), field("app_id")) else {
@@ -336,12 +342,12 @@ fn handle_mcp(
                 return;
             };
             if already_granted("app-open", &caller, Some(&app_id)) {
-                approve(true, stream);
+                approve(true, None, stream);
                 return;
             }
             let app_name = field("app_name").unwrap_or_else(|| app_id.clone());
             let caller_label = session_display_name(&caller);
-            let ok = hub.request(
+            let (ok, answered_by) = hub.request(
                 "app-open",
                 format!("Allow session {caller_label} to open {app_name}?"),
                 format!("This remembers access to {app_name} for this session."),
@@ -352,9 +358,38 @@ fn handle_mcp(
                 APPROVAL_TIMEOUT,
             );
             if ok {
-                persist_grant("app-open", &caller, Some(&app_id));
+                persist_grant("app-open", &caller, Some(&app_id), answered_by.as_deref());
             }
-            approve(ok, stream);
+            approve(ok, answered_by, stream);
+        }
+        "/mcp/approve-connector" => {
+            let (Some(session_id), Some(connector), Some(tool)) =
+                (field("session_id"), field("connector"), field("tool"))
+            else {
+                respond(
+                    stream,
+                    "400 Bad Request",
+                    r#"{"error":"session_id, connector and tool are required"}"#,
+                );
+                return;
+            };
+            if connector_grant_exists(&session_id, &connector, &tool) {
+                approve(true, None, stream);
+                return;
+            }
+            let session_label = session_display_name(&session_id);
+            let (ok, answered_by) = hub.request(
+                "connector",
+                format!("Allow '{tool}' (connector '{connector}') for session {session_label}?"),
+                format!("This remembers '{tool}' for this session."),
+                session_id.clone(),
+                Some(tool.clone()),
+                APPROVAL_TIMEOUT,
+            );
+            if ok {
+                persist_connector_grant(&session_id, &connector, &tool);
+            }
+            approve(ok, answered_by, stream);
         }
         "/mcp/computer-permissions-needed" => {
             respond(stream, "200 OK", r#"{"ok":true}"#);
@@ -819,7 +854,23 @@ pub fn start_with_platform(
             let overlay = overlay.clone();
             let platform_adapters = Arc::clone(&platform_adapters);
             std::thread::spawn(move || {
-                handle_connection(stream, &tx, &hub, &overlay, &platform_adapters)
+                // R2: catch panics at the connection boundary so one bad
+                // hook request cannot kill the listener thread silently.
+                // Log the panic and close the connection.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handle_connection(stream, &tx, &hub, &overlay, &platform_adapters)
+                }));
+                if let Err(payload) = result {
+                    let msg = payload
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "<non-string panic>".to_string());
+                    unpeel_core::json_log::error_fields(
+                        "hook listener connection panicked",
+                        serde_json::json!({"panic": msg}),
+                    );
+                }
             });
         }
     });
@@ -830,6 +881,115 @@ pub fn start_with_platform(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    /// Drive `handle_mcp` over a loopback TCP pair and return the raw
+    /// response head + body. The handler writes exactly one response and
+    /// returns, so the client side sees EOF after it.
+    fn drive_handle_mcp(
+        path: &'static str,
+        headers: HashMap<String, String>,
+        body: Vec<u8>,
+    ) -> String {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let hub = Arc::new(ApprovalHub::default());
+        let handler = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            handle_mcp(&mut stream, path, &headers, &body, &hub);
+        });
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        handler.join().unwrap();
+        String::from_utf8_lossy(&response).into_owned()
+    }
+
+    /// Private UNPEEL_HOME + the real MCP auth token for this process.
+    /// Serialized on APP_STATE_LOCK with the other UNPEEL_HOME-mutating
+    /// tests. The caller must restore UNPEEL_HOME with `restore_home`
+    /// before the guard drops.
+    fn mcp_test_token() -> (
+        std::sync::MutexGuard<'static, ()>,
+        String,
+        Option<std::ffi::OsString>,
+    ) {
+        let guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let dir =
+            std::env::temp_dir().join(format!("unpeel-hook-mcp-test-{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prev = std::env::var_os("UNPEEL_HOME");
+        std::env::set_var("UNPEEL_HOME", &dir);
+        let token = unpeel_core::mcp_auth::ensure_auth_token().expect("mcp auth token");
+        (guard, token, prev)
+    }
+
+    fn restore_home(prev: Option<std::ffi::OsString>) {
+        match &prev {
+            Some(p) => std::env::set_var("UNPEEL_HOME", p),
+            None => std::env::remove_var("UNPEEL_HOME"),
+        }
+    }
+
+    fn auth_headers(token: &str) -> HashMap<String, String> {
+        HashMap::from([("x-unpeel-auth".to_string(), token.to_string())])
+    }
+
+    #[test]
+    fn approve_connector_rejects_missing_auth() {
+        let (_guard, _token, prev) = mcp_test_token();
+        let body = br#"{"session_id":"sess-1","connector":"github","tool":"search"}"#;
+        let response = drive_handle_mcp("/mcp/approve-connector", HashMap::new(), body.to_vec());
+        restore_home(prev);
+        assert!(
+            response.starts_with("HTTP/1.1 401"),
+            "expected 401, got: {response}"
+        );
+    }
+
+    #[test]
+    fn approve_connector_rejects_traversal_session_id() {
+        // S1 negative test: a crafted session_id must not reach the
+        // manifest lookup (`session_display_name`) or the grant store.
+        let (_guard, token, prev) = mcp_test_token();
+        for evil in ["../evil", "..\\evil", "/absolute"] {
+            let body = format!(r#"{{"session_id":{evil:?},"connector":"github","tool":"search"}}"#);
+            let response = drive_handle_mcp(
+                "/mcp/approve-connector",
+                auth_headers(&token),
+                body.as_bytes().to_vec(),
+            );
+            assert!(
+                response.starts_with("HTTP/1.1 400"),
+                "id {evil:?}: expected 400, got: {response}"
+            );
+        }
+        restore_home(prev);
+    }
+
+    #[test]
+    fn approve_connector_honors_namespaced_grant() {
+        // Control: a remembered (connector, tool) grant short-circuits to
+        // approved without blocking on the hub; a grant for a *different*
+        // connector does not.
+        let (_guard, token, prev) = mcp_test_token();
+        persist_connector_grant("sess-1", "github", "search");
+        let body = br#"{"session_id":"sess-1","connector":"github","tool":"search"}"#;
+        let response = drive_handle_mcp(
+            "/mcp/approve-connector",
+            auth_headers(&token),
+            body.to_vec(),
+        );
+        assert!(
+            response.starts_with("HTTP/1.1 200") && response.contains(r#""approved":true"#),
+            "expected approved grant hit, got: {response}"
+        );
+        restore_home(prev);
+    }
 
     #[test]
     fn concurrent_registry_updates_preserve_every_frontend() {

@@ -125,6 +125,16 @@ pub fn unpeel_home() -> PathBuf {
     real_unpeel_home()
 }
 
+/// Test-only lock serializing mutation of the process-global `UNPEEL_HOME`.
+///
+/// Rust runs tests in one process in parallel; `std::env::set_var` is
+/// process-global, so two tests pointing `UNPEEL_HOME` at different scratch
+/// dirs race. Any test that sets `UNPEEL_HOME` must hold this lock for the
+/// whole time the override is in effect (acquire before set, release after
+/// restore). Production code never touches this.
+#[cfg(test)]
+pub static TEST_UNPEEL_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Ensure `~/.unpeel` exists and is private to the current user (mode `0700`).
 /// Session artifacts underneath (`output.bin`, `manifest.json`, `launch.json`)
 /// can contain echoed secrets and the first typed prompt; a `0700` parent makes
@@ -150,6 +160,13 @@ pub fn ensure_unpeel_home() -> std::io::Result<PathBuf> {
 
 pub fn app_state_path() -> PathBuf {
     unpeel_home().join("app-state.json")
+}
+
+/// Path to the grants file (sharded from app-state.json for concurrency).
+/// S2: persist_grant was serializing on the app-state.json exclusive lock;
+/// grants have no chain semantics, so they get their own file+lock.
+pub fn grants_path() -> PathBuf {
+    unpeel_home().join("grants.json")
 }
 
 pub fn activity_state_path() -> PathBuf {

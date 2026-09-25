@@ -258,13 +258,19 @@ pub fn run_stdio_with_domains(domains: McpDomainMask) -> Result<(), String> {
         if method == Some("tools/call") && has_id {
             let key = request_token_key(&message["id"]);
             let token = crate::mcp_cancel::CancelToken::default();
-            tokens.lock().unwrap().insert(key.clone(), token.clone());
+            tokens
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(key.clone(), token.clone());
             let (calls, ready) = &*queue;
-            calls.lock().unwrap().push_back(QueuedToolCall {
-                message,
-                key,
-                token,
-            });
+            calls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push_back(QueuedToolCall {
+                    message,
+                    key,
+                    token,
+                });
             ready.notify_one();
             continue;
         }
@@ -292,7 +298,7 @@ fn tool_call_worker(
     let (calls, ready) = queue;
     loop {
         let call = {
-            let mut calls = calls.lock().unwrap();
+            let mut calls = calls.lock().unwrap_or_else(|e| e.into_inner());
             loop {
                 if let Some(call) = calls.pop_front() {
                     break Some(call);
@@ -313,7 +319,10 @@ fn tool_call_worker(
             let _guard = crate::mcp_cancel::install(call.token.clone());
             handle_message_with_domains(&call.message, domains)
         };
-        tokens.lock().unwrap().remove(&call.key);
+        tokens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&call.key);
         if call.token.is_cancelled() {
             // Per spec, a cancelled request gets no response.
             trace(&format!(
@@ -343,7 +352,7 @@ fn cancel_inflight_request(
         return;
     };
     let key = request_token_key(request_id);
-    match tokens.lock().unwrap().get(&key) {
+    match tokens.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
         Some(token) => {
             token.cancel();
             trace(&format!("cancelled in-flight request {key}"));
@@ -605,6 +614,11 @@ fn tools_call_with_domains(params: &Value, domains: McpDomainMask) -> Result<Val
     };
     let outcome = if domains.allows_tool(name) && action_mask_allows {
         run_tool(name, &arguments)
+    } else if crate::session_connectors::is_connector_tool(name) {
+        // Attached connector tools are not domain tools: the session's own
+        // connector registration grants them, and the connector dispatcher
+        // enforces each tool's effective approval policy.
+        crate::session_connectors::call_connector_tool(name, &arguments)
     } else {
         Err(format!(
             "The '{name}' tool is not enabled for this MCP registration."
@@ -1657,6 +1671,10 @@ fn tool_definitions_for_manifest(
     if advertise_skills {
         tools.push(skills_tool_definition());
     }
+    // Session-attached connector tools (`unpeel connector enable`): the
+    // session's own MCP registration, resolved from its connectors.json.
+    // Empty when this server runs outside a session.
+    tools.extend(crate::session_connectors::connector_tool_definitions());
     tools
 }
 
@@ -2468,7 +2486,7 @@ fn tool_list_agents(_args: &Value) -> Result<String, String> {
             && security.permits_manifest(caller.as_ref(), manifest)
             && session_host::active_runtime_id(manifest).is_some()
     });
-    manifests.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    manifests.sort_by_key(|m| std::cmp::Reverse(m.session.created_at));
     let agents = manifests
         .iter()
         .filter_map(|manifest| agent_context_json(manifest, &activity))
@@ -2740,7 +2758,7 @@ fn tool_list_sessions(_args: &Value) -> Result<String, String> {
         manifest.state == HostedSessionState::Running
             && security.permits_manifest(caller.as_ref(), manifest)
     });
-    manifests.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    manifests.sort_by_key(|m| std::cmp::Reverse(m.session.created_at));
     let sessions: Vec<Value> = manifests
         .iter()
         .map(|manifest| {
@@ -3482,7 +3500,7 @@ fn group_peer_manifests_for_caller(
                 && security.permits_manifest(Some(&caller), manifest)
         })
         .collect();
-    peers.sort_by(|a, b| b.session.created_at.cmp(&a.session.created_at));
+    peers.sort_by_key(|p| std::cmp::Reverse(p.session.created_at));
 
     if let Some(only_ids) = only_ids {
         let found: HashSet<String> = peers

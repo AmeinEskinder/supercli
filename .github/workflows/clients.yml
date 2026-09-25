@@ -11,12 +11,20 @@ on:
   push:
     branches: [main]
     paths:
-      - 'clients/**'
+      # The Dioxus rewrite tree (clients/dioxus/**) is deliberately excluded:
+      # it is covered by apple.yml on macos-15 and nothing in the Swift
+      # clients consumes it, so a Dioxus-only push must not fire the
+      # expensive macos-26 Swift build.
+      - 'clients/native/**'
+      - 'clients/ios/**'
+      - 'clients/shared/**'
       - 'crates/unpeel-native-bridge/**'
       - '.github/workflows/clients.yml'
   pull_request:
     paths:
-      - 'clients/**'
+      - 'clients/native/**'
+      - 'clients/ios/**'
+      - 'clients/shared/**'
       - 'crates/unpeel-native-bridge/**'
       - '.github/workflows/clients.yml'
 

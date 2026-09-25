@@ -1,0 +1,16 @@
+# Unpeel Dioxus mobile: open a session from the list
+# Tags: smoke, sessions
+# Timeout: 120000
+# Param: bundle_id = com.unpeel.controller
+# Param: session_title = demo
+# Param: session_id
+
+app "${bundle_id}"
+wait_for @"new-session-button" timeout:30000
+assert_exists @"session-list"
+
+# Tap the session row by its stable test id (not the title text, which the
+# Host can change).
+tap @"session-row-${session_id}" type:cell
+wait_for @"terminal-view" timeout:15000
+assert_exists @"terminal-view"

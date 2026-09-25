@@ -1,0 +1,177 @@
+# Dioxus launcher Apple preparation (Track B Rust rewrite).
+#
+# This is NOT the upstream Swift Apple clients — those live in clients.yml
+# (macos-26, the macOS 26 SDK, Swift 6.2) and must stay there. This workflow
+# runs on macos-15 and covers only the Dioxus Rust launchers:
+#   1. Apple-target Rust checks (iOS bridge staticlib + the full client
+#      workspace — ring compiles on macOS where the Apple SDK exists).
+#   2. An unsigned iOS simulator app built with `dx bundle --platform ios`.
+#   3. MobAI device tests: the sim app is installed on a booted iOS
+#      simulator and the tests/device/ .mob smoke flows run through
+#      mobai-ci (free local-simulator lane; no account, no API key).
+#
+# MobAI does not replace Xcode/signing: the simulator .app here is unsigned
+# and runs in the simulator only. Device IPAs are operator-signed per
+# docs/APPLE_SETUP.md.
+name: Apple prep (Dioxus)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'clients/dioxus/**'
+      - 'crates/unpeel-client/**'
+      - 'tests/device/**'
+      - '.github/workflows/apple.yml'
+  pull_request:
+    paths:
+      - 'clients/dioxus/**'
+      - 'crates/unpeel-client/**'
+      - 'tests/device/**'
+      - '.github/workflows/apple.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-dioxus-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: '1.88.0'
+  DIOXUS_CLI_VERSION: '0.7.10'
+
+jobs:
+  rust-apple-checks:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust + Apple targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/dioxus
+      - name: iOS bridge staticlib (device + sim targets)
+        working-directory: clients/dioxus
+        run: |
+          cargo check -p unpeel-ios-bridge --target aarch64-apple-ios
+          cargo check -p unpeel-ios-bridge --target aarch64-apple-ios-sim
+      - name: Full client workspace checks (Apple targets)
+        working-directory: clients/dioxus
+        run: |
+          cargo check --workspace --target aarch64-apple-ios-sim
+          cargo clippy --workspace --target aarch64-apple-ios-sim -- -D warnings
+      - name: Shared UI + web crate checks (host)
+        working-directory: clients/dioxus
+        run: cargo test -p unpeel-ui
+
+  simulator-app:
+    needs: rust-apple-checks
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust + iOS sim target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/dioxus
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --version ${{ env.DIOXUS_CLI_VERSION }} --locked
+      - name: Build unsigned iOS simulator app
+        working-directory: clients/dioxus
+        # Unsigned simulator .app only — device IPAs are operator-signed.
+        run: dx bundle --platform ios --package unpeel-mobile
+      - name: Locate the .app bundle
+        id: app
+        working-directory: clients/dioxus
+        run: |
+          APP="$(find target/dx -name '*.app' -maxdepth 4 | head -1)"
+          test -n "$APP" || { echo "no .app found under target/dx"; find target/dx -maxdepth 2 | head -20; exit 1; }
+          echo "path=$APP" >> "$GITHUB_OUTPUT"
+          echo "built: $APP"
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpeel-mobile-simulator-app
+          path: clients/dioxus/${{ steps.app.outputs.path }}
+          if-no-files-found: error
+
+  native-shell-xcodegen:
+    needs: rust-apple-checks
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Validate native-shell project.yml
+        working-directory: clients/dioxus/native-shell
+        run: |
+          python3 -c "import yaml, sys; yaml.safe_load(open('project.yml'))" || pip install pyyaml
+          python3 -c "import yaml; yaml.safe_load(open('project.yml')); print('project.yml: valid YAML')"
+          plutil -lint InfoPlistAdditions.plist
+          plutil -lint Unpeel.entitlements
+      - name: Generate Xcode project (Mac-only)
+        working-directory: clients/dioxus/native-shell
+        # This requires the iOS SDK and Apple frameworks — macos-15 only.
+        # The generated project is not committed; it is a build artifact.
+        run: |
+          xcodegen generate
+          test -d UnpeelShell.xcodeproj || { echo "xcodegen did not produce UnpeelShell.xcodeproj"; exit 1; }
+          echo "Generated UnpeelShell.xcodeproj"
+      - name: Verify shell builds (simulator, unsigned)
+        working-directory: clients/dioxus/native-shell
+        run: |
+          xcodebuild -project UnpeelShell.xcodeproj \
+            -scheme UnpeelShell \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tail -20
+
+  mobai-device-tests:
+    needs: simulator-app
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download simulator app
+        uses: actions/download-artifact@v4
+        with:
+          name: unpeel-mobile-simulator-app
+          path: ${{ runner.temp }}/sim-app
+      - name: Boot iOS simulator
+        id: sim
+        run: |
+          UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; c=sorted([x for rt,xs in d.items() if "iOS" in rt for x in xs if x.get("isAvailable") and x["name"].startswith("iPhone")], key=lambda x: x["name"]); print(c[-1]["udid"] if c else "")')"
+          test -n "$UDID" || { echo "no available iPhone simulator on this image"; xcrun simctl list devices available; exit 1; }
+          xcrun simctl boot "$UDID" || true
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+      - name: Install app on the booted simulator
+        run: |
+          APP="$(find ${{ runner.temp }}/sim-app -name '*.app' -maxdepth 2 | head -1)"
+          test -n "$APP" || { echo "no .app in downloaded artifact"; exit 1; }
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$APP"
+      - name: Install mobai-ci
+        run: |
+          curl -fsSL https://mobai.run/ci/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate device flows
+        run: mobai-ci validate ./tests/device
+      - name: Run device smoke flows
+        run: mobai-ci test ./tests/device --output device-reports
+      - name: Upload device test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobai-device-reports
+          path: device-reports/

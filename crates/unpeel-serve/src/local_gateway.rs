@@ -245,10 +245,46 @@ fn serve_connection(
     let namespace = format!("local:{}:{id}", remote_stdio::owner_subject());
     let handler = |request: unpeel_core::relay_wire::TunnelRequest, cancelled: &AtomicBool| {
         if request.path == PAIRING_CONTROL_PATH {
-            return handle_local_control(request, &control_tx);
+            // R2: catch panics at the local-gateway boundary; return 500.
+            let path = request.path.clone();
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                handle_local_control(request, &control_tx)
+            })) {
+                Ok(response) => return response,
+                Err(payload) => {
+                    let msg = payload
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "<non-string panic>".to_string());
+                    unpeel_core::json_log::error_fields(
+                        "local gateway handler panicked",
+                        serde_json::json!({"panic": msg, "path": path}),
+                    );
+                    return (500, b"internal error".to_vec());
+                }
+            }
         }
         if request.path == PLATFORM_ADAPTER_CONTROL_PATH {
-            return handle_platform_adapter_control(id, request, &platform_adapters);
+            // R2: catch panics at the local-gateway boundary; return 500.
+            let path = request.path.clone();
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                handle_platform_adapter_control(id, request, &platform_adapters)
+            })) {
+                Ok(response) => return response,
+                Err(payload) => {
+                    let msg = payload
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "<non-string panic>".to_string());
+                    unpeel_core::json_log::error_fields(
+                        "local gateway handler panicked",
+                        serde_json::json!({"panic": msg, "path": path}),
+                    );
+                    return (500, b"internal error".to_vec());
+                }
+            }
         }
         if let Some(response) =
             crate::mobile::handle_local_live_route(&request, &approvals, &pairing, &snapshot)

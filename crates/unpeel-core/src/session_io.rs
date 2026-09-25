@@ -499,8 +499,12 @@ impl SessionIo {
             .has_answering_subscriber();
         let (chunk, host_queries) = self.query_scanner.scan(bytes, intercept_probes);
         if !host_queries.is_empty() {
-            let cursor = shared.viewport.lock().unwrap().cursor_position();
-            let mut guard = shared.runtime.lock().unwrap();
+            let cursor = shared
+                .viewport
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .cursor_position();
+            let mut guard = shared.runtime.lock().unwrap_or_else(|e| e.into_inner());
             for query in &host_queries {
                 let _ = match query {
                     HostAnsweredQuery::Da1 => {
@@ -546,9 +550,17 @@ impl SessionIo {
     fn publish_chunk(&mut self, chunk: Vec<u8>) {
         self.last_output_at = Instant::now();
         let shared = Arc::clone(&self.shared);
-        shared.viewport.lock().unwrap().feed(&chunk);
+        shared
+            .viewport
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .feed(&chunk);
         let agent_title = self.title_scanner.scan(&chunk);
-        shared.broadcaster.lock().unwrap().broadcast_chunk(&chunk);
+        shared
+            .broadcaster
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .broadcast_chunk(&chunk);
         self.journal
             .pressure
             .backlog
@@ -606,13 +618,17 @@ impl SessionIo {
                 .agent_restart_lock
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let mut guard = shared.runtime.lock().unwrap();
+            let mut guard = shared.runtime.lock().unwrap_or_else(|e| e.into_inner());
             let mut blocked = false;
             while !self.pending_input.is_empty() {
                 let (head, _) = self.pending_input.as_slices();
                 let menu_active = head.contains(&0x1b)
                     && viewport_has_menu_prompt(
-                        &shared.viewport.lock().unwrap().current_screen_text(),
+                        &shared
+                            .viewport
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .current_screen_text(),
                     );
                 match guard.writer.try_write(head) {
                     Ok(0) => {
@@ -1091,7 +1107,11 @@ impl SessionIo {
         if !pending.is_empty() {
             self.publish_chunk(pending);
         }
-        self.shared.broadcaster.lock().unwrap().mark_exited();
+        self.shared
+            .broadcaster
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .mark_exited();
         self.flush_stream_clients(registry);
         registry.remove(self.pty_fd, self.pty_token);
         if let Some(listener) = self.listener.take() {
@@ -1293,7 +1313,10 @@ pub(crate) fn dispatch_client_command(
         // broadcasts, so a subscriber starting at this offset sees exactly
         // the bytes the snapshot does not already contain. Reply is one
         // JSON header line followed by the raw VT bytes.
-        let (journal_offset, snapshot) = viewport.lock().unwrap().snapshot_vt();
+        let (journal_offset, snapshot) = viewport
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .snapshot_vt();
         let header = crate::session_host::SnapshotVtHeader {
             journal_offset,
             cols: snapshot.cols,
@@ -1317,65 +1340,119 @@ pub(crate) fn dispatch_client_command(
                     ok: false,
                     error: Some(error.to_string()),
                     viewport: None,
+                    outcome_unknown: false,
                 },
                 Ok(write_id) => {
-                    // Serialize idempotency check → PTY write → history
-                    // commit. A failed write is deliberately not recorded, so
-                    // an HTTP retry can still deliver it; a racing retry waits
-                    // on this same lock and observes the committed id after
+                    // Serialize idempotency check → write-ahead record → PTY
+                    // write → history commit under one runtime lock. The
+                    // durable `delivering` record (fsync) precedes the PTY
+                    // write: a crash between delivery and `record_applied`
+                    // leaves `delivering` without `applied`, so the retry
+                    // resolves as OutcomeUnknown instead of re-delivering.
+                    // A failed write is deliberately not recorded, so a
+                    // retry can still deliver it; a racing retry waits on
+                    // this same lock and observes the committed id after
                     // the first successful write.
-                    let applied = {
+                    use super::write_deliveries::DeliveryCheck;
+                    let sdir = super::session_dir(session_id);
+                    enum WriteOutcome {
+                        Applied,
+                        Duplicate,
+                        Unknown,
+                    }
+                    let outcome = {
                         let _restart_guard = agent_restart_lock
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner());
-                        let mut guard = runtime.lock().unwrap();
-                        if write_id.is_some_and(|id| guard.recent_write_ids.contains(id)) {
-                            false
-                        } else {
-                            let mut remaining = data.as_bytes();
-                            let menu_active = remaining.contains(&0x1b)
-                                && viewport_has_menu_prompt(
-                                    &shared.viewport.lock().unwrap().current_screen_text(),
-                                );
-                            while !remaining.is_empty() {
-                                let written = match guard.writer.write(remaining) {
-                                    Ok(0) => return Err("PTY input write returned zero".into()),
-                                    Ok(written) => written,
-                                    Err(error) if error.kind() == ErrorKind::Interrupted => {
-                                        continue
-                                    }
-                                    Err(error) => return Err(format!("Write error: {error}")),
-                                };
-                                guard.hook_input.feed(
-                                    &remaining[..written],
-                                    shared.runtime_generation.load(Ordering::Acquire),
-                                    current_timestamp_ms(),
-                                    menu_active,
-                                );
-                                remaining = &remaining[written..];
+                        let mut guard = runtime.lock().unwrap_or_else(|e| e.into_inner());
+                        let check = match write_id {
+                            Some(id) => super::write_deliveries::check_write_delivery(
+                                &mut guard.recent_write_ids,
+                                &sdir,
+                                id,
+                            )
+                            .map_err(|e| format!("write delivery log: {e}"))?,
+                            None => DeliveryCheck::Proceed,
+                        };
+                        match check {
+                            DeliveryCheck::AlreadyApplied => WriteOutcome::Duplicate,
+                            DeliveryCheck::OutcomeUnknown => WriteOutcome::Unknown,
+                            DeliveryCheck::Proceed => {
+                                let mut remaining = data.as_bytes();
+                                let menu_active = remaining.contains(&0x1b)
+                                    && viewport_has_menu_prompt(
+                                        &shared
+                                            .viewport
+                                            .lock()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .current_screen_text(),
+                                    );
+                                while !remaining.is_empty() {
+                                    let written = match guard.writer.write(remaining) {
+                                        Ok(0) => {
+                                            return Err("PTY input write returned zero".into())
+                                        }
+                                        Ok(written) => written,
+                                        Err(error)
+                                            if error.kind() == ErrorKind::Interrupted =>
+                                        {
+                                            continue
+                                        }
+                                        Err(error) => {
+                                            return Err(format!("Write error: {error}"))
+                                        }
+                                    };
+                                    guard.hook_input.feed(
+                                        &remaining[..written],
+                                        shared.runtime_generation.load(Ordering::Acquire),
+                                        current_timestamp_ms(),
+                                        menu_active,
+                                    );
+                                    remaining = &remaining[written..];
+                                }
+                                if let Some(id) = write_id {
+                                    super::write_deliveries::commit_write_applied(
+                                        &mut guard.recent_write_ids,
+                                        &sdir,
+                                        id,
+                                    )
+                                    .map_err(|e| format!("write delivery log: {e}"))?;
+                                }
+                                WriteOutcome::Applied
                             }
-                            if let Some(write_id) = write_id {
-                                guard.recent_write_ids.record_applied(write_id);
-                            }
-                            true
                         }
                     };
-                    if applied {
-                        mark_input_written(session_id, &shared.has_been_written_to);
-                        // Auto-title from the first submitted prompt for
-                        // clients that write straight to the control socket
-                        // (native attach, MCP).
-                        maybe_auto_title_from_input(
-                            session_id,
-                            data.as_bytes(),
-                            &shared.title_buffer,
-                            &shared.title_done,
-                        );
-                    }
-                    SessionHostResponse {
-                        ok: true,
-                        error: None,
-                        viewport: None,
+                    match outcome {
+                        WriteOutcome::Unknown => SessionHostResponse {
+                            ok: false,
+                            error: Some(
+                                "write may have been delivered before a crash; \
+                                 needs review, will not retry"
+                                    .to_string(),
+                            ),
+                            viewport: None,
+                            outcome_unknown: true,
+                        },
+                        WriteOutcome::Duplicate | WriteOutcome::Applied => {
+                            if matches!(outcome, WriteOutcome::Applied) {
+                                mark_input_written(session_id, &shared.has_been_written_to);
+                                // Auto-title from the first submitted prompt for
+                                // clients that write straight to the control socket
+                                // (native attach, MCP).
+                                maybe_auto_title_from_input(
+                                    session_id,
+                                    data.as_bytes(),
+                                    &shared.title_buffer,
+                                    &shared.title_done,
+                                );
+                            }
+                            SessionHostResponse {
+                                ok: true,
+                                error: None,
+                                viewport: None,
+                                outcome_unknown: false,
+                            }
+                        }
                     }
                 }
             }
@@ -1387,7 +1464,7 @@ pub(crate) fn dispatch_client_command(
             // deduplicate at the Host authority so that pair produces one
             // kernel PTY resize/SIGWINCH and one viewport reflow.
             let resized = {
-                let mut guard = runtime.lock().unwrap();
+                let mut guard = runtime.lock().unwrap_or_else(|e| e.into_inner());
                 if guard.pty_cols == cols && guard.pty_rows == rows {
                     false
                 } else {
@@ -1409,18 +1486,23 @@ pub(crate) fn dispatch_client_command(
             // reflow can re-wrap up to 4MB; keeping it outside preserves
             // keystroke/write responsiveness.
             if resized {
-                viewport.lock().unwrap().resize(cols, rows);
+                viewport
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .resize(cols, rows);
             }
             SessionHostResponse {
                 ok: true,
                 error: None,
                 viewport: None,
+                    outcome_unknown: false,
             }
         }
         SessionHostCommand::Ping => SessionHostResponse {
             ok: true,
             error: None,
             viewport: None,
+                    outcome_unknown: false,
         },
         SessionHostCommand::RestartAgent {
             expected_generation,
@@ -1457,11 +1539,13 @@ pub(crate) fn dispatch_client_command(
                     ok: true,
                     error: None,
                     viewport: None,
+                    outcome_unknown: false,
                 },
                 Err(error) => SessionHostResponse {
                     ok: false,
                     error: Some(error),
                     viewport: None,
+                    outcome_unknown: false,
                 },
             }
         }
@@ -1471,7 +1555,7 @@ pub(crate) fn dispatch_client_command(
             scroll_offset_rows,
             viewport_rows,
         } => {
-            let mut guard = viewport.lock().unwrap();
+            let mut guard = viewport.lock().unwrap_or_else(|e| e.into_inner());
             // cols/rows of 0 mean "snapshot at the current size" (used by
             // callers like the MCP host that have no viewport of their own).
             // Non-zero dimensions are a virtual client snapshot: resize a
@@ -1486,6 +1570,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: Some(snapshot),
+                    outcome_unknown: false,
             }
         }
         SessionHostCommand::StreamOutput { .. } | SessionHostCommand::StreamInput => {
@@ -1504,7 +1589,7 @@ pub(crate) fn dispatch_client_command(
             let _restart_guard = agent_restart_lock
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            terminate_hosted_runtime(&mut runtime.lock().unwrap());
+            terminate_hosted_runtime(&mut runtime.lock().unwrap_or_else(|e| e.into_inner()));
             // Let the reactor drain anything emitted during graceful
             // termination before using this flag to interrupt a retained
             // slave PTY that never reaches EOF.
@@ -1514,6 +1599,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: None,
+                    outcome_unknown: false,
             }
         }
     };
@@ -1616,10 +1702,19 @@ impl SessionIo {
         self.flush_stream_clients(registry);
 
         let (journal_next_offset, snapshot) = {
-            let viewport = self.shared.viewport.lock().unwrap();
+            let viewport = self
+                .shared
+                .viewport
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             viewport.snapshot_vt()
         };
-        let broadcaster_offset = self.shared.broadcaster.lock().unwrap().next_offset;
+        let broadcaster_offset = self
+            .shared
+            .broadcaster
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .next_offset;
         if broadcaster_offset != journal_next_offset {
             self.handing_off = false;
             let write = self.pty_write_interest;
@@ -1630,7 +1725,11 @@ impl SessionIo {
             ));
         }
         let (pty_cols, pty_rows, shell, child_pid) = {
-            let runtime = self.shared.runtime.lock().unwrap();
+            let runtime = self
+                .shared
+                .runtime
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             (
                 runtime.pty_cols,
                 runtime.pty_rows,
@@ -1710,7 +1809,13 @@ impl SessionIo {
             snapshot_rows: snapshot.rows,
             snapshot_len: snapshot.bytes.len() as u64,
             pending_pty_input: self.pending_input.iter().copied().collect(),
-            hook_input: self.shared.runtime.lock().unwrap().hook_input.clone(),
+            hook_input: self
+                .shared
+                .runtime
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .hook_input
+                .clone(),
             session_socket_path: self
                 .exit
                 .as_ref()
@@ -1899,7 +2004,7 @@ impl portable_pty::ChildKiller for HandedOverChild {
 
 impl portable_pty::Child for HandedOverChild {
     fn try_wait(&mut self) -> std::io::Result<Option<portable_pty::ExitStatus>> {
-        if let Some(status) = self.exit.lock().unwrap().clone() {
+        if let Some(status) = self.exit.lock().unwrap_or_else(|e| e.into_inner()).clone() {
             return Ok(Some(status));
         }
         if self.alive() {
@@ -2142,7 +2247,7 @@ pub(crate) fn record_child_exit(
         }
         _ => portable_pty::ExitStatus::with_exit_code(0),
     };
-    *slot.lock().unwrap() = Some(status);
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(status);
 }
 
 #[cfg(test)]
