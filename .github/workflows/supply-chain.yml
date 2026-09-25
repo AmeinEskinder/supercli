@@ -6,7 +6,7 @@ name: Supply chain
 
 on:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'crates/**/Cargo.toml'
       - 'crates/Cargo.lock'

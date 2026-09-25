@@ -9,7 +9,7 @@ on:
       - 'protocol/app-registry.json'
       - '.github/workflows/apps.yml'
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'crates/apps/**'
       - 'protocol/app-registry.json'

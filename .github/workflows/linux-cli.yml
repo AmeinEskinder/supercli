@@ -10,7 +10,15 @@ name: Linux CLI
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
+    paths:
+      - 'crates/**'
+      - 'scripts/build-cli-linux.sh'
+      - 'scripts/cli-glibc.sh'
+      - 'scripts/rust-release-env.sh'
+      - 'scripts/ci/**'
+      - '.github/workflows/linux-cli.yml'
+  pull_request:
     paths:
       - 'crates/**'
       - 'scripts/build-cli-linux.sh'

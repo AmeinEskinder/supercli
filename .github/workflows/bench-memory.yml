@@ -16,7 +16,7 @@ name: Memory benchmark
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'crates/**'
       - 'crates/unpeel-attach/**'

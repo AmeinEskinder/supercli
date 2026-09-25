@@ -3,7 +3,7 @@ name: Release guards
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'scripts/install.sh'
       - 'scripts/install-app.sh'

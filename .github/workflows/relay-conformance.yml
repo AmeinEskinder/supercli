@@ -7,7 +7,7 @@ name: Relay conformance
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'protocol/relay-kat-vectors-v1.json'
       - 'crates/**'

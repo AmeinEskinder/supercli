@@ -9,7 +9,7 @@ name: Linux full
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'crates/**'
       - 'clients/dioxus/**'

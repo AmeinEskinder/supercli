@@ -5,7 +5,7 @@ name: Runtime catalog
 # copy. Regenerate from `runtimes/` and fail on any difference.
 on:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - "runtimes/**"
       - "generated/**"

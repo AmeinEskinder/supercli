@@ -7,7 +7,7 @@ name: Native attach
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'crates/unpeel-attach/**'
       - '.github/workflows/native-attach.yml'

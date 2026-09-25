@@ -9,7 +9,7 @@ name: Apple clients
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       # The Dioxus rewrite tree (clients/dioxus/**) is deliberately excluded:
       # it is covered by apple.yml on macos-15 and nothing in the Swift

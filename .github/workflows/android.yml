@@ -16,7 +16,7 @@ name: Android APK (Dioxus)
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['track-b*', main]
     paths:
       - 'clients/dioxus/**'
       - 'crates/unpeel-client/**'
