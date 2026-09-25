@@ -21,3 +21,9 @@ serde_json = "1"
 vt100 = "0.16.2"
 unpeel-client = { path = "../../crates/unpeel-client" }
 unpeel-ui = { path = "unpeel-ui" }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "unwind"

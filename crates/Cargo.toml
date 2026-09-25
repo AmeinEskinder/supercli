@@ -26,4 +26,22 @@ license = "MIT"
 authors = ["Unpeel"]
 
 [profile.release]
+# R3: fast optimized builds for the Host, CLI, and launchers.
+# - lto = "thin" + codegen-units = 16: parallel codegen, fast link
+# - strip: remove debug symbols
+# - panic = "unwind": REQUIRED for R2's catch_unwind panic safety.
+#   panic = "abort" would silently disable the request-boundary and
+#   mid-call panic catches (all of R2 stops working in release).
 strip = true
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+
+[profile.dist]
+# R3: maximum-optimization distribution builds. Inherits release (so
+# panic = "unwind" is preserved) and tightens LTO + codegen units for the
+# smallest/slowest-link binaries. Only used where the extra link time is
+# affordable.
+inherits = "release"
+lto = "fat"
+codegen-units = 1
