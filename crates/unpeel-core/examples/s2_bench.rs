@@ -10,14 +10,17 @@
 //! (MCP + phone + etc.). Each thread performs n persists, measuring
 //! latency of each. Reports throughput and p50/p95/p99.
 
-use std::sync::{Arc, Barrier};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Barrier};
 use std::time::Instant;
 use unpeel_core::grant_writer::{persist_grant_direct, persist_grant_grouped};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let mode: String = args.get(1).cloned().unwrap_or_else(|| "grouped".to_string());
+    let mode: String = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "grouped".to_string());
     let concurrency: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
     let n: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(2000);
 
@@ -83,7 +86,10 @@ fn main() {
     let p99 = all_latencies[(total * 0.99) as usize];
     let max = all_latencies[all_latencies.len() - 1];
 
-    println!("mode={} concurrency={} n={} total={}", mode, concurrency, n, total as usize);
+    println!(
+        "mode={} concurrency={} n={} total={}",
+        mode, concurrency, n, total as usize
+    );
     println!("throughput={:.1}/s", throughput);
     println!("p50={:.1}ms", p50.as_secs_f64() * 1000.0);
     println!("p95={:.1}ms", p95.as_secs_f64() * 1000.0);

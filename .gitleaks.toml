@@ -65,3 +65,4 @@ description = "RelayProtocol.swift: Curve25519 private-key type declarations"
 targetRules = ["generic-api-key", "private-key"]
 paths = ['''^clients/shared/UnpeelShared/Sources/UnpeelShared/RelayProtocol\.swift$''']
 regexes = ['''privateKey''']
+

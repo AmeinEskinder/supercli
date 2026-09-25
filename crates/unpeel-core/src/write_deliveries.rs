@@ -90,8 +90,8 @@ fn append_record(session_dir: &Path, record: &DeliveryRecord) -> io::Result<()> 
     fs::create_dir_all(session_dir)?;
     let path = log_path(session_dir);
     let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-    let mut line = serde_json::to_vec(record)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut line =
+        serde_json::to_vec(record).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     line.push(b'\n');
     file.write_all(&line)?;
     file.sync_all()?;

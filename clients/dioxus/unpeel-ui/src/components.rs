@@ -258,13 +258,11 @@ pub fn ApprovalCard(
         Some(AnswerUiState::Failed) => Some({ t("approval.failed") }.to_string()),
         // Phase 14 (0a) follow-up: show the actual final decision, not a
         // generic success, when the Host reports already-resolved.
-        Some(AnswerUiState::AlreadyResolved { approved }) => Some(
-            if approved {
-                { t("approval.already_approved") }.to_string()
-            } else {
-                { t("approval.already_denied") }.to_string()
-            },
-        ),
+        Some(AnswerUiState::AlreadyResolved { approved }) => Some(if approved {
+            { t("approval.already_approved") }.to_string()
+        } else {
+            { t("approval.already_denied") }.to_string()
+        }),
         // Phase 14 follow-up 3: after a Host restart the phone cannot know
         // the decision. Show the resolved-unknown message with a link to
         // the audit entry, never as approved/denied.

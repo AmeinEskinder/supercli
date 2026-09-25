@@ -1389,18 +1389,12 @@ pub(crate) fn dispatch_client_command(
                                     );
                                 while !remaining.is_empty() {
                                     let written = match guard.writer.write(remaining) {
-                                        Ok(0) => {
-                                            return Err("PTY input write returned zero".into())
-                                        }
+                                        Ok(0) => return Err("PTY input write returned zero".into()),
                                         Ok(written) => written,
-                                        Err(error)
-                                            if error.kind() == ErrorKind::Interrupted =>
-                                        {
+                                        Err(error) if error.kind() == ErrorKind::Interrupted => {
                                             continue
                                         }
-                                        Err(error) => {
-                                            return Err(format!("Write error: {error}"))
-                                        }
+                                        Err(error) => return Err(format!("Write error: {error}")),
                                     };
                                     guard.hook_input.feed(
                                         &remaining[..written],
@@ -1495,14 +1489,14 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: None,
-                    outcome_unknown: false,
+                outcome_unknown: false,
             }
         }
         SessionHostCommand::Ping => SessionHostResponse {
             ok: true,
             error: None,
             viewport: None,
-                    outcome_unknown: false,
+            outcome_unknown: false,
         },
         SessionHostCommand::RestartAgent {
             expected_generation,
@@ -1570,7 +1564,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: Some(snapshot),
-                    outcome_unknown: false,
+                outcome_unknown: false,
             }
         }
         SessionHostCommand::StreamOutput { .. } | SessionHostCommand::StreamInput => {
@@ -1599,7 +1593,7 @@ pub(crate) fn dispatch_client_command(
                 ok: true,
                 error: None,
                 viewport: None,
-                    outcome_unknown: false,
+                outcome_unknown: false,
             }
         }
     };

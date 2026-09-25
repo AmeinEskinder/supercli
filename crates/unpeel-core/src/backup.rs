@@ -1202,7 +1202,10 @@ mod tests {
             w.join().unwrap();
         }
         let grants_written = grant_writer.join().unwrap();
-        assert!(grants_written > 0, "grant writer should have written grants");
+        assert!(
+            grants_written > 0,
+            "grant writer should have written grants"
+        );
         assert_eq!(verified, 3);
         // The live log is still a valid chain after the storm.
         verify_review_chain(&session_dir).unwrap();
@@ -1210,8 +1213,8 @@ mod tests {
         let live_grants = home.join("grants.json");
         if live_grants.exists() {
             let content = fs::read_to_string(&live_grants).unwrap();
-            let _: serde_json::Value = serde_json::from_str(&content)
-                .expect("live grants.json must be valid JSON");
+            let _: serde_json::Value =
+                serde_json::from_str(&content).expect("live grants.json must be valid JSON");
         }
         let _ = fs::remove_dir_all(&home);
     }

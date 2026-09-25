@@ -1885,10 +1885,8 @@ fn handle_with_effects(
             // Phase 13 v3 (B2): Real wake-up via Condvar — no spinning.
             // Waiting controllers cost nothing and wake in under 1ms when
             // the approval generation changes. Timeout semantics preserved.
-            approvals.wait_for_generation_change(
-                after_gen,
-                std::time::Duration::from_millis(wait_ms),
-            );
+            approvals
+                .wait_for_generation_change(after_gen, std::time::Duration::from_millis(wait_ms));
         }
         let core = snapshot
             .lock()
@@ -2325,10 +2323,7 @@ fn handle_approval_answer(
     // Phase 14 (0a): Nonce for idempotent retry. Client generates a unique
     // nonce per answer attempt; on retry after unknown outcome, the server
     // returns already_resolved with the original decision.
-    let nonce = body
-        .get("nonce")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let nonce = body.get("nonce").and_then(|v| v.as_str()).unwrap_or("");
     match approvals.answer(id, approved, Some("paired-device".to_string()), nonce) {
         crate::approvals::AnswerOutcome::Applied(_) => (200, r#"{"ok":true}"#.into()),
         crate::approvals::AnswerOutcome::AlreadyResolved(decision) => (

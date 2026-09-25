@@ -2584,6 +2584,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "tempfile",
  "unpeel-client",
  "unpeel-connector",
  "unpeel-core",

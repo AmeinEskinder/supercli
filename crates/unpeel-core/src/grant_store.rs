@@ -82,7 +82,6 @@ fn load_grants() -> Map<String, Value> {
         .unwrap_or_default()
 }
 
-
 /// Edit the grants file with minimal lock hold time (S2 optimization).
 ///
 /// Optimistic concurrency control:
@@ -109,8 +108,8 @@ pub fn edit_grants<T>(
             .and_then(|v| v.as_object().cloned())
             .unwrap_or_default();
         let outcome = mutate(&mut map)?;
-        let new_bytes = serde_json::to_vec_pretty(&Value::Object(map))
-            .map_err(|e| e.to_string())?;
+        let new_bytes =
+            serde_json::to_vec_pretty(&Value::Object(map)).map_err(|e| e.to_string())?;
 
         // Acquire lock
         let _lock = lock_grants()?;
@@ -185,7 +184,14 @@ mod tests {
     use std::thread;
 
     fn test_home() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("grant-test-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u32));
+        let dir = std::env::temp_dir().join(format!(
+            "grant-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u32
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -193,9 +199,13 @@ mod tests {
     fn persist_test_grant(caller: &str, target: &str) {
         edit_grants(|map| {
             let key = "mcp_write_approvals";
-            let entry = map.entry(key.to_string()).or_insert(Value::Object(Map::new()));
+            let entry = map
+                .entry(key.to_string())
+                .or_insert(Value::Object(Map::new()));
             if let Value::Object(obj) = entry {
-                let caller_entry = obj.entry(caller.to_string()).or_insert(Value::Array(vec![]));
+                let caller_entry = obj
+                    .entry(caller.to_string())
+                    .or_insert(Value::Array(vec![]));
                 if let Value::Array(arr) = caller_entry {
                     if !arr.iter().any(|v| v.as_str() == Some(target)) {
                         arr.push(Value::String(target.to_string()));
@@ -203,7 +213,8 @@ mod tests {
                 }
             }
             Ok::<(), String>(())
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     /// Serialize UNPEEL_HOME mutation against all other tests that touch it.
@@ -222,11 +233,11 @@ mod tests {
     #[test]
     fn concurrent_writers_no_lost_updates() {
         let (home, _guard) = locked_test_home();
-        
+
         let n_threads = 8;
         let barrier = Arc::new(Barrier::new(n_threads));
         let mut handles = vec![];
-        
+
         for i in 0..n_threads {
             let b = barrier.clone();
             handles.push(thread::spawn(move || {
@@ -236,18 +247,22 @@ mod tests {
                 persist_test_grant(&caller, &target);
             }));
         }
-        
+
         for h in handles {
             h.join().unwrap();
         }
-        
+
         for i in 0..n_threads {
             let caller = format!("session-{}", i);
             let target = format!("target-{}", i);
-            assert!(grant_exists("mcp_write_approvals", &caller, Some(&target)),
-                    "Grant missing for {} -> {}", caller, target);
+            assert!(
+                grant_exists("mcp_write_approvals", &caller, Some(&target)),
+                "Grant missing for {} -> {}",
+                caller,
+                target
+            );
         }
-        
+
         std::fs::remove_dir_all(&home).ok();
     }
 
@@ -255,16 +270,16 @@ mod tests {
     #[test]
     fn torn_temp_file_does_not_corrupt() {
         let (home, _guard) = locked_test_home();
-        
+
         persist_test_grant("alice", "bob");
         assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
-        
+
         let path = grants_path();
         let tmp = path.with_extension("json.unpeel-tmp");
         std::fs::write(&tmp, b"not valid json{{{").unwrap();
-        
+
         assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
-        
+
         std::fs::remove_file(&tmp).ok();
         std::fs::remove_dir_all(&home).ok();
     }
@@ -273,18 +288,18 @@ mod tests {
     #[test]
     fn rename_is_atomic() {
         let (home, _guard) = locked_test_home();
-        
+
         persist_test_grant("alice", "bob");
         persist_test_grant("charlie", "dave");
-        
+
         assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
         assert!(grant_exists("mcp_write_approvals", "charlie", Some("dave")));
-        
+
         let path = grants_path();
         let content = std::fs::read_to_string(&path).unwrap();
         let parsed: Value = serde_json::from_str(&content).unwrap();
         assert!(parsed.is_object());
-        
+
         std::fs::remove_dir_all(&home).ok();
     }
 }
@@ -403,31 +418,46 @@ pub fn remove_grants(keys: &[String]) -> Result<(), String> {
             let parts_ref: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
             match parts_ref.as_slice() {
                 ["write", caller, target] => {
-                    if let Some(map) = root.get_mut("mcp_write_approvals").and_then(|v| v.as_object_mut()) {
+                    if let Some(map) = root
+                        .get_mut("mcp_write_approvals")
+                        .and_then(|v| v.as_object_mut())
+                    {
                         if let Some(list) = map.get_mut(*caller).and_then(|v| v.as_array_mut()) {
                             list.retain(|v| v.as_str() != Some(*target));
                         }
                     }
                 }
                 ["browser", caller] => {
-                    if let Some(list) = root.get_mut("browser_approvals").and_then(|v| v.as_array_mut()) {
+                    if let Some(list) = root
+                        .get_mut("browser_approvals")
+                        .and_then(|v| v.as_array_mut())
+                    {
                         list.retain(|v| v.as_str() != Some(*caller));
                     }
                 }
                 ["computer", caller] => {
-                    if let Some(list) = root.get_mut("computer_approvals").and_then(|v| v.as_array_mut()) {
+                    if let Some(list) = root
+                        .get_mut("computer_approvals")
+                        .and_then(|v| v.as_array_mut())
+                    {
                         list.retain(|v| v.as_str() != Some(*caller));
                     }
                 }
                 ["app-open", caller, app_id] => {
-                    if let Some(map) = root.get_mut("mcp_app_open_approvals").and_then(|v| v.as_object_mut()) {
+                    if let Some(map) = root
+                        .get_mut("mcp_app_open_approvals")
+                        .and_then(|v| v.as_object_mut())
+                    {
                         if let Some(list) = map.get_mut(*caller).and_then(|v| v.as_array_mut()) {
                             list.retain(|v| v.as_str() != Some(*app_id));
                         }
                     }
                 }
                 ["connector", caller, connector, tool] => {
-                    if let Some(map) = root.get_mut("mcp_connector_approvals").and_then(|v| v.as_object_mut()) {
+                    if let Some(map) = root
+                        .get_mut("mcp_connector_approvals")
+                        .and_then(|v| v.as_object_mut())
+                    {
                         if let Some(list) = map.get_mut(*caller).and_then(|v| v.as_array_mut()) {
                             list.retain(|v| {
                                 let c = v.get("connector").and_then(|x| x.as_str());
@@ -441,6 +471,7 @@ pub fn remove_grants(keys: &[String]) -> Result<(), String> {
             }
         }
         Ok(())
-    }).map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
     Ok(())
 }

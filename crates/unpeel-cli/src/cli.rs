@@ -85,6 +85,9 @@ unpeel — run and steer CLI agent sessions
                                   scheduled autonomous sessions (opt-in)
   unpeel migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
+  unpeel self-update --check [--manifest PATH] [--json]
+                                  check for updates (local manifest only;
+                                  exit 3 when an update is available)
   unpeel backup [--to <path>] [--json]
                                   snapshot this home into a verifiable archive
   unpeel restore --from <path> [--force] [--json]
@@ -1028,6 +1031,7 @@ pub fn run(args: &[String]) -> i32 {
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "migrate" => Ok(crate::migrate_cli::run(&args[1..])),
         "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
+        "self-update" => Ok(crate::self_update_cli::run(&args[1..])),
         "init" => Ok(crate::init_cli::run(
             &parsed.positional[1..],
             parsed.has("json"),

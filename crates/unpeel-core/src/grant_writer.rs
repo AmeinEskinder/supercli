@@ -84,14 +84,11 @@ impl GrantQueue {
         // Fail fast if the writer is dead. Otherwise we'd enqueue and hang
         // forever waiting for an ack that will never come.
         {
-            let handle_guard = self
-                .writer_handle
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let handle_guard = self.writer_handle.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(handle) = handle_guard.as_ref() {
                 if handle.is_finished() {
                     return Err(
-                        "grant writer thread died; cannot persist grant (Ambiguous)".to_string(),
+                        "grant writer thread died; cannot persist grant (Ambiguous)".to_string()
                     );
                 }
             }
@@ -111,10 +108,7 @@ impl GrantQueue {
 
         // Enqueue.
         {
-            let mut q = self
-                .queue
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut q = self.queue.lock().unwrap_or_else(|e| e.into_inner());
             q.push_back(pending);
         }
         self.condvar.notify_one();
@@ -138,10 +132,7 @@ impl GrantQueue {
     /// first (see writer_loop) so a notify sent before this wait is not lost.
     fn wait_for_work(&self) {
         let q = self.queue.lock().unwrap_or_else(|e| e.into_inner());
-        let _guard = self
-            .condvar
-            .wait(q)
-            .unwrap_or_else(|e| e.into_inner());
+        let _guard = self.condvar.wait(q).unwrap_or_else(|e| e.into_inner());
     }
 }
 
@@ -156,10 +147,7 @@ fn grant_queue() -> &'static GrantQueue {
             writer_loop();
         });
         {
-            let mut guard = q
-                .writer_handle
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut guard = q.writer_handle.lock().unwrap_or_else(|e| e.into_inner());
             *guard = Some(handle);
         }
         q
@@ -185,9 +173,7 @@ fn writer_loop() {
 
         // Panic-contain the batch commit so one bad batch cannot take down
         // the writer and hang all future submitters.
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            commit_batch(batch)
-        }));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| commit_batch(batch)));
         match result {
             Ok(r) => {
                 let _ = r;
@@ -455,7 +441,9 @@ pub fn persist_connector_grant_grouped(
 /// The benchmark example (`s2_bench.rs`) contains an inlined copy of the
 /// old direct logic for before/after comparison only. It is not used in
 /// production.
-#[deprecated(note = "REMOVED: Use persist_grant_grouped. Direct path forks audit chain under concurrency.")]
+#[deprecated(
+    note = "REMOVED: Use persist_grant_grouped. Direct path forks audit chain under concurrency."
+)]
 pub fn persist_grant_direct(
     _kind: &str,
     _caller: &str,

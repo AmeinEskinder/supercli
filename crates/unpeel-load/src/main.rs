@@ -114,7 +114,7 @@ impl Stats {
     fn new() -> Self {
         Self {
             latencies: std::sync::Mutex::new(
-                Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap()
+                Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap(),
             ),
             errors: AtomicU64::new(0),
             completed: AtomicU64::new(0),
@@ -172,7 +172,10 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     if args.n > 0 {
-        println!("Running load test: n={} at {} concurrency...", args.n, args.concurrency);
+        println!(
+            "Running load test: n={} at {} concurrency...",
+            args.n, args.concurrency
+        );
     } else {
         println!("Running load test for {}s...", args.duration);
     }
@@ -222,7 +225,10 @@ async fn main() -> anyhow::Result<()> {
             let p95 = h.value_at_quantile(0.95) as f64 / 1000.0;
             let p99 = h.value_at_quantile(0.99) as f64 / 1000.0;
             let max = h.max() as f64 / 1000.0;
-            println!("Throughput: {:.1}/s ({} completed in {:.1}s)", tput, completed, test_elapsed);
+            println!(
+                "Throughput: {:.1}/s ({} completed in {:.1}s)",
+                tput, completed, test_elapsed
+            );
             println!("p50: {:.1}ms", p50);
             println!("p95: {:.1}ms", p95);
             println!("p99: {:.1}ms", p99);
@@ -490,11 +496,20 @@ async fn do_approve_cycle(
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("bootstrap failed: {} | {}", status, &body[..body.len().min(200)]));
+            return Err(anyhow::anyhow!(
+                "bootstrap failed: {} | {}",
+                status,
+                &body[..body.len().min(200)]
+            ));
         }
         let resp_text = resp.text().await?;
-        let resp: BootstrapResponse = serde_json::from_str(&resp_text)
-            .map_err(|e| anyhow::anyhow!("JSON parse failed: {} | body: {}", e, &resp_text[..resp_text.len().min(500)]))?;
+        let resp: BootstrapResponse = serde_json::from_str(&resp_text).map_err(|e| {
+            anyhow::anyhow!(
+                "JSON parse failed: {} | body: {}",
+                e,
+                &resp_text[..resp_text.len().min(500)]
+            )
+        })?;
         // Track generation for the next long-poll iteration.
         after_gen = resp.approval_generation;
         if let Some(a) = resp
@@ -601,7 +616,9 @@ async fn do_approve_cycle(
     }
 
     // Wait for MCP to complete
-    mcp_handle.await?.map_err(|e| anyhow::anyhow!("MCP task failed: {}", e))?;
+    mcp_handle
+        .await?
+        .map_err(|e| anyhow::anyhow!("MCP task failed: {}", e))?;
 
     Ok(t0.elapsed())
 }

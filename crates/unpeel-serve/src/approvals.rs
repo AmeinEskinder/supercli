@@ -322,16 +322,13 @@ impl ApprovalHub {
 /// (action-reviews.jsonl), not here — grants have no chain semantics,
 /// so sharding is safe. The grant is durably written (temp + rename)
 /// before this returns, same durability as before.
-pub fn persist_grant(
-    kind: &str,
-    caller: &str,
-    target: Option<&str>,
-    answered_by: Option<&str>,
-) {
+pub fn persist_grant(kind: &str, caller: &str, target: Option<&str>, answered_by: Option<&str>) {
     // Phase 13 v2: Use group commit for batched fsync.
     // The audit entry is recorded BEFORE the grant (write-ahead), and the
     // batch fsyncs once for N concurrent grants instead of N times.
-    if let Err(e) = unpeel_core::grant_writer::persist_grant_grouped(kind, caller, target, answered_by) {
+    if let Err(e) =
+        unpeel_core::grant_writer::persist_grant_grouped(kind, caller, target, answered_by)
+    {
         eprintln!("Failed to persist grant: {e}");
     }
 }
@@ -420,14 +417,14 @@ pub fn already_granted(kind: &str, caller: &str, target: Option<&str>) -> bool {
         "app-open" => "mcp_app_open_approvals",
         _ => return false,
     };
-    
+
     // Check if migrated (grants.json exists)
     let grants_path = unpeel_core::app_paths::grants_path();
     if grants_path.exists() {
         // Migrated: read ONLY from grants.json
         return unpeel_core::grant_store::grant_exists(key, caller, target);
     }
-    
+
     // Pre-migration: read from app-state.json (legacy)
     if unpeel_core::grant_store::grant_exists(key, caller, target) {
         return true;
@@ -565,8 +562,7 @@ mod tests {
         persist_connector_grant("sess-1", "github", "db.query");
         // S2: Grants are now sharded to grants.json, not app-state.json
         let state: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(unpeel_core::app_paths::grants_path())
-                .expect("grants.json written"),
+            &std::fs::read(unpeel_core::app_paths::grants_path()).expect("grants.json written"),
         )
         .unwrap();
         let grants = state["mcp_connector_approvals"]["sess-1"]
@@ -676,7 +672,11 @@ mod tests {
         // Verify IDs are unique (no collision).
         let ids: HashSet<String> = list
             .iter()
-            .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+            .filter_map(|v| {
+                v.get("id")
+                    .and_then(|id| id.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
         assert_eq!(
             ids.len(),
@@ -715,7 +715,11 @@ mod tests {
             let remaining_ids: HashSet<String> = hub
                 .list_json()
                 .iter()
-                .filter_map(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                .filter_map(|v| {
+                    v.get("id")
+                        .and_then(|id| id.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect();
             assert!(
                 !remaining_ids.contains(id),
@@ -796,7 +800,12 @@ mod tests {
         // Simulate a failed answer (unknown ID ~ HTTP 429: entry untouched).
         assert!(
             matches!(
-                hub.answer("wrong-id", true, Some("test-device".to_string()), "test-nonce"),
+                hub.answer(
+                    "wrong-id",
+                    true,
+                    Some("test-device".to_string()),
+                    "test-nonce"
+                ),
                 AnswerOutcome::NotFound
             ),
             "answering unknown ID must fail"
@@ -818,10 +827,7 @@ mod tests {
             ),
             "retry with correct ID must succeed"
         );
-        assert!(
-            hub.list_json().is_empty(),
-            "answered approval is removed"
-        );
+        assert!(hub.list_json().is_empty(), "answered approval is removed");
 
         let (approved, _) = handle.join().expect("request thread panicked");
         assert!(approved, "requester must see approval");
@@ -904,7 +910,9 @@ mod tests {
             "first answer must apply (got {outcome1:?})"
         );
         // The agent receives the decision exactly once.
-        let (approved, _) = rx.recv_timeout(Duration::from_secs(1)).expect("agent must receive decision");
+        let (approved, _) = rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("agent must receive decision");
         assert!(approved, "agent must see approved=true");
 
         // Retry with a DIFFERENT nonce (simulating a client retry after
@@ -1057,7 +1065,9 @@ mod tests {
         // Simulate agent writing the review log entry on Applied.
         record_review(
             session_dir,
-            Actor::Human { device_id: "phone".to_string() },
+            Actor::Human {
+                device_id: "phone".to_string(),
+            },
             "test-connector",
             "test-tool",
             "args-hash",
@@ -1087,7 +1097,6 @@ mod tests {
             lines.len()
         );
         // Verify the chain is intact (tamper-evident).
-        unpeel_core::action_reviews::verify_review_chain(session_dir)
-            .expect("chain must verify");
+        unpeel_core::action_reviews::verify_review_chain(session_dir).expect("chain must verify");
     }
 }

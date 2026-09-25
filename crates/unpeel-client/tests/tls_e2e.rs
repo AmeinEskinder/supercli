@@ -147,7 +147,8 @@ fn pinned_tls_rejects_malformed_fingerprint() {
 
 #[test]
 fn plaintext_client_refuses_https_urls() {
-    let err = HostClient::with_pinned_tls("http://127.0.0.1:1/mobile", "t", "00".repeat(32).as_str())
-        .unwrap_err();
+    let err =
+        HostClient::with_pinned_tls("http://127.0.0.1:1/mobile", "t", "00".repeat(32).as_str())
+            .unwrap_err();
     assert!(matches!(err, HostClientError::InvalidEndpoint(_)));
 }

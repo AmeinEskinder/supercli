@@ -351,7 +351,7 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
         changed: false,
         error: None,
     };
-    
+
     // Grant keys to migrate (S2 sharding)
     const GRANT_KEYS: [&str; 4] = [
         "mcp_write_approvals",
@@ -359,15 +359,16 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
         "browser_approvals",
         "computer_approvals",
     ];
-    
+
     let state_path = app_paths::app_state_path();
     let grants_path = app_paths::grants_path();
-    
+
     // Load app-state.json
     let state_content = match std::fs::read(&state_path) {
         Ok(c) => c,
         Err(e) => {
-            step.lines.push(format!("cannot read app-state.json: {}", e));
+            step.lines
+                .push(format!("cannot read app-state.json: {}", e));
             return step;
         }
     };
@@ -378,42 +379,48 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
             return step;
         }
     };
-    
+
     // Check which grant keys exist in app-state.json
     let state_obj = match state.as_object_mut() {
         Some(o) => o,
         None => {
-            step.lines.push("app-state.json is not an object".to_string());
+            step.lines
+                .push("app-state.json is not an object".to_string());
             return step;
         }
     };
-    
+
     let mut to_migrate = Vec::new();
     for key in GRANT_KEYS {
         if state_obj.contains_key(key) {
             to_migrate.push(key);
         }
     }
-    
+
     if to_migrate.is_empty() {
-        step.lines.push("no grants in app-state.json to migrate".to_string());
+        step.lines
+            .push("no grants in app-state.json to migrate".to_string());
         return step;
     }
-    
-    step.lines.push(format!("found grants to migrate: {}", to_migrate.join(", ")));
-    
+
+    step.lines.push(format!(
+        "found grants to migrate: {}",
+        to_migrate.join(", ")
+    ));
+
     if !apply {
-        step.lines.push("dry-run: would move grants to grants.json".to_string());
+        step.lines
+            .push("dry-run: would move grants to grants.json".to_string());
         return step;
     }
-    
+
     // Load existing grants.json (or empty)
     let mut grants_map = match std::fs::read(&grants_path) {
         Ok(c) => serde_json::from_slice::<serde_json::Map<String, serde_json::Value>>(&c)
             .unwrap_or_default(),
         Err(_) => serde_json::Map::new(),
     };
-    
+
     // Move each grant key
     for key in to_migrate {
         if let Some(value) = state_obj.remove(key) {
@@ -425,12 +432,15 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
                 grants_map.insert(key.to_string(), value);
                 step.lines.push(format!("migrated {}", key));
             } else {
-                step.lines.push(format!("{} already in grants.json, removing from app-state.json", key));
+                step.lines.push(format!(
+                    "{} already in grants.json, removing from app-state.json",
+                    key
+                ));
             }
             step.changed = true;
         }
     }
-    
+
     // Write grants.json
     if step.changed {
         let grants_value = serde_json::Value::Object(grants_map);
@@ -448,7 +458,7 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
             step.error = Some(format!("rename grants.json: {}", e));
             return step;
         }
-        
+
         // Write updated app-state.json (grants removed)
         let state_body = serde_json::to_vec_pretty(&state).unwrap();
         let state_tmp = state_path.with_extension("json.migrate-tmp");
@@ -460,10 +470,10 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
             step.error = Some(format!("rename app-state.json: {}", e));
             return step;
         }
-        
+
         step.lines.push("migration complete".to_string());
     }
-    
+
     step
 }
 
@@ -707,7 +717,8 @@ fn step_config(apply: bool) -> StepOutcome {
     let raw = match std::fs::read_to_string(&path) {
         Ok(r) => r,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            step.lines.push("no app-state.json; nothing to check".to_string());
+            step.lines
+                .push("no app-state.json; nothing to check".to_string());
             return step;
         }
         Err(e) => {
@@ -732,7 +743,8 @@ fn step_config(apply: bool) -> StepOutcome {
         return step;
     }
     for e in &report.errors {
-        step.lines.push(format!("invalid: {}: {}", e.path, e.message));
+        step.lines
+            .push(format!("invalid: {}: {}", e.path, e.message));
     }
     if !apply {
         step.lines.push(format!(
@@ -743,11 +755,8 @@ fn step_config(apply: bool) -> StepOutcome {
     }
     match backup(&path) {
         Ok(bak) => {
-            step.lines.push(format!(
-                "backed up {} to {}",
-                path.display(),
-                bak.display()
-            ));
+            step.lines
+                .push(format!("backed up {} to {}", path.display(), bak.display()));
         }
         Err(e) => {
             step.error = Some(e);
@@ -777,9 +786,8 @@ fn step_config(apply: bool) -> StepOutcome {
     match std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()) {
         Ok(()) => {
             step.changed = true;
-            step.lines.push(format!(
-                "reset {removed} invalid setting(s) to defaults"
-            ));
+            step.lines
+                .push(format!("reset {removed} invalid setting(s) to defaults"));
         }
         Err(e) => step.error = Some(format!("write {}: {e}", path.display())),
     }

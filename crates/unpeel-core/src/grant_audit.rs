@@ -75,9 +75,7 @@ fn acquire_audit_lock(audit_path: &std::path::Path) -> Result<AuditLock, String>
         let timeout = std::time::Duration::from_secs(30);
         loop {
             // SAFETY: flock with LOCK_EX|LOCK_NB on a valid fd.
-            let ret = unsafe {
-                libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB)
-            };
+            let ret = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
             if ret == 0 {
                 return Ok(AuditLock { _file: file });
             }
@@ -154,10 +152,7 @@ fn last_entry_hash() -> Result<Option<String>, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.to_string()),
     };
-    let len = file
-        .metadata()
-        .map_err(|e| e.to_string())?
-        .len();
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
     if len == 0 {
         return Ok(None);
     }
@@ -584,8 +579,7 @@ mod tests {
             // Audit entry WITHOUT a grant: the approval was recorded but the
             // grant write never landed (crash between audit fsync and
             // grants.json write). Fail closed: no error, no silent re-create.
-            record_grant_created("human:device-9", "write", "write", "write:ghost:target")
-                .unwrap();
+            record_grant_created("human:device-9", "write", "write", "write:ghost:target").unwrap();
 
             reconcile_grants().expect("audit-only entry must not fail reconciliation");
 

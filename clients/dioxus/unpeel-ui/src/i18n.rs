@@ -50,10 +50,7 @@ fn english_catalog() -> &'static HashMap<&'static str, &'static str> {
         m.insert("approval.sending", "Sending answer…");
         m.insert("approval.already_approved", "Already approved");
         m.insert("approval.already_denied", "Already denied");
-        m.insert(
-            "approval.resolved_unknown",
-            "Resolved — see activity log",
-        );
+        m.insert("approval.resolved_unknown", "Resolved — see activity log");
         m.insert(
             "approval.rate_limited",
             "Rate limited — retrying in {secs}s…",

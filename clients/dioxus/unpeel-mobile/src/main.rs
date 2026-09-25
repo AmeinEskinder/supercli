@@ -1060,10 +1060,36 @@ fn answer_approval(mut state: SyncSignal<MobileState>, approval_id: String, appr
     let mut state2 = state.clone();
     let host_id2 = host_id.clone();
     let approval_id2 = approval_id.clone();
-    std::thread::spawn(
-        move || {
-            let result =
-                client.answer_approval_with_progress(&approval_id, approved, |retry_in_secs| {
+    std::thread::spawn(move || {
+        let result =
+            client.answer_approval_with_progress(&approval_id, approved, |retry_in_secs| {
+                state2
+                    .write()
+                    .views
+                    .entry(host_id2.clone())
+                    .or_default()
+                    .answer_states
+                    .insert(
+                        approval_id2.clone(),
+                        AnswerUiState::RateLimited { retry_in_secs },
+                    );
+            });
+        // The card state is done — a fresh bootstrap decides whether the
+        // approval is still listed. On terminal failure the card shows
+        // the failed state so the user can tap to retry.
+        match result {
+            Ok((value, _)) => {
+                // Phase 14 (0a) follow-up: if the Host reports already_resolved,
+                // show the actual final decision, not a generic success.
+                let already = value
+                    .get("already_resolved")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if already {
+                    let approved = value
+                        .get("approved")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     state2
                         .write()
                         .views
@@ -1072,82 +1098,54 @@ fn answer_approval(mut state: SyncSignal<MobileState>, approval_id: String, appr
                         .answer_states
                         .insert(
                             approval_id2.clone(),
-                            AnswerUiState::RateLimited { retry_in_secs },
+                            AnswerUiState::AlreadyResolved { approved },
                         );
-                });
-            // The card state is done — a fresh bootstrap decides whether the
-            // approval is still listed. On terminal failure the card shows
-            // the failed state so the user can tap to retry.
-            match result {
-                Ok((value, _)) => {
-                    // Phase 14 (0a) follow-up: if the Host reports already_resolved,
-                    // show the actual final decision, not a generic success.
-                    let already = value
-                        .get("already_resolved")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    if already {
-                        let approved = value
-                            .get("approved")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                        state2
-                            .write()
-                            .views
-                            .entry(host_id2.clone())
-                            .or_default()
-                            .answer_states
-                            .insert(
-                                approval_id2.clone(),
-                                AnswerUiState::AlreadyResolved { approved },
-                            );
-                    } else {
-                        state2
-                            .write()
-                            .views
-                            .entry(host_id2.clone())
-                            .or_default()
-                            .answer_states
-                            .remove(&approval_id2);
-                    }
-                    match client.bootstrap() {
-                        Ok(snap) => {
-                            state2.write().hosts.set_snapshot(&host_id, snap);
-                        }
-                        Err(e) => {
-                            state2
-                                .write()
-                                .hosts
-                                .set_error(&host_id, format!("Approval failed: {e}"));
-                        }
-                    }
-                }
-                Err(e) => {
-                    // Phase 14 follow-up 3: a 409 "approval no longer pending"
-                    // after a Host restart is terminal — the phone cannot know
-                    // the decision. Render as "Resolved — see activity log",
-                    // never as a retryable failure.
-                    let state = match &e {
-                        unpeel_client::HostClientError::Status(409, _) => {
-                            AnswerUiState::ResolvedUnknown
-                        }
-                        _ => AnswerUiState::Failed,
-                    };
+                } else {
                     state2
                         .write()
                         .views
                         .entry(host_id2.clone())
                         .or_default()
                         .answer_states
-                        .insert(approval_id2.clone(), state);
-                    state2
-                        .write()
-                        .hosts
-                        .set_error(&host_id, format!("Approval failed: {e}"));
+                        .remove(&approval_id2);
+                }
+                match client.bootstrap() {
+                    Ok(snap) => {
+                        state2.write().hosts.set_snapshot(&host_id, snap);
+                    }
+                    Err(e) => {
+                        state2
+                            .write()
+                            .hosts
+                            .set_error(&host_id, format!("Approval failed: {e}"));
+                    }
                 }
             }
-        },
-    );
+            Err(e) => {
+                // Phase 14 follow-up 3: a 409 "approval no longer pending"
+                // after a Host restart is terminal — the phone cannot know
+                // the decision. Render as "Resolved — see activity log",
+                // never as a retryable failure.
+                let state = match &e {
+                    unpeel_client::HostClientError::Status(409, _) => {
+                        AnswerUiState::ResolvedUnknown
+                    }
+                    _ => AnswerUiState::Failed,
+                };
+                state2
+                    .write()
+                    .views
+                    .entry(host_id2.clone())
+                    .or_default()
+                    .answer_states
+                    .insert(approval_id2.clone(), state);
+                state2
+                    .write()
+                    .hosts
+                    .set_error(&host_id, format!("Approval failed: {e}"));
+            }
+        }
+    });
 }
 
 /// Archive or restore a session via the Host's session-organization patch

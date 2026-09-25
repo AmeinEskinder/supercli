@@ -45,7 +45,10 @@ pub fn run(args: &[String]) -> i32 {
     let json = args.iter().any(|a| a == "--json");
     let bundle_idx = args.iter().position(|a| a == "--bundle");
     if let Some(idx) = bundle_idx {
-        let output = args.get(idx + 1).map(|s| s.as_str()).unwrap_or("unpeel-doctor-bundle.tar.gz");
+        let output = args
+            .get(idx + 1)
+            .map(|s| s.as_str())
+            .unwrap_or("unpeel-doctor-bundle.tar.gz");
         let output_path = std::path::PathBuf::from(output);
         let (home, _) = run_checks();
         match build_bundle(&home, &output_path) {
@@ -262,7 +265,11 @@ fn check_clock_skew(home: &PathBuf) -> (&'static str, bool, String) {
 fn check_grants_file(home: &PathBuf) -> (&'static str, bool, String) {
     let path = home.join("grants.json");
     if !path.exists() {
-        return ("grants-file", true, "no grants file (no grants persisted yet)".to_string());
+        return (
+            "grants-file",
+            true,
+            "no grants file (no grants persisted yet)".to_string(),
+        );
     }
     match std::fs::read(&path) {
         Ok(raw) => match serde_json::from_slice::<serde_json::Value>(&raw) {
@@ -270,12 +277,24 @@ fn check_grants_file(home: &PathBuf) -> (&'static str, bool, String) {
                 if v.is_object() {
                     ("grants-file", true, "valid".to_string())
                 } else {
-                    ("grants-file", false, "grants.json is not a JSON object".to_string())
+                    (
+                        "grants-file",
+                        false,
+                        "grants.json is not a JSON object".to_string(),
+                    )
                 }
             }
-            Err(e) => ("grants-file", false, format!("grants.json parse error: {e}")),
+            Err(e) => (
+                "grants-file",
+                false,
+                format!("grants.json parse error: {e}"),
+            ),
         },
-        Err(e) => ("grants-file", false, format!("cannot read grants.json: {e}")),
+        Err(e) => (
+            "grants-file",
+            false,
+            format!("cannot read grants.json: {e}"),
+        ),
     }
 }
 
@@ -289,11 +308,19 @@ fn check_grant_audit(_home: &PathBuf) -> (&'static str, bool, String) {
         Ok(count) => {
             // Check grants ⊆ chain.
             match unpeel_core::grant_audit::doctor_check_grants_subset() {
-                Ok(()) => ("grant-audit", true, format!("{count} entries verified, grants ⊆ chain")),
+                Ok(()) => (
+                    "grant-audit",
+                    true,
+                    format!("{count} entries verified, grants ⊆ chain"),
+                ),
                 Err(e) => ("grant-audit", false, e),
             }
         }
-        Err(e) => ("grant-audit", false, format!("audit chain verification failed: {e}")),
+        Err(e) => (
+            "grant-audit",
+            false,
+            format!("audit chain verification failed: {e}"),
+        ),
     }
 }
 
@@ -342,13 +369,9 @@ fn redact_value(value: &mut serde_json::Value) {
 
 /// Build the diagnostics bundle. Returns the path to the created archive.
 fn build_bundle(home: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
-    let staging = std::env::temp_dir().join(format!(
-        "unpeel-bundle-{}",
-        std::process::id()
-    ));
+    let staging = std::env::temp_dir().join(format!("unpeel-bundle-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging)
-        .map_err(|e| format!("create staging dir: {e}"))?;
+    std::fs::create_dir_all(&staging).map_err(|e| format!("create staging dir: {e}"))?;
 
     // versions.json
     let versions = serde_json::json!({
@@ -437,11 +460,15 @@ fn collect_stats(home: &std::path::Path) -> Result<serde_json::Value, String> {
 
     let sessions_dir = home.join("app-sessions");
     if sessions_dir.exists() {
-        for entry in std::fs::read_dir(&sessions_dir)
-            .map_err(|e| format!("read app-sessions: {e}"))?
+        for entry in
+            std::fs::read_dir(&sessions_dir).map_err(|e| format!("read app-sessions: {e}"))?
         {
             let entry = entry.map_err(|e| format!("read dir entry: {e}"))?;
-            if !entry.file_type().map_err(|e| format!("file type: {e}"))?.is_dir() {
+            if !entry
+                .file_type()
+                .map_err(|e| format!("file type: {e}"))?
+                .is_dir()
+            {
                 continue;
             }
             sessions += 1;
@@ -452,10 +479,8 @@ fn collect_stats(home: &std::path::Path) -> Result<serde_json::Value, String> {
                 let count = content.lines().filter(|l| !l.trim().is_empty()).count();
                 total_reviews += count;
                 // Verify chain (metadata only, no payload)
-                match unpeel_core::action_reviews::verify_review_bytes(
-                    content.as_bytes(),
-                    "bundle",
-                ) {
+                match unpeel_core::action_reviews::verify_review_bytes(content.as_bytes(), "bundle")
+                {
                     Ok(_) => chains_ok += 1,
                     Err(_) => chains_failed += 1,
                 }
@@ -503,16 +528,14 @@ fn collect_logs(home: &std::path::Path, output: &std::path::Path) -> Result<(), 
     // in diagnostic bundles. Chain statistics are in stats.json instead.
     const EXCLUDED: &[&str] = &["action-reviews.jsonl", "grant-audit.jsonl"];
     let log_dirs = [home.join("logs"), home.to_path_buf()];
-    let mut out = std::fs::File::create(output)
-        .map_err(|e| format!("create logs.jsonl: {e}"))?;
+    let mut out = std::fs::File::create(output).map_err(|e| format!("create logs.jsonl: {e}"))?;
     use std::io::Write;
 
     for dir in &log_dirs {
         if !dir.exists() {
             continue;
         }
-        let entries = std::fs::read_dir(dir)
-            .map_err(|e| format!("read log dir: {e}"))?;
+        let entries = std::fs::read_dir(dir).map_err(|e| format!("read log dir: {e}"))?;
         for entry in entries {
             let entry = entry.map_err(|e| format!("log dir entry: {e}"))?;
             let path = entry.path();
@@ -536,8 +559,7 @@ fn collect_logs(home: &std::path::Path, output: &std::path::Path) -> Result<(), 
                     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(line) {
                         redact_value(&mut value);
                         let redacted = serde_json::to_string(&value).unwrap();
-                        writeln!(out, "{redacted}")
-                            .map_err(|e| format!("write logs: {e}"))?;
+                        writeln!(out, "{redacted}").map_err(|e| format!("write logs: {e}"))?;
                     }
                 }
             }
