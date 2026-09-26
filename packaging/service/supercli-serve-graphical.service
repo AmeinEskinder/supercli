@@ -33,7 +33,7 @@
 # diagnostics) matches supercli-serve.service.
 
 [Unit]
-Description=SuperCLI Host service (desktop session)
+Description=Supercli Host service (desktop session)
 PartOf=graphical-session.target
 After=graphical-session.target
 

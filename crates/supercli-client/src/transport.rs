@@ -277,6 +277,11 @@ pub struct OutputChunk {
 
 /// One HTTP request/response round trip. Implementations must never send
 /// the request anywhere but the configured base URL.
+///
+/// A round trip with response headers: (status, headers, body).
+pub(crate) type RoundtripWithHeaders =
+    Result<(u16, Vec<(String, String)>, String), HostClientError>;
+
 pub(crate) trait DirectTransport: Send + Sync {
     fn roundtrip(
         &self,
@@ -296,7 +301,7 @@ pub(crate) trait DirectTransport: Send + Sync {
         url: &str,
         auth: &str,
         body: Option<(&str, &[u8])>,
-    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+    ) -> RoundtripWithHeaders {
         let (status, text) = self.roundtrip(method, url, auth, body)?;
         Ok((status, Vec::new(), text))
     }
@@ -1148,7 +1153,7 @@ impl DirectTransport for UreqTransport {
         url: &str,
         auth: &str,
         body: Option<(&str, &[u8])>,
-    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+    ) -> RoundtripWithHeaders {
         let mut response = if method == "GET" {
             self.agent
                 .get(url)
@@ -1216,7 +1221,7 @@ impl DirectTransport for PinnedHttpsTransport {
         url: &str,
         auth: &str,
         body: Option<(&str, &[u8])>,
-    ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+    ) -> RoundtripWithHeaders {
         let (host, port, path) = parse_https_url(url)?;
         let server_name = ServerName::try_from(host.clone())
             .map(|name| name.to_owned())
@@ -1614,7 +1619,7 @@ mod tests {
                 _url: &str,
                 _auth: &str,
                 _body: Option<(&str, &[u8])>,
-            ) -> Result<(u16, Vec<(String, String)>, String), HostClientError> {
+            ) -> RoundtripWithHeaders {
                 let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
                 if attempt == 0 {
                     // First attempt: rate-limited. The Host was never told.
