@@ -119,6 +119,8 @@ fps and latency are **recorded in `metrics.json` as numbers, not gates**. The sa
 
 Measured (run #12, 1080x2400): control-channel tap-to-frame p50 382 ms / p95 1035 ms vs adb input p50 676 ms / p95 1156 ms — the control channel is ~1.8× faster. fps while the home screen is static is ~2–3 (scrcpy only emits on screen change); fps is measured while animating (Settings fling-scroll loop via the control channel).
 
+Measured (run #27, 1080x2400, fps_source=launcher-swipe): the emulator rendered 7.9 fps (`dumpsys gfxinfo`) but the stream carried 4.3 fps — at full-res on CI the **software encoder is also a bottleneck**, not just the renderer. Both numbers are recorded in `metrics.json` (`render_fps_gfxinfo` vs `fps_animating_60s`) so the renderer-vs-encoder split is visible on every run. `scripts/device-bench.sh` (Mac) reports the same render-fps vs stream-fps pair.
+
 Artifacts on every run (`if: always()`): `metrics.json`, screenshot, 10 s MKV, `e2e.log`, scrcpy-filtered logcat, server stderr. The workflow publishes key stages to `GITHUB_STEP_SUMMARY` (boot_completed, jar pushed, server alive, first packet, packet count) so the run page is readable without log access.
 
 ## 8. Local bench: `scripts/device-bench.sh`
