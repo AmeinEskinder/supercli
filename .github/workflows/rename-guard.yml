@@ -35,7 +35,6 @@ jobs:
                       -e '^./docs/internal/' \
                       -e '^./clients/gpuidart/' \
                       -e '^./clients/legacy/' \
-                      -e '^./crates/apps/app-kit/' \
                       -e '^./tests/device/' \
                       -e '^./scripts/generate-runtime-client-catalog.mjs$' \
                       -e '^./scripts/release-app.mjs$' \

@@ -7,7 +7,7 @@
 #   bun run apps:link      # dev mode: link every App build into ~/.supercli/apps/bin
 [workspace]
 resolver = "2"
-members = ["app-kit", "markdown", "filetree", "diffs", "usage"]
+members = ["markdown", "filetree", "diffs", "usage"]
 
 [profile.release]
 lto = true

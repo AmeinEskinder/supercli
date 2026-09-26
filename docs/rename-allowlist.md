@@ -21,9 +21,9 @@ names and references. Do not rename.
 
 - `clients/legacy/` — all frozen Dioxus, iOS, native, and shared clients
   (including `clients/legacy/shared/SupercliShared/.../GeneratedRuntimeCatalog.swift`,
-  whose generated `UnpeelRuntime*` Swift API surface belongs to the frozen client).
-- `crates/apps/app-kit/` — frozen Swift/TypeScript app framework. NOTE: not
-  yet moved under `clients/legacy/`; tracked as a follow-up, do not rename.
+  whose generated `UnpeelRuntime*` Swift API surface belongs to the frozen client),
+  and the frozen app-kit (`clients/legacy/app-kit/`, moved 2026-09-26; do not
+  rename).
 - `tests/device/` — `.mob` device-test scripts that drive the frozen Dioxus
   mobile client (bundle id `com.unpeel.controller`, `unpeel pair`).
 - `scripts/generate-runtime-client-catalog.mjs` — emits the `UnpeelRuntime*`
