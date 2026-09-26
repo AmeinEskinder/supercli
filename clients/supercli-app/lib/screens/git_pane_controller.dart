@@ -51,12 +51,17 @@ final class GitPaneController {
     return GitPaneView(
       paneId: paneId,
       tab: tab,
-      onStage: (path) => _run(() => client.gitStage(repoPath, [path])),
-      onUnstage: (path) => _run(() => client.gitUnstage(repoPath, [path])),
-      onCommit: (message) => _run(() => client.gitCommit(repoPath, message)),
-      onFetch: () => _run(() => client.gitFetch(repoPath)),
-      onPull: () => _run(() => client.gitPull(repoPath)),
-      onPush: () => _run(() => client.gitPush(repoPath)),
+      // Each callback is a direct user gesture (button click), which is the
+      // explicit approval the Host requires for mutating ops.
+      onStage: (path) =>
+          _run(() => client.gitStage(repoPath, [path], approved: true)),
+      onUnstage: (path) =>
+          _run(() => client.gitUnstage(repoPath, [path], approved: true)),
+      onCommit: (message) =>
+          _run(() => client.gitCommit(repoPath, message, approved: true)),
+      onFetch: () => _run(() => client.gitFetch(repoPath, approved: true)),
+      onPull: () => _run(() => client.gitPull(repoPath, approved: true)),
+      onPush: () => _run(() => client.gitPush(repoPath, approved: true)),
     );
   }
 }

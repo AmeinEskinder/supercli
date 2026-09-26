@@ -1,17 +1,48 @@
 //! Host git, file-write, and usage routes for the desktop/mobile clients.
 //!
-//! These back the Git/Files/Usage app panes (`clients/supercli-app`). Paths
-//! are resolved through [`ResourceScope`] from `host_resources`, so a
-//! Controller can only touch the registered project roots and the Host
-//! user's home (minus Supercli's own storage and SSH material) — the same
-//! scope as the existing file routes. Git itself runs via the `git` CLI
-//! with `GIT_OPTIONAL_LOCKS=0`; mutating commands (`stage`, `commit`,
-//! `fetch`, `pull`, `push`) additionally require the resolved path to be a
-//! git work tree, and `commit` refuses an empty message.
+//! These back the Git/Files/Usage app panes (`clients/supercli-app`).
+//!
+//! ## Security model
+//!
+//! A paired Controller is owner-equivalent today, so these routes are defense
+//! in depth. The rules below exist so a compromised or malicious Controller
+//! cannot achieve *persistent* code execution that bypasses agent approvals:
+//!
+//! - **Writes are project-root-only.** `files_write` refuses anything outside
+//!   the registered project roots (Fix 1). The bare home directory is off
+//!   limits: `~/.zshrc`, `~/.bashrc`, `~/.gitconfig` (`core.sshCommand`), and
+//!   `~/Library/LaunchAgents/*.plist` are all persistent code-execution
+//!   primitives.
+//! - **No dotfiles, ever.** Any path component starting with `.` is refused
+//!   for writes, even inside a project root. This covers `.git/` internals
+//!   (`hooks/`, `config`, `info/`), `.env`, and friends.
+//! - **Mutating ops require explicit approval.** Every state-changing route
+//!   (`files_write`, `git stage/unstage/commit/fetch/pull/push`) requires
+//!   `"approved": true` in the request body (Fix 2). There is no
+//!   `ApprovalGate`/`ApprovalHub` type in this codebase and no
+//!   `supercli-events` doctype bus wired to these routes, so the explicit
+//!   body field is the consent gate; every granted operation is appended to
+//!   an audit log (`<SUPERCLI_HOME>/git-ops-audit.jsonl`). A process-wide
+//!   hook registry (`set_git_op_hooks`) lets embedders/tests install
+//!   `before_*` rejectors.
+//! - **Repo toplevel must stay inside a project root** (Fix 3).
+//!   `git rev-parse --show-toplevel` is not trusted on its own: a path inside
+//!   a registered root whose enclosing repo has `$HOME` as its toplevel
+//!   (e.g. a dotfiles repo) would otherwise escape the root.
+//! - **Untrusted-repo git config is neutralized** (Fix 4). Read ops pass
+//!   `-c core.fsmonitor= -c core.hooksPath=/dev/null -c diff.external=`
+//!   plus `--no-ext-diff --no-textconv` so a repo's `.git/config` cannot
+//!   execute arbitrary commands via fsmonitor/textconv/external diff.
+//!   Network ops (`fetch`/`pull`/`push`) set
+//!   `GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10'` and run
+//!   under a hard timeout that **kills the child process** (the HTTP-layer
+//!   timeout alone would leave the git child running).
 
-use std::io;
-use std::path::Path;
-use std::process::Command;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+use std::sync::{OnceLock, RwLock};
+use std::time::Duration;
 
 use base64::Engine as _;
 use serde_json::{json, Value};
@@ -19,9 +50,174 @@ use serde_json::{json, Value};
 use crate::controller_api::{ControllerRequest, ControllerResponse};
 use crate::host_resources::{fail, Failure, ResourceScope};
 
-fn git(repo: &Path, args: &[&str]) -> io::Result<std::process::Output> {
-    Command::new("git")
-        .arg("-C")
+// ---------------------------------------------------------------------------
+// Approval gate + audit (Fix 2)
+// ---------------------------------------------------------------------------
+
+/// Name of the audit log, relative to `<SUPERCLI_HOME>`.
+const AUDIT_FILE_NAME: &str = "git-ops-audit.jsonl";
+
+/// Every mutating route requires `"approved": true` in the request body.
+///
+/// There is no `ApprovalGate`/`ApprovalHub` type in this codebase, and the
+/// `pending_approvals` queue in `controller_host` is wired to the MCP/session
+/// approval UI, not to these routes. The explicit body field is the consent
+/// gate for now: a Controller that wants to mutate must state, per request,
+/// that the user approved this exact operation. Rejected requests never reach
+/// git or the filesystem.
+fn require_approval(request: &ControllerRequest, op: &str) -> Result<(), Failure> {
+    let approved = request
+        .body
+        .get("approved")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !approved {
+        return Err(fail(
+            403,
+            format!(
+                "{op} requires approval: resubmit with \"approved\": true in the request body"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Best-effort audit append. Failures are swallowed: auditing must never break
+/// the operation itself, and a missing `<SUPERCLI_HOME>` (tests) just means
+/// nothing is persisted.
+fn audit(op: &str, path: &str, detail: &Value) {
+    let home = std::env::var_os("SUPERCLI_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(crate::app_paths::supercli_home);
+    let entry = json!({
+        "at": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0),
+        "op": op,
+        "path": path,
+        "detail": detail,
+    });
+    if let Ok(mut line) = serde_json::to_vec(&entry) {
+        line.push(b'\n');
+        if let Some(parent) = home.join(AUDIT_FILE_NAME).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(home.join(AUDIT_FILE_NAME))
+        {
+            use std::io::Write as _;
+            let _ = file.write_all(&line);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// before_*/after_* hooks (Fix 2, extensibility)
+// ---------------------------------------------------------------------------
+
+/// A `before_*` hook: receives the operation path, returns `Err` to reject.
+type BeforeFileWriteHook = Box<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
+/// A `before_*` hook for git ops: receives `(op, repo_root)`, `Err` rejects.
+type BeforeGitOpHook = Box<dyn Fn(&str, &Path) -> Result<(), String> + Send + Sync>;
+
+/// Process-wide hooks for git/file operations.
+///
+/// - `before_file_write(path)` / `before_git_op(op, repo_root)`: return `Err`
+///   to reject the operation before anything is executed. This is the
+///   `before_FileWrite` / `before_GitOp` seam: an embedder can veto.
+/// - After a successful operation the audit log records it (the `after_*`
+///   audit); hook rejection itself is also audited.
+///
+/// `None` (the default) means "no hook installed": the operation proceeds to
+/// the `approved` gate. Install via [`set_git_op_hooks`]; tests use
+/// [`clear_git_op_hooks`] to reset.
+#[derive(Default)]
+pub struct GitOpHooks {
+    pub before_file_write: Option<BeforeFileWriteHook>,
+    pub before_git_op: Option<BeforeGitOpHook>,
+}
+
+static GIT_OP_HOOKS: OnceLock<RwLock<GitOpHooks>> = OnceLock::new();
+
+fn hooks() -> &'static RwLock<GitOpHooks> {
+    GIT_OP_HOOKS.get_or_init(|| RwLock::new(GitOpHooks::default()))
+}
+
+/// Install process-wide git/file operation hooks (see [`GitOpHooks`]).
+pub fn set_git_op_hooks(hooks: GitOpHooks) {
+    *self::hooks().write().expect("git hooks lock poisoned") = hooks;
+}
+
+/// Remove all installed hooks (tests).
+pub fn clear_git_op_hooks() {
+    set_git_op_hooks(GitOpHooks::default());
+}
+
+fn run_before_file_write(path: &Path) -> Result<(), Failure> {
+    let hook = self::hooks().read().expect("git hooks lock poisoned");
+    if let Some(before) = &hook.before_file_write {
+        if let Err(reason) = before(path) {
+            audit(
+                "FileWrite",
+                &path.to_string_lossy(),
+                &json!({ "rejected_by_hook": reason }),
+            );
+            return Err(fail(403, format!("file write rejected by hook: {reason}")));
+        }
+    }
+    Ok(())
+}
+
+fn run_before_git_op(op: &str, repo: &Path) -> Result<(), Failure> {
+    let hook = self::hooks().read().expect("git hooks lock poisoned");
+    if let Some(before) = &hook.before_git_op {
+        if let Err(reason) = before(op, repo) {
+            audit(
+                "GitOp",
+                &repo.to_string_lossy(),
+                &json!({ "op": op, "rejected_by_hook": reason }),
+            );
+            return Err(fail(403, format!("git {op} rejected by hook: {reason}")));
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Hardened git invocation (Fix 4)
+// ---------------------------------------------------------------------------
+
+/// Config overrides that neutralize code execution from an untrusted repo's
+/// `.git/config` for read operations:
+///
+/// - `core.fsmonitor=`: a repo can otherwise run an arbitrary fsmonitor
+///   command on `git status`.
+/// - `core.hooksPath=/dev/null`: defense in depth; read ops should not run
+///   hooks at all.
+/// - `diff.external=` + `--no-ext-diff` + `--no-textconv`: `git diff` can
+///   otherwise run external diff drivers and textconv filters (arbitrary
+///   commands) from `.gitattributes`/`.git/config`.
+fn read_op_config_args() -> Vec<String> {
+    vec![
+        "-c".to_owned(),
+        "core.fsmonitor=".to_owned(),
+        "-c".to_owned(),
+        "core.hooksPath=/dev/null".to_owned(),
+        "-c".to_owned(),
+        "diff.external=".to_owned(),
+    ]
+}
+
+/// Run a git *read* command with untrusted-config hardening (Fix 4).
+fn git_read(repo: &Path, args: &[&str]) -> io::Result<Output> {
+    let mut cmd = Command::new("git");
+    for arg in read_op_config_args() {
+        cmd.arg(arg);
+    }
+    cmd.arg("-C")
         .arg(repo)
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
@@ -29,8 +225,96 @@ fn git(repo: &Path, args: &[&str]) -> io::Result<std::process::Output> {
         .output()
 }
 
-fn git_ok(repo: &Path, args: &[&str], what: &str) -> Result<String, Failure> {
-    let output = git(repo, args).map_err(|e| fail(500, format!("{what}: {e}")))?;
+/// Run a git command with a hard timeout that kills the child on expiry.
+///
+/// The HTTP layer has its own timeout, but that only abandons the handler —
+/// the git child would keep running (e.g. `git push` hanging on an SSH
+/// prompt). This spawns the child, then kills it if it has not exited within
+/// `timeout`.
+fn git_with_timeout(
+    repo: &Path,
+    config_args: &[String],
+    args: &[&str],
+    extra_env: &[(&str, &str)],
+    timeout: Duration,
+) -> io::Result<Output> {
+    let mut child = Command::new("git");
+    for arg in config_args {
+        child.arg(arg);
+    }
+    child
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0");
+    for (k, v) in extra_env {
+        child.env(k, v);
+    }
+    let mut child = child.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = out.read_to_end(&mut stdout);
+                }
+                if let Some(mut err) = child.stderr.take() {
+                    let _ = err.read_to_end(&mut stderr);
+                }
+                return Ok(Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            None => {
+                if std::time::Instant::now() >= deadline {
+                    // Hard kill: do not leave the child running after we
+                    // give up on it.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        format!("git command timed out after {}s", timeout.as_secs()),
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+}
+
+/// Hard timeouts for network operations (Fix 4).
+const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+const PUSH_PULL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Run a git *network* op (`fetch`/`pull`/`push`) with SSH hardening and a
+/// hard child-killing timeout (Fix 4).
+///
+/// - `GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10'`: never
+///   prompt for passwords/passphrases (which would hang forever); fail fast
+///   on unreachable hosts.
+/// - `GIT_TERMINAL_PROMPT=0`: no credential prompts.
+/// - The timeout kills the child; see [`git_with_timeout`].
+fn git_remote(repo: &Path, args: &[&str], timeout: Duration) -> io::Result<Output> {
+    git_with_timeout(
+        repo,
+        &read_op_config_args(),
+        args,
+        &[(
+            "GIT_SSH_COMMAND",
+            "ssh -o BatchMode=yes -o ConnectTimeout=10",
+        )],
+        timeout,
+    )
+}
+
+fn git_ok_read(repo: &Path, args: &[&str], what: &str) -> Result<String, Failure> {
+    let output = git_read(repo, args).map_err(|e| fail(500, format!("{what}: {e}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(fail(
@@ -45,9 +329,42 @@ fn git_ok(repo: &Path, args: &[&str], what: &str) -> Result<String, Failure> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Resolve a Controller-supplied path and require it to be inside a git
-/// work tree. Returns the repository root.
-fn resolve_repo(scope: &ResourceScope, request: &ControllerRequest) -> Result<std::path::PathBuf, Failure> {
+fn git_ok_remote(repo: &Path, args: &[&str], what: &str, timeout: Duration) -> Result<String, Failure> {
+    let output = git_remote(repo, args, timeout).map_err(|e| {
+        if e.kind() == io::ErrorKind::TimedOut {
+            fail(504, format!("{what}: {e}"))
+        } else {
+            fail(500, format!("{what}: {e}"))
+        }
+    })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(fail(
+            422,
+            if stderr.is_empty() {
+                format!("{what} failed")
+            } else {
+                format!("{what} failed: {stderr}")
+            },
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+// ---------------------------------------------------------------------------
+// Path resolution (Fix 1, Fix 3)
+// ---------------------------------------------------------------------------
+
+/// Resolve a Controller-supplied path and require it to be inside a git work
+/// tree whose toplevel is itself inside a registered project root.
+///
+/// The toplevel check (Fix 3) closes the dotfiles-repo escape: without it, a
+/// path like `<root>/sub` where the enclosing repo's toplevel is `$HOME`
+/// would let every git op run against the home directory repo.
+fn resolve_repo(
+    scope: &ResourceScope,
+    request: &ControllerRequest,
+) -> Result<PathBuf, Failure> {
     let raw = request
         .body
         .get("path")
@@ -55,8 +372,8 @@ fn resolve_repo(scope: &ResourceScope, request: &ControllerRequest) -> Result<st
         .or_else(|| request.query.get("path").map(String::as_str))
         .unwrap_or("");
     let resolved = scope.resolve(raw)?;
-    let output = git(resolved.display_path(), &["rev-parse", "--show-toplevel"])
-        .map_err(|e| fail(500, format!("git status: {e}")))?;
+    let output = git_read(resolved.display_path(), &["rev-parse", "--show-toplevel"])
+        .map_err(|e| fail(500, format!("git rev-parse: {e}")))?;
     if !output.status.success() {
         return Err(fail(404, "path is not inside a git repository"));
     }
@@ -64,25 +381,81 @@ fn resolve_repo(scope: &ResourceScope, request: &ControllerRequest) -> Result<st
     if root.is_empty() {
         return Err(fail(500, "git returned an empty repository root"));
     }
-    Ok(std::path::PathBuf::from(root))
+    let root_path = PathBuf::from(&root);
+    if !scope.is_inside_project_root(&root_path) {
+        return Err(fail(
+            403,
+            "repository root is outside the registered project roots",
+        ));
+    }
+    Ok(root_path)
 }
+
+/// Resolve a Controller-supplied path for writing (Fix 1).
+///
+/// - Must be inside a registered project root (the bare home directory is
+///   off limits: `~/.zshrc`, `~/.gitconfig`, `~/Library/LaunchAgents/` are
+///   persistent code-execution primitives).
+/// - No dotfiles or dot-directories: any path component starting with `.`
+///   is refused, even inside a root. This covers `.git/` internals
+///   (`hooks/`, `config`, `info/`), `.env`, `.ssh`, and friends.
+fn resolve_write_path(
+    scope: &ResourceScope,
+    raw: &str,
+) -> Result<crate::host_resources::ResolvedPath, Failure> {
+    let resolved = scope.resolve(raw)?;
+    let display = resolved.display_path();
+    // Find the project root this path is under (there must be one; the check
+    // below enforces it). Only the components *relative to the root* are
+    // subject to the dotfile rule — the root itself may legitimately live
+    // under a dotted parent (e.g. a tempdir like `/tmp/.tmpXXX/repo`).
+    let root = scope
+        .project_root_for(display)
+        .ok_or_else(|| fail(403, "writes are only allowed inside registered project roots"))?;
+    let relative = display.strip_prefix(&root).map_err(|_| {
+        fail(
+            403,
+            "writes are only allowed inside registered project roots",
+        )
+    })?;
+    // Deny dotfiles/dot-directories in the relative path. `scope.resolve`
+    // already normalized the path, so a lexical component check is sufficient
+    // (no `..` survives normalization). This covers `.git/` internals
+    // (`hooks/`, `config`, `info/`), `.env`, `.ssh`, and friends, even inside
+    // a project root.
+    for component in relative.components() {
+        if let std::path::Component::Normal(name) = component {
+            if name.to_string_lossy().starts_with('.') {
+                return Err(fail(
+                    403,
+                    "writes to dotfiles and dot-directories are not allowed",
+                ));
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+// ---------------------------------------------------------------------------
+// Route handlers
+// ---------------------------------------------------------------------------
 
 fn git_status(scope: &ResourceScope, request: &ControllerRequest) -> Result<Value, Failure> {
     let root = resolve_repo(scope, request)?;
-    let branch = git_ok(&root, &["symbolic-ref", "--quiet", "--short", "HEAD"], "git branch")
+    let branch = git_ok_read(&root, &["symbolic-ref", "--quiet", "--short", "HEAD"], "git branch")
         .ok()
         .and_then(|b| {
             let b = b.trim().to_owned();
             if b.is_empty() { None } else { Some(b) }
         })
         .or_else(|| {
-            git_ok(&root, &["rev-parse", "--short", "HEAD"], "git rev-parse")
+            git_ok_read(&root, &["rev-parse", "--short", "HEAD"], "git rev-parse")
                 .ok()
                 .map(|s| s.trim().to_owned())
                 .filter(|s| !s.is_empty())
         });
     let (ahead, behind) = upstream_counts(&root);
-    let porcelain = git_ok(&root, &["status", "--porcelain=v1", "-uall"], "git status")?;
+    let porcelain = git_ok_read(&root, &["status", "--porcelain=v1", "-uall"], "git status")?;
     let mut files = Vec::new();
     for line in porcelain.lines() {
         if line.len() < 4 {
@@ -108,7 +481,7 @@ fn git_status(scope: &ResourceScope, request: &ControllerRequest) -> Result<Valu
 }
 
 fn upstream_counts(root: &Path) -> (u64, u64) {
-    let upstream = match git(root, &["rev-parse", "--abbrev-ref", "@{upstream}"]) {
+    let upstream = match git_read(root, &["rev-parse", "--abbrev-ref", "@{upstream}"]) {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_owned()
         }
@@ -117,8 +490,10 @@ fn upstream_counts(root: &Path) -> (u64, u64) {
     if upstream.is_empty() {
         return (0, 0);
     }
-    let counts = match git(root, &["rev-list", "--left-right", "--count", "HEAD...@{upstream}", "--"])
-    {
+    let counts = match git_read(
+        root,
+        &["rev-list", "--left-right", "--count", "HEAD...@{upstream}", "--"],
+    ) {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_owned()
         }
@@ -142,7 +517,14 @@ fn git_diff(scope: &ResourceScope, request: &ControllerRequest) -> Result<Value,
         return Err(fail(400, "file required"));
     }
     // `git diff HEAD -- <file>` covers staged + unstaged in one view.
-    let diff = git_ok(&root, &["diff", "HEAD", "--", file], "git diff")?;
+    // `--no-ext-diff`/`--no-textconv` neutralize external diff drivers and
+    // textconv filters from `.gitattributes`/`.git/config` (Fix 4); the
+    // `-c diff.external=` in `git_read` is the belt to these suspenders.
+    let diff = git_ok_read(
+        &root,
+        &["diff", "--no-ext-diff", "--no-textconv", "HEAD", "--", file],
+        "git diff",
+    )?;
     Ok(json!({ "file": file, "diff": diff }))
 }
 
@@ -156,7 +538,7 @@ fn git_history(scope: &ResourceScope, request: &ControllerRequest) -> Result<Val
         .parse()
         .unwrap_or(50)
         .clamp(1, 200);
-    let log = git_ok(
+    let log = git_ok_read(
         &root,
         &[
             "log",
@@ -203,13 +585,25 @@ fn body_files(request: &ControllerRequest) -> Result<Vec<String>, Failure> {
         if path.is_empty() || path.contains('\0') || path.starts_with('/') || path.contains("..") {
             return Err(fail(400, format!("invalid file path: {path}")));
         }
+        // Dotfiles are never stageable through this route: staging
+        // `.git/config` or `.env` via a Controller is not a thing.
+        if path.split('/').any(|c| c.starts_with('.')) {
+            return Err(fail(403, format!("dotfiles are not stageable: {path}")));
+        }
         out.push(path.to_owned());
     }
     Ok(out)
 }
 
-fn git_stage(scope: &ResourceScope, request: &ControllerRequest, unstage: bool) -> Result<Value, Failure> {
+fn git_stage(
+    scope: &ResourceScope,
+    request: &ControllerRequest,
+    unstage: bool,
+) -> Result<Value, Failure> {
+    let what = if unstage { "git unstage" } else { "git stage" };
+    require_approval(request, what)?;
     let root = resolve_repo(scope, request)?;
+    run_before_git_op(what, &root)?;
     let files = body_files(request)?;
     let mut args: Vec<&str> = if unstage {
         vec!["restore", "--staged", "--"]
@@ -217,13 +611,32 @@ fn git_stage(scope: &ResourceScope, request: &ControllerRequest, unstage: bool) 
         vec!["add", "--"]
     };
     args.extend(files.iter().map(String::as_str));
-    let what = if unstage { "git unstage" } else { "git stage" };
-    git_ok(&root, &args, what)?;
+    // `git add`/`restore` do not read diff config, but keep the fsmonitor
+    // guard for consistency.
+    let output = git_read(&root, &args).map_err(|e| fail(500, format!("{what}: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(fail(
+            422,
+            if stderr.is_empty() {
+                format!("{what} failed")
+            } else {
+                format!("{what} failed: {stderr}")
+            },
+        ));
+    }
+    audit(
+        "GitOp",
+        &root.to_string_lossy(),
+        &json!({ "op": what, "files": files }),
+    );
     Ok(json!({ "ok": true }))
 }
 
 fn git_commit(scope: &ResourceScope, request: &ControllerRequest) -> Result<Value, Failure> {
+    require_approval(request, "git commit")?;
     let root = resolve_repo(scope, request)?;
+    run_before_git_op("git commit", &root)?;
     let message = request
         .body
         .get("message")
@@ -237,21 +650,50 @@ fn git_commit(scope: &ResourceScope, request: &ControllerRequest) -> Result<Valu
     if message.len() > 4096 {
         return Err(fail(400, "commit message too long"));
     }
-    git_ok(&root, &["commit", "-m", &message], "git commit")?;
+    // `commit` can run hooks; neutralize the code-execution vectors.
+    let output = git_read(&root, &["commit", "-m", &message])
+        .map_err(|e| fail(500, format!("git commit: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(fail(
+            422,
+            if stderr.is_empty() {
+                "git commit failed".to_owned()
+            } else {
+                format!("git commit failed: {stderr}")
+            },
+        ));
+    }
+    audit(
+        "GitOp",
+        &root.to_string_lossy(),
+        &json!({ "op": "git commit", "message_len": message.len() }),
+    );
     Ok(json!({ "ok": true }))
 }
 
-fn git_remote_op(scope: &ResourceScope, request: &ControllerRequest, op: &str) -> Result<Value, Failure> {
+fn git_remote_op(
+    scope: &ResourceScope,
+    request: &ControllerRequest,
+    op: &str,
+) -> Result<Value, Failure> {
+    require_approval(request, &format!("git {op}"))?;
     let root = resolve_repo(scope, request)?;
-    let args: &[&str] = match op {
-        "fetch" => &["fetch", "--prune"],
-        "pull" => &["pull", "--ff-only"],
-        "push" => &["push"],
+    run_before_git_op(&format!("git {op}"), &root)?;
+    let (args, timeout): (&[&str], Duration) = match op {
+        "fetch" => (&["fetch", "--prune"], FETCH_TIMEOUT),
+        "pull" => (&["pull", "--ff-only"], PUSH_PULL_TIMEOUT),
+        "push" => (&["push"], PUSH_PULL_TIMEOUT),
         _ => return Err(fail(400, "unknown git operation")),
     };
-    // Remote ops can take a while; the HTTP layer already applies its own
-    // timeout, so no extra timeout here.
-    git_ok(&root, args, &format!("git {op}"))?;
+    // Network ops run under a hard timeout that kills the git child (Fix 4);
+    // the HTTP layer timeout alone would leave it running.
+    git_ok_remote(&root, args, &format!("git {op}"), timeout)?;
+    audit(
+        "GitOp",
+        &root.to_string_lossy(),
+        &json!({ "op": format!("git {op}") }),
+    );
     Ok(json!({ "ok": true }))
 }
 
@@ -270,6 +712,7 @@ fn files_list(scope: &ResourceScope, request: &ControllerRequest) -> Result<Valu
 }
 
 fn files_write(scope: &ResourceScope, request: &ControllerRequest) -> Result<Value, Failure> {
+    require_approval(request, "file write")?;
     let raw = request
         .body
         .get("path")
@@ -283,11 +726,18 @@ fn files_write(scope: &ResourceScope, request: &ControllerRequest) -> Result<Val
     if content_b64.len() > 8 * 1024 * 1024 {
         return Err(fail(400, "content too large (max 8 MiB)"));
     }
-    let resolved = scope.resolve(raw)?;
+    // Fix 1: project roots only, no dotfiles/dot-directories.
+    let resolved = resolve_write_path(scope, raw)?;
+    run_before_file_write(resolved.display_path())?;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(content_b64)
         .map_err(|_| fail(400, "contentBase64 is not valid base64"))?;
     resolved.write_bytes(&bytes)?;
+    audit(
+        "FileWrite",
+        &resolved.display_path().to_string_lossy(),
+        &json!({ "bytes": bytes.len() }),
+    );
     Ok(json!({ "ok": true, "bytesWritten": bytes.len() }))
 }
 
@@ -401,6 +851,17 @@ mod tests {
         }
     }
 
+    /// POST request with `approved: true` merged into the body.
+    fn approved_post(scope: &ResourceScope, path: &str, mut body: Value) -> (u16, Value) {
+        if let Value::Object(map) = &mut body {
+            map.insert("approved".to_owned(), Value::Bool(true));
+        }
+        let mut req = request("POST", path);
+        req.body = body;
+        let resp = route_with_scope(scope, &req).expect("route owned");
+        (resp.status, resp.body)
+    }
+
     struct Fixture {
         _root: tempfile::TempDir,
         scope: ResourceScope,
@@ -504,7 +965,7 @@ mod tests {
         let repo = f.repo.to_string_lossy().into_owned();
         std::fs::write(f.repo.join("a.txt"), "one\ntwo\n").unwrap();
 
-        let (status, _) = post(
+        let (status, _) = approved_post(
             &f.scope,
             "/mobile/git/stage",
             json!({"path": repo, "files": ["a.txt"]}),
@@ -521,7 +982,7 @@ mod tests {
             .unwrap();
         assert_eq!(a["staged"], json!(true));
 
-        let (status, body) = post(
+        let (status, body) = approved_post(
             &f.scope,
             "/mobile/git/commit",
             json!({"path": repo, "message": "second"}),
@@ -552,7 +1013,7 @@ mod tests {
     fn git_commit_rejects_empty_message() {
         let f = fixture();
         let repo = f.repo.to_string_lossy().into_owned();
-        let (status, _) = post(
+        let (status, _) = approved_post(
             &f.scope,
             "/mobile/git/commit",
             json!({"path": repo, "message": "   "}),
@@ -590,7 +1051,7 @@ mod tests {
         assert!(names.contains(&"a.txt".to_owned()), "{names:?}");
 
         let content = base64::engine::general_purpose::STANDARD.encode("written");
-        let (status, body) = post(
+        let (status, body) = approved_post(
             &f.scope,
             "/mobile/files/write",
             json!({"path": format!("{repo}/b.txt"), "contentBase64": content}),
@@ -606,7 +1067,7 @@ mod tests {
     fn files_write_rejects_path_outside_scope() {
         let f = fixture();
         let content = base64::engine::general_purpose::STANDARD.encode("evil");
-        let (status, _) = post(
+        let (status, _) = approved_post(
             &f.scope,
             "/mobile/files/write",
             json!({"path": "/etc/evil.txt", "contentBase64": content}),
@@ -628,5 +1089,209 @@ mod tests {
         let f = fixture();
         let req = request("GET", "/mobile/git/nope");
         assert!(route_with_scope(&f.scope, &req).is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Security tests (Fix 5)
+    // -----------------------------------------------------------------------
+
+    /// Process-global hook tests must not run in parallel.
+    static HOOK_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Fix 5.1: writes to shell startup files, gitconfig, and LaunchAgents
+    /// are rejected even though they are inside the scope's home directory.
+    #[test]
+    fn files_write_rejects_home_dotfiles_and_launch_agents() {
+        let f = fixture();
+        // The fixture home is NOT a project root, so these are doubly
+        // rejected; the point is the sensitive paths never get written.
+        for target in [
+            f.home.join(".zshrc"),
+            f.home.join(".bashrc"),
+            f.home.join(".gitconfig"),
+            f.home.join("Library/LaunchAgents/evil.plist"),
+        ] {
+            let content = base64::engine::general_purpose::STANDARD.encode("evil");
+            let (status, body) = approved_post(
+                &f.scope,
+                "/mobile/files/write",
+                json!({
+                    "path": target.to_string_lossy(),
+                    "contentBase64": content,
+                }),
+            );
+            assert_eq!(status, 403, "target {target:?}: {body}");
+            assert!(
+                !target.exists(),
+                "sensitive target was written: {target:?}"
+            );
+        }
+    }
+
+    /// Fix 5.1 (continued): dotfiles are rejected even *inside* a project root.
+    #[test]
+    fn files_write_rejects_dotfiles_inside_project_root() {
+        let f = fixture();
+        for target in [
+            f.repo.join(".git").join("config"),
+            f.repo.join(".git").join("hooks").join("pre-commit"),
+            f.repo.join(".env"),
+        ] {
+            let content = base64::engine::general_purpose::STANDARD.encode("evil");
+            let (status, _) = approved_post(
+                &f.scope,
+                "/mobile/files/write",
+                json!({
+                    "path": target.to_string_lossy(),
+                    "contentBase64": content,
+                }),
+            );
+            assert_eq!(status, 403, "target {target:?}");
+        }
+        // The real .git/config must be untouched.
+        let config = std::fs::read_to_string(f.repo.join(".git/config")).unwrap();
+        assert!(!config.contains("evil"), "{config}");
+    }
+
+    /// Fix 5.2: a repo whose toplevel is outside the registered project roots
+    /// is rejected, even when the requested path is inside a root.
+    #[test]
+    fn resolve_repo_rejects_toplevel_outside_project_roots() {
+        let f = fixture();
+        // A second repo under the fixture home: resolvable by the scope
+        // (home is in scope) but NOT a registered project root.
+        let other = f.home.join("other-repo");
+        std::fs::create_dir_all(&other).unwrap();
+        sh(&other, &["init", "-b", "main"]);
+        sh(&other, &["config", "user.email", "test@example.com"]);
+        sh(&other, &["config", "user.name", "Test"]);
+        std::fs::write(other.join("x.txt"), "x\n").unwrap();
+        sh(&other, &["add", "."]);
+        sh(&other, &["commit", "-m", "init"]);
+
+        let other_str = other.to_string_lossy().into_owned();
+        let (status, body) = get(&f.scope, "/mobile/git/status", &[("path", &other_str)]);
+        assert_eq!(status, 403, "{body}");
+        assert!(body["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("outside the registered project roots"));
+    }
+
+    /// Fix 5.3: `core.fsmonitor` from the repo's `.git/config` is not
+    /// executed by the status handler.
+    #[test]
+    fn git_status_does_not_execute_fsmonitor() {
+        let f = fixture();
+        let marker = f._root.path().join("pwned-marker");
+        // Plant a malicious fsmonitor in the repo config. Use printf to avoid
+        // depending on shell quoting edge cases.
+        sh(
+            &f.repo,
+            &[
+                "config",
+                "core.fsmonitor",
+                &format!("touch {}", marker.to_string_lossy()),
+            ],
+        );
+        let repo = f.repo.to_string_lossy().into_owned();
+        let (status, body) = get(&f.scope, "/mobile/git/status", &[("path", &repo)]);
+        assert_eq!(status, 200, "{body}");
+        assert!(
+            !marker.exists(),
+            "fsmonitor was executed: marker {marker:?} exists"
+        );
+        // Clean up the planted config so other tests are unaffected.
+        sh(&f.repo, &["config", "--unset", "core.fsmonitor"]);
+    }
+
+    /// Fix 5.4: mutating ops require explicit approval; without
+    /// `"approved": true` nothing is executed.
+    #[test]
+    fn mutating_ops_require_approved_true() {
+        let f = fixture();
+        let repo = f.repo.to_string_lossy().into_owned();
+        let content = base64::engine::general_purpose::STANDARD.encode("nope");
+
+        // files_write without approval.
+        let (status, body) = post(
+            &f.scope,
+            "/mobile/files/write",
+            json!({"path": format!("{repo}/evil.txt"), "contentBase64": content}),
+        );
+        assert_eq!(status, 403, "{body}");
+        assert!(!f.repo.join("evil.txt").exists());
+
+        // git stage without approval.
+        std::fs::write(f.repo.join("a.txt"), "changed\n").unwrap();
+        let (status, _) = post(
+            &f.scope,
+            "/mobile/git/stage",
+            json!({"path": repo, "files": ["a.txt"]}),
+        );
+        assert_eq!(status, 403);
+
+        // git commit without approval.
+        let (status, _) = post(
+            &f.scope,
+            "/mobile/git/commit",
+            json!({"path": repo, "message": "x"}),
+        );
+        assert_eq!(status, 403);
+
+        // git push without approval: must be rejected before any network
+        // attempt (the repo has no remote; a 403 proves the gate fired first).
+        let (status, body) = post(&f.scope, "/mobile/git/push", json!({"path": repo}));
+        assert_eq!(status, 403, "{body}");
+        assert!(body["error"].as_str().unwrap_or("").contains("requires approval"));
+    }
+
+    /// Fix 2 hooks: a `before_git_op` hook can reject, and the rejection is
+    /// audited without executing anything.
+    #[test]
+    fn before_git_op_hook_can_reject() {
+        // Hooks are process-global; serialize hook tests.
+        let _guard = HOOK_TEST_LOCK.lock().unwrap();
+        let f = fixture();
+        set_git_op_hooks(GitOpHooks {
+            before_file_write: None,
+            before_git_op: Some(Box::new(|op, _| {
+                if op.contains("push") {
+                    Err("pushes disabled by policy".to_owned())
+                } else {
+                    Ok(())
+                }
+            })),
+        });
+        let repo = f.repo.to_string_lossy().into_owned();
+        let (status, body) = approved_post(&f.scope, "/mobile/git/push", json!({"path": repo}));
+        assert_eq!(status, 403, "{body}");
+        assert!(body["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("rejected by hook"));
+        clear_git_op_hooks();
+    }
+
+    /// Fix 2 hooks: a `before_file_write` hook can reject.
+    #[test]
+    fn before_file_write_hook_can_reject() {
+        // Hooks are process-global; serialize hook tests.
+        let _guard = HOOK_TEST_LOCK.lock().unwrap();
+        let f = fixture();
+        set_git_op_hooks(GitOpHooks {
+            before_file_write: Some(Box::new(|_| Err("writes frozen".to_owned()))),
+            before_git_op: None,
+        });
+        let repo = f.repo.to_string_lossy().into_owned();
+        let content = base64::engine::general_purpose::STANDARD.encode("nope");
+        let (status, body) = approved_post(
+            &f.scope,
+            "/mobile/files/write",
+            json!({"path": format!("{repo}/frozen.txt"), "contentBase64": content}),
+        );
+        assert_eq!(status, 403, "{body}");
+        assert!(!f.repo.join("frozen.txt").exists());
+        clear_git_op_hooks();
     }
 }

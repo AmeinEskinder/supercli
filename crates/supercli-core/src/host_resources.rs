@@ -71,6 +71,32 @@ impl ResourceScope {
         }
     }
 
+    /// Returns true if `path` is inside one of the registered project roots.
+    ///
+    /// Used by security-sensitive routes (git ops, file writes) that must not
+    /// operate on the bare home directory: a paired Controller could otherwise
+    /// overwrite shell startup files (`~/.zshrc`), `~/.gitconfig`
+    /// (`core.sshCommand`), or `~/Library/LaunchAgents/*.plist` for persistent
+    /// code execution. Both sides are canonicalized best-effort so a symlinked
+    /// project root still matches.
+    pub(crate) fn is_inside_project_root(&self, path: &Path) -> bool {
+        self.project_root_for(path).is_some()
+    }
+
+    /// Returns the registered project root that `path` lives under, if any.
+    /// Canonicalizes best-effort so symlinked roots still match.
+    pub(crate) fn project_root_for(&self, path: &Path) -> Option<PathBuf> {
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        self.project_roots
+            .iter()
+            .filter(|root| {
+                let canonical_root = root.canonicalize().unwrap_or_else(|_| (*root).clone());
+                canonical.starts_with(&canonical_root)
+            })
+            .max_by_key(|root| root.components().count())
+            .cloned()
+    }
+
     /// Lexically normalizes a Controller-supplied path and binds it to the
     /// scope root it lives under. No filesystem access happens here, so a
     /// denied path is refused before anything is opened.
