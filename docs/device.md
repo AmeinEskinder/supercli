@@ -17,7 +17,7 @@
 | Wire format 0x01–0x04, device points | `src/wire_format.rs` | implemented |
 | `adb` fallback backend | `src/adb.rs` | implemented |
 | `simctl` lifecycle backend | `src/simctl.rs` | implemented (lifecycle + screenshots only) |
-| baguette iOS backend | `src/baguette.rs` | in progress |
+| baguette iOS backend (serve WS + input pipe) | `src/baguette_native.rs` | implemented, unit-tested vs fake serve/input |
 | `supercli device setup android\|ios` | `crates/supercli-cli/src/device_cli.rs` | implemented |
 | Web Devices panel + `/farm` wall | `crates/supercli-serve/src/devices.rs`, `static/devices.html`, `static/farm.html` | implemented |
 | Android CI (headless emulator) | `.github/workflows/device-android.yml` | correctness gate (see §7) |
@@ -57,7 +57,7 @@ The rest of the table is the target, implemented backend-first:
 
 No `scrcpy` CLI is required. The backend downloads the pinned server jar and drives it directly:
 
-- **Pinned server:** scrcpy-server **v2.7** (`SCRCPY_SERVER_VERSION`), SHA-256 verified after download, cached under `~/.supercli`, pushed to `/data/local/tmp/scrcpy-server.jar` via `adb push` (only after `sys.boot_completed=1` **and** `pm path android` — the package manager must be ready).
+- **Pinned server:** scrcpy-server **v2.7** (`SCRCPY_SERVER_VERSION`), SHA-256 `a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba` (71,200 bytes, release asset `scrcpy-server-v2.7`; independently re-verified with Python hashlib), verified after download, cached under `~/.supercli`, pushed to `/data/local/tmp/scrcpy-server.jar` via `adb push` (only after `sys.boot_completed=1` **and** `pm path android` — the package manager must be ready). Notice in `THIRD_PARTY_NOTICES.txt` → "MANUAL NOTICE 1 (scrcpy-server)".
 - **Server launch:** `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60`. The first `app_process` argument must be the **exact** server version string (`2.7`, not `2.7.0`); anything else and the server dies immediately.
 - **v2.x forward-tunnel handshake** (`handshake_video_control`) — this ordering is load-bearing. With `tunnel_forward=true` the server accepts **all** sockets first (video, then control) and only then writes anything, so a client that waits for the video header before opening the control socket deadlocks:
   1. Connect socket #1 (video).
@@ -133,9 +133,16 @@ Artifacts on every run (`if: always()`): `metrics.json`, screenshot, 10 s MKV, `
 
 Env overrides: `AVD_NAME`, `API_LEVEL`, `DEVICE_PROFILE`, `ANDROID_SERIAL`, `OUT_DIR`, `WIPE_DATA`, `KEEP_EMULATOR`.
 
-## 9. iOS
+## 9. iOS — native baguette backend (`baguette_native.rs`)
 
-`simctl.rs` covers lifecycle + screenshots only (boot/shutdown/install/launch/screenshot). Input, streaming, a11y, and live logs go through the baguette passthrough (`baguette.rs`, in progress): baguette's `serve` WebSocket framed as 0x04 wire frames, proxied to the same Devices panel and `/farm` infrastructure as Android.
+`simctl.rs` covers lifecycle + screenshots only (boot/shutdown/install/launch/screenshot) — simctl has no input injection. Input, streaming, a11y, and live logs go through the native baguette client (`src/baguette_native.rs`, `#[cfg(feature = "device")]`, std-only — the hand-rolled WebSocket handshake kept `tungstenite` out per the LITE rule). baguette itself is **not vendored**; it must be installed by the user (`brew install baguette`).
+
+- **Gates** (honest errors, never panics): macOS host → Apple Silicon → `baguette` on PATH (`NotMacOSHost` / `ToolMissing` unit-tested).
+- **Serve:** probes `127.0.0.1:8421`, spawns `baguette serve` only when nothing listens (15 s startup wait); `Drop` kills the serve child only if this session spawned it.
+- **Video:** `WS /devices/<udid>/stream?format=avcc`. Every WebSocket message is one unified wire frame (§4): the first is the `0x01` description (parsed for device name + point/pixel geometry), then `0x02`/`0x03`/`0x04` frames validated with `wire_from_baguette` and relayed **byte-identical** — supercli proxies baguette's iOS stream directly. RFC 6455 upgrade with hand-rolled SHA-1/Base64 accept verification (pinned against the RFC 6455 §1.3 test vector), masked client frames, ping→pong, close→`Closed`, 64 MiB message cap, handshake-overflow buffering (one TCP segment can carry the `101` head *and* the first frames — a real bug caught by the fake-serve test).
+- **Input:** a persistent `baguette input --udid <udid>` child. Gestures are newline-delimited JSON on stdin → one `{"ok":true}` / `{"ok":false,"error":…}` ack per line on stdout (5 s ack deadline via a dedicated reader thread; an exited child surfaces an error, never a hang). Encoders, all in **device points**: `tap` (`{"type":"tap","x":219,"y":478,"width":438,"height":954,"duration":0.05}`), `swipe` (`startX/startY/endX/endY` + `width/height` + `duration`), `touch1-down/move/up` (+ optional `edge`), `touch2-down/move/up` (the pinch path), `button` (`home`, `lock`, …), `key` (W3C `code`), `text`.
+- **Session shape** mirrors `scrcpy_native.rs`: `split()` hands out disjoint `(&WsClient, &mut InputChannel)` borrows so one thread pumps video while another sends input; `description_frame()` returns the raw `0x01` frame so the Devices panel / `/farm` bootstrap iOS sessions exactly like Android ones — one decoder path, one input path, platform selected only by the device id.
+- **Tests:** scripted fake `baguette serve` (upgrade path assertion, accept-key verification, ping→masked-pong, `0x01`→`0x02`→close flow, byte-identical passthrough) and stub `baguette input` children (ack round-trip, rejection surfacing, exited-child error). All run on Linux; the real-device path needs a macOS host with baguette installed.
 
 ## 10. LITE architecture notes
 

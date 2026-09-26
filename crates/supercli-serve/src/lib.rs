@@ -20,6 +20,7 @@ pub mod approvals;
 pub mod auto_archive;
 pub mod computer;
 pub mod control;
+pub mod devices;
 pub mod direct_path;
 pub mod driver;
 pub mod hook_listener;

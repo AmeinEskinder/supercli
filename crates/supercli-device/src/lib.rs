@@ -429,6 +429,8 @@ pub trait DeviceBackend {
 pub mod adb;
 #[cfg(feature = "device")]
 pub mod baguette;
+#[cfg(feature = "device")]
+pub mod baguette_native;
 #[cfg(test)]
 mod fake;
 #[cfg(feature = "device")]
@@ -436,7 +438,13 @@ pub(crate) mod json;
 #[cfg(feature = "device")]
 pub mod scrcpy;
 #[cfg(feature = "device")]
+pub mod scrcpy_native;
+#[cfg(feature = "device")]
 pub mod simctl;
+
+// Always compiled: pure std wire format + setup planners (no tools).
+pub mod setup;
+pub mod wire_format;
 
 #[cfg(test)]
 mod tests {

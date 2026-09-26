@@ -10887,3 +10887,34 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
+
+================================================================================
+MANUAL NOTICE 1 (not generated from cargo metadata — runtime-downloaded binary)
+Packages and source files:
+- scrcpy-server v2.7 (Apache-2.0) — https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-server-v2.7
+--------------------------------------------------------------------------------
+Used by: crates/supercli-device/src/scrcpy_native.rs (native scrcpy client).
+The jar is NOT vendored: it is downloaded once at runtime from the official
+Genymobile/scrcpy GitHub release, SHA-256 verified against the pinned hash
+(a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba,
+computed 2026-09-26 from the release asset above), then adb-pushed to the
+device and started via app_process. Per the Apache-2.0 license, this notice
+records the dependency and its source.
+
+                              Apache License
+                        Version 2.0, January 2004
+                     https://www.apache.org/licenses/LICENSE-2.0
+
+Copyright (C) 2018 Genymobile
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
