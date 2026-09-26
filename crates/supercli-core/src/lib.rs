@@ -79,6 +79,8 @@ pub mod host_resources;
 #[cfg(feature = "native-host")]
 pub mod http_fetch;
 #[cfg(feature = "native-host")]
+pub mod icons;
+#[cfg(feature = "native-host")]
 pub mod integrations;
 pub mod json_log;
 #[cfg(feature = "native-host")]
