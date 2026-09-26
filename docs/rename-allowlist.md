@@ -67,8 +67,6 @@ names and references. Do not rename.
 
 - `docs/rename-allowlist.md` — this file (documents the word being guarded).
 - `.github/workflows/rename-guard.yml` — the guard workflow (references the word).
-- `scripts/fresh-clone-verify.sh` — the verify script (references the word).
-- `scripts/sync-main-v2.sh` — the sync script (embeds guard logic).
 
 ## Deliberately NOT excluded (renamed 2026-09-26)
 

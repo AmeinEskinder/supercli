@@ -1,81 +1,106 @@
-# Changelog
+# Changelog — supercli
 
-All notable changes to Unpeel (Track B + Phases 9–12) are documented here.
+All notable changes to supercli are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.9.0] — 2026-09-25
+## [0.1.0] — 2026-09-26
 
-### Phase 11 — Accessibility, backup/restore, config, supply chain, init, poison audit
+First supercli release: the renamed, device-first agent harness.
+(Previously developed as Unpeel; see `docs/rename-allowlist.md` for the
+rename record.)
 
-**Added:**
-- Dioxus UI accessibility pass: keyboard-only approve/deny/cancel/composer, visible focus + sane focus order, ARIA roles/labels, contrast ≥ 4.5:1, `prefers-reduced-motion`. Playwright 17/17, axe 0 serious/critical violations.
-- `unpeel backup` / `unpeel restore`: consistent snapshot (LogLock + SQLite online-backup), SHA-256 manifest tar archive; restore verifies manifest + hash chain, refuses while Host runs.
-- Typed config schema + `unpeel config check` (unknown key → warning, bad value → error with path + reason, exit 2); Host refuses invalid config at startup.
-- Supply chain: `cargo-deny` + `cargo-audit` (exceptions documented), CI job.
-- `unpeel init`: first-run UX creating `~/.unpeel` with 0700, default valid config, pairing code/QR, ends with doctor. Fresh-HOME e2e 16/16.
-- Poison-recovery audit: 27 `into_inner` conversions reviewed, table in `docs/security/poison-recovery-audit.md`.
+### Devices
 
-### Phase 12 Q1 — Write-ahead delivery log (duplicate-write window closed)
+- Native Android device backend over the scrcpy v2 protocol: correct
+  v2 forward-tunnel handshake (video + control sockets accepted before
+  any read), 64-byte device-name/codec/resolution header parse, H.264
+  packet streaming.
+- Device-point coordinate system end to end (0x01–0x04 wire framing):
+  tap, swipe, pinch, and HOME all address device points, never
+  normalized floats.
+- `supercli device setup android` / `supercli device setup ios`:
+  guided setup with honest gate messages (host OS, required tools,
+  server reachability).
+- iOS baguette passthrough: WebSocket video stream (`0x01` geometry
+  frame, byte-identical relay) and NDJSON input pipe
+  (tap/swipe/touch/button/key/text), same Devices panel and `/farm`
+  path as Android.
+- `/farm` HTTP endpoint and web Devices panel: live device grid with
+  per-tile streams, tap/type/keys, device-point input.
+- Device agent tools: `describe-ui` (uiautomator XML and baguette a11y
+  JSON → structured UI trees), live `logcat`/`os_log` streaming over
+  WebSocket, and MCP exposure (`device_tap`, `device_swipe`,
+  `device_type`, `device_describe_ui`, `device_screenshot`,
+  `device_logs`).
+- Dangerous device operations (install/uninstall/erase) sit behind a
+  fail-closed `ApprovalGate`: every allow AND deny is appended to a
+  JSONL audit log; denial makes zero backend calls.
+- `scripts/device-bench.sh`: reproducible 60 s animated-stream
+  benchmark (metrics.json schema shared with CI) for Apple Silicon
+  hosts with GPU acceleration.
 
-**Fixed:**
-- The P6 finding at `session_io.rs`: a crash/OOM/panic between PTY delivery and `record_applied` could duplicate a write on retry. Now a write-ahead `delivering` record (fsync) precedes the PTY write; the retry resolves as OutcomeUnknown (surface for review, never re-deliver). New per-session `write-deliveries.jsonl`, fault-injection hook, 3 new tests.
+### Events
 
-## [0.8.0] — 2026-09-25
+- New `supercli-events` crate: durable, hash-chained hook event log
+  with `hooks.toml` routing.
+- `supercli hooks` CLI: `list`, `test <name>`, `trace [id]` (audit-log
+  lineage, relative timing, approve/deny decisions, entry hashes).
+- ToolCall `before_execute` hooked after write-ahead review fsync and
+  before tool bytes are sent; hook escalations re-enter the approval
+  flow as Ask (never silent rejection).
+- Doctypes: Session (`autoname`, `on_update`/`on_change`,
+  `on_trash` with reject veto, `after_delete`), Turn
+  (`on_update`/`on_change` on finish), Run (scheduled runs with
+  field-level `doc_diff`), Device (`emit_device_update` for backend
+  state transitions), Approval, ToolCall.
 
-### Phase 9 H1 — Fuzz/property testing + hash-chain hardening
+### Durable runs
 
-**Added:**
-- Deterministic seeded in-tree fuzz/property harnesses (`UNPEEL_FUZZ_ITERS=20_000` default):
-  - Event decoder, pairing envelope, connector manifest, review-log/hash-chain, lease state machine model, `CallOutcome` exhaustive property.
+- Write-ahead run journal: `begin_step`/`complete_step` fsync before
+  effects; per-operation-kind reconciliation (Model, Read, File write,
+  Idempotent HTTP, Opaque write).
+- Fail closed: the scheduled runner refuses to run without a journal
+  unless `--no-durable` / `allow_unjournaled()` is given explicitly.
+- Crash recovery proven: daemon SIGKILL mid-run resumes the same run
+  ID with zero duplicate completed effects.
+- Scheduled triggers (`run-once`, daemon) wired to durable runs.
 
-**Fixed (found by fuzzer):**
-- `Actor::parse` was not the inverse of `Display` (empty device IDs broke verification on legitimate logs).
-- **Tamper-evidence hole:** hash-chain verification hashed the *parsed* entry, not the raw bytes — key-rename, whitespace, and escape mutations were invisible to verification.
+### gpuidart app
 
-**Changed:**
-- Added `ChainError::NonCanonical` + strict canonical-byte equality check. The verifier now requires exact byte-equality with the writer's canonical serialization before checking hash/link.
-- Writer hashes the canonical projection (entry without `entry_hash`); verifier's byte-equality check makes the chain a pure deterministic function of on-disk bytes.
-- **Compatibility:** The writer is byte-identical pre/post fix. Every log that verified before the fix still verifies. The fix only tightened verification.
+- Native desktop/mobile client (Dart/Flutter): session list, approval
+  cards, composer, takeover surface.
+- Headless approval proof: real production Host connection handler
+  (TLS, ApprovalHub, bearer auth); Dart headless process approves a
+  real blocking request, Host asserts `approved == true` and
+  `answered_by == paired-device`.
+- Keyboard map: Ctrl+Enter approve, Ctrl+Shift+Enter deny, arrows
+  navigate sessions, Ctrl+L composer focus.
 
-**Docs corrected** (`docs/hash-chain-canonical-form.md`):
-- Genesis `prev_hash` is `"genesis"` (was incorrectly documented as `"GENESIS"`).
-- Decision vocabulary is `"approved"`/`"denied"` (was incorrectly documented as ask/allow/deny).
-- Added `golden_vector_stored_line` test pinning the exact writer-emitted line.
+### Memory
 
-### Phase 9 H2 — `unpeel migrate`
+- `supercli memory` CLI: `set`, `get`, `promote`, `forget`, `list`;
+  session and long-term scopes with atomic, lock-protected saves.
+- Operator profile: advisory-only hints. `suggest_auto_allow` is pure
+  advice — it can never grant anything by itself; only an explicit
+  user action through the audited grant path creates a grant.
+- Human approval decisions feed profile counters.
 
-**Added:**
-- New command: `unpeel migrate [--apply] [--json]` (dry-run by default).
-  - **Connector grants:** Quarantines legacy bare-string grants (connector identity is never guessed; re-approval required). Namespaced grants untouched.
-  - **Review logs:** Re-chains genuinely chainless (pre-chain-format) logs deterministically. Refuses to rewrite broken, tampered, or invalid chained logs (reported, never modified).
-  - **Schedules/leases:** Preserves `schedules.json`; initializes/upgrades lease-DB schema idempotently without touching existing rows.
-- Backup-first: all mutations create timestamped backups before writing.
-- Idempotent: repeated `--apply` is a no-op (no backup spam).
+### Browser takeover
 
-### Phase 9 H3 — Host soak verification
+- CDP client refuses any endpoint that is not loopback (127.0.0.0/8,
+  ::1, localhost) before any socket is opened; fails closed on
+  unresolvable names.
+- Live human takeover: pause the agent's browser actions, forward the
+  human's clicks and keys via CDP `Input.dispatchMouseEvent` /
+  `Input.dispatchKeyEvent`, then hand control back. Every transition
+  (`takeover_begin`, `takeover_pause`, `takeover_resume`) is an
+  fsync'd audit entry; input from the side not holding control is
+  refused.
 
-**Verified:**
-- 30+ minute Host soak (1900s load): 19,163 allow calls, 1,720 ask approvals, 57 turn-cancels, 21,067 events polled, **0 errors**.
-- Event ring buffer: 512-event bound enforced and exercised (eviction verified).
-- Memory: no leak (RSS returned to 211 MiB below start after idle).
-- FDs: no leak (182 after idle vs 285 at start).
-- Review-log lock: 0 timeouts under concurrent load.
+### Security
 
-**Product bug found (not fixed in this release):**
-- `turn-cancel` has a TOCTOU race: it lists in-flight reviews, then marks each `Ambiguous`. A fast concurrent call completing between the list and the record → HTTP 500 ("already has a recorded outcome"). The soak harness uses a dedicated cancel session to avoid triggering this.
-
-### Phase 9 H4 — Release engineering
-
-**Added:**
-- `docs/internal/release-checklist.md`: workspace version + `cargo update`, test/clippy/fmt matrices, PTY matrix, notices check, 30-min Host soak, release order (CLI → Mac app → website).
-- This CHANGELOG.md.
-
-### Phase 9 H5 — README quickstart
-
-**Added:**
-- `README.md` `## Quickstart` section: Host installation/start, pairing with `unpeel pair`, first session, approval behavior, stopping/cancelling a turn, ambiguity/no-auto-retry semantics.
-
----
-
-## [0.7.1] and earlier
-
-See git history for changes prior to Phase 9.
+- Secret scanning (gitleaks) and the rename guard run in CI and in
+  `scripts/fresh-clone-verify.sh`; both must be green.
+- Every commit is authored and committed as
+  `Amein Eskinder <62555273+AmeinEskinder@users.noreply.github.com>`;
+  the identity check enforces this on all reachable commits.
