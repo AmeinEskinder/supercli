@@ -6,13 +6,19 @@
 /// - Approvals: show card, answer via HostClient (idempotent).
 /// - Keyboard: UiAction events drive approve/deny/list navigation.
 ///
-/// Usage: dart run --host=127.0.0.1 --port=8137
+/// Usage: dart run --host=127.0.0.1 --port=8137 [--token=...] [--tls] [--insecure]
+///
+/// The real Host serves /mobile over TLS with a self-signed Host certificate
+/// and requires a paired-device `Bearer` token. `--tls` switches to https;
+/// `--insecure` accepts the self-signed Host certificate (e2e only — a
+/// production client pins the fingerprint from pairing).
 library;
 
 import 'dart:async';
 import 'dart:io';
 
 import 'package:gpuidart/gpuidart.dart';
+import 'package:http/io_client.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
@@ -20,7 +26,23 @@ import 'package:supercli_app/models.dart';
 Future<void> main(List<String> args) async {
   final host = _parseArg(args, '--host=') ?? '127.0.0.1';
   final port = int.tryParse(_parseArg(args, '--port=') ?? '8137') ?? 8137;
-  final client = HostClient(baseUrl: Uri.parse('http://$host:$port'));
+  final token = _parseArg(args, '--token=');
+  final useTls = args.contains('--tls');
+  final insecure = args.contains('--insecure');
+  final scheme = useTls ? 'https' : 'http';
+
+  IOClient? httpClientFor() {
+    if (!insecure) return null;
+    final io = HttpClient()
+      ..badCertificateCallback = (cert, host, port) => true;
+    return IOClient(io);
+  }
+
+  final client = HostClient(
+    baseUrl: Uri.parse('$scheme://$host:$port'),
+    httpClient: httpClientFor(),
+    token: token,
+  );
   final app = SupercliApp();
 
   // Allow headless smoke runs (no native window) for CI.
@@ -38,8 +60,12 @@ Future<void> main(List<String> args) async {
 
   Future<void> refresh() async {
     try {
-      final sessions = await client.listSessions();
-      final approvals = await client.listApprovals();
+      // Real Host route: GET /mobile/bootstrap carries sessions and
+      // pendingApprovals. (GET /mobile/sessions and /mobile/approvals do
+      // not exist on the Host.)
+      final boot = await client.bootstrap();
+      final sessions = HostClient.sessionsFromBootstrap(boot);
+      final approvals = HostClient.approvalsFromBootstrap(boot);
       app.sessions = sessions;
       app.pendingApproval = approvals.isEmpty ? null : approvals.first;
       app.statusLine =
