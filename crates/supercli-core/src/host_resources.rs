@@ -257,8 +257,7 @@ impl ResolvedPath {
     /// non-regular targets).
     pub(crate) fn write_bytes(&self, bytes: &[u8]) -> Result<(), Failure> {
         let (parent, leaf) = self.open_parent()?;
-        secure_fs::atomic_write_regular_at(&parent, leaf.as_bytes(), bytes)
-            .map_err(walk_error)
+        secure_fs::atomic_write_regular_at(&parent, leaf.as_bytes(), bytes).map_err(walk_error)
     }
 
     fn open_root(&self) -> Result<File, Failure> {

@@ -161,7 +161,9 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
 {}",
                     String::from_utf8_lossy(&o.stderr)
                 ),
-                Err(e) => panic!("helper must write run-created marker within 60s (wait failed: {e})"),
+                Err(e) => {
+                    panic!("helper must write run-created marker within 60s (wait failed: {e})")
+                }
             }
         }
     };

@@ -68,10 +68,7 @@ pub fn check_git_approval(
 
     // 1. before_* hook (fail-closed, 2s timeout via the events dispatcher).
     //    FileWrite for /mobile/files/write, GitOp for /mobile/git/*.
-    let doc_id = format!(
-        "gitop-{}",
-        request.id.as_deref().unwrap_or("unknown")
-    );
+    let doc_id = format!("gitop-{}", request.id.as_deref().unwrap_or("unknown"));
     let doc = serde_json::json!({
         "op": op_name,
         "path": request.path,
@@ -130,10 +127,7 @@ pub fn check_git_approval(
 /// mutating operation. Call only when the core handler returned 200.
 pub fn emit_after(request: &ControllerRequest) {
     let (doctype, op_name) = classify(request);
-    let doc_id = format!(
-        "gitop-{}",
-        request.id.as_deref().unwrap_or("unknown")
-    );
+    let doc_id = format!("gitop-{}", request.id.as_deref().unwrap_or("unknown"));
     let doc = serde_json::json!({
         "op": op_name,
         "path": request.path,
@@ -265,7 +259,12 @@ mod tests {
         );
 
         // Deny from the "human" side.
-        let outcome = hub.answer(&approval_id, false, Some("test-human".to_string()), "nonce-1");
+        let outcome = hub.answer(
+            &approval_id,
+            false,
+            Some("test-human".to_string()),
+            "nonce-1",
+        );
         assert!(
             matches!(
                 outcome,
@@ -315,7 +314,12 @@ mod tests {
         };
 
         // Allow from the "human" side.
-        let outcome = hub.answer(&approval_id, true, Some("test-human".to_string()), "nonce-2");
+        let outcome = hub.answer(
+            &approval_id,
+            true,
+            Some("test-human".to_string()),
+            "nonce-2",
+        );
         assert!(
             matches!(
                 outcome,
@@ -326,6 +330,9 @@ mod tests {
         );
 
         let result = handle.join().expect("thread panicked");
-        assert!(result.is_ok(), "explicit Allow should permit, got {result:?}");
+        assert!(
+            result.is_ok(),
+            "explicit Allow should permit, got {result:?}"
+        );
     }
 }
