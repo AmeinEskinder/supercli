@@ -11,3 +11,4 @@ ccc28a3c4a3ea106e0f76156d11da8330681d201:crates/supercli-core/src/browser_mcp.rs
 91106fa45b8aa5b2f16e3c58e97ed99b62605406:crates/supercli-tui/tests/cases/mobile.py:generic-api-key:179
 50c16dcd8fc0adfdf0ecd600a991afe280322de0:crates/supercli-client/tests/tls_e2e.rs:private-key:41
 72c025c6e72a9d809772395bc81dd4b53095fa32:crates/supercli-client/tests/tls_e2e.rs:private-key:41
+1e34e500b312845ba5123616a717d7d448ed78d1:clients/supercli-app/test/settings_test.dart:generic-api-key:221
