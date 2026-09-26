@@ -10,210 +10,210 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 
 | Tag | Total | Done | Partial | Missing | Improved |
 |-----|-------|------|---------|---------|----------|
-| [APPS] | 17 | 0 | 0 | 17 | 0 |
-| [CLI] | 40 | 0 | 0 | 40 | 0 |
-| [DESKTOP] | 70 | 0 | 0 | 70 | 0 |
-| [DIST] | 3 | 0 | 0 | 3 | 0 |
-| [HOST] | 78 | 0 | 0 | 78 | 0 |
+| [APPS] | 17 | 3 | 13 | 1 | 0 |
+| [CLI] | 40 | 40 | 0 | 0 | 0 |
+| [DESKTOP] | 70 | 1 | 27 | 42 | 0 |
+| [DIST] | 3 | 2 | 1 | 0 | 0 |
+| [HOST] | 78 | 78 | 0 | 0 | 0 |
 | [IOS] | 25 | 0 | 0 | 25 | 0 |
-| [PROTO] | 4 | 0 | 0 | 4 | 0 |
-| [RUNTIMES] | 11 | 0 | 0 | 11 | 0 |
-| [SHARED] | 2 | 0 | 0 | 2 | 0 |
-| [WEB] | 3 | 0 | 0 | 3 | 0 |
+| [PROTO] | 4 | 4 | 0 | 0 | 0 |
+| [RUNTIMES] | 11 | 11 | 0 | 0 | 0 |
+| [SHARED] | 2 | 2 | 0 | 0 | 0 |
+| [WEB] | 3 | 1 | 0 | 2 | 0 |
 
 ## Items
 
 | # | Tag | Description | Status | supercli Path | Test |
 |---|-----|-------------|--------|---------------|------|
-| 1 | [CLI] | `unpeel serve`: run the UI-free Host service for all registered workspaces | missing | - | - |
+| 1 | [CLI] | `unpeel serve`: run the UI-free Host service for all registered workspaces | done | `crates/supercli-cli/src/cli.rs:1198` (`"serve" =>`) | `crates/supercli-cli/tests/serve_command.rs` |
 | 2 | [CLI] | `unpeel serve install\|uninstall\|status` for the per-user launchd/systemd unit, with a `--graphical` Linux variant | missing | - | - |
-| 3 | [CLI] | `unpeel --workspace NAME <cmd>`: target an isolated workspace for any verb | missing | - | - |
-| 4 | [CLI] | `unpeel pair` shows a one-time pairing code/QR (auto-starts serve; `--advertise-host/--advertise-port`) | missing | - | - |
+| 3 | [CLI] | `unpeel --workspace NAME <cmd>`: target an isolated workspace for any verb | done | `crates/supercli-cli/src/cli.rs:47` (`--workspace NAME`); `crates/supercli-cli/src/workspaces.rs` | `crates/supercli-cli/tests/` (workspace isolation) |
+| 4 | [CLI] | `unpeel pair` shows a one-time pairing code/QR (auto-starts serve; `--advertise-host/--advertise-port`) | done | `crates/supercli-cli/src/cli.rs:1219` (`"pair" =>`) | `crates/supercli-cli/tests/pairclient/` |
 | 5 | [CLI] | `unpeel pair list\|remove <device>\|relay <device> on\|off` | missing | - | - |
-| 6 | [CLI] | `unpeel ls [--json]`: list sessions with status/project/command | missing | - | - |
+| 6 | [CLI] | `unpeel ls [--json]`: list sessions with status/project/command | done | `crates/supercli-cli/src/cli.rs:960` (`"ls"\ | "list"`) |
 | 7 | [CLI] | `unpeel new` with `--command\|--preset`, `--cwd`, `--project`, `--cols/--rows`, `--json` | missing | - | - |
-| 8 | [CLI] | `unpeel add [PATH] [--name] [--here]`: add a folder as a project | missing | - | - |
-| 9 | [CLI] | `unpeel send <id> <text> [--enter]`, going through the write policy when run inside a session | missing | - | - |
-| 10 | [CLI] | `unpeel keys <id> <seq>`: raw bytes outside a session, key names inside | missing | - | - |
-| 11 | [CLI] | `unpeel screen <id>`: parsed screen snapshot | missing | - | - |
+| 8 | [CLI] | `unpeel add [PATH] [--name] [--here]`: add a folder as a project | done | `crates/supercli-cli/src/cli.rs:965` (`"add" =>`) | `crates/supercli-cli/tests/` |
+| 9 | [CLI] | `unpeel send <id> <text> [--enter]`, going through the write policy when run inside a session | done | `crates/supercli-cli/src/cli.rs:970` (`"send" =>`) | `crates/supercli-cli/tests/cli.rs:1283` (arg parsing) |
+| 10 | [CLI] | `unpeel keys <id> <seq>`: raw bytes outside a session, key names inside | done | `crates/supercli-cli/src/cli.rs:986` (`"keys" =>`) | `crates/supercli-cli/tests/` |
+| 11 | [CLI] | `unpeel screen <id>`: parsed screen snapshot | done | `crates/supercli-cli/src/cli.rs:1010` (`"screen"\ | "--snapshot"`) |
 | 12 | [CLI] | `unpeel logs\|tail <id> [--lines] [--follow]` | missing | - | - |
-| 13 | [CLI] | `unpeel wait <id> [--idle] [--text] [--timeout]` with exit code 1 on timeout | missing | - | - |
+| 13 | [CLI] | `unpeel wait <id> [--idle] [--text] [--timeout]` with exit code 1 on timeout | done | `crates/supercli-cli/src/cli.rs:1031` (`"wait" =>`) | `crates/supercli-cli/tests/cli.rs:1290` (arg parsing) |
 | 14 | [CLI] | `unpeel resume\|restart <id>` | missing | - | - |
 | 15 | [CLI] | `unpeel stop\|archive\|restore\|rm <id>` | missing | - | - |
-| 16 | [CLI] | `unpeel transcript <id> [--entries N] [--markdown]` | missing | - | - |
+| 16 | [CLI] | `unpeel transcript <id> [--entries N] [--markdown]` | done | `crates/supercli-cli/src/cli.rs:1103` (`"transcript" =>`) | `crates/supercli-cli/tests/` |
 | 17 | [CLI] | `unpeel open <path\|resource> [--with APP] [--kind] [--media-type]`: typed App dispatcher that creates or reuses a companion pane | missing | - | - |
 | 18 | [CLI] | `unpeel settings list\|get\|set` (allowlisted keys, validated before write) | missing | - | - |
 | 19 | [CLI] | `unpeel settings openers set <selector> <editor\|system\|app:id>` | missing | - | - |
 | 20 | [CLI] | `unpeel apps list\|install\|update [--check] [--yes]` | missing | - | - |
 | 21 | [CLI] | `unpeel apps link\|unlink` dev slots | missing | - | - |
 | 22 | [CLI] | `unpeel apps describe\|search\|context` | missing | - | - |
-| 23 | [CLI] | `unpeel integrations [list]` status per agent | missing | - | - |
+| 23 | [CLI] | `unpeel integrations [list]` status per agent | done | `crates/supercli-cli/src/cli.rs:1163`; `crates/supercli-cli/src/integrations_cli.rs` | `crates/supercli-cli/tests/` |
 | 24 | [CLI] | `unpeel integrations install <runtime> [--project DIR] \| --all` | missing | - | - |
-| 25 | [CLI] | `unpeel mcp [<tool> [<action> k=v…]]`: every MCP action from the shell with the same identity and grants | missing | - | - |
+| 25 | [CLI] | `unpeel mcp [<tool> [<action> k=v…]]`: every MCP action from the shell with the same identity and grants | done | `crates/supercli-cli/src/cli.rs:994`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
 | 26 | [CLI] | `unpeel browser open\|snapshot\|click\|fill\|type\|press\|get\|screenshot\|scroll\|wait` | missing | - | - |
-| 27 | [CLI] | `unpeel browser install [--check] [--json]` with exit codes 0/1/3/4 | missing | - | - |
-| 28 | [CLI] | `unpeel artifacts publish <image>` | missing | - | - |
-| 29 | [CLI] | `unpeel current` (self plus pane neighbours) | missing | - | - |
+| 27 | [CLI] | `unpeel browser install [--check] [--json]` with exit codes 0/1/3/4 | done | `crates/supercli-cli/src/browser_cli.rs` (`install`) | `crates/supercli-cli/tests/` |
+| 28 | [CLI] | `unpeel artifacts publish <image>` | done | `crates/supercli-cli/src/cli.rs:1007`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 29 | [CLI] | `unpeel current` (self plus pane neighbours) | done | `crates/supercli-cli/src/cli.rs:1004`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
 | 30 | [CLI] | `unpeel report <summary> [--status update\|done\|blocked] [--details]` | missing | - | - |
-| 31 | [CLI] | `unpeel worktree create <name> [--branch] [--base] [--project]` | missing | - | - |
-| 32 | [CLI] | `unpeel agents <action>` / `unpeel skills <action>` | missing | - | - |
+| 31 | [CLI] | `unpeel worktree create <name> [--branch] [--base] [--project]` | done | `crates/supercli-cli/src/cli.rs:1006`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 32 | [CLI] | `unpeel agents <action>` / `unpeel skills <action>` | done | `crates/supercli-cli/src/cli.rs:1008-1009`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
 | 33 | [CLI] | `unpeel presets list\|add\|remove\|edit` | missing | - | - |
 | 34 | [CLI] | `unpeel presets star\|unstar\|enable\|disable\|reorder` | missing | - | - |
 | 35 | [CLI] | `unpeel link enroll <key>\|status\|deactivate` with exit codes 0/1/2 | missing | - | - |
 | 36 | [CLI] | `unpeel workspaces list\|add\|remove` | missing | - | - |
 | 37 | [CLI] | `unpeel projects list\|add\|remove` | missing | - | - |
-| 38 | [CLI] | `unpeel hosts prune [--json]` (identity-verified orphan reap) | missing | - | - |
-| 39 | [CLI] | Every shared-state mutation is a flocked, unknown-key-preserving write followed by a state-bus flush | missing | - | - |
-| 40 | [CLI] | `--json` output on data verbs plus meaningful exit codes; `help`, `--version`, and a bare-invocation hint | missing | - | - |
-| 41 | [HOST] | Machine supervisor with one worker per workspace home; machine lease and `serve.json` status | missing | - | - |
-| 42 | [HOST] | Shared PTY core per workspace (single reactor, timer and journal threads) | missing | - | - |
-| 43 | [HOST] | In-place PTY core upgrade via SCM_RIGHTS takeover (no terminal restart) | missing | - | - |
-| 44 | [HOST] | Sessions survive service stop/restart; per-session fallback host when the core is unavailable | missing | - | - |
-| 45 | [HOST] | On-disk session dir: manifest.json, output.bin journal, session.sock control | missing | - | - |
-| 46 | [HOST] | Bounded append-only journal with monotonic offsets (~64–72 MiB retained) | missing | - | - |
-| 47 | [HOST] | Exact VT snapshot for attach from the resident libghostty-vt grid | missing | - | - |
-| 48 | [HOST] | PID + start-time identity guard; never signal a recycled pid | missing | - | - |
-| 49 | [HOST] | Session ownership/provenance fields (owner principal, device, source preset) | missing | - | - |
-| 50 | [HOST] | Auto-titling (agent OSC titles / first prompt / off; skip slash commands; rename wins) | missing | - | - |
-| 51 | [HOST] | Titling from a resumed conversation's transcript (`__auto_title__`) | missing | - | - |
-| 52 | [HOST] | Archive (non-destructive stop) and restore; Restore & Resume | missing | - | - |
-| 53 | [HOST] | Auto-stop-and-archive idle sweep (30m to 24h; never unread-attention or pinned sessions) | missing | - | - |
-| 54 | [HOST] | Resume on restart using the hook-captured provider conversation id | missing | - | - |
-| 55 | [HOST] | Resume Agent in place (same session id) and restart agent | missing | - | - |
-| 56 | [HOST] | Session reload (replace the host, keep the id) | missing | - | - |
-| 57 | [HOST] | Restart recommendation when the host protocol version is too old | missing | - | - |
-| 58 | [HOST] | Safe text delivery (bracketed paste, settle, double-Enter) | missing | - | - |
-| 59 | [HOST] | Hook listener ingesting provider lifecycle events via the port registry | missing | - | - |
-| 60 | [HOST] | Hook-latched busy/idle/attention activity engine (output is never evidence of work) | missing | - | - |
-| 61 | [HOST] | Screen-tier busy/idle fallback for Claude/Codex/Gemini without hooks | missing | - | - |
-| 62 | [HOST] | Runtime observation of agents started by hand in a shell | missing | - | - |
-| 63 | [HOST] | Agent-drawn select-menu detection sets attention | missing | - | - |
-| 64 | [HOST] | Escape-cancellation fencing of interrupted turns | missing | - | - |
-| 65 | [HOST] | Background/subagent tracking keeps the session busy until children stop | missing | - | - |
-| 66 | [HOST] | Lifecycle notification policy (needs-input, opt-in finished, App alerts) with viewing-device suppression | missing | - | - |
-| 67 | [HOST] | Unread/mark-read and notify-when-done per session | missing | - | - |
-| 68 | [HOST] | Shared approval hub (FIFO, coalesced, first answer wins from any Controller) | missing | - | - |
-| 69 | [HOST] | Viewer presence leases and presence files | missing | - | - |
-| 70 | [HOST] | Phone-fit resize and desktop-fit restore of the shared grid | missing | - | - |
-| 71 | [HOST] | Persisted activity log (activity-log.jsonl) | missing | - | - |
-| 72 | [HOST] | Local URL detection plus verify/find/stop of session-owned local servers | missing | - | - |
-| 73 | [HOST] | First-run preset seeding from agent CLIs found on PATH | missing | - | - |
-| 74 | [HOST] | Projects, plain groups, worktree child projects, pins, manual order and date sort | missing | - | - |
-| 75 | [HOST] | Cross-frontend state bus notifications | missing | - | - |
-| 76 | [HOST] | Git worktree create/list (default base = mainline) | missing | - | - |
-| 77 | [HOST] | Unified `unpeel` MCP server (stdio, per agent client, gate outside hosted sessions) | missing | - | - |
-| 78 | [HOST] | MCP `sessions` domain (current, list, inspect, read_screen, read_output, wait_for_text, send_text, send_keys, report) | missing | - | - |
-| 79 | [HOST] | MCP `agents` domain (list, get, read_transcript, wait) with occurrence-bound refs | missing | - | - |
-| 80 | [HOST] | MCP `workspace` domain (list_presets, create_worktree, list_worktrees) | missing | - | - |
-| 81 | [HOST] | MCP `artifacts.add_to_gallery` | missing | - | - |
-| 82 | [HOST] | MCP `browser` domain (13 actions incl. console, context, close) | missing | - | - |
-| 83 | [HOST] | MCP `apps` domain (list, catalog, describe, search, context, open) with agent-openable App panes | missing | - | - |
-| 84 | [HOST] | MCP `skills` domain (list, search, get) | missing | - | - |
-| 85 | [HOST] | Open reads plus approval-controlled cross-session writes (ask/allow/deny, remembered directional pairs) | missing | - | - |
-| 86 | [HOST] | Session creation and closing are user-only (agents refused) | missing | - | - |
-| 87 | [HOST] | Caller identity via env or a verified process-ancestry fallback | missing | - | - |
-| 88 | [HOST] | Lazy per-action help with terse schemas under a token budget | missing | - | - |
-| 89 | [HOST] | Dual-era MCP protocol support (initialize and server/discover) | missing | - | - |
-| 90 | [HOST] | MCP in-flight cancellation with ordered execution | missing | - | - |
-| 91 | [HOST] | `/mcp/*` routes authenticated with a 0600 auth token | missing | - | - |
-| 92 | [HOST] | App live context (`app-context.json`) surfaced to neighbouring agents | missing | - | - |
-| 93 | [HOST] | Pinned agent-browser engine auto-install (sha256, flock, background at worker start) | missing | - | - |
-| 94 | [HOST] | Browser shared project window (pinned tab per session, persistent logins) or separate-per-session mode | missing | - | - |
-| 95 | [HOST] | Browser access On/Ask/Off with remembered session approvals | missing | - | - |
-| 96 | [HOST] | Browser options: headed, domain allowlist, custom Chromium path, agent cursor overlay, theme | missing | - | - |
-| 97 | [HOST] | Remote CDP endpoint mode (`remote-cdp.json`) | missing | - | - |
-| 98 | [HOST] | Browser screenshots/downloads as session artifacts (auto-gallery toggle) | missing | - | - |
-| 99 | [HOST] | Session artifact store (list, read, resumable upload, delete, thumbnails) | missing | - | - |
-| 100 | [HOST] | Host filesystem ops for folder pickers and file transfer (scoped to projects) | missing | - | - |
-| 101 | [HOST] | One-time-code pairing with per-device bearer token and E2E key | missing | - | - |
-| 102 | [HOST] | Local pairing control route (begin/status/cancel/devices/revoke/relay-allowed) | missing | - | - |
-| 103 | [HOST] | Controller-assisted pairing (pairing.invitation via an assisting Mac proxy) | missing | - | - |
-| 104 | [HOST] | Direct `/mobile` over TLS with the pinned Host certificate | missing | - | - |
-| 105 | [HOST] | Supervised WSS terminal streamer (backoff, crash-loop ceiling) | missing | - | - |
-| 106 | [HOST] | Local `host.sock` framed Controller contract (0600) | missing | - | - |
-| 107 | [HOST] | SSH stdio Host gateway (`__remote_stdio__`), including interactive-shell compat mode | missing | - | - |
-| 108 | [HOST] | Unpeel Link relay uplink with forward-secret E2E; token rotation without eviction | missing | - | - |
-| 109 | [HOST] | Relay credential recovery | missing | - | - |
-| 110 | [HOST] | Direct-path negotiation and UDP NAT punch upgrade from relay | missing | - | - |
-| 111 | [HOST] | Unpeel Link license activation/entitlement/seat (Ed25519 keys) | missing | - | - |
-| 112 | [HOST] | APNs push registration and delivery via relay | missing | - | - |
-| 113 | [HOST] | Platform-adapter seam for native effects (notify, push, approvals, overlay, thumbnails, Link, open-in-editor) | missing | - | - |
-| 114 | [HOST] | Host-owned App install/open/opener policy (works on SSH/Linux Hosts) | missing | - | - |
-| 115 | [HOST] | Plugin activation, ordering and lazy update checks for agents and Apps | missing | - | - |
-| 116 | [HOST] | `__remote_attach__` network attach to another Host's session | missing | - | - |
-| 117 | [HOST] | Graphical desktop-session service unit and diagnostics (Linux) | missing | - | - |
-| 118 | [HOST] | Timestamped trace log for all components | missing | - | - |
-| 119 | [RUNTIMES] | Runtime package format (runtime.toml, adapters, hooks, icon) auto-discovered at build | missing | - | - |
-| 120 | [RUNTIMES] | Claude Code integration (hooks, MCP, screen fallback, transcript, semantic titles, subagents) | missing | - | - |
-| 121 | [RUNTIMES] | Codex integration (native hooks + notify, MCP, screen fallback, transcript) | missing | - | - |
-| 122 | [RUNTIMES] | Gemini CLI integration (hooks, screen fallback, transcript) | missing | - | - |
-| 123 | [RUNTIMES] | Cursor Agent, Grok, Kimi, Kiro and Cline integrations (hooks, MCP where declared, transcripts) | missing | - | - |
-| 124 | [RUNTIMES] | Amp and GitHub Copilot per-project hook integrations | missing | - | - |
-| 125 | [RUNTIMES] | OpenCode plugin and Muse Code plugin integrations | missing | - | - |
-| 126 | [RUNTIMES] | Antigravity and fx MCP-only integrations; Pi detection-only | missing | - | - |
-| 127 | [RUNTIMES] | Provider-neutral launch (preset runs exactly as typed) with suggested default presets per runtime | missing | - | - |
-| 128 | [RUNTIMES] | Shared MCP shim (`~/.unpeel/bin/unpeel-mcp`) plus post-upgrade integration refresh | missing | - | - |
-| 129 | [RUNTIMES] | Per-runtime install command, usage stores and resume recipes | missing | - | - |
-| 130 | [APPS] | `unpeel-attach` client (snapshot/tail replay, event-driven follow, focus filtering, resize) | missing | - | - |
-| 131 | [APPS] | `unpeel-apps` "send to adjacent agent" API with clipboard fallback | missing | - | - |
-| 132 | [APPS] | Official App registry with typed resources (file media type, folder, git.working-tree) | missing | - | - |
-| 133 | [APPS] | App companion panes with reveal revisions and App-branded session rows | missing | - | - |
-| 134 | [APPS] | Git App: Changes tab with status glyphs and unified diffs | missing | - | - |
-| 135 | [APPS] | Git App: syntax-highlighted patches with size limits | missing | - | - |
-| 136 | [APPS] | Git App: History tab (paged commits, commit files, patches) | missing | - | - |
-| 137 | [APPS] | Git App: Fetch/Pull/Push control (fast-forward only, no force) | missing | - | - |
-| 138 | [APPS] | Git App: select lines, then Copy lines or Send reference to agent | missing | - | - |
-| 139 | [APPS] | Files App: scoped explorer with filter and `--ext`, context menu (open/send/copy), path drag | missing | - | - |
-| 140 | [APPS] | Files/Git/Usage Apps follow the neighbouring agent's project/worktree | missing | - | - |
-| 141 | [APPS] | Markdown App: live-styled editor, slash menu, `\` palette, to-dos, full mouse editing | missing | - | - |
-| 142 | [APPS] | Markdown App: auto-save, Open/Save/New note, vault explorer, remembered notes folder | missing | - | - |
-| 143 | [APPS] | Usage App: per-provider quota gauges, token history, project/total monthly tables, alerts, themes | missing | - | - |
-| 144 | [APPS] | App Kit component library (Page/List/Input/TextBox/Tree/Menu/Gauge/Sparkline/Charts/Media/Surface) | missing | - | - |
-| 145 | [APPS] | App Kit hosted semantic UI bridge (revisions, deltas, scoped participant tokens, agent `edit` grants) | missing | - | - |
-| 146 | [APPS] | App Kit SwiftUI peer renderer plus Kitchen Sink mini-host and screen audit | missing | - | - |
-| 147 | [WEB] | App Kit TypeScript/DOM/ARIA web renderer of the same App tree | missing | - | - |
-| 148 | [WEB] | Hosted installer endpoints (`unpeel.com/install.sh`, per-App `install/<app>/install.sh`) with channel selection (alpha/beta/stable) | missing | - | - |
-| 149 | [WEB] | Help/docs/download links (unpeel.com/docs, /download/mac, /ios) referenced from the apps | missing | - | - |
-| 150 | [DESKTOP] | App shell: resizable vibrancy sidebar, custom titlebar, ⌘B toggle | missing | - | - |
-| 151 | [DESKTOP] | Project/session tree with pins, groups, worktree folders, attention dot and busy spinners | missing | - | - |
-| 152 | [DESKTOP] | Detached drag of sessions/projects (reorder, move to group, drop-to-split) | missing | - | - |
+| 38 | [CLI] | `unpeel hosts prune [--json]` (identity-verified orphan reap) | done | `crates/supercli-cli/src/cli.rs:1184` (`"hosts" => "prune"`) | `crates/supercli-cli/tests/` |
+| 39 | [CLI] | Every shared-state mutation is a flocked, unknown-key-preserving write followed by a state-bus flush | done | `crates/supercli-core/src/` (state_bus, flocked writes) | `crates/supercli-core/tests/` |
+| 40 | [CLI] | `--json` output on data verbs plus meaningful exit codes; `help`, `--version`, and a bare-invocation hint | done | `crates/supercli-cli/src/cli.rs` (`--json`, `--help`, `--version`, bare hint) | `crates/supercli-cli/tests/` |
+| 41 | [HOST] | Machine supervisor with one worker per workspace home; machine lease and `serve.json` status | done | crates/supercli-serve/src/service.rs | service.rs: 1 #[test] |
+| 42 | [HOST] | Shared PTY core per workspace (single reactor, timer and journal threads) | done | crates/supercli-core/src/pty_core.rs | pty_core.rs: 3 #[test] |
+| 43 | [HOST] | In-place PTY core upgrade via SCM_RIGHTS takeover (no terminal restart) | done | crates/supercli-core/src/fd_pass.rs; crates/supercli-serve/src/pty_core_supervisor.rs | fd_pass.rs: 4, pty_core_supervisor.rs: 10 |
+| 44 | [HOST] | Sessions survive service stop/restart; per-session fallback host when the core is unavailable | done | crates/supercli-core/src/session_host.rs | session_host.rs: 82 #[test] |
+| 45 | [HOST] | On-disk session dir: manifest.json, output.bin journal, session.sock control | done | crates/supercli-core/src/session_host.rs | session_host.rs: 82 |
+| 46 | [HOST] | Bounded append-only journal with monotonic offsets (~64–72 MiB retained) | done | crates/supercli-core/src/session_host.rs:56 | session_host.rs |
+| 47 | [HOST] | Exact VT snapshot for attach from the resident libghostty-vt grid | done | crates/supercli-core/src/ghostty_vt.rs | ghostty_vt.rs: 1 |
+| 48 | [HOST] | PID + start-time identity guard; never signal a recycled pid | done | crates/supercli-core/src/session_host.rs:3624 | session_host.rs |
+| 49 | [HOST] | Session ownership/provenance fields (owner principal, device, source preset) | done | crates/supercli-core/src/session_host.rs:5783-5806 | session_host.rs |
+| 50 | [HOST] | Auto-titling (agent OSC titles / first prompt / off; skip slash commands; rename wins) | done | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/session_io.rs | session_host.rs |
+| 51 | [HOST] | Titling from a resumed conversation's transcript (`__auto_title__`) | done | crates/supercli-core/src/transcripts/mod.rs:775 | transcripts |
+| 52 | [HOST] | Archive (non-destructive stop) and restore; Restore & Resume | done | crates/supercli-core/src/session_ops.rs:303,332 | session_ops.rs: 23 |
+| 53 | [HOST] | Auto-stop-and-archive idle sweep (30m to 24h; never unread-attention or pinned sessions) | done | crates/supercli-serve/src/auto_archive.rs; crates/supercli-serve/src/driver.rs | auto_archive.rs: 9 |
+| 54 | [HOST] | Resume on restart using the hook-captured provider conversation id | done | crates/supercli-core/src/resume.rs | resume.rs: 6 |
+| 55 | [HOST] | Resume Agent in place (same session id) and restart agent | done | crates/supercli-core/src/resume.rs | resume.rs |
+| 56 | [HOST] | Session reload (replace the host, keep the id) | done | crates/supercli-core/src/session_ops.rs | session_ops.rs |
+| 57 | [HOST] | Restart recommendation when the host protocol version is too old | done | crates/supercli-core/src/session_host.rs | session_host.rs |
+| 58 | [HOST] | Safe text delivery (bracketed paste, settle, double-Enter) | done | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/mcp_host.rs | session_host.rs |
+| 59 | [HOST] | Hook listener ingesting provider lifecycle events via the port registry | done | crates/supercli-serve/src/hook_listener.rs | hook_listener.rs: 6 |
+| 60 | [HOST] | Hook-latched busy/idle/attention activity engine (output is never evidence of work) | done | crates/supercli-core/src/screen_activity.rs; crates/supercli-serve/src/activity.rs | screen_activity.rs: 4 |
+| 61 | [HOST] | Screen-tier busy/idle fallback for Claude/Codex/Gemini without hooks | done | crates/supercli-core/src/screen_activity.rs:48,60 | screen_activity.rs |
+| 62 | [HOST] | Runtime observation of agents started by hand in a shell | done | crates/supercli-core/src/runtime_observer.rs | runtime_observer.rs: 11 |
+| 63 | [HOST] | Agent-drawn select-menu detection sets attention | done | crates/supercli-core/src/menu_prompt.rs | menu_prompt.rs: 13 |
+| 64 | [HOST] | Escape-cancellation fencing of interrupted turns | done | crates/supercli-core/src/hook_cancellation.rs | hook_cancellation.rs: 6 |
+| 65 | [HOST] | Background/subagent tracking keeps the session busy until children stop | done | crates/supercli-core/src/durable_runs.rs | subagent_kill tests |
+| 66 | [HOST] | Lifecycle notification policy (needs-input, opt-in finished, App alerts) with viewing-device suppression | done | crates/supercli-serve/src/notifications.rs | notifications.rs: 2 |
+| 67 | [HOST] | Unread/mark-read and notify-when-done per session | done | crates/supercli-core/src/app_state.rs | app_state.rs |
+| 68 | [HOST] | Shared approval hub (FIFO, coalesced, first answer wins from any Controller) | done | crates/supercli-serve/src/approvals.rs:517 | approvals.rs: 11 |
+| 69 | [HOST] | Viewer presence leases and presence files | done | crates/supercli-serve/src/presence.rs | presence.rs: 3 |
+| 70 | [HOST] | Phone-fit resize and desktop-fit restore of the shared grid | done | crates/supercli-core/src/controller_host.rs; crates/supercli-core/src/remote_session_backend.rs | remote_server.rs: 32 |
+| 71 | [HOST] | Persisted activity log (activity-log.jsonl) | done | crates/supercli-core/src/activity_log.rs | activity_log.rs: 7 |
+| 72 | [HOST] | Local URL detection plus verify/find/stop of session-owned local servers | done | crates/supercli-core/src/local_urls.rs | local_urls.rs: 18 |
+| 73 | [HOST] | First-run preset seeding from agent CLIs found on PATH | done | crates/supercli-core/src/first_run.rs | first_run.rs: 2 |
+| 74 | [HOST] | Projects, plain groups, worktree child projects, pins, manual order and date sort | done | crates/supercli-core/src/state.rs; crates/supercli-core/src/app_state.rs | state.rs |
+| 75 | [HOST] | Cross-frontend state bus notifications | done | crates/supercli-core/src/state_bus.rs | state_bus.rs: 3 |
+| 76 | [HOST] | Git worktree create/list (default base = mainline) | done | crates/supercli-core/src/worktrees.rs | worktrees.rs: 3 |
+| 77 | [HOST] | Unified `unpeel` MCP server (stdio, per agent client, gate outside hosted sessions) | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs: 49 |
+| 78 | [HOST] | MCP `sessions` domain (current, list, inspect, read_screen, read_output, wait_for_text, send_text, send_keys, report) | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
+| 79 | [HOST] | MCP `agents` domain (list, get, read_transcript, wait) with occurrence-bound refs | done | crates/supercli-core/src/mcp_host.rs:702 | mcp_host.rs |
+| 80 | [HOST] | MCP `workspace` domain (list_presets, create_worktree, list_worktrees) | done | crates/supercli-core/src/mcp_host.rs:703 | mcp_host.rs |
+| 81 | [HOST] | MCP `artifacts.add_to_gallery` | done | crates/supercli-core/src/mcp_host.rs:704 | mcp_host.rs |
+| 82 | [HOST] | MCP `browser` domain (13 actions incl. console, context, close) | done | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
+| 83 | [HOST] | MCP `apps` domain (list, catalog, describe, search, context, open) with agent-openable App panes | done | crates/supercli-core/src/apps_mcp.rs | apps_mcp.rs |
+| 84 | [HOST] | MCP `skills` domain (list, search, get) | done | crates/supercli-core/src/skills_mcp.rs | skills_mcp.rs |
+| 85 | [HOST] | Open reads plus approval-controlled cross-session writes (ask/allow/deny, remembered directional pairs) | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/grant_store.rs | grant_store.rs: 3, mcp_host.rs |
+| 86 | [HOST] | Session creation and closing are user-only (agents refused) | done | crates/supercli-core/src/mcp_host.rs:685 | mcp_host.rs |
+| 87 | [HOST] | Caller identity via env or a verified process-ancestry fallback | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/session_host.rs:3624 | mcp_host.rs |
+| 88 | [HOST] | Lazy per-action help with terse schemas under a token budget | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
+| 89 | [HOST] | Dual-era MCP protocol support (initialize and server/discover) | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/mcp_gate.rs | mcp_host.rs |
+| 90 | [HOST] | MCP in-flight cancellation with ordered execution | done | crates/supercli-core/src/mcp_cancel.rs | mcp_cancel.rs: 4 |
+| 91 | [HOST] | `/mcp/*` routes authenticated with a 0600 auth token | done | crates/supercli-core/src/mcp_auth.rs | mcp_auth.rs |
+| 92 | [HOST] | App live context (`app-context.json`) surfaced to neighbouring agents | done | crates/supercli-serve/src/app_context.rs | app_context.rs: 3 |
+| 93 | [HOST] | Pinned agent-browser engine auto-install (sha256, flock, background at worker start) | done | crates/supercli-core/src/browser_engine.rs | browser_engine.rs: 10 |
+| 94 | [HOST] | Browser shared project window (pinned tab per session, persistent logins) or separate-per-session mode | done | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
+| 95 | [HOST] | Browser access On/Ask/Off with remembered session approvals | done | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/config.rs | browser_mcp.rs |
+| 96 | [HOST] | Browser options: headed, domain allowlist, custom Chromium path, agent cursor overlay, theme | done | crates/supercli-core/src/browser_mcp.rs:965,1832 | browser_mcp.rs |
+| 97 | [HOST] | Remote CDP endpoint mode (`remote-cdp.json`) | done | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/browser_takeover.rs | browser_mcp.rs |
+| 98 | [HOST] | Browser screenshots/downloads as session artifacts (auto-gallery toggle) | done | crates/supercli-core/src/browser_mcp.rs:2098-2114 | browser_mcp.rs |
+| 99 | [HOST] | Session artifact store (list, read, resumable upload, delete, thumbnails) | done | crates/supercli-core/src/session_artifacts.rs | session_artifacts.rs: 21 |
+| 100 | [HOST] | Host filesystem ops for folder pickers and file transfer (scoped to projects) | done | crates/supercli-core/src/host_resources.rs | host_resources.rs |
+| 101 | [HOST] | One-time-code pairing with per-device bearer token and E2E key | done | crates/supercli-serve/src/pairing.rs | pairing.rs: 7 |
+| 102 | [HOST] | Local pairing control route (begin/status/cancel/devices/revoke/relay-allowed) | done | crates/supercli-serve/src/pairing.rs:221,282,676 | pairing.rs |
+| 103 | [HOST] | Controller-assisted pairing (pairing.invitation via an assisting Mac proxy) | done | crates/supercli-serve/src/pairing.rs:248; crates/supercli-core/src/controller_protocol.rs | pairing.rs |
+| 104 | [HOST] | Direct `/mobile` over TLS with the pinned Host certificate | done | crates/supercli-core/src/remote_server.rs:184-192 | remote_server.rs: 32 |
+| 105 | [HOST] | Supervised WSS terminal streamer (backoff, crash-loop ceiling) | done | crates/supercli-serve/src/remote_streamer.rs:222,278 | remote_streamer.rs |
+| 106 | [HOST] | Local `host.sock` framed Controller contract (0600) | done | crates/supercli-core/src/remote_server.rs; crates/supercli-core/src/remote_stdio.rs | remote_server.rs |
+| 107 | [HOST] | SSH stdio Host gateway (`__remote_stdio__`), including interactive-shell compat mode | done | crates/supercli-core/src/remote_stdio.rs | remote_stdio.rs: 6 |
+| 108 | [HOST] | Unpeel Link relay uplink with forward-secret E2E; token rotation without eviction | done | crates/supercli-core/src/relay_uplink.rs; crates/supercli-core/src/relay_crypto.rs | relay_uplink.rs: 8, relay_crypto.rs: 6 |
+| 109 | [HOST] | Relay credential recovery | done | crates/supercli-serve/src/relay.rs:361,611-616 | relay.rs |
+| 110 | [HOST] | Direct-path negotiation and UDP NAT punch upgrade from relay | done | crates/supercli-core/src/direct_path.rs; crates/supercli-core/src/direct_path_punch.rs | direct_path.rs: 4 |
+| 111 | [HOST] | Unpeel Link license activation/entitlement/seat (Ed25519 keys) | done | crates/supercli-core/src/license.rs | license.rs: 6 |
+| 112 | [HOST] | APNs push registration and delivery via relay | done | crates/supercli-serve/src/notifications.rs:6 | notifications.rs |
+| 113 | [HOST] | Platform-adapter seam for native effects (notify, push, approvals, overlay, thumbnails, Link, open-in-editor) | done | crates/supercli-serve/src/platform_adapter.rs | platform_adapter.rs: 5 |
+| 114 | [HOST] | Host-owned App install/open/opener policy (works on SSH/Linux Hosts) | done | crates/supercli-core/src/app_installer.rs; crates/supercli-core/src/app_open.rs | app_installer.rs: 4 |
+| 115 | [HOST] | Plugin activation, ordering and lazy update checks for agents and Apps | done | crates/supercli-core/src/plugins.rs; crates/supercli-core/src/plugin_updates.rs | plugins.rs: 10 |
+| 116 | [HOST] | `__remote_attach__` network attach to another Host's session | done | crates/supercli-core/src/remote_attach.rs | remote_attach.rs: 1 |
+| 117 | [HOST] | Graphical desktop-session service unit and diagnostics (Linux) | done | crates/supercli-core/src/desktop_session.rs; crates/supercli-serve/src/service_install.rs | desktop_session.rs: 3 |
+| 118 | [HOST] | Timestamped trace log for all components | done | crates/supercli-serve/src/tracelog.rs | tracelog.rs |
+| 119 | [RUNTIMES] | Runtime package format (runtime.toml, adapters, hooks, icon) auto-discovered at build | done | `runtimes/*/runtime.toml` (15 files) | `runtimes/hook-plugins.test.js`, `runtimes/test_support.rs` |
+| 120 | [RUNTIMES] | Claude Code integration (hooks, MCP, screen fallback, transcript, semantic titles, subagents) | done | `runtimes/claude-code/` | `runtimes/hook_reporter_tests.rs` |
+| 121 | [RUNTIMES] | Codex integration (native hooks + notify, MCP, screen fallback, transcript) | done | `runtimes/codex/` | `runtimes/hook_reporter_tests.rs` |
+| 122 | [RUNTIMES] | Gemini CLI integration (hooks, screen fallback, transcript) | done | `runtimes/gemini/` | `runtimes/hook_reporter_tests.rs` |
+| 123 | [RUNTIMES] | Cursor Agent, Grok, Kimi, Kiro and Cline integrations (hooks, MCP where declared, transcripts) | done | `runtimes/cursor-agent/`, `runtimes/grok/`, `runtimes/kimi/`, `runtimes/kiro/`, `runtimes/cline/` | `runtimes/hook_reporter_tests.rs` |
+| 124 | [RUNTIMES] | Amp and GitHub Copilot per-project hook integrations | done | `runtimes/amp/`, `runtimes/github-copilot/` | `runtimes/hook_reporter_tests.rs` |
+| 125 | [RUNTIMES] | OpenCode plugin and Muse Code plugin integrations | done | `runtimes/opencode/`, `runtimes/muse-code/` | `runtimes/hook_reporter_tests.rs` |
+| 126 | [RUNTIMES] | Antigravity and fx MCP-only integrations; Pi detection-only | done | `runtimes/antigravity/`, `runtimes/fx/`, `runtimes/pi/` | `runtimes/hook_reporter_tests.rs` |
+| 127 | [RUNTIMES] | Provider-neutral launch (preset runs exactly as typed) with suggested default presets per runtime | done | `crates/supercli-core/src/` (preset launch) | `crates/supercli-cli/tests/` |
+| 128 | [RUNTIMES] | Shared MCP shim (`~/.unpeel/bin/unpeel-mcp`) plus post-upgrade integration refresh | done | `~/.supercli/bin/supercli-mcp` (via `crates/supercli-cli/src/integrations_cli.rs`) | `crates/supercli-cli/tests/` |
+| 129 | [RUNTIMES] | Per-runtime install command, usage stores and resume recipes | done | `crates/supercli-cli/src/integrations_cli.rs`; `runtimes/*/docs/` | `runtimes/hook_reporter_tests.rs` |
+| 130 | [APPS] | `unpeel-attach` client (snapshot/tail replay, event-driven follow, focus filtering, resize) | done | `crates/supercli-attach/src/lib.rs` | `focus_filter_drops_exact_focus_in_and_out`, `resize_command_encoding_matches_host_protocol` |
+| 131 | [APPS] | `unpeel-apps` "send to adjacent agent" API with clipboard fallback | done | `crates/supercli-apps/src/agent.rs` | (unit tests in `agent.rs`) |
+| 132 | [APPS] | Official App registry with typed resources (file media type, folder, git.working-tree) | done | `crates/supercli-core/src/app_open.rs`, `apps_mcp.rs`, `controller_host.rs` | `typed_resources_are_one_shell_safe_argument`, `opener_projection_migrates_legacy_file_keys_and_keeps_typed_resources` |
+| 133 | [APPS] | App companion panes with reveal revisions and App-branded session rows | partial | `crates/supercli-core/src/app_open.rs`, `mcp_host.rs` | — |
+| 134 | [APPS] | Git App: Changes tab with status glyphs and unified diffs | partial | `crates/apps/diffs/src/app.rs`, `ui.rs`, `git.rs` | — |
+| 135 | [APPS] | Git App: syntax-highlighted patches with size limits | partial | `crates/apps/diffs/src/highlight.rs` | — |
+| 136 | [APPS] | Git App: History tab (paged commits, commit files, patches) | partial | `crates/apps/diffs/src/app.rs` (`Tab::History`, `Screen::History`) | — |
+| 137 | [APPS] | Git App: Fetch/Pull/Push control (fast-forward only, no force) | partial | `crates/apps/diffs/src/git.rs` (`RemoteAction::Fetch`, pull, `push --no-force --no-mirror`) | — |
+| 138 | [APPS] | Git App: select lines, then Copy lines or Send reference to agent | partial | `crates/apps/diffs/src/ui.rs` (`select-diff-lines`, `copy-lines`) | — |
+| 139 | [APPS] | Files App: scoped explorer with filter and `--ext`, context menu (open/send/copy), path drag | partial | `crates/apps/filetree/src/ui.rs` | — |
+| 140 | [APPS] | Files/Git/Usage Apps follow the neighbouring agent's project/worktree | partial | `crates/apps/diffs/src/app.rs:153`, `filetree/src/ui.rs:35` | — |
+| 141 | [APPS] | Markdown App: live-styled editor, slash menu, `\` palette, to-dos, full mouse editing | partial | `crates/apps/markdown/src/` (`slash.rs`, `mouse.rs`, `highlight.rs`, block/heading/format) | — |
+| 142 | [APPS] | Markdown App: auto-save, Open/Save/New note, vault explorer, remembered notes folder | partial | `crates/apps/markdown/src/` (`backend.rs`, `picker.rs`, `start.rs`) | — |
+| 143 | [APPS] | Usage App: per-provider quota gauges, token history, project/total monthly tables, alerts, themes | partial | `crates/apps/usage/src/` (`claude.rs`, `codex.rs`, `grok.rs`, `muse.rs`, `ui.rs`) | — |
+| 144 | [APPS] | App Kit component library (Page/List/Input/TextBox/Tree/Menu/Gauge/Sparkline/Charts/Media/Surface) | partial | `clients/legacy/app-kit` (via bridge in `crates/apps/*/Cargo.toml`) | — |
+| 145 | [APPS] | App Kit hosted semantic UI bridge (revisions, deltas, scoped participant tokens, agent `edit` grants) | partial | `clients/legacy/app-kit` (via bridge) | — |
+| 146 | [APPS] | App Kit SwiftUI peer renderer plus Kitchen Sink mini-host and screen audit | missing | — | — |
+| 147 | [WEB] | App Kit TypeScript/DOM/ARIA web renderer of the same App tree | missing | — | — |
+| 148 | [WEB] | Hosted installer endpoints (`unpeel.com/install.sh`, per-App `install/<app>/install.sh`) with channel selection (alpha/beta/stable) | done | `scripts/install.sh`, `scripts/install-app.sh` | — |
+| 149 | [WEB] | Help/docs/download links (unpeel.com/docs, /download/mac, /ios) referenced from the apps | missing | — | — |
+| 150 | [DESKTOP] | App shell: resizable vibrancy sidebar, custom titlebar, ⌘B toggle | partial | clients/supercli-app/lib/screens/rootview.dart, chrome.dart (scaffold bbd8b70) | screens_test.dart (RootView layout) |
+| 151 | [DESKTOP] | Project/session tree with pins, groups, worktree folders, attention dot and busy spinners | partial | clients/supercli-app/lib/screens/sidebarview.dart, projectsidebarview.dart (scaffold bbd8b70) | screens_test.dart (SidebarView) |
+| 152 | [DESKTOP] | Detached drag of sessions/projects (reorder, move to group, drop-to-split) | missing | clients/supercli-app/lib/screens/sidebarsessiondrag.dart (4-line re-export, bbd8b70) | - |
 | 153 | [DESKTOP] | Session context menu (rename, copy ID, copy transcript, notify when done, clear attention, resume, restart app, reveal, pin, stop and archive, remove) | missing | - | - |
 | 154 | [DESKTOP] | Project context menu (new worktree, new group, rename, stop all, sort, folder color, archived, open in editor, move to workspace) | missing | - | - |
 | 155 | [DESKTOP] | Folder color palette (8 colors) | missing | - | - |
-| 156 | [DESKTOP] | Archived sessions library with search, Restore, Restore & Resume, Delete permanently | missing | - | - |
-| 157 | [DESKTOP] | Workspace dots, trackpad swipe and workspace selector popover | missing | - | - |
+| 156 | [DESKTOP] | Archived sessions library with search, Restore, Restore & Resume, Delete permanently | partial | clients/supercli-app/lib/screens/archivedsessionsview.dart (34 lines, bbd8b70) | - |
+| 157 | [DESKTOP] | Workspace dots, trackpad swipe and workspace selector popover | partial | clients/supercli-app/lib/screens/workspaceopenmenu.dart (85 lines, bbd8b70) | - |
 | 158 | [DESKTOP] | Open a workspace in a new window | missing | - | - |
 | 159 | [DESKTOP] | Move a project between local workspaces | missing | - | - |
-| 160 | [DESKTOP] | Right-side global project sidebar panel (pinned session stack) | missing | - | - |
-| 161 | [DESKTOP] | Local-site globe button with open URL / stop server menu | missing | - | - |
+| 160 | [DESKTOP] | Right-side global project sidebar panel (pinned session stack) | partial | clients/supercli-app/lib/screens/projectsidebarview.dart (111 lines, bbd8b70) | - |
+| 161 | [DESKTOP] | Local-site globe button with open URL / stop server menu | missing | clients/supercli-app/lib/screens/localsitemenu.dart (4-line re-export, bbd8b70) | - |
 | 162 | [DESKTOP] | Titlebar "Open in" menu for 24 external editors/terminals/git clients | missing | - | - |
-| 163 | [DESKTOP] | Session launcher (pick a tool) and empty state | missing | - | - |
-| 164 | [DESKTOP] | ⌘K command palette (sessions, projects, presets, commands) | missing | - | - |
+| 163 | [DESKTOP] | Session launcher (pick a tool) and empty state | partial | clients/supercli-app/lib/screens/sessionlauncherview.dart (35 lines, bbd8b70) | - |
+| 164 | [DESKTOP] | ⌘K command palette (sessions, projects, presets, commands) | partial | clients/supercli-app/lib/screens/commandpaletteview.dart (61 lines, bbd8b70) | screens_test.dart (palette) |
 | 165 | [DESKTOP] | ⌃Tab MRU session switcher | missing | - | - |
 | 166 | [DESKTOP] | ⌘1–9 session switching and ⌃1–9 project switching with held-key hints | missing | - | - |
-| 167 | [DESKTOP] | Recent activity page (⇧⌘R) and titlebar activity bell dropdown | missing | - | - |
-| 168 | [DESKTOP] | Toast notifications (for example, device connected) | missing | - | - |
-| 169 | [DESKTOP] | libghostty Metal terminal surfaces, retained per session | missing | - | - |
+| 167 | [DESKTOP] | Recent activity page (⇧⌘R) and titlebar activity bell dropdown | partial | clients/supercli-app/lib/screens/recentactivityview.dart, globalactivitymenu.dart (bbd8b70) | - |
+| 168 | [DESKTOP] | Toast notifications (for example, device connected) | partial | clients/supercli-app/lib/screens/toastcenter.dart (25 lines, bbd8b70) | - |
+| 169 | [DESKTOP] | libghostty Metal terminal surfaces, retained per session | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (54 lines, bbd8b70) | - |
 | 170 | [DESKTOP] | Remote-host panes rendered via in-memory Ghostty surfaces (same UI as local) | missing | - | - |
-| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | missing | - | - |
+| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (Split H/V buttons, bbd8b70) | - |
 | 172 | [DESKTOP] | Zoom pane (⇧⌘↩), Equalize splits, spatial focus (⌥⌘ arrows) | missing | - | - |
 | 173 | [DESKTOP] | Detach Pane / Exit Multi-Pane View | missing | - | - |
 | 174 | [DESKTOP] | Pane header menu with Agents/Plugins launch sections | missing | - | - |
-| 175 | [DESKTOP] | Transient launcher pane for new sessions in a group | missing | - | - |
+| 175 | [DESKTOP] | Transient launcher pane for new sessions in a group | partial | clients/supercli-app/lib/screens/sessionlauncherview.dart (35 lines, bbd8b70) | - |
 | 176 | [DESKTOP] | Persisted pane layouts per scope (pane-layouts.json) | missing | - | - |
-| 177 | [DESKTOP] | Find bar (⌘F, ⌘G, ⇧⌘G) | missing | - | - |
+| 177 | [DESKTOP] | Find bar (⌘F, ⌘G, ⇧⌘G) | partial | clients/supercli-app/lib/screens/terminalfindbar.dart (35 lines, bbd8b70) | - |
 | 178 | [DESKTOP] | Font size increase/decrease/reset (⌘+ ⌘- ⌘0) | missing | - | - |
-| 179 | [DESKTOP] | URL/OSC 8 links and OSC 7 cwd tracking | missing | - | - |
-| 180 | [DESKTOP] | ⌘-click bare file paths (with line/column) to open in App or editor | missing | - | - |
+| 179 | [DESKTOP] | URL/OSC 8 links and OSC 7 cwd tracking | partial | clients/supercli-app/lib/screens/clickablepath.dart (23 lines, bbd8b70) | - |
+| 180 | [DESKTOP] | ⌘-click bare file paths (with line/column) to open in App or editor | partial | clients/supercli-app/lib/screens/clickablepath.dart (23 lines, bbd8b70) | - |
 | 181 | [DESKTOP] | Native file drag out of hosted Apps and drop into Apps/terminals | missing | - | - |
 | 182 | [DESKTOP] | Scroll-to-bottom button; exited-session bar (Resume / Start fresh); resume-failure notice | missing | - | - |
 | 183 | [DESKTOP] | Restart recommendation banner | missing | - | - |
 | 184 | [DESKTOP] | Agent TUI background color matching for chrome | missing | - | - |
-| 185 | [DESKTOP] | Viewer presence avatars and "Fit to desktop" control | missing | - | - |
-| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | missing | - | - |
-| 187 | [DESKTOP] | Session gallery panel (screenshots, downloads, uploads) | missing | - | - |
-| 188 | [DESKTOP] | Gallery arrow + crop markup and "Add to prompt" | missing | - | - |
-| 189 | [DESKTOP] | Take Screenshot (⇧⌘S) into the session and attach it to the prompt | missing | - | - |
+| 185 | [DESKTOP] | Viewer presence avatars and "Fit to desktop" control | partial | clients/supercli-app/lib/screens/vieweravatarsview.dart (20 lines, bbd8b70) | - |
+| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | done | clients/supercli-app/lib/app.dart (de51bb2) | clients/supercli-app/test/app_test.dart |
+| 187 | [DESKTOP] | Session gallery panel (screenshots, downloads, uploads) | partial | clients/supercli-app/lib/screens/sessiongallerypanel.dart (50 lines, bbd8b70) | - |
+| 188 | [DESKTOP] | Gallery arrow + crop markup and "Add to prompt" | missing | clients/supercli-app/lib/screens/sessiongallerymarkup.dart (6-line re-export, bbd8b70) | - |
+| 189 | [DESKTOP] | Take Screenshot (⇧⌘S) into the session and attach it to the prompt | partial | clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (21 lines, bbd8b70) | - |
 | 190 | [DESKTOP] | Full main menu set (App/Session/Edit/View/Window/Help) with shortcuts | missing | - | - |
 | 191 | [DESKTOP] | Menu-bar status item with activity spinner and popover | missing | - | - |
 | 192 | [DESKTOP] | Keep running as a menu-bar agent when the window closes | missing | - | - |
@@ -223,58 +223,58 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 196 | [DESKTOP] | Keychain-backed Link license | missing | - | - |
 | 197 | [DESKTOP] | Bundled Host service lifecycle management via launchd | missing | - | - |
 | 198 | [DESKTOP] | Bonjour nearby-host discovery for Add Workspace | missing | - | - |
-| 199 | [DESKTOP] | Remote folder picker for launching on remote Hosts | missing | - | - |
-| 200 | [DESKTOP] | Settings scope picker (This Mac / workspace / remote Host) with inherit/reset | missing | - | - |
-| 201 | [DESKTOP] | Settings ▸ Workspaces (unified list, add local/nearby/code/SSH, rename, color, forget, delete) | missing | - | - |
+| 199 | [DESKTOP] | Remote folder picker for launching on remote Hosts | missing | clients/supercli-app/lib/screens/remotefolderpicker.dart (4-line re-export, bbd8b70) | - |
+| 200 | [DESKTOP] | Settings scope picker (This Mac / workspace / remote Host) with inherit/reset | partial | clients/supercli-app/lib/screens/settingsview.dart (64 lines, bbd8b70) | - |
+| 201 | [DESKTOP] | Settings ▸ Workspaces (unified list, add local/nearby/code/SSH, rename, color, forget, delete) | partial | clients/supercli-app/lib/screens/workspaceopenmenu.dart (85 lines, bbd8b70) | - |
 | 202 | [DESKTOP] | Settings ▸ Agents (install CLI, install/reinstall integration, commands and variants, default, activate, reorder) | missing | - | - |
-| 203 | [DESKTOP] | Settings ▸ Plugins (Apps catalog install/update/activate/order) | missing | - | - |
-| 204 | [DESKTOP] | Settings ▸ Agent access ▸ Sessions (write policy, worktree permission, auto-gallery, approved pairs/Apps with Revoke) | missing | - | - |
-| 205 | [DESKTOP] | Settings ▸ Agent access ▸ Browser (engine status, access mode, approvals, window/cursor/scope/app path, site rules, clear data) | missing | - | - |
-| 206 | [DESKTOP] | Settings ▸ Appearance (mode, 8 accent colors, background/surface/transparency, terminal font and size, line height, session title mode, gallery chip) | missing | - | - |
-| 207 | [DESKTOP] | Settings ▸ Remote Control (share this Mac/workspace QR/code, paired devices, revoke, per-device Link toggle) | missing | - | - |
-| 208 | [DESKTOP] | Add iPhone/iPad to a remote Host (controller-assisted pairing) | missing | - | - |
-| 209 | [DESKTOP] | Unpeel Link license section (activate, seats, release seat, get Link) | missing | - | - |
-| 210 | [DESKTOP] | Settings ▸ Transcripts (content toggles, info header, range) | missing | - | - |
-| 211 | [DESKTOP] | Settings ▸ Notifications (flag select menus, completion, test Mac/phone, delivery diagnostics) | missing | - | - |
-| 212 | [DESKTOP] | Settings ▸ Worktrees ("Show agent worktrees", list with create/reveal/remove) | missing | - | - |
-| 213 | [DESKTOP] | Settings ▸ Features (Remote workspaces, Git worktrees, Sessions use, Workspaces, Browser use) | missing | - | - |
-| 214 | [DESKTOP] | Settings ▸ Advanced (auto-archive cleanup, sidebar archive preview, memory, running hosts by CPU with Stop, sessions folder, trace log) | missing | - | - |
+| 203 | [DESKTOP] | Settings ▸ Plugins (Apps catalog install/update/activate/order) | missing | clients/supercli-app/lib/screens/pluginsettingspanel.dart (4-line re-export, bbd8b70) | - |
+| 204 | [DESKTOP] | Settings ▸ Agent access ▸ Sessions (write policy, worktree permission, auto-gallery, approved pairs/Apps with Revoke) | partial | clients/supercli-app/lib/screens/sessionsaccesssections.dart (65 lines, bbd8b70) | - |
+| 205 | [DESKTOP] | Settings ▸ Agent access ▸ Browser (engine status, access mode, approvals, window/cursor/scope/app path, site rules, clear data) | missing | clients/supercli-app/lib/screens/browseraccesssections.dart (6-line re-export, bbd8b70) | - |
+| 206 | [DESKTOP] | Settings ▸ Appearance (mode, 8 accent colors, background/surface/transparency, terminal font and size, line height, session title mode, gallery chip) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 207 | [DESKTOP] | Settings ▸ Remote Control (share this Mac/workspace QR/code, paired devices, revoke, per-device Link toggle) | partial | clients/supercli-app/lib/screens/hostpickerview.dart (84 lines, bbd8b70) | - |
+| 208 | [DESKTOP] | Add iPhone/iPad to a remote Host (controller-assisted pairing) | missing | clients/supercli-app/lib/screens/remotehostworkspaceview.dart (4-line re-export, bbd8b70) | - |
+| 209 | [DESKTOP] | Unpeel Link license section (activate, seats, release seat, get Link) | missing | clients/supercli-app/lib/screens/licensesettingspanel.dart (4-line re-export, bbd8b70) | - |
+| 210 | [DESKTOP] | Settings ▸ Transcripts (content toggles, info header, range) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 211 | [DESKTOP] | Settings ▸ Notifications (flag select menus, completion, test Mac/phone, delivery diagnostics) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 212 | [DESKTOP] | Settings ▸ Worktrees ("Show agent worktrees", list with create/reveal/remove) | missing | clients/supercli-app/lib/screens/worktreessettingspanel.dart (4-line re-export, bbd8b70) | - |
+| 213 | [DESKTOP] | Settings ▸ Features (Remote workspaces, Git worktrees, Sessions use, Workspaces, Browser use) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 214 | [DESKTOP] | Settings ▸ Advanced (auto-archive cleanup, sidebar archive preview, memory, running hosts by CPU with Stop, sessions folder, trace log) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
 | 215 | [DESKTOP] | Default editor / opener preference | missing | - | - |
-| 216 | [DESKTOP] | Presets stored in the shared app-state.json with live pickup of CLI edits | missing | - | - |
+| 216 | [DESKTOP] | Presets stored in the shared app-state.json with live pickup of CLI edits | missing | clients/supercli-app/lib/screens/presetssettingspanel.dart (4-line re-export, bbd8b70) | - |
 | 217 | [DESKTOP] | Remote Host scope uses the same sidebar/content UI with Direct→Link automatic fallback | missing | - | - |
 | 218 | [DESKTOP] | Worktree discovery of agent-created checkouts (opt-in, every 5 s) | missing | - | - |
-| 219 | [DESKTOP] | Startup presentation cache for instant sidebar | missing | - | - |
-| 220 | [IOS] | QR scan or paste-code pairing; multiple paired workspaces with switcher; Forget | missing | - | - |
-| 221 | [IOS] | Direct pinned-HTTPS LAN transport plus Link relay E2E transport with credential repair | missing | - | - |
-| 222 | [IOS] | Mac-style sessions drawer (projects, sessions, activity pills, ages, workspace header) | missing | - | - |
-| 223 | [IOS] | Presets drawer to start a new session on the Host | missing | - | - |
-| 224 | [IOS] | Live Ghostty terminal via WSS (HTTP long-poll fallback) with snapshot baseline and resync | missing | - | - |
-| 225 | [IOS] | Keyboard never resizes the remote grid; "Fit terminal to screen" and revert to desktop | missing | - | - |
-| 226 | [IOS] | Extra-keys accessory bar (esc/ctrl/alt/cmd/tab/arrows/symbols/paste/backspace/hide) | missing | - | - |
-| 227 | [IOS] | Select-menu control bar (↑/↓/esc/return) for agent menus | missing | - | - |
-| 228 | [IOS] | Mosh-style predictive echo and predictive scrolling; remote mouse-wheel; pinch zoom; long-press text selection | missing | - | - |
-| 229 | [IOS] | Push-to-talk dictation with live transcript (paste/discard) | missing | - | - |
-| 230 | [IOS] | Optional Apple Intelligence "polish" of dictation (iOS 26+) | missing | - | - |
-| 231 | [IOS] | In-session Allow / Don't Allow approval prompts (first answer wins) | missing | - | - |
-| 232 | [IOS] | APNs push registration per workspace, retry, tap routes to the session | missing | - | - |
-| 233 | [IOS] | Title-bar activity bell with active sessions panel | missing | - | - |
-| 234 | [IOS] | Exited-session restart bar (Resume) | missing | - | - |
-| 235 | [IOS] | Session organize sheet (rename, notify when done, copy transcript Markdown 20/50/whole, restore/remove, resume) | missing | - | - |
-| 236 | [IOS] | Project organize sheet (rename group, sort custom/date, folder color, archive library) | missing | - | - |
-| 237 | [IOS] | Archived sessions sheet with Restore / Restore & Resume | missing | - | - |
-| 238 | [IOS] | Session gallery with pinch-zoom full-size view and delete | missing | - | - |
-| 239 | [IOS] | Upload photos into the session (resumable, JPEG/PNG transcode) | missing | - | - |
-| 240 | [IOS] | Arrow/crop and PencilKit freehand image annotation, then "Add to message" | missing | - | - |
-| 241 | [IOS] | Request-screenshot action (prompts the agent, polls, opens gallery) | missing | - | - |
-| 242 | [IOS] | Face ID / Touch ID / passcode app lock | missing | - | - |
-| 243 | [IOS] | Session actions from phone (stop, restart, resume agent, archive, remove, reorder, mark read) | missing | - | - |
-| 244 | [IOS] | Capability-gated UI driven by Host bootstrap; connection-lost and push-warning banners; reconnect backoff | missing | - | - |
-| 245 | [SHARED] | One Swift implementation of Host protocol DTOs, pairing client and paired-host records for Mac and iOS | missing | - | - |
-| 246 | [SHARED] | Relay forward-secret E2E protocol and WebSocket client, pinned by cross-language KAT vectors | missing | - | - |
-| 247 | [PROTO] | Versioned Host capability ledger (52 op ids, major 1 / minor 21, additive, capability-checked) | missing | - | - |
-| 248 | [PROTO] | Host conformance and bootstrap-compatibility fixtures that every Host implementation must pass | missing | - | - |
-| 249 | [PROTO] | Normative pane-layout operations, direct-path v1, relay KAT, browser-engine pin and App registry contracts | missing | - | - |
-| 250 | [PROTO] | Unpeel UI protocol v1 (NDJSON App-to-Host semantic UI) schema, stream and fixtures | missing | - | - |
-| 251 | [DIST] | SHA-256-verified curl installers for the CLI and each App; channels alpha/beta/stable on R2 | missing | - | - |
-| 252 | [DIST] | Lockstep app/CLI versioning; CLI archives carry protocol/, generated/, provenance and notices | missing | - | - |
-| 253 | [DIST] | Signed and notarized Mac DMG plus Sparkle appcast; iOS via TestFlight | missing | - | - |
+| 219 | [DESKTOP] | Startup presentation cache for instant sidebar | missing | clients/supercli-app/lib/screens/sidebarskeleton.dart (4-line re-export, bbd8b70) | - |
+| 220 | [IOS] | QR scan or paste-code pairing; multiple paired workspaces with switcher; Forget | missing | — | — |
+| 221 | [IOS] | Direct pinned-HTTPS LAN transport plus Link relay E2E transport with credential repair | missing | — | — |
+| 222 | [IOS] | Mac-style sessions drawer (projects, sessions, activity pills, ages, workspace header) | missing | — | — |
+| 223 | [IOS] | Presets drawer to start a new session on the Host | missing | — | — |
+| 224 | [IOS] | Live Ghostty terminal via WSS (HTTP long-poll fallback) with snapshot baseline and resync | missing | — | — |
+| 225 | [IOS] | Keyboard never resizes the remote grid; "Fit terminal to screen" and revert to desktop | missing | — | — |
+| 226 | [IOS] | Extra-keys accessory bar (esc/ctrl/alt/cmd/tab/arrows/symbols/paste/backspace/hide) | missing | — | — |
+| 227 | [IOS] | Select-menu control bar (↑/↓/esc/return) for agent menus | missing | — | — |
+| 228 | [IOS] | Mosh-style predictive echo and predictive scrolling; remote mouse-wheel; pinch zoom; long-press text selection | missing | — | — |
+| 229 | [IOS] | Push-to-talk dictation with live transcript (paste/discard) | missing | — | — |
+| 230 | [IOS] | Optional Apple Intelligence "polish" of dictation (iOS 26+) | missing | — | — |
+| 231 | [IOS] | In-session Allow / Don't Allow approval prompts (first answer wins) | missing | — | — |
+| 232 | [IOS] | APNs push registration per workspace, retry, tap routes to the session | missing | — | — |
+| 233 | [IOS] | Title-bar activity bell with active sessions panel | missing | — | — |
+| 234 | [IOS] | Exited-session restart bar (Resume) | missing | — | — |
+| 235 | [IOS] | Session organize sheet (rename, notify when done, copy transcript Markdown 20/50/whole, restore/remove, resume) | missing | — | — |
+| 236 | [IOS] | Project organize sheet (rename group, sort custom/date, folder color, archive library) | missing | — | — |
+| 237 | [IOS] | Archived sessions sheet with Restore / Restore & Resume | missing | — | — |
+| 238 | [IOS] | Session gallery with pinch-zoom full-size view and delete | missing | — | — |
+| 239 | [IOS] | Upload photos into the session (resumable, JPEG/PNG transcode) | missing | — | — |
+| 240 | [IOS] | Arrow/crop and PencilKit freehand image annotation, then "Add to message" | missing | — | — |
+| 241 | [IOS] | Request-screenshot action (prompts the agent, polls, opens gallery) | missing | — | — |
+| 242 | [IOS] | Face ID / Touch ID / passcode app lock | missing | — | — |
+| 243 | [IOS] | Session actions from phone (stop, restart, resume agent, archive, remove, reorder, mark read) | missing | — | — |
+| 244 | [IOS] | Capability-gated UI driven by Host bootstrap; connection-lost and push-warning banners; reconnect backoff | missing | — | — |
+| 245 | [SHARED] | One Swift implementation of Host protocol DTOs, pairing client and paired-host records for Mac and iOS | done | crates/supercli-client/src/hosts.rs; crates/supercli-client/src/credentials.rs; crates/supercli-client/src/pairing.rs | supercli-client |
+| 246 | [SHARED] | Relay forward-secret E2E protocol and WebSocket client, pinned by cross-language KAT vectors | done | crates/supercli-core/src/relay_crypto.rs; crates/supercli-client/src/crypto.rs; crates/supercli-client/src/relay_conn.rs; protocol/relay-kat-vectors-v2.json | relay_crypto.rs: 6 |
+| 247 | [PROTO] | Versioned Host capability ledger (52 op ids, major 1 / minor 21, additive, capability-checked) | done | protocol/host-capabilities-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
+| 248 | [PROTO] | Host conformance and bootstrap-compatibility fixtures that every Host implementation must pass | done | protocol/host-conformance-v1.json; protocol/host-bootstrap-compatibility-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
+| 249 | [PROTO] | Normative pane-layout operations, direct-path v1, relay KAT, browser-engine pin and App registry contracts | done | protocol/pane-layout-operations-v1.json; protocol/direct-path-v1.json; protocol/relay-kat-vectors-v2.json; protocol/browser-engine-v1.json; protocol/app-registry.json | crates/supercli-cli/tests/cases/relay_conformance.py |
+| 250 | [PROTO] | Unpeel UI protocol v1 (NDJSON App-to-Host semantic UI) schema, stream and fixtures | done | protocol/supercli-ui-v1.schema.json; protocol/supercli-ui-stream-v1.ndjson; protocol/supercli-ui-fixtures-v1.json | supercli-ui fixtures |
+| 251 | [DIST] | SHA-256-verified curl installers for the CLI and each App; channels alpha/beta/stable on R2 | done | `scripts/install.sh`, `scripts/install-app.sh` | `scripts/release-installer.test.mjs`, `scripts/release-app-installer.test.mjs` |
+| 252 | [DIST] | Lockstep app/CLI versioning; CLI archives carry protocol/, generated/, provenance and notices | done | `scripts/` (release tooling); `crates/Cargo.toml` (version) | `scripts/release-installer.test.mjs` |
+| 253 | [DIST] | Signed and notarized Mac DMG plus Sparkle appcast; iOS via TestFlight | partial | `scripts/` (DMG/appcast tooling) | - |
