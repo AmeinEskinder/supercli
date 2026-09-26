@@ -140,6 +140,36 @@ final class HostClient {
     await _post('/mobile/sessions/$sessionId/messages', {'text': text});
   }
 
+  /// POST `/mobile/workspace-settings` — persist workspace settings
+  /// (`settings.workspace.set`). The [settings] map uses the Host's
+  /// camelCase wire format (see `AppSettings.toHostJson`). Throws
+  /// [HostException] on transport or validation errors.
+  Future<void> settingsSet(Map<String, Object> settings) async {
+    final response = await _post('/mobile/workspace-settings', settings);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HostException(
+        'settings set failed: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  /// GET `/mobile/workspace-settings` — read the workspace settings
+  /// (`settings.workspace.get`). Returns the raw wire map in the same
+  /// camelCase shape `AppSettings.fromHostJson` parses. Throws
+  /// [HostException] on transport errors.
+  Future<Map<String, dynamic>> settingsGet() async {
+    final response = await _get('/mobile/workspace-settings');
+    final body = jsonDecode(response.body);
+    if (body is Map<String, dynamic>) {
+      return body;
+    }
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    throw HostException('settings get returned unexpected body');
+  }
+
   /// POST `/mobile/browser/takeover` — browser takeover over CDP.
   ///
   /// Pass `{'list': true}` to list tabs, or `{'target_id': id, 'frames': n,

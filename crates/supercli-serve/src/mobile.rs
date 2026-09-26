@@ -2258,6 +2258,12 @@ fn handle_with_effects(
                 supercli_core::controller_host::workspace_settings_response(&body_json(request));
             (status, body.to_string())
         }
+        // Capability `settings.workspace.get`: read the workspace settings
+        // in the same wire format the POST accepts (round-trip safe).
+        ("GET", "/mobile/workspace-settings") => {
+            let (status, body) = supercli_core::controller_host::workspace_settings_get();
+            (status, body.to_string())
+        }
         ("GET", "/mobile/plugin-updates") => {
             (200, supercli_core::plugin_updates::request().to_string())
         }

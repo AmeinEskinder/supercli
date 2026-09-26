@@ -51,6 +51,22 @@ enum SettingsTab {
 /// access), 206 (appearance, in General tab), 207 (remote control), 209
 /// (license), 210 (transcripts), 211 (notifications), 212 (worktrees),
 /// 213 (features), 214 (advanced), 216 (presets).
+///
+/// ## Host persistence wiring
+///
+/// The view itself is stateless; persistence lives in [SettingsController]
+/// (see settings_controller.dart). The app shell wires them:
+///
+/// ```dart
+/// final controller = SettingsController(
+///   host: hostClient,
+///   onError: (msg) => toastCenter.show(msg), // route to ToastCenter
+/// );
+/// await controller.load(); // GET /mobile/workspace-settings on startup
+/// final view = SettingsView(settings: controller.settings);
+/// // After any user edit to controller.settings:
+/// controller.edited(); // debounced POST /mobile/workspace-settings
+/// ```
 final class SettingsView {
   SettingsView({
     AppSettings? settings,
