@@ -76,12 +76,13 @@ Future<void> main(List<String> args) async {
     final host = gpui;
     if (host != null) {
       final dataset = app.sessionDataset;
+      // Rebuild rows from the fresh sessions; the dataset instance is
+      // cached (see app.sessionDataset) so ownership checks pass.
       await host.replaceDataset(
         dataset,
-        columns: dataset.columns,
+        columns: const ['Title', 'Updated'],
         rows: [
-          for (var i = 0; i < dataset.rowCount; i++)
-            [for (var j = 0; j < dataset.columns.length; j++) dataset.cell(i, j)],
+          for (final s in app.sessions) [s.title, SupercliApp.formatTime(s.updatedAt)],
         ],
       );
       await host.publish(app.build(), actions: app.actions());
