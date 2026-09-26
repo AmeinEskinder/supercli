@@ -232,3 +232,15 @@ approvals, files) without the table column machinery.
 **Status:** Using single-line UiInput as a stopgap.
 Missing: multiline controlled composer with Enter-to-send vs Shift+Enter for
 newline, cursor/selection state surviving rebuilds.
+
+### P1-1. app-kit replacement (diff view, file tree, markdown editor, usage view)
+**Status:** Live features bridged via `clients/legacy/app-kit` (temporary).
+The `crates/apps/` workspace (diffs, filetree, markdown, usage) currently builds
+against the frozen `clients/legacy/app-kit` via a path-dependency bridge
+(`../../../clients/legacy/app-kit`). This keeps `apps.yml` green but the apps
+do not use gpuidart. Each needs a native gpuidart port:
+- **diff view** (from `supercli-diffs`): side-by-side/inline diff rendering
+- **file tree** (from `supercli-filetree`): collapsible tree with icons
+- **markdown editor** (from `supercli-markdown`, `markdown-text-area` feature): rich text editing
+- **usage view** (from `supercli-usage`): charts/meters for usage data
+**Blocks:** unifying the app surfaces on gpuidart; removing the legacy bridge.
