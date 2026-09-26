@@ -429,6 +429,8 @@ pub trait DeviceBackend {
 pub mod adb;
 #[cfg(feature = "device")]
 pub mod baguette;
+#[cfg(feature = "device")]
+pub mod baguette_native;
 #[cfg(test)]
 mod fake;
 #[cfg(feature = "device")]

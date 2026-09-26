@@ -176,6 +176,60 @@ The scrcpy-server jar is Apache-2.0; on implementation its copyright/version not
   `type (1 B) | length (u32 BE) | payload` with 0x01 description (JSON),
   0x02 keyframe, 0x03 delta, 0x04 JPEG seed.
 
+### 9.2b Native baguette client in Rust (serve WebSocket + input pipe)
+
+New module `baguette_native.rs` (`#[cfg(feature = "device")]`, std-only —
+the hand-rolled WebSocket handshake kept `tungstenite` out, per the §2
+LITE default-to-std rule) speaks baguette's long-lived protocols directly, with
+no per-command CLI round-trips. baguette itself is **not vendored**; it must
+be installed by the user (`brew install baguette`).
+
+**Verified against upstream on 2026-09-26** (baguette README "Quick start"
++ "Wire protocol — `baguette input"`):
+
+- `baguette serve` binds **127.0.0.1:8421** (web UI at `/simulators`).
+  `BaguetteNative::connect` probes the port and spawns `baguette serve`
+  only when nothing listens (15 s startup wait); `Drop` kills the serve
+  child **only if this session spawned it**.
+- Video: `WS /devices/<udid>/stream?format=avcc`. Every WebSocket message
+  is one unified wire frame (§9.3): the first is the `0x01` description
+  (parsed for device name + point/pixel geometry), then `0x02`/`0x03`/`0x04`
+  frames, validated with `wire_from_baguette` and relayed **byte-identical**
+  — supercli proxies baguette's iOS stream directly, exactly as §9.3
+  intends.
+- WebSocket: RFC 6455 upgrade with hand-rolled SHA-1/Base64
+  `Sec-WebSocket-Accept` verification (pinned against the RFC 6455 §1.3
+  test vector), masked client frames, ping→pong, close→`Closed`, 64 MiB
+  message cap, masked server frames rejected as protocol violations, and
+  handshake-overflow buffering (one TCP segment can carry the `101` head
+  *and* the first frames).
+- Input: a persistent `baguette input --udid <udid>` child. Gestures are
+  newline-delimited JSON on stdin → one `{"ok":true}` /
+  `{"ok":false,"error":…}` ack per line on stdout (5 s ack deadline via a
+  dedicated reader thread; an exited child surfaces an error, never a
+  hang). Encoders, all in **device points** (rounded to integer points,
+  matching the documented examples):
+  - `tap`: `{"type":"tap","x":219,"y":478,"width":438,"height":954,"duration":0.05}`
+  - `swipe`: `startX/startY/endX/endY` + `width/height` + `duration`
+  - `touch1-down/move/up` (+ optional `edge` for system gestures),
+    `touch2-down/move/up` (the pinch path)
+  - `button`: `home`, `lock`, `power`, `volume-up/down`, `action`,
+    `app-switcher`, `swipe-to-home`, … (+ optional `duration`)
+  - `key` (W3C `code`), `text`
+- Session shape mirrors `scrcpy_native.rs`: `BaguetteNative::connect`
+  gates (macOS → Apple Silicon → `baguette` on PATH, honest
+  `NotMacOSHost`/`ToolMissing` errors), `split()` hands out disjoint
+  `(&WsClient, &mut InputChannel)` borrows so one thread pumps video while
+  another sends input, `description_frame()` returns the raw `0x01` frame
+  so the Devices panel / `/farm` bootstrap iOS sessions exactly like
+  Android ones — one decoder path, one input path, platform selected only
+  by the device id.
+- Tests: scripted fake `baguette serve` (upgrade path assertion, accept-key
+  verification, ping→masked-pong, `0x01`→`0x02`→close frame flow,
+  byte-identical passthrough) and stub `baguette input` children
+  (ack round-trip, rejection surfacing, exited-child error). All run on
+  Linux; the real-device path needs a macOS host with baguette installed.
+
 ### 9.3 One wire format for both platforms
 
 Adopt baguette's framing verbatim: `0x01` description (stream metadata), `0x02` keyframe, `0x03` delta, `0x04` JPEG seed (recovery on packet loss) — plus baguette's device-point coordinate convention for input. supercli then **proxies baguette's iOS stream directly** and emits the **same** format for Android from the native scrcpy client. The web Devices panel and the gpuidart P0-6 surface stay platform-agnostic: one decoder path, one input path, platform selected only by the device id.
