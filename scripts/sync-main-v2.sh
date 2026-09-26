@@ -107,6 +107,7 @@ else
               -e 'package-lock.json' \
               -e 'docs/rename-allowlist.md' \
               -e '.github/workflows/rename-guard.yml' \
+              -e 'scripts/sync-main-v2.sh' \
     || true)
   if [[ -n "$matches" ]]; then
     echo "FAIL: unpeel references found:"
@@ -125,6 +126,7 @@ else
     --exclude-dir=.dart_tool \
     --exclude='rename-guard.yml' \
     --exclude='fresh-clone-verify.sh' \
+    --exclude='sync-main-v2.sh' \
     | grep -v -e '^./clients/legacy/' \
     || true)
   if [[ -n "$domain_matches" ]]; then
