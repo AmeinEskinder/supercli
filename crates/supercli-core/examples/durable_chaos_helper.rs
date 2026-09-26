@@ -1,45 +1,56 @@
-//! Chaos-test helper: executes durable-run steps with a write-ahead intent
-//! protocol, recording each real side effect to an external append-only file.
+//! Chaos-test helper: executes durable-run steps with the write-ahead
+//! intent protocol, recording each real side effect externally.
 //!
-//! This is a stopgap implementation of the write-ahead step protocol (task a)
-//! for the SIGKILL chaos test. It demonstrates the correct crash-recovery
-//! behavior; the protocol will move into `durable_runs.rs` core when (a) lands.
+//! Each run executes a mix of step kinds (default):
+//! `model,read,file_write,idempotent_http,opaque_write`.
+//!
+//! - `model`: simulated LLM call (sleep, no side effect) — safe to rerun.
+//! - `read`: reads `<home>/read_source.txt` — safe to rerun.
+//! - `file_write`: writes `<home>/file_step_<n>.txt` with a reconcile hint
+//!   (path + expected SHA-256); resume probes the file before replaying.
+//! - `idempotent_http`: simulated remote with an idempotency-keyed server
+//!   log at `<home>/idem_server.log`; replays use the SAME key and the
+//!   server dedups (one EFFECT per key, DEDUP lines are not effects).
+//! - `opaque_write`: appends to the external `--side-effects` file; no
+//!   probe and no key exist, so a mid-step crash parks the run in
+//!   NEEDS_REVIEW (never replayed).
+//!
+//! Crash recovery delegates entirely to `RunsDb::resume_run`, which
+//! reconciles orphaned intents before falling back to review.
 //!
 //! Usage:
 //!   durable_chaos_helper --run-id <id> --home <dir> --steps <n> \
-//!       --side-effects <path>
-//!
-//! Protocol per step:
-//!   1. `begin_step`: append intent row (outcome=None) to the journal.
-//!   2. Perform the "side effect": append one line to the external
-//!      side-effects file and fsync it. This is the ground truth.
-//!   3. Sleep 50ms (widens the SIGKILL window).
-//!   4. `complete_step`: append outcome row (Executed).
-//!
-//! Crash recovery (on startup):
-//!   - If the run is terminal (DONE/FAILED/NEEDS_REVIEW): exit 0.
-//!   - Call `resume_run`. If `needs_review_step_no` is set: exit 0.
-//!   - Let `n = first_incomplete_step_no`, `total = run.steps_total`.
-//!     If `n < total`, step `n` has an intent row without an outcome: we
-//!     crashed mid-step. The side effect may or may not have happened, so
-//!     classify as Ambiguous (never replay) and let `resume_run` move the
-//!     run to NEEDS_REVIEW. Exit 0.
-//!   - Otherwise execute steps `n..steps`, then transition to DONE.
+//!       --side-effects <path> [--kinds <csv>]
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use supercli_core::action_reviews::AttemptOutcome;
-use supercli_core::durable_runs::{step_input_hash, RunState, RunsDb, StepKind};
+use supercli_core::browser_engine::sha256_hex;
+use supercli_core::durable_runs::{step_input_hash, ReconcileHint, RunState, RunsDb, StepKind};
 
 fn usage() -> ! {
     eprintln!(
         "usage: durable_chaos_helper --run-id <id> --home <dir> \
-         --steps <n> --side-effects <path>"
+         --steps <n> --side-effects <path> [--kinds <csv>]"
     );
     std::process::exit(2);
+}
+
+fn parse_kind(s: &str) -> StepKind {
+    match s {
+        "model" => StepKind::Model,
+        "read" => StepKind::ReadOnly,
+        "file_write" => StepKind::FileWrite,
+        "idempotent_http" => StepKind::IdempotentHttp,
+        "opaque_write" => StepKind::OpaqueWrite,
+        _ => {
+            eprintln!("unknown kind: {s}");
+            usage();
+        }
+    }
 }
 
 fn main() {
@@ -48,6 +59,7 @@ fn main() {
     let mut home: Option<PathBuf> = None;
     let mut steps: Option<u64> = None;
     let mut side_effects: Option<PathBuf> = None;
+    let mut kinds: Option<String> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -68,6 +80,10 @@ fn main() {
                 i += 1;
                 side_effects = args.get(i).map(PathBuf::from);
             }
+            "--kinds" => {
+                i += 1;
+                kinds = args.get(i).cloned();
+            }
             _ => usage(),
         }
         i += 1;
@@ -77,18 +93,133 @@ fn main() {
         (Some(r), Some(h), Some(s), Some(e)) => (r, h, s, e),
         _ => usage(),
     };
+    let kinds: Vec<StepKind> = kinds
+        .as_deref()
+        .unwrap_or("model,read,file_write,idempotent_http,opaque_write")
+        .split(',')
+        .map(|s| parse_kind(s.trim()))
+        .collect();
+    if kinds.is_empty() {
+        usage();
+    }
 
-    if let Err(e) = run(&run_id, &home, steps, &side_effects) {
+    if let Err(e) = run(&run_id, &home, steps, &side_effects, &kinds) {
         eprintln!("durable_chaos_helper: error: {e:?}");
         std::process::exit(1);
     }
 }
 
+/// Append one line to a file and fsync it (crash-safe external record).
+fn append_fsync(path: &Path, line: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut f = OpenOptions::new().create(true).append(true).open(path)?;
+    f.write_all(line.as_bytes())?;
+    f.flush()?;
+    f.sync_all()?;
+    Ok(())
+}
+
+fn ts_nanos() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+}
+
+/// The side effect for one step. Returns the reconcile hint to journal
+/// with the intent (if any).
+fn execute_step(
+    kind: StepKind,
+    run_id: &str,
+    home: &Path,
+    step_no: u64,
+    side_effects_path: &Path,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match kind {
+        StepKind::Model => {
+            // Simulated LLM call: no external side effect.
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            Ok(None)
+        }
+        StepKind::ReadOnly => {
+            // Side-effect-free read.
+            let src = home.join("read_source.txt");
+            if !src.exists() {
+                std::fs::write(&src, b"chaos read source v1\n")?;
+            }
+            let _ = std::fs::read(&src)?;
+            Ok(None)
+        }
+        StepKind::FileWrite => {
+            let content = format!("chaos-file:{run_id}:{step_no}\n");
+            let path = home.join(format!("file_step_{step_no}.txt"));
+            let hash = sha256_hex(content.as_bytes());
+            let hint = ReconcileHint {
+                path: Some(path.to_string_lossy().to_string()),
+                expected_hash: Some(hash),
+                idempotency_key: None,
+            };
+            // Full overwrite + fsync: a torn write is detectable by the
+            // probe (hash mismatch) and the rerun overwrites wholesale.
+            std::fs::write(&path, &content)?;
+            let f = OpenOptions::new().read(true).open(&path)?;
+            f.sync_all()?;
+            drop(f);
+            // Parent dir fsync so the rename/write is durable.
+            if let Ok(d) = OpenOptions::new().read(true).open(home) {
+                let _ = d.sync_all();
+            }
+            Ok(hint.to_json())
+        }
+        StepKind::IdempotentHttp => {
+            // The step id IS the idempotency key: derived deterministically
+            // so every replay carries the SAME key.
+            let key = format!("idem:{run_id}:{step_no}");
+            let server = home.join("idem_server.log");
+            let seen = std::fs::read_to_string(&server)
+                .unwrap_or_default()
+                .lines()
+                .any(|l| l == format!("EFFECT key={key}"));
+            if seen {
+                // Remote dedups: no new effect, just a dedup marker (not
+                // an effect — duplicates here are harmless).
+                append_fsync(&server, &format!("DEDUP key={key}\n"))?;
+            } else {
+                append_fsync(&server, &format!("EFFECT key={key}\n"))?;
+            }
+            let hint = ReconcileHint {
+                path: None,
+                expected_hash: None,
+                idempotency_key: Some(key),
+            };
+            Ok(hint.to_json())
+        }
+        StepKind::OpaqueWrite => {
+            // The hard case: an external effect with no probe and no
+            // idempotency key. Exactly-once is enforced by NEVER replaying.
+            let pid = std::process::id();
+            append_fsync(
+                side_effects_path,
+                &format!(
+                    "run_id={run_id} step_no={step_no} kind=opaque_write \
+                     pid={pid} ts_nanos={}\n",
+                    ts_nanos()
+                ),
+            )?;
+            Ok(None)
+        }
+        StepKind::Tool | StepKind::Subagent => {
+            eprintln!("chaos helper does not use legacy kinds");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn run(
     run_id: &str,
-    home: &std::path::Path,
+    home: &Path,
     steps: u64,
-    side_effects_path: &std::path::Path,
+    side_effects_path: &Path,
+    kinds: &[StepKind],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let db = RunsDb::open(home)?;
 
@@ -104,90 +235,85 @@ fn run(
         let _ = db.transition(run_id, RunState::Queued, RunState::ExecutingTools);
     }
 
-    // 3. Ask the journal where to resume.
+    // 3. Resume: orphaned intents are reconciled inside resume_run
+    //    (probe / same-key replay) before falling back to review.
     let plan = db.resume_run(run_id)?;
     if plan.needs_review_step_no.is_some() {
-        // Already classified ambiguous; resume_run marked NEEDS_REVIEW.
         return Ok(());
     }
-    let first = plan.first_incomplete_step_no.unwrap_or(steps);
-    let run = db.get_run(run_id)?;
     // Re-check terminal: resume_run may have marked NEEDS_REVIEW.
-    match run.state {
+    match db.get_run(run_id)?.state {
         RunState::Done | RunState::Failed | RunState::NeedsReview => return Ok(()),
         _ => {}
     }
+    let first = plan.first_incomplete_step_no.unwrap_or(steps);
 
-    // 4. Mid-step crash detection (stopgap classifier for task a):
-    //    if the first incomplete step_no is < steps_total, the journal holds
-    //    an intent row (outcome=None) for it: we crashed after begin_step.
-    //    The side effect may have happened -> Ambiguous, never replay.
-    if first < run.steps_total {
-        let input_hash = step_input_hash(&format!("chaos:{run_id}:{first}"));
-        db.append_step(
-            run_id,
-            first,
-            StepKind::Tool,
-            &input_hash,
-            None,
-            Some(&AttemptOutcome::Ambiguous {
-                reason: "chaos: crashed mid-step; side effect may have executed".to_string(),
-            }),
-        )?;
-        // Let resume_run see the ambiguous outcome and mark NEEDS_REVIEW.
-        let _ = db.resume_run(run_id)?;
-        return Ok(());
-    }
-
-    // 5. Execute the remaining steps with the write-ahead protocol.
+    // 4. Execute the remaining steps with the write-ahead protocol.
     for step_no in first..steps {
-        let input_hash = step_input_hash(&format!("chaos:{run_id}:{step_no}"));
+        let kind = kinds[(step_no as usize) % kinds.len()];
+        let input_hash = step_input_hash(&format!("chaos2:{run_id}:{step_no}:{}", kind.as_str()));
 
-        // (a) begin_step: intent first.
-        db.append_step(run_id, step_no, StepKind::Tool, &input_hash, None, None)?;
+        // (a) Intent first, fsync'd (with reconcile hint).
+        let hint = execute_hint_placeholder(kind, run_id, home, step_no)?;
+        let intent =
+            db.begin_step_with_hint(run_id, step_no, kind, &input_hash, hint.as_deref())?;
 
-        // (b) The real side effect, external to the journal, fsynced.
-        record_side_effect(side_effects_path, run_id, step_no)?;
+        // (b) The real side effect.
+        let actual_hint = execute_step(kind, run_id, home, step_no, side_effects_path)?;
+        // The hint journaled at (a) must equal the one for the effect we
+        // just ran (deterministic derivation); a mismatch is a bug.
+        assert_eq!(hint, actual_hint, "hint drift for step {step_no}");
 
-        // (c) Widen the crash window.
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // (c) Widen the crash window: kill -9 here orphans the intent.
+        std::thread::sleep(std::time::Duration::from_millis(30));
 
-        // (d) complete_step: outcome after.
-        db.append_step(
-            run_id,
-            step_no,
-            StepKind::Tool,
-            &input_hash,
+        // (d) Outcome after.
+        db.complete_step(
+            &intent,
+            &AttemptOutcome::Executed { success: true },
             Some("ok"),
-            Some(&AttemptOutcome::Executed { success: true }),
         )?;
     }
 
-    // 6. All steps done -> DONE (conditional; safe if a prior attempt won).
+    // 5. All steps done -> DONE (conditional; safe if a prior attempt won).
     let _ = db.transition(run_id, RunState::ExecutingTools, RunState::Done);
-    // Also handle the case where we never left QUEUED (0 steps).
     let _ = db.transition(run_id, RunState::Queued, RunState::Done);
     Ok(())
 }
 
-/// Append one side-effect line and fsync: this file is the ground truth for
-/// the chaos test, independent of the journal.
-fn record_side_effect(
-    path: &std::path::Path,
+/// Derive the reconcile hint for a step WITHOUT executing the effect, so
+/// it can be journaled in the intent row before the side effect runs.
+/// Must be deterministic and identical to what [`execute_step`] uses.
+fn execute_hint_placeholder(
+    kind: StepKind,
     run_id: &str,
+    home: &Path,
     step_no: u64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let pid = std::process::id();
-    let ts_nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let mut f = OpenOptions::new().create(true).append(true).open(path)?;
-    writeln!(
-        f,
-        "run_id={run_id} step_no={step_no} pid={pid} ts_nanos={ts_nanos}"
-    )?;
-    f.flush()?;
-    f.sync_all()?;
-    Ok(())
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match kind {
+        StepKind::Model | StepKind::ReadOnly | StepKind::OpaqueWrite => Ok(None),
+        StepKind::FileWrite => {
+            let content = format!("chaos-file:{run_id}:{step_no}\n");
+            let path = home.join(format!("file_step_{step_no}.txt"));
+            let hint = ReconcileHint {
+                path: Some(path.to_string_lossy().to_string()),
+                expected_hash: Some(sha256_hex(content.as_bytes())),
+                idempotency_key: None,
+            };
+            Ok(hint.to_json())
+        }
+        StepKind::IdempotentHttp => {
+            let key = format!("idem:{run_id}:{step_no}");
+            let hint = ReconcileHint {
+                path: None,
+                expected_hash: None,
+                idempotency_key: Some(key),
+            };
+            Ok(hint.to_json())
+        }
+        StepKind::Tool | StepKind::Subagent => {
+            eprintln!("chaos helper does not use legacy kinds");
+            std::process::exit(2);
+        }
+    }
 }

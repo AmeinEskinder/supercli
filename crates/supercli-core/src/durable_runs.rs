@@ -51,6 +51,25 @@
 //!    returns 0 rows and the worker treats it as "someone else owns it".
 //! 5. `begin_step` fails closed: if the intent cannot be fsync'd, the step
 //!    must not execute.
+//!
+//! ## Reconciliation (before human review)
+//!
+//! A crash that orphans an intent does not automatically park the run.
+//! [`reconcile_orphan`] runs first, per step kind:
+//!
+//! - `model` / `read`: re-run — no external side effect exists to
+//!   duplicate.
+//! - `file_write`: probe the target file; content hash equal to the
+//!   intended hash (carried in the intent's reconcile hint) proves the
+//!   write landed → journal as executed without re-running. Otherwise
+//!   re-run (the rerun overwrites, so a torn write cannot survive).
+//! - `idempotent_http`: re-run with the SAME idempotency key (the step id,
+//!   carried in the hint); the remote side dedups, so a double landing is
+//!   still a single effect.
+//! - `opaque_write` (and legacy `tool`/`subagent`): nothing can prove the
+//!   step's fate → NEEDS_REVIEW, never replayed.
+//!
+//! Only steps with no probe and no idempotency key ever reach review.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -95,37 +114,15 @@ pub fn outcome_str(outcome: &AttemptOutcome) -> &'static str {
 /// Classify an orphaned intent (a `started` row with no outcome row) using
 /// the [`AttemptOutcome`] vocabulary.
 ///
-/// Soundness argument: the write-ahead protocol requires workers to fence
-/// *before* [`RunsDb::begin_step`], so a worker refused by the fence never
-/// creates an intent, and a worker that loses its fence *after* the intent
-/// but *before* the call journals `never_ran` explicitly via
-/// [`RunsDb::complete_step`] (it never leaves an orphan on that path).
-/// Therefore an orphan that survives to resume time means the worker died
-/// after the intent was durable and before any outcome was journaled — the
-/// side effect may or may not have executed, and no retroactive fence check
-/// can distinguish "died before the call" from "died after the call".
-/// For side-effecting kinds the only sound classification is
-/// [`AttemptOutcome::Ambiguous`]: the run goes to NEEDS_REVIEW and the step
-/// is never replayed.
-///
-/// The one exception is [`StepKind::Model`]: an LLM call has no external
-/// side effect — re-running it spends tokens but cannot duplicate a
-/// mutation — so its orphans are [`AttemptOutcome::NeverRan`] and safe to
-/// re-run. (Callers whose tools are idempotent on `input_hash` may still
-/// only re-run an ambiguous step after human review; the store never
-/// replays one on its own.)
+/// This is a thin projection of [`reconcile_orphan`] onto the
+/// `AttemptOutcome` vocabulary: `Rerun` → `NeverRan`, `AlreadyComplete` →
+/// `Executed`, `NeedsReview` → `Ambiguous`. Prefer [`reconcile_orphan`]
+/// when the reconciliation output (e.g. the probe-match record) matters.
 pub fn classify_orphan(intent: &StepIntent) -> AttemptOutcome {
-    match intent.kind {
-        StepKind::Model => AttemptOutcome::NeverRan {
-            reason: "orphaned model intent: model calls have no external \
-                     side effect; safe to re-run"
-                .to_string(),
-        },
-        StepKind::Tool | StepKind::Subagent => AttemptOutcome::Ambiguous {
-            reason: "orphaned intent with no outcome row: the side effect \
-                     may have executed after the intent fsync; never replay"
-                .to_string(),
-        },
+    match reconcile_orphan(intent) {
+        ReconcileVerdict::Rerun { reason } => AttemptOutcome::NeverRan { reason },
+        ReconcileVerdict::AlreadyComplete { .. } => AttemptOutcome::Executed { success: true },
+        ReconcileVerdict::NeedsReview { reason } => AttemptOutcome::Ambiguous { reason },
     }
 }
 
@@ -223,28 +220,237 @@ impl RunState {
 }
 
 /// Step kinds in the journal (docs/durable-runs.md §2.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Each kind declares how an orphaned intent (crash between the intent
+/// fsync and the outcome journal) is reconciled on resume — see
+/// [`reconcile_orphan`]:
+///
+/// - `Model` / `ReadOnly`: no external side effect (or a side-effect-free
+///   read) — safe to re-run.
+/// - `FileWrite`: the target file is probed — content hash compared to the
+///   intended hash carried in the step's reconcile hint. Match → the write
+///   landed before the crash (journal as executed, don't re-run);
+///   mismatch/missing → it didn't (safe to re-run; the rerun overwrites).
+/// - `IdempotentHttp`: replayed with the SAME idempotency key (the step
+///   id, carried in the reconcile hint); the remote side dedups.
+/// - `OpaqueWrite`: no probe and no idempotency key exists — the only kind
+///   that goes to NEEDS_REVIEW.
+/// - `Tool` / `Subagent`: legacy kinds from before reconciliation; treated
+///   like `OpaqueWrite` (fail closed, never replay).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepKind {
     Model,
+    ReadOnly,
     Tool,
     Subagent,
+    FileWrite,
+    IdempotentHttp,
+    OpaqueWrite,
 }
 
 impl StepKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             StepKind::Model => "model",
+            StepKind::ReadOnly => "read",
             StepKind::Tool => "tool",
             StepKind::Subagent => "subagent",
+            StepKind::FileWrite => "file_write",
+            StepKind::IdempotentHttp => "idempotent_http",
+            StepKind::OpaqueWrite => "opaque_write",
         }
     }
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "model" => Some(StepKind::Model),
+            "read" => Some(StepKind::ReadOnly),
             "tool" => Some(StepKind::Tool),
             "subagent" => Some(StepKind::Subagent),
+            "file_write" => Some(StepKind::FileWrite),
+            "idempotent_http" => Some(StepKind::IdempotentHttp),
+            "opaque_write" => Some(StepKind::OpaqueWrite),
             _ => None,
+        }
+    }
+
+    /// True for kinds whose execution performs a tool-like side effect
+    /// (used for `max_tool_calls` budget accounting).
+    fn counts_as_tool_call(self) -> bool {
+        matches!(
+            self,
+            StepKind::Tool | StepKind::FileWrite | StepKind::IdempotentHttp | StepKind::OpaqueWrite
+        )
+    }
+}
+
+/// Reconciliation parameters for an orphaned intent, stored as JSON in
+/// `run_steps.reconcile_hint`. Only the fields relevant to the step's kind
+/// are populated.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct ReconcileHint {
+    /// FileWrite: absolute path of the probe target.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub path: Option<String>,
+    /// FileWrite: expected SHA-256 hex of the intended file content.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expected_hash: Option<String>,
+    /// IdempotentHttp: the idempotency key to replay with (the step id).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub idempotency_key: Option<String>,
+}
+
+impl ReconcileHint {
+    pub fn to_json(&self) -> Option<String> {
+        serde_json::to_string(self).ok()
+    }
+
+    pub fn from_json(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
+}
+
+/// The verdict of reconciling one orphaned intent on resume.
+#[derive(Debug, Clone)]
+pub enum ReconcileVerdict {
+    /// Safe to re-execute: the step has no external side effect
+    /// (`Model`, `ReadOnly`), the probe proved the side effect did NOT
+    /// land (`FileWrite` with missing/mismatched content), or the replay
+    /// carries the same idempotency key and the remote dedups
+    /// (`IdempotentHttp`).
+    Rerun { reason: String },
+    /// The probe proved the side effect already landed before the crash
+    /// (`FileWrite` whose content hash matches). `output` describes the
+    /// reconciliation and is journaled as the step's outcome — the step is
+    /// NOT re-executed.
+    AlreadyComplete { reason: String, output: String },
+    /// Nothing can prove whether the side effect landed (`OpaqueWrite`,
+    /// legacy `Tool`/`Subagent`, or a `FileWrite`/`IdempotentHttp` whose
+    /// hint is missing or malformed). The run is parked in NEEDS_REVIEW
+    /// and the step is never replayed.
+    NeedsReview { reason: String },
+}
+
+/// Result of probing a `FileWrite` target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileProbe {
+    /// The file exists and its SHA-256 matches the intended hash: the
+    /// write landed before the crash.
+    Completed,
+    /// The file is missing or its content differs: the write did not land
+    /// (or was torn mid-write — a rerun overwrites it wholesale).
+    Incomplete,
+    /// No usable hint (missing/malformed): cannot probe at all.
+    NoProbe,
+}
+
+/// Probe the `FileWrite` target: read the file and compare its SHA-256 to
+/// the intended hash from the reconcile hint.
+///
+/// Soundness: the hint (path + expected hash) is journaled in the same
+/// fsync'd intent row as the step itself, so a surviving orphan always
+/// carries its own probe parameters. The probe only *reads*; it never
+/// mutates. A torn write (crash mid-write) yields a hash mismatch, which
+/// correctly classifies as `Incomplete` — the rerun overwrites the file
+/// completely, so no partial content survives.
+fn probe_file_write(hint_json: Option<&str>) -> FileProbe {
+    let hint = hint_json.and_then(ReconcileHint::from_json);
+    let (path, expected) = match hint {
+        Some(h) => match (h.path, h.expected_hash) {
+            (Some(p), Some(e)) => (p, e),
+            _ => return FileProbe::NoProbe,
+        },
+        None => return FileProbe::NoProbe,
+    };
+    match std::fs::read(&path) {
+        Ok(bytes) if sha256_hex(&bytes) == expected => FileProbe::Completed,
+        _ => FileProbe::Incomplete,
+    }
+}
+
+/// Reconcile an orphaned intent (a `started` row with no outcome row).
+///
+/// This runs *before* falling back to human review, so that a crash only
+/// parks the run when nothing can prove the step's fate:
+///
+/// - `Model` / `ReadOnly`: re-running spends tokens / re-reads, but cannot
+///   duplicate a mutation → `Rerun`.
+/// - `FileWrite`: probe the target. Hash matches → `AlreadyComplete`
+///   (journal as executed, never re-run the write). Otherwise → `Rerun`
+///   (the rerun overwrites, so a torn partial write cannot survive).
+/// - `IdempotentHttp`: → `Rerun`; the worker replays with the SAME
+///   idempotency key from the hint, and the remote side dedups — a replay
+///   that lands twice is still a single effect.
+/// - `OpaqueWrite` / legacy `Tool` / `Subagent`: no probe and no key can
+///   prove anything → `NeedsReview`. The step is never replayed.
+///
+/// Fail-closed: a `FileWrite` or `IdempotentHttp` whose hint is missing or
+/// malformed degrades to `NeedsReview`, never to `Rerun`.
+pub fn reconcile_orphan(intent: &StepIntent) -> ReconcileVerdict {
+    match intent.kind {
+        StepKind::Model => ReconcileVerdict::Rerun {
+            reason: "orphaned model intent: model calls have no external \
+                     side effect; safe to re-run"
+                .to_string(),
+        },
+        StepKind::ReadOnly => ReconcileVerdict::Rerun {
+            reason: "orphaned read-only intent: reads have no side effect; \
+                     safe to re-run"
+                .to_string(),
+        },
+        StepKind::FileWrite => match probe_file_write(intent.reconcile_hint.as_deref()) {
+            FileProbe::Completed => {
+                let hash = intent
+                    .reconcile_hint
+                    .as_deref()
+                    .and_then(ReconcileHint::from_json)
+                    .and_then(|h| h.expected_hash)
+                    .unwrap_or_default();
+                ReconcileVerdict::AlreadyComplete {
+                    reason: "file probe: target content hash matches the \
+                             intended hash; the write landed before the crash"
+                        .to_string(),
+                    output: format!("{{\"reconciled\":\"probe_match\",\"hash\":\"{hash}\"}}"),
+                }
+            }
+            FileProbe::Incomplete => ReconcileVerdict::Rerun {
+                reason: "file probe: target missing or content differs; the \
+                         write did not land — safe to re-run (rerun overwrites)"
+                    .to_string(),
+            },
+            FileProbe::NoProbe => ReconcileVerdict::NeedsReview {
+                reason: "file_write intent has no usable reconcile hint; \
+                         cannot probe — fail closed to review"
+                    .to_string(),
+            },
+        },
+        StepKind::IdempotentHttp => {
+            match intent
+                .reconcile_hint
+                .as_deref()
+                .and_then(ReconcileHint::from_json)
+                .and_then(|h| h.idempotency_key)
+            {
+                Some(key) => ReconcileVerdict::Rerun {
+                    reason: format!(
+                        "idempotent_http intent: replay with the same \
+                         idempotency key ({key}); the remote side dedups"
+                    ),
+                },
+                None => ReconcileVerdict::NeedsReview {
+                    reason: "idempotent_http intent has no idempotency key; \
+                             cannot replay safely — fail closed to review"
+                        .to_string(),
+                },
+            }
+        }
+        StepKind::OpaqueWrite | StepKind::Tool | StepKind::Subagent => {
+            ReconcileVerdict::NeedsReview {
+                reason: "orphaned intent with no outcome row and no \
+                         reconciliation strategy: the side effect may have \
+                         executed after the intent fsync; never replay"
+                    .to_string(),
+            }
         }
     }
 }
@@ -280,6 +486,8 @@ pub struct Step {
     pub attempt: u64,
     pub review_id: Option<String>,
     pub ts_ms: u64,
+    /// JSON [`ReconcileHint`] from the latest journal row, if any.
+    pub reconcile_hint: Option<String>,
 }
 
 impl Step {
@@ -304,6 +512,9 @@ pub struct StepIntent {
     pub attempt: u64,
     pub kind: StepKind,
     pub input_hash: String,
+    /// JSON [`ReconcileHint`] (file probe params, idempotency key), if the
+    /// worker supplied one at [`RunsDb::begin_step`] time.
+    pub reconcile_hint: Option<String>,
 }
 
 /// One UI replay event.
@@ -374,6 +585,49 @@ pub struct RunsDb {
     home: PathBuf,
 }
 
+/// One journal row for a step: the full attempt history of
+/// `(run_id, step_no)`, oldest first. Used by crash-recovery verification
+/// (and `runs show`) to see how an orphan was reconciled: a second
+/// `started` row means the step was re-begun after a crash, an
+/// `executed_ok` row whose output carries `"reconciled":"probe_match"`
+/// means the file probe proved the write landed.
+#[derive(Debug, Clone)]
+pub struct StepAttempt {
+    pub attempt: u64,
+    pub kind: StepKind,
+    pub input_hash: String,
+    pub output: Option<String>,
+    pub outcome: Option<String>,
+}
+
+impl RunsDb {
+    /// All journal rows for `(run_id, step_no)`, ordered by attempt.
+    pub fn step_attempts(&self, run_id: &str, step_no: u64) -> Result<Vec<StepAttempt>, RunsError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT attempt, kind, input_hash, output, outcome
+             FROM run_steps
+             WHERE run_id = ?1 AND step_no = ?2
+             ORDER BY attempt",
+        )?;
+        let attempts = stmt
+            .query_map(rusqlite::params![run_id, step_no as i64], |row| {
+                Ok(StepAttempt {
+                    attempt: row.get::<_, i64>(0).unwrap_or(0).max(0) as u64,
+                    kind: row
+                        .get::<_, String>(1)
+                        .ok()
+                        .and_then(|s| StepKind::parse(&s))
+                        .unwrap_or(StepKind::Tool),
+                    input_hash: row.get(2)?,
+                    output: row.get(3)?,
+                    outcome: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(attempts)
+    }
+}
+
 impl RunsDb {
     /// Open (creating) `runs.db` under `home`, with the default lease TTL.
     pub fn open(home: &Path) -> Result<Self, RunsError> {
@@ -433,6 +687,19 @@ impl RunsDb {
                  PRIMARY KEY (run_id, seq)
              );",
         )?;
+        // Schema evolution: `run_steps.reconcile_hint` carries the
+        // reconciliation parameters for an orphaned intent (file probe
+        // path+hash, idempotency key) as JSON. Databases created before
+        // this column existed get it via ALTER TABLE.
+        let has_hint: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('run_steps')
+             WHERE name = 'reconcile_hint'",
+            [],
+            |row| row.get(0),
+        )?;
+        if has_hint == 0 {
+            conn.execute("ALTER TABLE run_steps ADD COLUMN reconcile_hint TEXT", [])?;
+        };
         let mut leases = ScheduleLeases::open(home, RUN_LEASE_TENANT)?;
         if let Some(ttl) = ttl_ms {
             leases = leases.with_ttl(ttl);
@@ -565,6 +832,23 @@ impl RunsDb {
         kind: StepKind,
         input_hash: &str,
     ) -> Result<StepIntent, RunsError> {
+        self.begin_step_with_hint(run_id, step_no, kind, input_hash, None)
+    }
+
+    /// Write-ahead intent with a reconciliation hint: `hint` is JSON
+    /// ([`ReconcileHint`]) carrying the parameters [`reconcile_orphan`]
+    /// needs if this intent is orphaned by a crash (file probe path+hash,
+    /// idempotency key). The hint is fsync'd in the same intent row as the
+    /// step itself, so a surviving orphan always carries its own probe
+    /// parameters.
+    pub fn begin_step_with_hint(
+        &self,
+        run_id: &str,
+        step_no: u64,
+        kind: StepKind,
+        input_hash: &str,
+        hint: Option<&str>,
+    ) -> Result<StepIntent, RunsError> {
         let attempt: i64 = self
             .conn
             .query_row(
@@ -577,10 +861,18 @@ impl RunsDb {
         self.conn.execute(
             &format!(
                 "INSERT INTO run_steps
-                 (run_id, step_no, attempt, kind, input_hash, output, outcome, ts_ms)
-                 VALUES (?1, ?2, ?3, ?4, ?5, NULL, '{OUTCOME_STARTED}', {DB_NOW_MS})"
+                 (run_id, step_no, attempt, kind, input_hash, output, outcome,
+                  reconcile_hint, ts_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5, NULL, '{OUTCOME_STARTED}', ?6, {DB_NOW_MS})"
             ),
-            rusqlite::params![run_id, step_no as i64, attempt, kind.as_str(), input_hash],
+            rusqlite::params![
+                run_id,
+                step_no as i64,
+                attempt,
+                kind.as_str(),
+                input_hash,
+                hint
+            ],
         )?;
         // Durability BEFORE the side effect: a crash after this point
         // leaves a classifiable orphan instead of silence.
@@ -595,6 +887,7 @@ impl RunsDb {
             attempt: attempt.max(0) as u64,
             kind,
             input_hash: input_hash.to_string(),
+            reconcile_hint: hint.map(|s| s.to_string()),
         })
     }
 
@@ -618,8 +911,9 @@ impl RunsDb {
         self.conn.execute(
             &format!(
                 "INSERT INTO run_steps
-                 (run_id, step_no, attempt, kind, input_hash, output, outcome, ts_ms)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, {DB_NOW_MS})"
+                 (run_id, step_no, attempt, kind, input_hash, output, outcome,
+                  reconcile_hint, ts_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, {DB_NOW_MS})"
             ),
             rusqlite::params![
                 intent.run_id,
@@ -628,7 +922,8 @@ impl RunsDb {
                 intent.kind.as_str(),
                 intent.input_hash,
                 output,
-                outcome_s
+                outcome_s,
+                intent.reconcile_hint,
             ],
         )?;
         self.fsync_db()?;
@@ -645,7 +940,8 @@ impl RunsDb {
     /// begun step reached a decided outcome.
     pub fn find_orphaned_intents(&self, run_id: &str) -> Result<Vec<StepIntent>, RunsError> {
         let mut stmt = self.conn.prepare(
-            "SELECT s.run_id, s.step_no, s.attempt, s.kind, s.input_hash
+            "SELECT s.run_id, s.step_no, s.attempt, s.kind, s.input_hash,
+                    s.reconcile_hint
              FROM run_steps s
              JOIN (SELECT step_no, MAX(attempt) AS a FROM run_steps
                    WHERE run_id = ?1 GROUP BY step_no) latest
@@ -665,6 +961,7 @@ impl RunsDb {
                         .and_then(|s| StepKind::parse(&s))
                         .unwrap_or(StepKind::Tool),
                     input_hash: row.get(4)?,
+                    reconcile_hint: row.get(5)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -834,7 +1131,8 @@ impl RunsDb {
     fn latest_steps(&self, run_id: &str) -> Result<Vec<Step>, RunsError> {
         let mut stmt = self.conn.prepare(
             "SELECT s.run_id, s.step_no, s.kind, s.input_hash, s.output,
-                    s.outcome, s.attempt, s.review_id, s.ts_ms
+                    s.outcome, s.attempt, s.review_id, s.ts_ms,
+                    s.reconcile_hint
              FROM run_steps s
              JOIN (SELECT step_no, MAX(attempt) AS a FROM run_steps
                    WHERE run_id = ?1 GROUP BY step_no) latest
@@ -858,6 +1156,7 @@ impl RunsDb {
                     attempt: row.get::<_, i64>(6).unwrap_or(0).max(0) as u64,
                     review_id: row.get(7)?,
                     ts_ms: row.get::<_, i64>(8).unwrap_or(0).max(0) as u64,
+                    reconcile_hint: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1064,15 +1363,19 @@ impl RunsDb {
         let budgets = Budgets::parse(&run.budgets);
         // Only steps that actually did work count. `never_ran` provably
         // did nothing; in-progress (NULL) rows aren't counted here because
-        // this path only runs for decided outcomes.
-        let counts_as_call = kind == StepKind::Tool
+        // this path only runs for decided outcomes. Side-effecting step
+        // kinds (tool, file_write, idempotent_http, opaque_write) count;
+        // model/read-only steps don't.
+        let counts_as_call = kind.counts_as_tool_call()
             && matches!(outcome, "executed_ok" | "executed_failed" | "ambiguous");
         if counts_as_call {
             if let Some(max) = budgets.max_tool_calls {
                 let used: i64 = self.conn.query_row(
                     "SELECT COUNT(*) FROM (
                        SELECT step_no, MAX(attempt) AS a FROM run_steps
-                       WHERE run_id = ?1 AND kind = 'tool' GROUP BY step_no
+                       WHERE run_id = ?1
+                         AND kind IN ('tool','file_write','idempotent_http','opaque_write')
+                       GROUP BY step_no
                      ) latest
                      JOIN run_steps s ON s.run_id = ?1
                        AND s.step_no = latest.step_no AND s.attempt = latest.a
@@ -1133,10 +1436,12 @@ impl RunsDb {
     /// - No row / NULL outcome / `never_ran` → safe to execute.
     /// - `ambiguous` → NEVER replayed: the run is moved to NEEDS_REVIEW
     ///   and the step is reported via `needs_review_step_no`.
-    /// - `started` (orphaned write-ahead intent) → classified by
-    ///   [`classify_orphan`]: model steps are `NeverRan` and safe to
-    ///   re-run; tool/subagent steps are `Ambiguous` (the side effect may
-    ///   have executed after the intent fsync), so the run is moved to
+    /// - `started` (orphaned write-ahead intent) → reconciled by
+    ///   [`reconcile_orphan`] *before* falling back to review:
+    ///   `Rerun` → the step is safe to execute (first incomplete step);
+    ///   `AlreadyComplete` → the probe proved the side effect landed, so
+    ///   the outcome is journaled as executed and the scan continues
+    ///   (never re-executed); `NeedsReview` → the run is moved to
     ///   NEEDS_REVIEW and the step is never replayed.
     /// - `executed_ok` / `executed_failed` → complete; output is replayed.
     ///
@@ -1164,7 +1469,8 @@ impl RunsDb {
                     break;
                 }
                 // Write-ahead orphan: the intent was fsync'd but no outcome
-                // was ever journaled. Classify it — never assume.
+                // was ever journaled. Reconcile it — review is the last
+                // resort, not the default.
                 Some("started") => {
                     let intent = StepIntent {
                         run_id: step.run_id.clone(),
@@ -1172,22 +1478,36 @@ impl RunsDb {
                         attempt: step.attempt,
                         kind: step.kind,
                         input_hash: step.input_hash.clone(),
+                        reconcile_hint: step.reconcile_hint.clone(),
                     };
-                    match classify_orphan(&intent) {
-                        AttemptOutcome::NeverRan { .. } => {
+                    match reconcile_orphan(&intent) {
+                        ReconcileVerdict::Rerun { .. } => {
                             first_incomplete_step_no = Some(expected);
+                            break;
                         }
-                        AttemptOutcome::Ambiguous { .. } => {
-                            needs_review_step_no = Some(expected);
+                        ReconcileVerdict::AlreadyComplete { output, .. } => {
+                            // The probe proved the side effect landed
+                            // before the crash: journal the outcome so the
+                            // orphan is closed, and keep scanning — later
+                            // steps may still need work. The step is NOT
+                            // re-executed.
+                            self.complete_step(
+                                &intent,
+                                &AttemptOutcome::Executed { success: true },
+                                Some(&output),
+                            )?;
+                            let mut done_step = step;
+                            done_step.outcome = Some(OUTCOME_EXECUTED_OK.to_string());
+                            done_step.output = Some(output);
+                            done_step.attempt += 1;
+                            completed.push(done_step);
+                            expected += 1;
                         }
-                        // Unreachable: classify_orphan only returns
-                        // NeverRan or Ambiguous. Fail closed (park the
-                        // run) rather than replaying on a surprise.
-                        AttemptOutcome::Executed { .. } => {
+                        ReconcileVerdict::NeedsReview { .. } => {
                             needs_review_step_no = Some(expected);
+                            break;
                         }
                     }
-                    break;
                 }
                 // None (legacy started-but-unfinished), never_ran (provably
                 // did nothing), or an unknown string: safe to (re-)execute.
@@ -1908,6 +2228,328 @@ mod tests {
             .complete_step(&intent2, &ok_outcome(), Some("{}"))
             .unwrap_err();
         assert!(matches!(err, RunsError::BudgetExceeded { .. }));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    // ---- Reconciliation (Amein's review: review is the last resort) ----
+
+    fn file_hint(home: &std::path::Path, name: &str, content: &str) -> (String, String) {
+        let path = home.join(name);
+        std::fs::write(&path, content).unwrap();
+        let hint = ReconcileHint {
+            path: Some(path.to_string_lossy().to_string()),
+            expected_hash: Some(sha256_hex(content.as_bytes())),
+            idempotency_key: None,
+        };
+        (path.to_string_lossy().to_string(), hint.to_json().unwrap())
+    }
+
+    /// FileWrite orphan where the target already has the intended content:
+    /// the probe proves the write landed → journaled as executed, NOT
+    /// re-run, run NOT parked.
+    #[test]
+    fn reconcile_file_write_completed_probe() {
+        let home = test_home("reconfiledone");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        db.transition(&id, RunState::Queued, RunState::ExecutingTools)
+            .unwrap();
+        let content = "chaos-file:complete\n";
+        let (path, hint_json) = file_hint(&home, "target.txt", content);
+        // Simulate: intent fsync'd, write landed, crash before outcome.
+        let intent = db
+            .begin_step_with_hint(
+                &id,
+                0,
+                StepKind::FileWrite,
+                &step_hash("rf", 0),
+                Some(&hint_json),
+            )
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::AlreadyComplete { .. }
+        ));
+        drop(db);
+        let db = RunsDb::open(&home).unwrap();
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, None);
+        assert_eq!(plan.completed.len(), 1);
+        assert_eq!(plan.completed[0].outcome.as_deref(), Some("executed_ok"));
+        assert!(plan.completed[0]
+            .output
+            .as_deref()
+            .unwrap_or("")
+            .contains("probe_match"));
+        assert_eq!(plan.first_incomplete_step_no, Some(1));
+        // No orphan left behind; the file was NOT rewritten by resume.
+        assert!(db.find_orphaned_intents(&id).unwrap().is_empty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// FileWrite orphan where the target is missing: the write did not
+    /// land → safe to re-run.
+    #[test]
+    fn reconcile_file_write_missing_reruns() {
+        let home = test_home("reconfilemissing");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let missing = home.join("not_there.txt");
+        let hint = ReconcileHint {
+            path: Some(missing.to_string_lossy().to_string()),
+            expected_hash: Some(sha256_hex(b"intended")),
+            idempotency_key: None,
+        };
+        // Crash after the intent but before the write.
+        let intent = db
+            .begin_step_with_hint(
+                &id,
+                0,
+                StepKind::FileWrite,
+                &step_hash("rf", 1),
+                Some(&hint.to_json().unwrap()),
+            )
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::Rerun { .. }
+        ));
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, None);
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        // Re-executing writes the file; a later resume probes it complete.
+        std::fs::write(&missing, b"intended").unwrap();
+        let intent2 = db
+            .begin_step_with_hint(
+                &id,
+                0,
+                StepKind::FileWrite,
+                &step_hash("rf", 1),
+                Some(&hint.to_json().unwrap()),
+            )
+            .unwrap();
+        assert_eq!(intent2.attempt, 1);
+        db.complete_step(&intent2, &ok_outcome(), Some("{}"))
+            .unwrap();
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.completed.len(), 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// FileWrite orphan where the target has DIFFERENT content (torn
+    /// write): hash mismatch → re-run, and the rerun overwrites wholesale.
+    #[test]
+    fn reconcile_file_write_hash_mismatch_reruns() {
+        let home = test_home("reconfiletorn");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let path = home.join("torn.txt");
+        std::fs::write(&path, b"partial-write-").unwrap(); // torn content
+        let hint = ReconcileHint {
+            path: Some(path.to_string_lossy().to_string()),
+            expected_hash: Some(sha256_hex(b"full intended content")),
+            idempotency_key: None,
+        };
+        let intent = db
+            .begin_step_with_hint(
+                &id,
+                0,
+                StepKind::FileWrite,
+                &step_hash("rf", 2),
+                Some(&hint.to_json().unwrap()),
+            )
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::Rerun { .. }
+        ));
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        assert_eq!(plan.needs_review_step_no, None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// FileWrite orphan with no usable hint: cannot probe → fail closed to
+    /// review, never re-run blind.
+    #[test]
+    fn reconcile_file_write_no_hint_needs_review() {
+        let home = test_home("reconfilenohint");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::FileWrite, &step_hash("rf", 3))
+            .unwrap();
+        assert!(intent.reconcile_hint.is_none());
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::NeedsReview { .. }
+        ));
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, Some(0));
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::NeedsReview);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// IdempotentHttp orphan with a key: re-run with the SAME key; the
+    /// verdict surfaces the key so the worker replays it exactly.
+    #[test]
+    fn reconcile_idempotent_http_reruns_with_same_key() {
+        let home = test_home("reconidem");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let hint = ReconcileHint {
+            path: None,
+            expected_hash: None,
+            idempotency_key: Some("idem:run:3".to_string()),
+        };
+        let intent = db
+            .begin_step_with_hint(
+                &id,
+                3,
+                StepKind::IdempotentHttp,
+                &step_hash("ri", 3),
+                Some(&hint.to_json().unwrap()),
+            )
+            .unwrap();
+        match reconcile_orphan(&intent) {
+            ReconcileVerdict::Rerun { reason } => {
+                assert!(reason.contains("idem:run:3"), "reason: {reason}")
+            }
+            v => panic!("expected Rerun, got {v:?}"),
+        }
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, None);
+        // Steps before the orphan are untouched; resume continues AT it.
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// IdempotentHttp orphan without a key: cannot replay safely → review.
+    #[test]
+    fn reconcile_idempotent_http_no_key_needs_review() {
+        let home = test_home("reconidemkeyless");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::IdempotentHttp, &step_hash("ri", 0))
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::NeedsReview { .. }
+        ));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// OpaqueWrite orphan: no probe, no key → NEEDS_REVIEW, never replayed.
+    #[test]
+    fn reconcile_opaque_write_needs_review() {
+        let home = test_home("reconopaque");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        db.transition(&id, RunState::Queued, RunState::ExecutingTools)
+            .unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::OpaqueWrite, &step_hash("ro", 0))
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::NeedsReview { .. }
+        ));
+        drop(db);
+        let db = RunsDb::open(&home).unwrap();
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, Some(0));
+        assert!(plan.completed.is_empty());
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::NeedsReview);
+        // Still listed as an orphan — nothing was silently replayed.
+        assert_eq!(db.find_orphaned_intents(&id).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// ReadOnly orphan: reads have no side effect → safe to re-run.
+    #[test]
+    fn reconcile_readonly_reruns() {
+        let home = test_home("reconread");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::ReadOnly, &step_hash("rr", 0))
+            .unwrap();
+        assert!(matches!(
+            reconcile_orphan(&intent),
+            ReconcileVerdict::Rerun { .. }
+        ));
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        assert_eq!(plan.needs_review_step_no, None);
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::Queued);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The reconcile hint survives the crash: written in the fsync'd
+    /// intent row, readable from the orphan after reopen.
+    #[test]
+    fn reconcile_hint_survives_crash() {
+        let home = test_home("reconhintcrash");
+        let id = {
+            let db = RunsDb::open(&home).unwrap();
+            let id = db.create_run(None, "{}", "{}").unwrap();
+            let hint = ReconcileHint {
+                path: None,
+                expected_hash: None,
+                idempotency_key: Some("idem:crash:1".to_string()),
+            };
+            db.begin_step_with_hint(
+                &id,
+                0,
+                StepKind::IdempotentHttp,
+                &step_hash("rh", 0),
+                Some(&hint.to_json().unwrap()),
+            )
+            .unwrap();
+            drop(db); // kill -9
+            id
+        };
+        let db = RunsDb::open(&home).unwrap();
+        let orphans = db.find_orphaned_intents(&id).unwrap();
+        assert_eq!(orphans.len(), 1);
+        let hint = orphans[0]
+            .reconcile_hint
+            .as_deref()
+            .and_then(ReconcileHint::from_json)
+            .expect("hint parses");
+        assert_eq!(hint.idempotency_key.as_deref(), Some("idem:crash:1"));
+        // And the verdict still resolves to Rerun with that key.
+        assert!(matches!(
+            reconcile_orphan(&orphans[0]),
+            ReconcileVerdict::Rerun { .. }
+        ));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// step_attempts exposes the attempt history for verification.
+    #[test]
+    fn step_attempts_history() {
+        let home = test_home("attempts");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let i1 = db
+            .begin_step(&id, 0, StepKind::Model, &step_hash("a", 0))
+            .unwrap();
+        drop(db);
+        let db = RunsDb::open(&home).unwrap();
+        let i2 = db
+            .begin_step(&id, 0, StepKind::Model, &step_hash("a", 0))
+            .unwrap();
+        assert_eq!(i1.attempt, 0);
+        assert_eq!(i2.attempt, 1);
+        db.complete_step(&i2, &ok_outcome(), Some("{}")).unwrap();
+        let attempts = db.step_attempts(&id, 0).unwrap();
+        assert_eq!(attempts.len(), 3);
+        assert_eq!(attempts[0].outcome.as_deref(), Some("started"));
+        assert_eq!(attempts[1].outcome.as_deref(), Some("started"));
+        assert_eq!(attempts[2].outcome.as_deref(), Some("executed_ok"));
         let _ = std::fs::remove_dir_all(&home);
     }
 }
