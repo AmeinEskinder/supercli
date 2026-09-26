@@ -33,6 +33,7 @@ jobs:
             --exclude='*.a' \
             | grep -v -e '^./docs/book/' \
                       -e '^./docs/internal/' \
+                      -e '^./docs/parity/' \
                       -e '^./clients/gpuidart/' \
                       -e '^./clients/legacy/' \
                       -e '^./tests/device/' \
