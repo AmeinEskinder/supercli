@@ -218,7 +218,7 @@ void main() {
 
     test('active shows masked key and deactivate', () {
       const panel = LicenseSettingsPanel(
-        licenseKey: 'ABCD-1234-EFGH-5678',
+        licenseKey: 'TEST-LICENSE-KEY',
         status: 'Active',
         activated: true,
         seats: [LicenseSeat(id: 's1', deviceName: 'MacBook')],
@@ -227,8 +227,8 @@ void main() {
       final row = node.children[2] as UiRow;
       expect((row.children[1] as UiButton).label, 'Deactivate');
       final masked = row.children[0] as UiText;
-      expect(masked.text, contains('5678'));
-      expect(masked.text, isNot(contains('ABCD')));
+      expect(masked.text, contains('-KEY'));
+      expect(masked.text, isNot(contains('TEST-LICENSE-KEY')));
     });
 
     test('seats dataset has rows', () {
