@@ -1499,6 +1499,14 @@ fn principal_device_id(principal: &ControllerPrincipal) -> String {
 /// `{"list": true}` or `{"target_id": "...", "frames": N, "interval_ms": M,
 /// "endpoint": "ws://…"}`. Returns the takeover_tool JSON output.
 ///
+/// Live human takeover adds session actions (`"action": ...`):
+/// `begin` (attach, returns a session token), `pause` (agent stops driving,
+/// control goes to the human), `mouse` / `key` (forward one human input
+/// event via CDP Input.dispatchMouseEvent / Input.dispatchKeyEvent —
+/// refused unless the session is paused for the human), `resume` (control
+/// back to the agent), `status`, `close`. Begin/pause/resume are appended
+/// to the durable audit log `browser-takeover-audit.jsonl`.
+///
 /// The CDP endpoint is loopback-only (ws://); the Host dials it from the
 /// machine the browser runs on, so this works when the gpuidart app and the
 /// browser are on the same host as the Host.
@@ -2241,7 +2249,8 @@ fn handle_with_effects(
             (200, supercli_core::plugin_updates::request().to_string())
         }
         ("POST", "/mobile/openers") => {
-            let (status, body) = supercli_core::controller_host::opener_response(&body_json(request));
+            let (status, body) =
+                supercli_core::controller_host::opener_response(&body_json(request));
             (status, body.to_string())
         }
         ("POST", "/mobile/integrations/install") => {
@@ -2462,8 +2471,11 @@ fn handle_project_organization(
         Ok(())
     };
     let color_writer: Option<ProjectColorWriter<'_>> = Some(&write_color);
-    let (status, body) =
-        supercli_core::controller_host::project_organization_response(body, &projects, color_writer);
+    let (status, body) = supercli_core::controller_host::project_organization_response(
+        body,
+        &projects,
+        color_writer,
+    );
     (status, body.to_string())
 }
 
@@ -3924,9 +3936,11 @@ mod tests {
             supercli_core::action_reviews::Actor::PolicyAllow,
         )
         .unwrap();
-        assert!(supercli_core::action_reviews::inflight_reviews(&session_dir)
-            .unwrap()
-            .is_empty());
+        assert!(
+            supercli_core::action_reviews::inflight_reviews(&session_dir)
+                .unwrap()
+                .is_empty()
+        );
 
         let request = Request {
             request_id: None,
@@ -5254,7 +5268,8 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                     response.get("hostProtocol"),
                     Some(
                         &serde_json::to_value(
-                            supercli_core::controller_protocol::HostProtocolDescriptor::headless_v1()
+                            supercli_core::controller_protocol::HostProtocolDescriptor::headless_v1(
+                            )
                         )
                         .expect("descriptor json")
                     )
