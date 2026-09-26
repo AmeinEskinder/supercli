@@ -4,9 +4,9 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/terminal/terminal_pane.dart';
 import 'package:supercli_app/terminal/terminal_state.dart';
+import 'package:supercli_app/terminal/terminal_types.dart';
 
 void main() {
   final state = TerminalState(cols: 60, rows: 16, fontSize: 13.0);

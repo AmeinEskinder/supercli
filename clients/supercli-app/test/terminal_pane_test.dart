@@ -9,6 +9,7 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/terminal/terminal_pane.dart';
 import 'package:supercli_app/terminal/terminal_state.dart';
+import 'package:supercli_app/terminal/terminal_types.dart';
 import 'package:test/test.dart';
 
 TerminalState makeState({int cols = 10, int rows = 4}) =>
@@ -127,15 +128,14 @@ void main() {
       expect(s.cursor.style, CursorStyle.bar);
     });
 
-    test('cursor style round-trips through the node', () {
+    test('cursor style is stored on state', () {
       final s = makeState();
       s.setCursor(2, 1, CursorStyle.underline, true);
-      final node = s.buildNode('t1');
-      expect(node.cursor.col, 2);
-      expect(node.cursor.row, 1);
-      expect(node.cursor.style, CursorStyle.underline);
-      final json = node.toJson();
-      expect((json['cursor'] as Map)['style'], 'underline');
+      expect(s.cursor.col, 2);
+      expect(s.cursor.row, 1);
+      expect(s.cursor.style, CursorStyle.underline);
+      // NOTE: JSON serialization was via UiTerminal (P0-8 proposal);
+      // cursor renders via TerminalPane.buildFallback today.
     });
   });
 
@@ -160,36 +160,33 @@ void main() {
     });
   });
 
-  group('UiTerminal node', () {
-    test('buildNode carries grid, theme, and dimensions', () {
+  group('visibleRows', () {
+    test('returns grid with correct dimensions', () {
       final s = makeState(cols: 80, rows: 24);
-      final node = s.buildNode('term-1');
-      expect(node, isA<UiTerminal>());
-      expect(node.cols, 80);
-      expect(node.rows, 24);
-      expect(node.cells.length, 24);
-      expect(node.cells[0].length, 80);
-      expect(node.fontFamily, isNotEmpty);
-      expect(node.scrollbackLines, 10000);
+      s.writeString('hello');
+      final rows = s.visibleRows();
+      expect(rows.length, 24);
+      expect(rows[0].length, 80);
+      expect(rows[0][0].char, 'h');
+      // NOTE: P0-8 UiTerminal node proposal is at
+      // docs/internal/proposals/gpuidart-p08-uiterminal.patch
     });
 
-    test('node JSON has the terminal kind and cell data', () {
+    test('visibleRows carries cell data with colors', () {
       final s = makeState();
       s.writeString('hi', fg: TerminalColor.palette(196));
-      final json = s.buildNode('t1').toJson();
-      expect(json['kind'], 'terminal');
-      expect(json['cols'], 10);
-      final cells = json['cells'] as List;
-      final first = (cells[0] as List)[0] as Map;
-      expect(first['char'], 'h');
-      expect((first['fg'] as Map)['palette'], 196);
+      final rows = s.visibleRows();
+      expect(rows[0][0].char, 'h');
+      expect((rows[0][0].fg as PaletteColor).index, 196);
     });
 
-    test('selection serializes when present', () {
+    test('selection is stored on state', () {
       final s = makeState();
       s.select(0, 0, 2, 0);
-      final json = s.buildNode('t1').toJson();
-      expect(json.containsKey('selection'), isTrue);
+      expect(s.selection, isNotNull);
+      expect(s.selection!.startCol, 0);
+      // NOTE: JSON serialization was via UiTerminal (P0-8 proposal);
+      // RLE fallback renders selection via TerminalPane.buildFallback
     });
   });
 
@@ -273,13 +270,13 @@ void main() {
       expect(selected, isNotEmpty);
     });
 
-    test('build() composes header + terminal node + fallback', () {
+    test('build() composes header + RLE fallback', () {
       final s = makeState();
       final pane = TerminalPane(paneId: 'p1', title: 'zsh', state: s);
       final node = pane.build() as UiColumn;
       expect(node.children[0], isA<UiRow>()); // header
-      expect(node.children[1], isA<UiTerminal>()); // P0-8 node
-      expect(node.children[2], isA<UiColumn>()); // fallback grid
+      // P0-8 UiTerminal removed; RLE fallback is children[1]
+      expect(node.children[1], isA<UiColumn>()); // fallback grid
     });
   });
 

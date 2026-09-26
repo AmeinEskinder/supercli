@@ -4,6 +4,22 @@
 **Branch:** `track-b-terminal-pane`
 **Status:** Real implementation where gpuidart allows; gaps logged below.
 
+## PROPOSAL FOR AMEIN (2026-09-26 update)
+
+The `UiTerminal` framework work has been **reverted from the submodule** and exported
+as a proposal patch. Rationale: the submodule commit existed only in the build VM;
+fresh clones would fail.
+
+- **Proposal patch:** `docs/internal/proposals/gpuidart-p08-uiterminal.patch`
+  (git format-patch against upstream `135d300`; applies to `clients/gpuidart`)
+- **Vendored types:** `clients/supercli-app/lib/terminal/terminal_types.dart`
+  (copied from the proposal so supercli-app builds against upstream gpuidart)
+- **Current rendering:** RLE fallback (`UiRow`/`UiText`) via `TerminalPane.buildFallback`
+- **When you ship P0-8:** delete `terminal_types.dart`, import from `package:gpuidart`,
+  and restore `TerminalState.buildNode` → `UiTerminal` (see patch for the API)
+
+No push to `ameineskinder/gpuidart` was made; no access was requested.
+
 ## What was built
 
 - `clients/gpuidart/lib/src/terminal.dart` — `UiTerminal` wire types:

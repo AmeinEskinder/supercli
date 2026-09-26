@@ -2,7 +2,7 @@
 ///
 /// Real implementation of the P0-8 terminal pane (not a scaffold). The pane
 /// is backed by [TerminalState] (grid + scrollback + cursor + selection) and
-/// renders through [TerminalPane], which builds the `UiTerminal` snapshot
+/// renders through [TerminalPane] via the RLE fallback (P0-8 UiTerminal proposal pending)
 /// node for the native renderer plus a run-length-encoded UiRow/UiText
 /// fallback that displays today with real ANSI 256 + truecolor.
 ///

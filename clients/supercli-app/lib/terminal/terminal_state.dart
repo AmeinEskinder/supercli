@@ -3,15 +3,15 @@
 /// The Rust host owns the ghostty-vt screen state, diffs it, and pushes dirty
 /// cells. This class applies those updates to a local grid, maintains the
 /// scrollback buffer, cursor, and selection, and rebuilds an immutable
-/// `UiTerminal` snapshot node for the native renderer.
+/// snapshot data for the native renderer (via TerminalPane RLE fallback until P0-8 ships).
 ///
 /// Data flow:
 ///   host damage (list of `TerminalCellUpdate`)
 ///     -> `updateCells` -> `TerminalDamage` ranges
-///     -> `buildNode` -> UiTerminal -> host.publish()
+///     -> `visibleRows` -> TerminalPane.buildFallback -> host.publish()
 library;
 
-import 'package:gpuidart/gpuidart.dart';
+import 'terminal_types.dart';
 
 /// One dirty cell pushed by the host's ghostty-vt diff.
 final class TerminalCellUpdate {
@@ -201,24 +201,13 @@ class TerminalState {
     return TerminalDamage(allDamage);
   }
 
-  /// Build the immutable snapshot node for the native renderer.
-  UiTerminal buildNode(String id) {
-    final cells = scrollOffset == 0
-        ? _grid
-        : _viewportRows();
-    return UiTerminal(
-      id,
-      cols: cols,
-      rows: rows,
-      fontFamily: fontFamily,
-      fontSize: fontSize,
-      lineHeight: lineHeight,
-      theme: theme,
-      scrollbackLines: scrollbackLines,
-      cells: cells,
-      cursor: cursor,
-      selection: selection,
-    );
+  /// Get the visible grid rows for rendering.
+  ///
+  /// NOTE: The P0-8 `UiTerminal` native node is not yet in upstream gpuidart.
+  /// Until Amein ships it (see docs/internal/proposals/gpuidart-p08-uiterminal.patch),
+  /// callers should render via [TerminalPane.buildFallback] which uses UiRow/UiText.
+  List<List<TerminalCell>> visibleRows() {
+    return scrollOffset == 0 ? _grid : _viewportRows();
   }
 
   List<List<TerminalCell>> _viewportRows() {

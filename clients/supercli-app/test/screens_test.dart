@@ -99,11 +99,10 @@ void main() {
         lines: const ['\$ ls', 'src/'],
       );
       final node = pane.build() as UiColumn;
-      // header + UiTerminal node + fallback grid
-      expect(node.children.length, 3);
+      // header + fallback grid (P0-8 UiTerminal removed; RLE fallback only)
+      expect(node.children.length, 2);
       expect(node.children[0], isA<UiRow>());
-      expect(node.children[1], isA<UiTerminal>());
-      expect(node.children[2], isA<UiColumn>());
+      expect(node.children[1], isA<UiColumn>());
       // The lines made it into the terminal state.
       expect(pane.state.grid[0][0].char, '\$');
     });
@@ -115,8 +114,8 @@ void main() {
         findBarVisible: true,
       );
       final node = pane.build() as UiColumn;
-      // header + find bar + UiTerminal node + fallback grid
-      expect(node.children.length, 4);
+      // header + find bar + fallback grid (P0-8 UiTerminal removed)
+      expect(node.children.length, 3);
     });
 
     test('exposes terminal key bindings', () {

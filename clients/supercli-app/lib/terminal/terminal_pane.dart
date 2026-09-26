@@ -1,19 +1,18 @@
 /// Terminal pane widget: real implementation of the P0-8 terminal surface.
 ///
-/// Renders a [TerminalState] two ways:
-/// 1. [buildNode] — the forward-looking [UiTerminal] snapshot node carrying
-///    the full grid + cursor + selection for the native renderer's
-///    damage-only redraws (60fps path once the native side implements it).
-/// 2. [buildFallback] — renders the same state with today's primitives
-///    (UiRow/UiText), run-length-encoding consecutive cells with identical
-///    attributes into one UiText. This is what actually displays until the
-///    native terminal renderer lands, and it already gives real ANSI 256
-///    colors, truecolor, bold, cursor, and selection highlighting.
+/// Renders a [TerminalState] via the RLE fallback (UiRow/UiText).
+///
+/// Run-length-encodes consecutive cells with identical attributes into one
+/// UiText. This gives real ANSI 256 colors, truecolor, bold, cursor, and
+/// selection highlighting today. The P0-8 `UiTerminal` native node proposal
+/// is at docs/internal/proposals/gpuidart-p08-uiterminal.patch — when Amein
+/// ships it in the framework, this can switch to damage-only redraws.
 library;
 
 import 'package:gpuidart/gpuidart.dart';
 
 import 'terminal_state.dart';
+import 'terminal_types.dart';
 
 /// Maps special keys to the byte sequences a PTY expects.
 /// Sent through `onInput` when the corresponding [UiAction] fires.
@@ -119,8 +118,6 @@ class TerminalPane {
   final bool findBarVisible;
   final TerminalKeymap keymap;
 
-  String get _nodeId => 'terminal-$paneId';
-
   /// Handle a key action from the host event stream. Returns true if the key
   /// was consumed (an [onInput] callback fired).
   bool handleKeyAction(String actionName, Set<String> modifiers) {
@@ -139,8 +136,8 @@ class TerminalPane {
     if (text.isNotEmpty) onCopy?.call(text);
   }
 
-  /// The P0-8 snapshot node for the native renderer.
-  UiTerminal buildNode() => state.buildNode(_nodeId);
+  /// Visible grid rows for the RLE fallback renderer.
+  /// (P0-8 native node proposal: docs/internal/proposals/gpuidart-p08-uiterminal.patch)
 
   /// Full pane: header + terminal surface + optional find bar.
   UiNode build() {
@@ -157,10 +154,8 @@ class TerminalPane {
           const UiButton('find-next', 'Next'),
           const UiButton('find-prev', 'Prev'),
         ]),
-      // The native terminal node (renders once the native side implements
-      // the 'terminal' kind) followed by the primitive fallback that
-      // displays today.
-      buildNode(),
+      // RLE fallback grid (P0-8 native node proposal pending at
+      // docs/internal/proposals/gpuidart-p08-uiterminal.patch).
       buildFallback(),
     ]);
   }
