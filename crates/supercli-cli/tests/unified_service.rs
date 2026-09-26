@@ -47,7 +47,10 @@ impl Drop for ServiceProcess {
         self.stop();
         // The worker detaches one PTY core per workspace home; removing the
         // home without shutting them down leaks a core per run.
-        supercli_core::pty_core::shutdown_cores_under(&self.root, std::time::Duration::from_secs(15));
+        supercli_core::pty_core::shutdown_cores_under(
+            &self.root,
+            std::time::Duration::from_secs(15),
+        );
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }

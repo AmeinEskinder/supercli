@@ -992,6 +992,15 @@ pub fn run(args: &[String]) -> i32 {
             supercli_serve::control::send_text(&row.dir(), &sequence).map(|_| 0)
         }),
         "mcp" => Ok(crate::mcp_cli::run(&args[1..])),
+        #[cfg(feature = "device")]
+        "device" => Ok(crate::device_cli::run(&args[1..])),
+        #[cfg(not(feature = "device"))]
+        "device" => {
+            eprintln!(
+                "supercli device needs the `device` cargo feature (rebuild with --features device)"
+            );
+            Ok(2)
+        }
         "current" => Ok(crate::mcp_cli::current(&args[1..])),
         "report" => Ok(crate::mcp_cli::report(&args[1..])),
         "worktree" | "worktrees" => Ok(crate::mcp_cli::worktree(&args[1..])),

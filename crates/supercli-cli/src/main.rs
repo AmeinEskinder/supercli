@@ -15,6 +15,8 @@ mod cli;
 mod computer_cli;
 mod config_cli;
 mod connectors_cli;
+#[cfg(feature = "device")]
+mod device_cli;
 mod doctor_cli;
 mod hooks_cli;
 mod ideas_cli;
@@ -97,6 +99,17 @@ fn main() {
             std::process::exit(1);
         }
         return;
+    }
+    // Hidden device MCP server: speaks MCP (JSON-RPC 2.0) on stdio, like
+    // `__browser_mcp__`. Launched by the Host or an agent session.
+    #[cfg(feature = "device")]
+    if args.as_slice() == [supercli_device::mcp::DEVICE_MCP_ARG] {
+        std::process::exit(crate::device_cli::run_device_mcp());
+    }
+    #[cfg(not(feature = "device"))]
+    if args.iter().any(|a| a == "__device_mcp__") {
+        eprintln!("supercli __device_mcp__ needs the `device` cargo feature (rebuild with --features device)");
+        std::process::exit(2);
     }
     let code = cli::run(&args);
     // One-shot verbs exit immediately; wait for their change pings to
