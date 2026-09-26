@@ -510,6 +510,114 @@ pub fn takeover_audit_path(home: &std::path::Path) -> std::path::PathBuf {
     home.join("browser-takeover-audit.jsonl")
 }
 
+/// Hash recorded as `prev_hash` for the first entry in a takeover audit log.
+const TAKEOVER_GENESIS_PREV_HASH: &str = "genesis";
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    // Local hex encoding: avoids a new dependency for one call.
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for b in digest {
+        out.push(char::from_digit((b >> 4) as u32, 16).unwrap());
+        out.push(char::from_digit((b & 0xf) as u32, 16).unwrap());
+    }
+    out
+}
+
+/// Canonical bytes of a takeover audit entry for hashing: JSON object;
+/// serde_json is built WITHOUT the preserve_order feature, so keys
+/// serialize in alphabetical order regardless of insertion order. `entry_hash`
+/// is excluded (it is what we are computing).
+fn takeover_audit_canonical_bytes(
+    ts_ms: u64,
+    event: &str,
+    target_id: &str,
+    actor: &str,
+    reason: &str,
+    prev_hash: &str,
+) -> Vec<u8> {
+    serde_json::json!({
+        "actor": actor,
+        "event": event,
+        "prev_hash": prev_hash,
+        "reason": reason,
+        "target_id": target_id,
+        "ts_ms": ts_ms,
+    })
+    .to_string()
+    .into_bytes()
+}
+
+/// Read the `entry_hash` of the last line in the takeover audit log, if any.
+fn takeover_audit_last_hash(home: &std::path::Path) -> Result<Option<String>, String> {
+    let path = takeover_audit_path(home);
+    let file = match std::fs::File::open(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("audit open: {e}")),
+    };
+    use std::io::BufRead;
+    let reader = std::io::BufReader::new(file);
+    let mut last: Option<String> = None;
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("audit read: {e}"))?;
+        let v: serde_json::Value =
+            serde_json::from_str(&line).map_err(|e| format!("audit parse: {e}"))?;
+        if let Some(h) = v.get("entry_hash").and_then(|h| h.as_str()) {
+            last = Some(h.to_string());
+        }
+    }
+    Ok(last)
+}
+
+/// Verify the hash chain of the takeover audit log. Returns the number of
+/// entries. Any tampering (flipped byte), reordering, fork, or truncation
+/// is an error.
+pub fn verify_takeover_audit_chain(home: &std::path::Path) -> Result<usize, String> {
+    let path = takeover_audit_path(home);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("audit open: {e}"))?;
+    let mut prev = TAKEOVER_GENESIS_PREV_HASH.to_string();
+    let mut count = 0usize;
+    for (i, line) in text.lines().enumerate() {
+        let v: serde_json::Value =
+            serde_json::from_str(line).map_err(|e| format!("audit line {i}: parse: {e}"))?;
+        let field = |k: &str| {
+            v.get(k)
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| format!("audit line {i}: missing {k}"))
+        };
+        let ts_ms = v
+            .get("ts_ms")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| format!("audit line {i}: missing ts_ms"))?;
+        let (event, target_id, actor, reason, file_prev, file_hash) = (
+            field("event")?,
+            field("target_id")?,
+            field("actor")?,
+            field("reason")?,
+            field("prev_hash")?,
+            field("entry_hash")?,
+        );
+        if file_prev != prev {
+            return Err(format!(
+                "audit line {i}: prev_hash mismatch (reorder or fork)"
+            ));
+        }
+        let recomputed = sha256_hex(&takeover_audit_canonical_bytes(
+            ts_ms, event, target_id, actor, reason, file_prev,
+        ));
+        if recomputed != file_hash {
+            return Err(format!("audit line {i}: entry_hash mismatch (tampered)"));
+        }
+        prev = file_hash.to_string();
+        count += 1;
+    }
+    Ok(count)
+}
+
 fn audit_transition(
     home: &std::path::Path,
     event: &str,
@@ -525,12 +633,19 @@ fn audit_transition(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
+    let prev_hash =
+        takeover_audit_last_hash(home)?.unwrap_or_else(|| TAKEOVER_GENESIS_PREV_HASH.to_string());
+    let entry_hash = sha256_hex(&takeover_audit_canonical_bytes(
+        ts_ms, event, target_id, actor, reason, &prev_hash,
+    ));
     let line = serde_json::json!({
         "ts_ms": ts_ms,
         "event": event,
         "target_id": target_id,
         "actor": actor,
         "reason": reason,
+        "prev_hash": prev_hash,
+        "entry_hash": entry_hash,
     })
     .to_string();
     use std::io::Write;
@@ -554,13 +669,20 @@ fn audit_transition(
 /// State machine (fail closed):
 /// - `begin` → Agent. `pause_for_human` → Human. `resume_agent` → Agent.
 /// - Human input (`human_mouse`/`human_key`) is refused unless the session
-///   is in Human state; pausing twice or resuming without a pause errors.
-/// - Every transition appends a durable audit entry (fsync) recording who
-///   moved control and why.
+///   is in Human state; pausing twice is an idempotent no-op, resuming
+///   without a pause errors.
+/// - `resume_agent` re-verifies the tab is still the same one (target id +
+///   URL); a navigated-away or vanished tab refuses the handoff and control
+///   stays with the human.
+/// - Every transition appends a durable, hash-chained audit entry (fsync)
+///   recording who moved control and why; [`verify_takeover_audit_chain`]
+///   detects tampering.
 pub struct TakeoverSession {
     client: CdpClient,
     session_id: String,
     target_id: String,
+    /// URL of the tab as seen at `begin`; resume refuses if it changed.
+    target_url: String,
     home: std::path::PathBuf,
     actor: String,
     state: TakeoverState,
@@ -576,11 +698,20 @@ impl TakeoverSession {
     ) -> Result<Self, String> {
         let mut client = CdpClient::connect(endpoint)?;
         let session_id = client.attach(target_id)?;
+        // Record the tab's URL now so resume can verify the human did not
+        // navigate it away (or the target was replaced) while paused.
+        let target_url = client
+            .list_targets()?
+            .into_iter()
+            .find(|t| t.target_id == target_id)
+            .map(|t| t.url)
+            .ok_or_else(|| format!("takeover begin: target {target_id:?} not listed"))?;
         audit_transition(home, "takeover_begin", target_id, actor, "session opened")?;
         Ok(TakeoverSession {
             client,
             session_id,
             target_id: target_id.to_string(),
+            target_url,
             home: home.to_path_buf(),
             actor: actor.to_string(),
             state: TakeoverState::Agent,
@@ -595,11 +726,40 @@ impl TakeoverSession {
         &self.target_id
     }
 
+    /// URL recorded at `begin`, used to verify the tab on resume.
+    pub fn target_url(&self) -> &str {
+        &self.target_url
+    }
+
+    /// Re-list targets and confirm `target_id` still resolves to the URL
+    /// recorded at `begin`. Fail closed: any mismatch or lookup failure
+    /// refuses the handoff (control stays with the human).
+    fn verify_target_unchanged(&mut self) -> Result<(), String> {
+        let targets = self.client.list_targets()?;
+        match targets.into_iter().find(|t| t.target_id == self.target_id) {
+            Some(t) if t.url == self.target_url => Ok(()),
+            Some(t) => Err(format!(
+                "refused: target {} navigated away (was {:?}, now {:?}); control stays with the human",
+                self.target_id, self.target_url, t.url
+            )),
+            None => Err(format!(
+                "refused: target {} is no longer listed; control stays with the human",
+                self.target_id
+            )),
+        }
+    }
+
     /// Pause the agent's browser actions and hand control to the human.
-    /// Audit: `takeover_pause`.
+    /// The CDP session stays attached (it is NOT closed); only the state
+    /// gate changes, so in-flight agent input paths are refused from here
+    /// on. Audit: `takeover_pause` (fsynced; on audit failure the state
+    /// rolls back so we never claim an unrecorded handoff).
+    /// Pausing twice is idempotent: a no-op success with no duplicate audit.
     pub fn pause_for_human(&mut self, reason: &str) -> Result<(), String> {
-        if self.state != TakeoverState::Agent {
-            return Err("refused: control is already with the human".to_string());
+        if self.state == TakeoverState::Human {
+            // Idempotent: already handed off; no state change, no duplicate
+            // audit entry.
+            return Ok(());
         }
         self.state = TakeoverState::Human;
         // Audit the transition; if the audit write fails, roll the state
@@ -655,10 +815,15 @@ impl TakeoverSession {
     }
 
     /// Hand control back to the agent. Audit: `takeover_resume`.
+    /// Fail closed: the tab is re-verified (same target id AND same URL as
+    /// at `begin`) BEFORE the state flips. If the human navigated away, the
+    /// target vanished, or the check itself fails, control stays with the
+    /// human and no resume is audited.
     pub fn resume_agent(&mut self, reason: &str) -> Result<(), String> {
         if self.state != TakeoverState::Human {
             return Err("refused: the agent already holds control".to_string());
         }
+        self.verify_target_unchanged()?;
         self.state = TakeoverState::Agent;
         if let Err(e) = audit_transition(
             &self.home,
@@ -944,13 +1109,40 @@ mod tests {
     /// thread per connection). Returns the ws:// URL. If `reject` is true
     /// every handshake is answered with 400 instead of 101.
     fn fake_cdp_server(reject: bool) -> String {
+        fake_cdp_server_with_url_fn(reject, None)
+    }
+
+    /// Fake CDP server whose `Target.getTargets` reports
+    /// `https://example.com` on the first call and
+    /// `https://navigated-away.example` afterwards, simulating the human
+    /// navigating the tab away while the agent is paused.
+    fn fake_cdp_server_navigating() -> String {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls2 = calls.clone();
+        fake_cdp_server_with_url_fn(
+            false,
+            Some(std::sync::Arc::new(move || {
+                if calls2.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    "https://example.com".to_string()
+                } else {
+                    "https://navigated-away.example".to_string()
+                }
+            })),
+        )
+    }
+
+    fn fake_cdp_server_with_url_fn(
+        reject: bool,
+        url_fn: Option<std::sync::Arc<dyn Fn() -> String + Send + Sync>>,
+    ) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
             for conn in listener.incoming() {
                 let Ok(mut stream) = conn else { break };
+                let url_fn = url_fn.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = handle_fake_conn(&mut stream, reject) {
+                    if let Err(e) = handle_fake_conn(&mut stream, reject, url_fn) {
                         let _ = e;
                     }
                 });
@@ -961,7 +1153,11 @@ mod tests {
         format!("ws://127.0.0.1:{port}/devtools/browser/x")
     }
 
-    fn handle_fake_conn(stream: &mut TcpStream, reject: bool) -> Result<(), String> {
+    fn handle_fake_conn(
+        stream: &mut TcpStream,
+        reject: bool,
+        url_fn: Option<std::sync::Arc<dyn Fn() -> String + Send + Sync>>,
+    ) -> Result<(), String> {
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .unwrap();
@@ -1008,11 +1204,17 @@ mod tests {
             let id = msg["id"].clone();
             let method = msg["method"].as_str().unwrap_or("").to_string();
             let reply = match method.as_str() {
-                "Target.getTargets" => serde_json::json!({
-                    "id": id, "result": {"targetInfos": [
-                        {"targetId": "tab-1", "title": "Example", "url": "https://example.com", "type": "page"}
-                    ]}
-                }),
+                "Target.getTargets" => {
+                    let url = url_fn
+                        .as_ref()
+                        .map(|f| f())
+                        .unwrap_or_else(|| "https://example.com".to_string());
+                    serde_json::json!({
+                        "id": id, "result": {"targetInfos": [
+                            {"targetId": "tab-1", "title": "Example", "url": url, "type": "page"}
+                        ]}
+                    })
+                }
                 "Target.attachToTarget" => serde_json::json!({
                     "id": id, "result": {"sessionId": "sess-1"}
                 }),
@@ -1169,12 +1371,15 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("agent holds control"), "got: {err}");
 
-        // Pause -> Human state, audited.
+        // Pause -> Human state, audited. The CDP session stays attached:
+        // human input forwards over the same connection (proves pause did
+        // not tear the session down).
         sess.pause_for_human("user clicked Take Over").unwrap();
         assert_eq!(sess.state(), TakeoverState::Human);
-        // Pausing twice is refused.
-        let err = sess.pause_for_human("again").unwrap_err();
-        assert!(err.contains("already with the human"), "got: {err}");
+        // Pausing twice is idempotent: no-op success, still Human, and no
+        // duplicate audit entry.
+        sess.pause_for_human("again").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Human);
 
         // Human input now forwards via CDP Input.* (fake server acks).
         sess.human_mouse("mousePressed", 100.0, 200.0, "left", 1)
@@ -1217,6 +1422,103 @@ mod tests {
         // Timestamps are non-decreasing.
         assert!(entries[0]["ts_ms"].as_u64().unwrap() <= entries[1]["ts_ms"].as_u64().unwrap());
         assert!(entries[1]["ts_ms"].as_u64().unwrap() <= entries[2]["ts_ms"].as_u64().unwrap());
+        // Hash chain is intact over the three transitions.
+        assert_eq!(verify_takeover_audit_chain(&home).unwrap(), 3);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn takeover_double_pause_is_idempotent_no_duplicate_audit() {
+        let url = fake_cdp_server(false);
+        let home = takeover_test_home();
+        let mut sess = TakeoverSession::begin(&home, &url, "tab-1", "human:x").unwrap();
+
+        sess.pause_for_human("first").unwrap();
+        // Repeated pauses are no-op successes: state stays Human.
+        sess.pause_for_human("second").unwrap();
+        sess.pause_for_human("third").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Human);
+
+        // Exactly one pause entry: idempotent pauses are not re-audited.
+        let entries = read_takeover_audit(&home);
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|e| e["event"] == "takeover_pause")
+                .count(),
+            1
+        );
+
+        // The session still round-trips after the idempotent pauses.
+        sess.resume_agent("back").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Agent);
+        sess.close();
+        assert_eq!(verify_takeover_audit_chain(&home).unwrap(), 3);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn takeover_resume_fails_closed_when_tab_navigated() {
+        let url = fake_cdp_server_navigating();
+        let home = takeover_test_home();
+        let mut sess = TakeoverSession::begin(&home, &url, "tab-1", "human:x").unwrap();
+        // begin recorded the first URL.
+        assert_eq!(sess.target_url(), "https://example.com");
+
+        sess.pause_for_human("handoff").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Human);
+
+        // The tab navigated while paused: resume must fail closed, control
+        // stays with the human, and no resume is audited.
+        let err = sess.resume_agent("hand back").unwrap_err();
+        assert!(err.contains("navigated away"), "got: {err}");
+        assert_eq!(sess.state(), TakeoverState::Human);
+
+        // The CDP session is still alive: the human can keep driving.
+        sess.human_mouse("mousePressed", 1.0, 1.0, "left", 1)
+            .unwrap();
+
+        // Audit log has begin + pause only; the chain still verifies.
+        let entries = read_takeover_audit(&home);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["event"], "takeover_begin");
+        assert_eq!(entries[1]["event"], "takeover_pause");
+        assert_eq!(verify_takeover_audit_chain(&home).unwrap(), 2);
+        sess.close();
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn takeover_audit_hash_chain_detects_tampering() {
+        let url = fake_cdp_server(false);
+        let home = takeover_test_home();
+        let mut sess = TakeoverSession::begin(&home, &url, "tab-1", "human:x").unwrap();
+        sess.pause_for_human("p").unwrap();
+        sess.resume_agent("r").unwrap();
+        sess.close();
+
+        // Three linked entries verify.
+        assert_eq!(verify_takeover_audit_chain(&home).unwrap(), 3);
+
+        // Every entry carries prev_hash/entry_hash, linked head to tail.
+        let entries = read_takeover_audit(&home);
+        assert_eq!(entries[0]["prev_hash"], "genesis");
+        for w in entries.windows(2) {
+            assert_eq!(w[1]["prev_hash"], w[0]["entry_hash"]);
+        }
+
+        // Flip one byte in the middle entry (valid JSON, wrong hash):
+        // verification must fail.
+        let path = takeover_audit_path(&home);
+        let text = std::fs::read_to_string(&path).unwrap();
+        let tampered = text.replacen("takeover_pause", "takeover_pausf", 1);
+        assert_ne!(text, tampered);
+        std::fs::write(&path, tampered).unwrap();
+        let err = verify_takeover_audit_chain(&home).unwrap_err();
+        assert!(err.contains("entry_hash mismatch"), "got: {err}");
 
         let _ = std::fs::remove_dir_all(&home);
     }
@@ -1246,7 +1548,7 @@ mod tests {
         // begin
         let out: serde_json::Value = serde_json::from_str(
             &takeover_tool(&serde_json::json!({
-                "action": "begin", "endpoint": url, "target_id": "tab-9",
+                "action": "begin", "endpoint": url, "target_id": "tab-1",
                 "actor": "human:gpuidart", "home": home_str,
             }))
             .unwrap(),
@@ -1261,7 +1563,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out["state"], "agent");
-        assert_eq!(out["target_id"], "tab-9");
+        assert_eq!(out["target_id"], "tab-1");
 
         // mouse before pause is refused (agent holds control).
         let err = takeover_tool(&serde_json::json!({
