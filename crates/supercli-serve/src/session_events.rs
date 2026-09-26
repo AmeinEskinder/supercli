@@ -961,7 +961,9 @@ mod tests {
     /// on the shared home lock so no two SUPERCLI_HOME-mutating tests
     /// observe each other's home.
     fn with_temp_home(tag: &str, f: impl FnOnce()) {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir =
             std::env::temp_dir().join(format!("supercli-events-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

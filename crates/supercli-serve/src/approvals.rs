@@ -526,7 +526,7 @@ mod tests {
 
     impl TempHome {
         fn new(tag: &str) -> Self {
-            let guard = APP_STATE_LOCK.lock().unwrap();
+            let guard = APP_STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let dir = std::env::temp_dir().join(format!(
                 "supercli-approvals-test-{tag}-{}",
                 std::process::id()
