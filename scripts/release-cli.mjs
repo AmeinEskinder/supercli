@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build and publish the Unpeel CLI (`supercli` + `supercli-host` + `supercli-attach`) tarballs that
+// Build and publish the SuperCLI CLI (`supercli` + `supercli-host` + `supercli-attach`) tarballs that
 // back `curl -fsSL https://supercli.com/install.sh | sh`.
 //
 // Operator/CI script, same transport as publish-cloudflare-release.mjs

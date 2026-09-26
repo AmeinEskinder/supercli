@@ -1,9 +1,9 @@
-// Unpeel OpenCode plugin
-export const UnpeelNotifyPlugin = async ({ $, client }) => {
-  if (globalThis.__unpeelOpencodeNotifyPluginV1) return {};
-  globalThis.__unpeelOpencodeNotifyPluginV1 = true;
+// SuperCLI OpenCode plugin
+export const SuperCLINotifyPlugin = async ({ $, client }) => {
+  if (globalThis.__supercliOpencodeNotifyPluginV1) return {};
+  globalThis.__supercliOpencodeNotifyPluginV1 = true;
 
-  if (!process?.env?.UNPEEL_SESSION_ID) return {};
+  if (!process?.env?.SUPERCLI_SESSION_ID) return {};
 
   const notifyPath = "{{NOTIFY_PATH}}";
   let currentState = 'idle';

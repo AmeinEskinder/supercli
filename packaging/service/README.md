@@ -1,6 +1,6 @@
-# Unpeel Host service units
+# SuperCLI Host service units
 
-Start `supercli serve` (the UI-free Unpeel Host service) on boot, per user.
+Start `supercli serve` (the UI-free SuperCLI Host service) on boot, per user.
 These files are the templates `supercli serve install` renders; they are also
 usable verbatim in a container or golden image when `supercli` is installed at
 `/usr/local/bin/supercli` (what `curl -fsSL https://supercli.com/install.sh | sh`

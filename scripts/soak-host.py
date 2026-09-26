@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Phase 9 H3 — Host soak and load test.
 
-Runs the real Host (`unpeel serve`) for 30+ minutes under sustained load:
+Runs the real Host (`supercli serve`) for 30+ minutes under sustained load:
 many concurrent sessions, continuous event polling, Ask approvals answered
 from the paired-controller path, and turn cancels mid-flight. Samples
 heap/RSS, file-descriptor counts, and tool-call round-trip latency (the
 review-log lock contention proxy) throughout, then empirically checks the
 event ring-buffer bound.
 
-Real binaries, private short-path UNPEEL_HOME (never the real ~/.unpeel).
+Real binaries, private short-path SUPERCLI_HOME (never the real ~/.supercli).
 No mocks. Usage:
 
     SOAK_SECS=2100 python3 scripts/soak-host.py
@@ -27,8 +27,8 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UNPEEL = os.path.join(ROOT, "crates", "target", "debug", "unpeel")
-UNPEEL_HOST = os.path.join(ROOT, "crates", "target", "debug", "unpeel-host")
+SUPERCLI = os.path.join(ROOT, "crates", "target", "debug", "supercli")
+SUPERCLI_HOST = os.path.join(ROOT, "crates", "target", "debug", "supercli-host")
 PAIR_CLIENT = os.path.join(ROOT, "crates", "target", "debug", "examples", "pair_client")
 OUT_DIR = os.path.join(ROOT, "out", "soak")
 
@@ -38,7 +38,7 @@ N_WORKERS = int(os.environ.get("SOAK_WORKERS", "3"))
 METRIC_EVERY = 20
 
 TS = time.strftime("%Y%m%d-%H%M%S")
-HOME = "/home/hatch/soak-unpeel-%d" % os.getpid()
+HOME = "/home/hatch/soak-supercli-%d" % os.getpid()
 CONN_DIR = os.path.join(HOME, "connectors")
 LOG_DIR = os.path.join(HOME, "logs")
 TOKEN = {"value": None}
@@ -50,11 +50,11 @@ metrics_path = os.path.join(OUT_DIR, "metrics-%s.jsonl" % TS)
 
 env = dict(
     os.environ,
-    UNPEEL_HOME=HOME,
-    UNPEEL_CONNECTORS_DIR=CONN_DIR,
-    UNPEEL_CONNECTORS_KEYCHAIN="memory",
-    UNPEEL_TEST="1",
-    UNPEEL_HOST_BIN=UNPEEL_HOST,
+    SUPERCLI_HOME=HOME,
+    SUPERCLI_CONNECTORS_DIR=CONN_DIR,
+    SUPERCLI_CONNECTORS_KEYCHAIN="memory",
+    SUPERCLI_TEST="1",
+    SUPERCLI_HOST_BIN=SUPERCLI_HOST,
 )
 
 stop_flag = threading.Event()
@@ -184,7 +184,7 @@ def proc_starttime(pid):
 
 
 def kill_home_processes(home):
-    """Terminate processes whose UNPEEL_HOME environ equals this run's
+    """Terminate processes whose SUPERCLI_HOME environ equals this run's
     home (e.g. the PTY core serve leaves running on purpose). Scoped by
     environ match — other runs' and other users' processes are untouched.
     Every kill verifies the pid's kernel start time first: under load the
@@ -198,11 +198,11 @@ def kill_home_processes(home):
         try:
             with open("/proc/%s/environ" % pid, "rb") as h:
                 envb = h.read().split(b"\0")
-            if ("UNPEEL_HOME=%s" % home).encode() not in envb:
+            if ("SUPERCLI_HOME=%s" % home).encode() not in envb:
                 continue
             with open("/proc/%s/cmdline" % pid, "rb") as h:
                 cmd = h.read().replace(b"\0", b" ").decode("utf8", "replace")
-            if "unpeel" in cmd:
+            if "supercli" in cmd:
                 st = proc_starttime(pid)
                 if st is not None:
                     hits.append((int(pid), st))
@@ -326,9 +326,9 @@ def mobile(method, path, body=None, timeout=20):
 # ------------------------------------------------------------ MCP sidecar ---
 class McpSidecar:
     def __init__(self, session_id):
-        e = dict(env, UNPEEL_SESSION_ID=session_id)
+        e = dict(env, SUPERCLI_SESSION_ID=session_id)
         self.proc = spawn(
-            [UNPEEL_HOST, "__mcp__"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [SUPERCLI_HOST, "__mcp__"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, env=e, text=True, bufsize=1,
         )
         with sidecars_lock:
@@ -427,7 +427,7 @@ def inflight_review_for_tool(sid, tool):
 
 # ----------------------------------------------------------------- setup ---
 def setup():
-    for f in (UNPEEL, UNPEEL_HOST, PAIR_CLIENT):
+    for f in (SUPERCLI, SUPERCLI_HOST, PAIR_CLIENT):
         if not (os.path.isfile(f) and os.access(f, os.X_OK)):
             log("FATAL: binary missing: %s (build first)" % f)
             sys.exit(2)
@@ -449,7 +449,7 @@ def setup():
     os.chmod(os.path.join(HOME, "mcp", "auth-token"), 0o600)
 
     serve_log = open(os.path.join(LOG_DIR, "serve.log"), "w")
-    serve = spawn([UNPEEL, "serve"], env=env, stdout=serve_log, stderr=subprocess.STDOUT)
+    serve = spawn([SUPERCLI, "serve"], env=env, stdout=serve_log, stderr=subprocess.STDOUT)
     with open(os.path.join(HOME, "pids", "serve.pid"), "w") as h:
         h.write(str(serve.pid))
     for _ in range(40):
@@ -468,14 +468,14 @@ def setup():
     # Pairing ceremony (same as e2e-scenario.sh step 2).
     pair_log = open(os.path.join(LOG_DIR, "pair.log"), "w")
     pair = spawn(
-        [UNPEEL, "pair", "--advertise-host", "127.0.0.1", "--advertise-port", str(port)],
+        [SUPERCLI, "pair", "--advertise-host", "127.0.0.1", "--advertise-port", str(port)],
         env=env, stdout=pair_log, stderr=subprocess.STDOUT)
     qr = None
     for _ in range(40):
         try:
             with open(os.path.join(LOG_DIR, "pair.log")) as h:
                 for line in h:
-                    if line.startswith("UNPEEL:"):
+                    if line.startswith("SUPERCLI:"):
                         qr = line.strip()
                         break
             if qr:
@@ -484,7 +484,7 @@ def setup():
             pass
         time.sleep(0.5)
     if not qr:
-        log("FATAL: no QR code from unpeel pair")
+        log("FATAL: no QR code from supercli pair")
         sys.exit(2)
     for _ in range(40):
         if os.path.exists(os.path.join(HOME, "remote", "tls", "cert.pem")):
@@ -513,16 +513,16 @@ def setup():
         log("FATAL: pairing returned no auth token")
         sys.exit(2)
     log("paired (genuine sealed /mobile/pair exchange)")
-    # The `unpeel pair` process exits on its own once pairing completes;
+    # The `supercli pair` process exits on its own once pairing completes;
     # reap it here so it never lingers past setup.
     reap(pair, timeout=10)
 
     sessions = []
     for i in range(N_SESSIONS):
-        r = sh([UNPEEL, "new", "--command", "sleep 3600", "--json"])
+        r = sh([SUPERCLI, "new", "--command", "sleep 3600", "--json"])
         sid = json.loads(r.stdout)["id"]
         for c in ("asky", "allowy", "slowy"):
-            rr = sh([UNPEEL, "connector", "enable", c, "--session", sid])
+            rr = sh([SUPERCLI, "connector", "enable", c, "--session", sid])
             if rr.returncode != 0:
                 log("FATAL: connector enable %s: %s" % (c, rr.stderr[-300:]))
                 sys.exit(2)
@@ -646,7 +646,7 @@ def load_worker(sid, worker_id, do_cancels=False):
 
 
 def proc_snapshot():
-    """RSS (kB) and fd counts for unpeel processes."""
+    """RSS (kB) and fd counts for supercli processes."""
     procs = []
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
@@ -656,7 +656,7 @@ def proc_snapshot():
                 cmd = h.read().replace(b"\0", b" ").decode("utf8", "replace")
         except Exception:
             continue
-        if "target/debug/unpeel-host" in cmd or ("target/debug/unpeel" in cmd and " serve" in cmd):
+        if "target/debug/supercli-host" in cmd or ("target/debug/supercli" in cmd and " serve" in cmd):
             try:
                 rss = vmdata = rssanon = 0
                 with open("/proc/%s/status" % pid) as h:
@@ -727,21 +727,21 @@ def main():
     if not os.path.exists(cargo):
         cargo = "cargo"  # fall back to PATH
     build = subprocess.run(
-        [cargo, "build", "--bin", "unpeel"],
+        [cargo, "build", "--bin", "supercli"],
         cwd=os.path.join(ROOT, "crates"),
         capture_output=True, text=True, timeout=600,
     )
     if build.returncode != 0:
-        print("FATAL: cargo build --bin unpeel failed:\n%s" % build.stderr[-2000:],
+        print("FATAL: cargo build --bin supercli failed:\n%s" % build.stderr[-2000:],
               flush=True)
         sys.exit(1)
     build_host = subprocess.run(
-        [cargo, "build", "-p", "unpeel-host"],
+        [cargo, "build", "-p", "supercli-host"],
         cwd=os.path.join(ROOT, "crates"),
         capture_output=True, text=True, timeout=600,
     )
     if build_host.returncode != 0:
-        print("FATAL: cargo build -p unpeel-host failed:\n%s" % build_host.stderr[-2000:],
+        print("FATAL: cargo build -p supercli-host failed:\n%s" % build_host.stderr[-2000:],
               flush=True)
         sys.exit(1)
     log("binaries rebuilt OK")
@@ -863,7 +863,7 @@ def main():
         h.write("- tool calls: allow=%d ask=%d cancels=%d events_polled=%d errors=%d\n"
                 % (counters["allow"], counters["ask"], counters["cancel"],
                    counters["events"], counters["errors"]))
-        h.write("## Memory (all unpeel processes)\n\n")
+        h.write("## Memory (all supercli processes)\n\n")
         h.write("- RSS: start %d MiB, end of load %d MiB, after idle %d MiB\n"
                 % (rss_total(first) // 1024, rss_total(mid) // 1024,
                    rss_total(last) // 1024))
@@ -873,7 +873,7 @@ def main():
                 % (vmdata_total(first) // 1024, vmdata_total(mid) // 1024))
         h.write("- allocator heap: not instrumented in this build; RSS/VmData "
                 "are the proxies\n")
-        h.write("## File descriptors (all unpeel processes)\n\n")
+        h.write("## File descriptors (all supercli processes)\n\n")
         h.write("- start: %d, end of load: %d, after idle: %d (growth %+.0f)\n"
                 % (fds_total(first), fds_total(mid), fds_total(last), fd_growth))
         h.write("## Event ring buffer\n\n")
@@ -897,7 +897,7 @@ def main():
     # Teardown: stop every session, kill sidecars, terminate serve, then
     # sweep this driver's process tree. Scoped — never a global pkill.
     for sid in sessions:
-        sh([UNPEEL, "stop", sid])
+        sh([SUPERCLI, "stop", sid])
     kill_all_sidecars()
     serve.terminate()
     try:
@@ -908,7 +908,7 @@ def main():
     kill_process_tree(os.getpid())
     owned = kill_home_processes(HOME)
     if owned:
-        log("cleaned %d run-owned processes by UNPEEL_HOME match: %s" % (len(owned), owned))
+        log("cleaned %d run-owned processes by SUPERCLI_HOME match: %s" % (len(owned), owned))
     # Remove this run's private home; the report + metrics stay in out/soak.
     import shutil
     shutil.rmtree(HOME, ignore_errors=True)

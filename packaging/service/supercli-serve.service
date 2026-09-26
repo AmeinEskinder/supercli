@@ -1,4 +1,4 @@
-# Unpeel Host service — Linux systemd user unit.
+# SuperCLI Host service — Linux systemd user unit.
 #
 # Usable verbatim when `supercli` is installed at /usr/local/bin/supercli
 # (the install.sh default):
@@ -21,7 +21,7 @@
 # ~/.supercli/hooks/trace.log.
 
 [Unit]
-Description=Unpeel Host service
+Description=SuperCLI Host service
 
 [Service]
 ExecStart=/usr/local/bin/supercli serve

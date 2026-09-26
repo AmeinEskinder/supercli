@@ -6,8 +6,8 @@ pinned-HTTPS mobile calls, MCP stdio sidecar flows, review-log polling,
 hash-chain verification, and the record-for-record comparison.
 
 Environment required:
-  UNPEEL_HOME       private home for this run
-  UNPEEL_HOST_BIN   path to the unpeel-host binary
+  SUPERCLI_HOME       private home for this run
+  SUPERCLI_HOST_BIN   path to the supercli-host binary
   E2E_TOKEN         the seeded controller bearer token
 """
 import hashlib
@@ -22,9 +22,9 @@ import sys
 import threading
 import time
 
-HOME = os.environ["UNPEEL_HOME"]
+HOME = os.environ["SUPERCLI_HOME"]
 TOKEN = os.environ["E2E_TOKEN"]
-UNPEEL_HOST = os.environ["UNPEEL_HOST_BIN"]
+SUPERCLI_HOST = os.environ["SUPERCLI_HOST_BIN"]
 
 
 # ---------------------------------------------------------------- mobile ---
@@ -103,12 +103,12 @@ def cmd_wait_approval(args):
 # ------------------------------------------------------------- MCP sidecar ---
 
 class McpSidecar:
-    """A real `unpeel-host __mcp__` stdio peer for one session."""
+    """A real `supercli-host __mcp__` stdio peer for one session."""
 
     def __init__(self, session_id):
-        env = dict(os.environ, UNPEEL_SESSION_ID=session_id)
+        env = dict(os.environ, SUPERCLI_SESSION_ID=session_id)
         self.proc = subprocess.Popen(
-            [UNPEEL_HOST, "__mcp__"],
+            [SUPERCLI_HOST, "__mcp__"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

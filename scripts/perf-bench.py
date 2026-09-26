@@ -2,15 +2,15 @@
 """Q5 final: n=2000, based on the working breakdown script."""
 import json, os, sys, time, threading, shutil
 
-ROOT = "/home/hatch/workspace/muse-harness/unpeel"
-os.environ["UNPEEL_TUI_BINARY"] = os.path.join(ROOT, "crates", "target", "release", "unpeel")
+ROOT = "/home/hatch/workspace/muse-harness/supercli"
+os.environ["SUPERCLI_TUI_BINARY"] = os.path.join(ROOT, "crates", "target", "release", "supercli")
 sys.path.insert(0, "/home/hatch/workspace")
-sys.path.insert(0, os.path.join(ROOT, "crates", "unpeel-cli", "tests"))
+sys.path.insert(0, os.path.join(ROOT, "crates", "supercli-cli", "tests"))
 
 from pooled_client import PooledMobileClient
 from harness import Home, Serve, mcp_post
 
-UNPEEL_HOST = os.path.join(ROOT, "crates", "target", "release", "unpeel-host")
+SUPERCLI_HOST = os.path.join(ROOT, "crates", "target", "release", "supercli-host")
 BASELINE_PATH = os.environ.get("PERF_OUTPUT", os.path.join(ROOT, "scripts", "perf-baseline.json"))
 WARMUP = int(os.environ.get("PERF_WARMUP", "200"))
 N_ITER = int(os.environ.get("PERF_ITER", "2000"))
@@ -35,12 +35,12 @@ def machine_specs():
     return specs
 
 def main():
-    root = "/home/hatch/perf-unpeel-%d" % os.getpid()
+    root = "/home/hatch/perf-supercli-%d" % os.getpid()
     shutil.rmtree(root, ignore_errors=True)
     home = Home(root)
     token = home.pair_device(token="perf-token")
     mcp_token = home.auth_token
-    env = dict(os.environ, UNPEEL_HOST_BIN=UNPEEL_HOST)
+    env = dict(os.environ, SUPERCLI_HOST_BIN=SUPERCLI_HOST)
     service = Serve(home, env=env)
     try:
         ready = service.ready(timeout=30.0)

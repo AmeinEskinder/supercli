@@ -22,7 +22,7 @@
 # A machine with a real session manager does not need this file.
 
 [Unit]
-Description=Unpeel desktop session (hand-rolled: Xvfb, streamed Xorg, kiosk)
+Description=SuperCLI desktop session (hand-rolled: Xvfb, streamed Xorg, kiosk)
 BindsTo=graphical-session.target
 Wants=graphical-session-pre.target
 After=graphical-session-pre.target

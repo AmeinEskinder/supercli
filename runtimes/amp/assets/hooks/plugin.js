@@ -31,7 +31,7 @@ function threadIDFrom(event) {
   return candidates.find((value) => typeof value === "string" && value.length > 0);
 }
 
-export default function registerUnpeelAmpPlugin(amp) {
+export default function registerSuperCLIAmpPlugin(amp) {
   amp.on("agent.start", async (event) => {
     await notify("Start", {
       prompt_text: typeof event?.message === "string" ? event.message : undefined,

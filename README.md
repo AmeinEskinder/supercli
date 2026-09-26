@@ -1,6 +1,6 @@
-# Unpeel
+# SuperCLI
 
-Unpeel is an **agent-first terminal multiplexer**, written in Rust. Sessions
+SuperCLI is an **agent-first terminal multiplexer**, written in Rust. Sessions
 keep running on your own machines, know when the agent inside them needs you,
 and give that agent a browser and its sibling sessions to work
 with. This repository is the whole product apart from the website and the
@@ -10,7 +10,7 @@ built from one tree at one version.
 **Why this multiplexer**
 
 - 🔁 **Sessions outlive everything.** Close the window, quit the app, drop the
-  SSH connection, reboot the client, upgrade Unpeel: the agent keeps working.
+  SSH connection, reboot the client, upgrade SuperCLI: the agent keeps working.
   One shared PTY core per workspace runs every session as an event-driven
   task, and a new build takes over running terminals in place, no restart.
 - 🚦 **It knows what the agent is doing.** Provider hooks, runtime detection,
@@ -18,7 +18,7 @@ built from one tree at one version.
   idle, and *needs you*, per session, with notifications to whichever client
   you are holding. Resume re-runs the agent with its own conversation id
   after a crash or a Host upgrade.
-- 🧰 **Built-in MCP tools.** Every session has the single `unpeel` MCP server:
+- 🧰 **Built-in MCP tools.** Every session has the single `supercli` MCP server:
   an isolated real browser with screenshots as reviewable artifacts,
   presets and worktrees, and the session gallery. The browser engine is
   Host-installed and pinned; nothing to set
@@ -36,11 +36,11 @@ built from one tree at one version.
   booking a trip.
 - 📱 **Steer it from anywhere, on hardware you own.** Pair a Mac or a phone
   with a one-time code. On your own network or VPN the connection is direct;
-  away from home it goes through Unpeel Link, an end-to-end encrypted relay
+  away from home it goes through SuperCLI Link, an end-to-end encrypted relay
   that only ever sees ciphertext. Your sessions, transcripts, and screenshots
   never live on a server you don't control.
 - 🗂️ **Plain files, one protocol.** Every session is a directory under
-  `~/.unpeel/`: a manifest, a bounded output journal, a control socket. You
+  `~/.supercli/`: a manifest, a bounded output journal, a control socket. You
   can read, back up, or script it with ordinary tools. Every client speaks the
   same versioned protocol to every server, so a Mac hosting sessions and a
   Linux box hosting sessions look identical from the phone.
@@ -50,12 +50,12 @@ built from one tree at one version.
 
 **Clients**
 
-- Mac app: [unpeel.com/download/mac](https://unpeel.com/download/mac)
-- iPhone / iPad: [unpeel.com/ios](https://unpeel.com/ios)
-- Docs, including headless hosting: [unpeel.com/docs](https://unpeel.com/docs)
+- Mac app: [supercli.com/download/mac](https://supercli.com/download/mac)
+- iPhone / iPad: [supercli.com/ios](https://supercli.com/ios)
+- Docs, including headless hosting: [supercli.com/docs](https://supercli.com/docs)
 
 This repository holds the Host service, the shared PTY core, the unified
-`unpeel` MCP server, the built-in agent runtimes, the CLI, and the Host
+`supercli` MCP server, the built-in agent runtimes, the CLI, and the Host
 protocol — and the Mac and iOS app sources under
 [`clients/`](clients/) (`clients/native`, `clients/ios`, `clients/shared`) plus the C-ABI
 bridge crate the Mac app links, so app and server always build from one tree.
@@ -67,10 +67,10 @@ How to build and test them: the "Apple clients" section of
 Mac or Linux:
 
 ```bash
-curl -fsSL https://unpeel.com/install.sh | sh
+curl -fsSL https://supercli.com/install.sh | sh
 ```
 
-That installs `unpeel`, `unpeel-host`, and `unpeel-attach` (Apple silicon and
+That installs `supercli`, `supercli-host`, and `supercli-attach` (Apple silicon and
 Intel Macs, Linux x86_64 and aarch64; Ubuntu 20.04 / Debian 11 or newer). The
 installer verifies the archive against its SHA-256 sidecar and refuses to
 install otherwise.
@@ -80,20 +80,20 @@ install otherwise.
 **1. Start the Host and pair your phone.**
 
 ```bash
-unpeel serve            # the Host service (leave it running)
-unpeel pair             # shows a one-time code / QR — scan it in the iPhone app
+supercli serve            # the Host service (leave it running)
+supercli pair             # shows a one-time code / QR — scan it in the iPhone app
 ```
 
 On your own network the phone connects directly; away from home it goes
-through Unpeel Link, the end-to-end encrypted relay. `unpeel serve install`
+through SuperCLI Link, the end-to-end encrypted relay. `supercli serve install`
 registers the per-user boot service (launchd / systemd) so the Host survives
 reboots.
 
 **2. Open your first session.**
 
 ```bash
-unpeel new --command "claude" --cwd ~/project
-unpeel ls               # sessions, status, project, command
+supercli new --command "claude" --cwd ~/project
+supercli ls               # sessions, status, project, command
 ```
 
 The agent runs inside a hosted terminal on your machine. Close the window,
@@ -111,31 +111,31 @@ in flight as ambiguous — never silently failed, never auto-retried — so you
 can see exactly what may or may not have happened. From a terminal attached
 to the session, Ctrl-C does the same where the app's Stop is unavailable.
 
-The full CLI: `unpeel help`.
+The full CLI: `supercli help`.
 
 ## Run a Host
 
 ```bash
-unpeel serve            # the Host service: every registered workspace, one worker each
-unpeel serve install    # per-user boot service (launchd on macOS, systemd --user on Linux)
-unpeel pair             # show a one-time code / QR for a Controller (Mac app, iPhone)
-unpeel new --command "claude" --cwd ~/project
-unpeel ls               # sessions, status, project, command
+supercli serve            # the Host service: every registered workspace, one worker each
+supercli serve install    # per-user boot service (launchd on macOS, systemd --user on Linux)
+supercli pair             # show a one-time code / QR for a Controller (Mac app, iPhone)
+supercli new --command "claude" --cwd ~/project
+supercli ls               # sessions, status, project, command
 ```
 
-`unpeel serve` owns the machine lease, supervises one worker per workspace,
+`supercli serve` owns the machine lease, supervises one worker per workspace,
 ingests provider hooks, answers Controllers over the local socket, LAN
-(Direct), and Unpeel Link, and keeps every session alive across upgrades.
-`unpeel --workspace NAME serve` runs a single isolated workspace (the container
-spelling). The full CLI: `unpeel help`.
+(Direct), and SuperCLI Link, and keeps every session alive across upgrades.
+`supercli --workspace NAME serve` runs a single isolated workspace (the container
+spelling). The full CLI: `supercli help`.
 
-The one-shot verbs, `unpeel settings`, `unpeel presets`, and the test gates
+The one-shot verbs, `supercli settings`, `supercli presets`, and the test gates
 they share with the clients are documented in
 [`docs/agents/cli.md`](docs/agents/cli.md).
 
 ## How sessions survive
 
-- **Shared PTY core.** The worker starts one detached `unpeel-host
+- **Shared PTY core.** The worker starts one detached `supercli-host
   __pty_core__` per workspace and every session runs inside it as an
   event-driven task, not as a process of its own. Per empty session it costs
   0.12 MiB, per filled 10k-line session 0.39 MiB, and each attached client
@@ -143,7 +143,7 @@ they share with the clients are documented in
   `scripts/bench-memory.sh`; the targets are tracked in the private design
   records).
 - **Journal + sockets.** Each session lives under
-  `~/.unpeel/app-sessions/<id>/`: `manifest.json` (identity, state, pid with
+  `~/.supercli/app-sessions/<id>/`: `manifest.json` (identity, state, pid with
   start-time identity so a recycled pid is never signalled), `output.bin` (a
   logically append-only journal with monotonic lifetime offsets and a bounded
   retained tail), and `session.sock` (write / resize / ping / kill, and an
@@ -151,10 +151,10 @@ they share with the clients are documented in
   libghostty-vt grid).
 - **In-place core upgrade.** A newer core takes over a running one over
   `SCM_RIGHTS` (`__pty_core__ --takeover`, triggered by the service on build
-  skew), so upgrading Unpeel never restarts a terminal. Sessions never depend
+  skew), so upgrading SuperCLI never restarts a terminal. Sessions never depend
   on the worker: the service can stop and restart while every PTY keeps
   running.
-- **Clients are attachments.** `unpeel-attach <id>` replays the journal tail
+- **Clients are attachments.** `supercli-attach <id>` replays the journal tail
   (or the snapshot) and then bridges stdio to `session.sock`; the Mac app
   runs it inside its Ghostty surfaces, and remote Controllers stream the same
   journal over the Host protocol. Any client can restart without touching the
@@ -168,7 +168,7 @@ Detail: [`docs/agents/pty-core.md`](docs/agents/pty-core.md),
 
 One protocol for every Controller and every Host. A Controller never cares
 whether it is talking to a Mac app Host or a headless Linux box; SSH, LAN
-(Direct), and Unpeel Link are transports for the same contract, never second
+(Direct), and SuperCLI Link are transports for the same contract, never second
 sets of verbs. Capabilities are advertised, not guessed: bootstrap carries a
 major-versioned, additive `hostProtocol` descriptor whose stable operation
 ids come from [`protocol/host-capabilities-v1.json`](protocol/host-capabilities-v1.json),
@@ -188,7 +188,7 @@ Provider knowledge lives in one package per agent under
 assets, and fixtures. Launching is provider-neutral: a preset runs its command
 in your login shell exactly as typed. Each agent's hooks and MCP registration
 are its *integration*, installed once per Host with
-`unpeel integrations install <runtime>` (or Install integration on Settings ▸ Agents)
+`supercli integrations install <runtime>` (or Install integration on Settings ▸ Agents)
 into that CLI's own configuration, and kept current by the Host after
 upgrades. The build discovers the packages and generates the registry, so
 adding an agent never touches a central list. Contribution contract:
@@ -199,9 +199,9 @@ Busy / idle / needs-attention state comes from real provider hook
 integrations, never from guessing at output; select menus drawn by agents are
 detected from the parsed viewport.
 
-## The `unpeel` MCP server
+## The `supercli` MCP server
 
-`unpeel-host __mcp__` is one MCP server every capable session gets: `sessions`
+`supercli-host __mcp__` is one MCP server every capable session gets: `sessions`
 (inspect, read the screen, wait for text, send input to sibling sessions under
 an approval-controlled write policy), `agents` (occurrence-bound runtime
 occupants and their transcripts), `workspace` (presets, git worktrees),
@@ -217,19 +217,19 @@ default; session creation stays user-only. Detail:
 - **Mac app** — [`clients/native`](clients/native). The desktop client: a Controller
   of the bundled Host service plus the platform adapter (notifications,
   Keychain, approvals). Signed,
-  notarized builds: [unpeel.com/download](https://unpeel.com/download).
+  notarized builds: [supercli.com/download](https://supercli.com/download).
 - **iPhone / iPad app** — [`clients/ios`](clients/ios). A remote Controller: steer
-  every session from your phone over your network or through Unpeel Link.
-  Builds ship through TestFlight; see [unpeel.com](https://unpeel.com).
+  every session from your phone over your network or through SuperCLI Link.
+  Builds ship through TestFlight; see [supercli.com](https://supercli.com).
 - **Shared Swift package** — [`clients/shared/SupercliShared`](clients/shared/SupercliShared):
   pairing, the Host protocol client, and the end-to-end relay crypto both apps
   use, pinned to the same test vectors as the Rust side.
-- **`unpeel` CLI** — this repository's `crates/unpeel-cli`, for terminals and
+- **`supercli` CLI** — this repository's `crates/supercli-cli`, for terminals and
   headless Hosts.
 
 Every client speaks the Host protocol in [`protocol/`](protocol/); a headless
 Linux Host is driven from the Mac app or the phone exactly like a Mac Host:
-[unpeel.com/docs/headless-host](https://unpeel.com/docs/headless-host).
+[supercli.com/docs/headless-host](https://supercli.com/docs/headless-host).
 Building the apps from source is covered in the "Apple clients" section of
 [`AGENTS.md`](AGENTS.md).
 
@@ -237,26 +237,26 @@ Building the apps from source is covered in the "Apple clients" section of
 
 The server — this repository — is public under the MIT license
 (`LICENSE`). The Mac and iOS app sources are here too
-(`apps/`); official signed builds are published only by the Unpeel team.
+(`apps/`); official signed builds are published only by the SuperCLI team.
 The only closed component is
-the backend of the operated Unpeel Link service (accounts, seats,
+the backend of the operated SuperCLI Link service (accounts, seats,
 entitlements, rendezvous, relay, push): everything local and direct is free
 and has no Link dependency. Design records and plans live in a private
 archive repository; this repository documents what ships.
 
 ## Development
 
-Rust 1.88 or newer. No Node runtime is required to run Unpeel; Bun is only
+Rust 1.88 or newer. No Node runtime is required to run SuperCLI; Bun is only
 used by the release scripts.
 
 ```bash
-cargo build --manifest-path crates/Cargo.toml -p unpeel-cli -p unpeel-host
-cargo build --manifest-path crates/unpeel-attach/Cargo.toml   # standalone crate
+cargo build --manifest-path crates/Cargo.toml -p supercli-cli -p supercli-host
+cargo build --manifest-path crates/supercli-attach/Cargo.toml   # standalone crate
 cargo build --release --manifest-path crates/apps/Cargo.toml   # first-party Apps + App Kit (own workspace)
-bun run apps:link                                              # dev mode: link those builds into ~/.unpeel/apps/bin
-UNPEEL_HOME=/tmp/unpeel-dev crates/target/debug/unpeel serve  # isolated state
+bun run apps:link                                              # dev mode: link those builds into ~/.supercli/apps/bin
+SUPERCLI_HOME=/tmp/supercli-dev crates/target/debug/supercli serve  # isolated state
 cargo test --manifest-path crates/Cargo.toml --workspace
-crates/unpeel-cli/tests/run.sh          # the real-PTY case matrix (~8 min)
+crates/supercli-cli/tests/run.sh          # the real-PTY case matrix (~8 min)
 scripts/verify-attach.sh                # attach replay / echo / snapshot smoke
 ```
 
@@ -266,7 +266,7 @@ the map of how the session system fits together and what must stay aligned.
 ## Releases
 
 Server releases are CLI archives per channel on Cloudflare R2 behind
-unpeel.com (`bun run release:cli`); the installer above reads the same
+supercli.com (`bun run release:cli`); the installer above reads the same
 bucket. Every archive carries `BUILD_PROVENANCE.json`,
 `THIRD_PARTY_NOTICES.txt`, and `protocol/`. Details:
 [`docs/agents/releases.md`](docs/agents/releases.md). Third-party licenses

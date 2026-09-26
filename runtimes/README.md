@@ -6,7 +6,7 @@ the compiled registry. Adding a package must not require adding its name to a
 central provider list.
 
 This is a source contribution boundary: a new or changed runtime ships in a
-new Unpeel build. Downloadable third-party adapters are not supported yet.
+new SuperCLI build. Downloadable third-party adapters are not supported yet.
 
 ## Package layout
 
@@ -24,24 +24,24 @@ runtimes/<slug>/
 └── fixtures/             # add provider-owned fixtures as behavior grows
 ```
 
-There is no hand-written module file: `unpeel-core/build.rs` generates the
+There is no hand-written module file: `supercli-core/build.rs` generates the
 package module from what exists on disk (`setup::install`, `resume::ADAPTER`,
 `tests.rs`) plus the descriptor's flags. A runtime with only `runtime.toml`
 is already a complete package — detection gives it identity and tint, and
 `[screen]` rules give it busy/idle without any Rust.
 
 **Launching is provider-neutral.** A preset runs its command in the user's
-login shell exactly as typed, with only Unpeel's generic session environment
+login shell exactly as typed, with only SuperCLI's generic session environment
 exported. An adapter never rewrites the command, wraps the executable, mints
 a conversation id, or edits provider configuration at launch. Everything
 provider-specific is the runtime's **integration** — the `setup.rs`
-installer that registers lifecycle hooks and the Unpeel MCP shim
+installer that registers lifecycle hooks and the SuperCLI MCP shim
 (`integrations::install::write_mcp_shim`) in the provider's own global
 configuration — which the user installs explicitly
-(`unpeel integrations install <runtime>`, or Install integration on Settings ▸ Agents) and
+(`supercli integrations install <runtime>`, or Install integration on Settings ▸ Agents) and
 the Host keeps current after upgrades.
 
-Provider-neutral enforcement remains in `unpeel-core`: PTY ownership,
+Provider-neutral enforcement remains in `supercli-core`: PTY ownership,
 PID/start-time checks, hook ingress and generation ordering, locked/atomic
 file writes, MCP authorization, transcript path validation and read bounds,
 activity arbitration, notifications, and the Host/Controller protocol.
@@ -70,7 +70,7 @@ Important fields:
 - `display`, `install`, and `suggested_presets`: generated into client-safe
   metadata so Mac, iOS, and headless serve do not grow new provider tables. `display.kind`
   is the presentation family (`agent`, `app`, `editor`, `terminal`; default
-  `agent`) so a markdown-editor or Unpeel App CLI gets the right generic logo
+  `agent`) so a markdown-editor or SuperCLI App CLI gets the right generic logo
   without a client special case. A custom `display.icon_asset` must be a
   package-local SVG below `assets/` and declare `icon_source` plus
   `icon_license`. Icons default to template rendering; set
@@ -87,7 +87,7 @@ Important fields:
   the fresh-install command. Use a shell maintenance invocation (for example,
   `command agent update`) so an updater does not start a managed agent session.
 - `environment.strip_inherited`: provider identity/session variables that a
-  nested Unpeel Host must remove before opening a new terminal.
+  nested SuperCLI Host must remove before opening a new terminal.
 - `updates`: optional read-only release lookup (`version_args`, `latest_url`,
   optional JSON pointer or version delimiters). Checks run lazily on the Host
   when Agents or Plugins is visible, never during bootstrap. Unknown versions and
@@ -115,7 +115,7 @@ Important fields:
   agents — `summary` says which of the provider's own files the installer
   edits; optional `manual_command` is the provider's documented way to
   register the MCP shim by hand (`{shim}` is replaced with its path);
-  optional `legacy_evidence` lists files under the Unpeel home (the hook
+  optional `legacy_evidence` lists files under the SuperCLI home (the hook
   script, a plugin marker) that only a pre-0.7 launch-time install wrote, so
   the Host can adopt that install as an integration on upgrade.
 - `capabilities`: only behavior actually implemented by the adapter.
@@ -139,7 +139,7 @@ The recipe is five files, each optional after the first:
    closest existing descriptor and keep aliases exact; add false-positive
    tests for generic executable names.
 2. `adapter/setup.rs` — `pub fn install() -> Result<(), String>`: write the
-   hook script under `~/.unpeel/hooks/`, register it in the provider's own
+   hook script under `~/.supercli/hooks/`, register it in the provider's own
    global hook config, and register the MCP shim
    (`crate::integrations::install::write_mcp_shim()`) through the
    provider's persistent MCP mechanism. Use the shared primitives in
@@ -166,9 +166,9 @@ transcript roots and format, and version-dependent behavior.
   declared icon for shared clients. Record an upstream URL or explicit
   `internal:` generation/migration marker and its license/brand status.
   Installers must merge user configuration idempotently, preserve unrelated
-  entries, and remove only Unpeel-owned entries.
+  entries, and remove only SuperCLI-owned entries.
 - Every owned lifecycle reporter must send and durably seed numeric
-  `unpeel_runtime_generation`. It must no-op outside an Unpeel Session,
+  `supercli_runtime_generation`. It must no-op outside an SuperCLI Session,
   report to the direct hook port and current port registry, and forward only
   the provider conversation ID/path fields the Host knows how to validate.
   The reporter reads its Session from the generic hosted environment (or,
@@ -224,9 +224,9 @@ At minimum, add package-local unit fixtures and run:
 
 ```sh
 bun run validate:runtimes
-cargo test -p unpeel-core
-cargo test -p unpeel-host
-cargo test -p unpeel-cli
+cargo test -p supercli-core
+cargo test -p supercli-host
+cargo test -p supercli-cli
 # The Apple clients (apps/) run their own suites against the catalog
 # regenerated with --out from this checkout
 ```

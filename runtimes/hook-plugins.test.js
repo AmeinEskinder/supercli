@@ -1,21 +1,21 @@
 import { afterEach, expect, test } from "bun:test";
-import { UnpeelNotifyPlugin } from "./opencode/assets/hooks/plugin.js";
+import { SuperCLINotifyPlugin } from "./opencode/assets/hooks/plugin.js";
 import registerAmp from "./amp/assets/hooks/plugin.js";
 
-const originalSession = process.env.UNPEEL_SESSION_ID;
+const originalSession = process.env.SUPERCLI_SESSION_ID;
 const originalSpawn = Bun.spawn;
 afterEach(() => {
-  if (originalSession === undefined) delete process.env.UNPEEL_SESSION_ID;
-  else process.env.UNPEEL_SESSION_ID = originalSession;
+  if (originalSession === undefined) delete process.env.SUPERCLI_SESSION_ID;
+  else process.env.SUPERCLI_SESSION_ID = originalSession;
   Bun.spawn = originalSpawn;
-  delete globalThis.__unpeelOpencodeNotifyPluginV1;
+  delete globalThis.__supercliOpencodeNotifyPluginV1;
 });
 
 async function openCode() {
-  process.env.UNPEEL_SESSION_ID = "isolated-plugin-test";
+  process.env.SUPERCLI_SESSION_ID = "isolated-plugin-test";
   const posts = [];
   const sessions = [{ id: "root" }, { id: "child", parentID: "root" }];
-  const plugin = await UnpeelNotifyPlugin({
+  const plugin = await SuperCLINotifyPlugin({
     $: async (_parts, _path, payload) => { posts.push(JSON.parse(payload)); },
     client: { session: { list: async () => {
       await new Promise(resolve => setTimeout(resolve, 2));

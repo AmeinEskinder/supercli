@@ -1,4 +1,4 @@
-# Unpeel Host service, one workspace — Linux systemd user template unit.
+# SuperCLI Host service, one workspace — Linux systemd user template unit.
 #
 # The scoped single-workspace shape (`supercli --workspace NAME serve`) for
 # containers and explicitly scoped units. Most machines want the plain
@@ -15,7 +15,7 @@
 # makes the second owner report it as external rather than compete.
 
 [Unit]
-Description=Unpeel Host service (workspace %i)
+Description=SuperCLI Host service (workspace %i)
 
 [Service]
 ExecStart=/usr/local/bin/supercli --workspace %i serve

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Unpeel Host service — macOS per-user LaunchAgent.
+  SuperCLI Host service — macOS per-user LaunchAgent.
 
   Usable verbatim when `supercli` is installed at /usr/local/bin/supercli
   (the install.sh default):
