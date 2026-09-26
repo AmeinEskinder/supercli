@@ -42,19 +42,19 @@ jobs:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: clients/dioxus
+          workspaces: clients/legacy/dioxus
       - name: iOS bridge staticlib (device + sim targets)
-        working-directory: clients/dioxus
+        working-directory: clients/legacy/dioxus
         run: |
           cargo check -p supercli-ios-bridge --target aarch64-apple-ios
           cargo check -p supercli-ios-bridge --target aarch64-apple-ios-sim
       - name: Full client workspace checks (Apple targets)
-        working-directory: clients/dioxus
+        working-directory: clients/legacy/dioxus
         run: |
           cargo check --workspace --target aarch64-apple-ios-sim
           cargo clippy --workspace --target aarch64-apple-ios-sim -- -D warnings
       - name: Shared UI + web crate checks (host)
-        working-directory: clients/dioxus
+        working-directory: clients/legacy/dioxus
         run: cargo test -p supercli-ui
 
   simulator-app:
@@ -70,16 +70,16 @@ jobs:
           targets: aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: clients/dioxus
+          workspaces: clients/legacy/dioxus
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli --version ${{ env.DIOXUS_CLI_VERSION }} --locked
       - name: Build unsigned iOS simulator app
-        working-directory: clients/dioxus
+        working-directory: clients/legacy/dioxus
         # Unsigned simulator .app only — device IPAs are operator-signed.
         run: dx bundle --platform ios --package supercli-mobile
       - name: Locate the .app bundle
         id: app
-        working-directory: clients/dioxus
+        working-directory: clients/legacy/dioxus
         run: |
           APP="$(find target/dx -name '*.app' -maxdepth 4 | head -1)"
           test -n "$APP" || { echo "no .app found under target/dx"; find target/dx -maxdepth 2 | head -20; exit 1; }
@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: supercli-mobile-simulator-app
-          path: clients/dioxus/${{ steps.app.outputs.path }}
+          path: clients/legacy/dioxus/${{ steps.app.outputs.path }}
           if-no-files-found: error
 
   native-shell-xcodegen:
@@ -101,14 +101,14 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Validate native-shell project.yml
-        working-directory: clients/dioxus/native-shell
+        working-directory: clients/legacy/dioxus/native-shell
         run: |
           python3 -c "import yaml, sys; yaml.safe_load(open('project.yml'))" || pip install pyyaml
           python3 -c "import yaml; yaml.safe_load(open('project.yml')); print('project.yml: valid YAML')"
           plutil -lint InfoPlistAdditions.plist
           plutil -lint Supercli.entitlements
       - name: Generate Xcode project (Mac-only)
-        working-directory: clients/dioxus/native-shell
+        working-directory: clients/legacy/dioxus/native-shell
         # This requires the iOS SDK and Apple frameworks — macos-15 only.
         # The generated project is not committed; it is a build artifact.
         run: |
@@ -116,7 +116,7 @@ jobs:
           test -d SupercliShell.xcodeproj || { echo "xcodegen did not produce SupercliShell.xcodeproj"; exit 1; }
           echo "Generated SupercliShell.xcodeproj"
       - name: Verify shell builds (simulator, unsigned)
-        working-directory: clients/dioxus/native-shell
+        working-directory: clients/legacy/dioxus/native-shell
         run: |
           xcodebuild -project SupercliShell.xcodeproj \
             -scheme SupercliShell \
