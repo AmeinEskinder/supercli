@@ -9,8 +9,10 @@
 //! WebSocket each message is one frame; on a raw TCP socket the proxy must
 //! length-prefix frames itself.
 //!
-//! Touch input uses [`DevicePoint`]: coordinates normalized to 0.0–1.0 on
-//! both axes, independent of device pixels.
+//! Touch input uses [`DevicePoint`]: coordinates in the device's point
+//! coordinate system (baguette's convention) — the same units as the
+//! screen size in points, so callers can pipe the 0x01 description's
+//! `width_points`/`height_points` straight back as input.
 //!
 //! No feature gate: pure `std`, always compiled.
 
@@ -42,8 +44,8 @@ pub enum WireError {
     Empty,
     /// A frame arrived with a type byte outside 0x01–0x04.
     UnknownFrameType(u8),
-    /// A point was normalized against a zero width or height.
-    ZeroDimension,
+    /// A pixel↔point conversion was attempted with a zero display density.
+    ZeroDensity,
 }
 
 impl fmt::Display for WireError {
@@ -53,8 +55,8 @@ impl fmt::Display for WireError {
             WireError::UnknownFrameType(t) => {
                 write!(f, "unknown wire frame type 0x{t:02x}")
             }
-            WireError::ZeroDimension => {
-                f.write_str("cannot normalize a point against a zero width or height")
+            WireError::ZeroDensity => {
+                f.write_str("cannot map pixels to device points with a zero density_dpi")
             }
         }
     }
@@ -85,8 +87,12 @@ impl WireFrame {
     }
 }
 
-/// Normalized device point: 0.0–1.0 on both axes, independent of pixels.
-/// All touch input on the wire uses these coordinates.
+/// A point in the device's point coordinate system (baguette's convention).
+///
+/// Device points are the same units as the screen size in points, so a
+/// caller can pipe the 0x01 description's `width_points`/`height_points`
+/// straight back as touch input without rescaling. iOS points are
+/// pixels / scale; Android points are pixels * 160 / density_dpi.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DevicePoint {
     pub x: f32,
@@ -94,24 +100,27 @@ pub struct DevicePoint {
 }
 
 impl DevicePoint {
-    /// Convert device pixels to normalized coordinates. Values outside the
-    /// screen clamp to [0.0, 1.0] rather than erroring.
-    pub fn from_pixels(x: u32, y: u32, width: u32, height: u32) -> Result<Self, WireError> {
-        if width == 0 || height == 0 {
-            return Err(WireError::ZeroDimension);
+    /// Map Android device pixels to device points via the display density:
+    /// points = pixels * 160 / density_dpi.
+    pub fn from_android_pixels(px: u32, py: u32, density_dpi: u32) -> Result<Self, WireError> {
+        if density_dpi == 0 {
+            return Err(WireError::ZeroDensity);
         }
         Ok(DevicePoint {
-            x: (x as f32 / width as f32).clamp(0.0, 1.0),
-            y: (y as f32 / height as f32).clamp(0.0, 1.0),
+            x: px as f32 * 160.0 / density_dpi as f32,
+            y: py as f32 * 160.0 / density_dpi as f32,
         })
     }
 
-    /// Convert back to device pixels (rounds to the nearest pixel).
-    pub fn to_pixels(self, width: u32, height: u32) -> (u32, u32) {
-        (
-            (self.x * width as f32).round() as u32,
-            (self.y * height as f32).round() as u32,
-        )
+    /// Map device points back to Android device pixels (rounds to nearest).
+    pub fn to_android_pixels(self, density_dpi: u32) -> Result<(u32, u32), WireError> {
+        if density_dpi == 0 {
+            return Err(WireError::ZeroDensity);
+        }
+        Ok((
+            (self.x * density_dpi as f32 / 160.0).round() as u32,
+            (self.y * density_dpi as f32 / 160.0).round() as u32,
+        ))
     }
 }
 
@@ -124,7 +133,8 @@ pub struct H264Packet {
 }
 
 /// Wrap a baguette frame for the unified stream: baguette already speaks
-/// this format, so this is a validated passthrough (byte-identical).
+/// this format — and already uses device points for coordinates — so this
+/// is a validated passthrough (byte-identical).
 pub fn wire_from_baguette(frame: &[u8]) -> Result<Vec<u8>, WireError> {
     let (frame_type, _) = WireFrame::decode(frame)?;
     if !is_known_frame_type(frame_type) {
@@ -145,27 +155,42 @@ pub fn wire_from_h264(packet: &H264Packet) -> Vec<u8> {
 }
 
 /// Stream metadata carried in a [`FRAME_DESCRIPTION`] payload, encoded as
-/// UTF-8 JSON: `{"device":"Pixel 7","platform":"android","width":1080,
-/// "height":2400,"orientation":"portrait"}`. `platform` is `"android"` or
-/// `"ios"`; `orientation` is `"portrait"` or `"landscape"`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// UTF-8 JSON. `platform` is `"android"` or `"ios"`; `orientation` is
+/// `"portrait"` or `"landscape"`. `width_points`/`height_points` are the
+/// screen size in device points — the same units as [`DevicePoint`], so
+/// clients can scale their UI and pipe coordinates straight back as touch
+/// input. `density_dpi` is present for Android only (needed for the
+/// pixel↔point mapping); on iOS points = pixels / scale, so it is omitted.
+#[derive(Clone, Debug, PartialEq)]
 pub struct StreamDescription {
     pub device: String,
     pub platform: String,
-    pub width: u32,
-    pub height: u32,
+    pub width_points: f32,
+    pub height_points: f32,
+    pub width_pixels: u32,
+    pub height_pixels: u32,
+    pub density_dpi: Option<u32>,
     pub orientation: String,
 }
 
 impl StreamDescription {
     /// Encode as UTF-8 JSON (hand-rolled: this crate is `std`-only).
+    /// `density_dpi` is emitted only when `Some` (Android); iOS descriptions
+    /// omit the key entirely.
     pub fn encode(&self) -> Vec<u8> {
+        let density = match self.density_dpi {
+            Some(d) => format!(",\"density_dpi\":{d}"),
+            None => String::new(),
+        };
         let json = format!(
-            "{{\"device\":{},\"platform\":{},\"width\":{},\"height\":{},\"orientation\":{}}}",
+            "{{\"device\":{},\"platform\":{},\"width_points\":{},\"height_points\":{},\"width_pixels\":{},\"height_pixels\":{}{},\"orientation\":{}}}",
             json_string(&self.device),
             json_string(&self.platform),
-            self.width,
-            self.height,
+            self.width_points,
+            self.height_points,
+            self.width_pixels,
+            self.height_pixels,
+            density,
             json_string(&self.orientation),
         );
         json.into_bytes()
@@ -289,55 +314,84 @@ mod tests {
     }
 
     #[test]
-    fn device_point_pixel_roundtrip() {
-        for (x, y, w, h) in [
-            (0u32, 0u32, 1080u32, 2400u32),
-            (100, 200, 1080, 2400),
-            (1079, 2399, 1080, 2400),
-            (1080, 2400, 1080, 2400),
-            (540, 1200, 1080, 2400),
-            (10, 20, 1170, 2532),
+    fn device_point_android_pixel_roundtrip() {
+        // density 160: points == pixels exactly.
+        for (px, py, dpi) in [
+            (0u32, 0u32, 160u32),
+            (100, 200, 160),
+            (1080, 2400, 160),
+            // density 320: 1080px -> 540pt, exact round-trip.
+            (0, 0, 320),
+            (540, 1200, 320),
+            (1080, 2400, 320),
+            // density 420: non-integral points still round-trip.
+            (0, 0, 420),
+            (420, 840, 420),
+            (840, 1680, 420),
         ] {
-            let p = DevicePoint::from_pixels(x, y, w, h).unwrap();
-            assert!(
-                (0.0..=1.0).contains(&p.x) && (0.0..=1.0).contains(&p.y),
-                "out of range for ({x},{y}) in {w}x{h}"
+            let p = DevicePoint::from_android_pixels(px, py, dpi).unwrap();
+            assert_eq!(
+                p.to_android_pixels(dpi).unwrap(),
+                (px, py),
+                "roundtrip failed for ({px},{py}) @ {dpi}dpi"
             );
-            assert_eq!(p.to_pixels(w, h), (x, y), "roundtrip failed for ({x},{y})");
         }
     }
 
     #[test]
-    fn device_point_clamps_out_of_bounds() {
-        let p = DevicePoint::from_pixels(2000, 5000, 1080, 2400).unwrap();
-        assert_eq!(p, DevicePoint { x: 1.0, y: 1.0 });
+    fn device_point_android_conversion_uses_density() {
+        // points = pixels * 160 / density_dpi (baguette's device-point units).
+        let p = DevicePoint::from_android_pixels(1080, 2400, 320).unwrap();
+        assert_eq!(
+            p,
+            DevicePoint {
+                x: 540.0,
+                y: 1200.0
+            }
+        );
+        let p = DevicePoint::from_android_pixels(1080, 2400, 420).unwrap();
+        let expected_x = 1080.0f32 * 160.0 / 420.0;
+        let expected_y = 2400.0f32 * 160.0 / 420.0;
+        assert!(
+            (p.x - expected_x).abs() < 1e-3 && (p.y - expected_y).abs() < 1e-3,
+            "got ({}, {}), want ({}, {})",
+            p.x,
+            p.y,
+            expected_x,
+            expected_y
+        );
+        // Back to pixels through the same density.
+        assert_eq!(p.to_android_pixels(420).unwrap(), (1080, 2400));
     }
 
     #[test]
-    fn device_point_zero_dimension_is_error() {
+    fn device_point_zero_density_is_error() {
         assert_eq!(
-            DevicePoint::from_pixels(1, 1, 0, 2400),
-            Err(WireError::ZeroDimension)
+            DevicePoint::from_android_pixels(1, 1, 0),
+            Err(WireError::ZeroDensity)
         );
         assert_eq!(
-            DevicePoint::from_pixels(1, 1, 1080, 0),
-            Err(WireError::ZeroDimension)
+            DevicePoint { x: 1.0, y: 1.0 }.to_android_pixels(0),
+            Err(WireError::ZeroDensity)
         );
     }
 
     #[test]
-    fn stream_description_encodes_exact_schema() {
+    fn stream_description_android_includes_point_size_and_density() {
         let d = StreamDescription {
             device: "Pixel 7".to_string(),
             platform: "android".to_string(),
-            width: 1080,
-            height: 2400,
+            width_points: 540.0,
+            height_points: 1200.0,
+            width_pixels: 1080,
+            height_pixels: 2400,
+            density_dpi: Some(320),
             orientation: "portrait".to_string(),
         };
         let json = String::from_utf8(d.encode()).unwrap();
         assert_eq!(
             json,
-            r#"{"device":"Pixel 7","platform":"android","width":1080,"height":2400,"orientation":"portrait"}"#
+            r#"{"device":"Pixel 7","platform":"android","width_points":540,"height_points":1200,"width_pixels":1080,"height_pixels":2400,"density_dpi":320,"orientation":"portrait"}"#
         );
         let frame = d.wire_frame();
         assert_eq!(frame[0], FRAME_DESCRIPTION);
@@ -345,12 +399,35 @@ mod tests {
     }
 
     #[test]
+    fn stream_description_ios_omits_density_dpi() {
+        let d = StreamDescription {
+            device: "iPhone 15".to_string(),
+            platform: "ios".to_string(),
+            width_points: 390.0,
+            height_points: 844.0,
+            width_pixels: 1170,
+            height_pixels: 2532,
+            density_dpi: None,
+            orientation: "portrait".to_string(),
+        };
+        let json = String::from_utf8(d.encode()).unwrap();
+        assert_eq!(
+            json,
+            r#"{"device":"iPhone 15","platform":"ios","width_points":390,"height_points":844,"width_pixels":1170,"height_pixels":2532,"orientation":"portrait"}"#
+        );
+        assert!(!json.contains("density_dpi"));
+    }
+
+    #[test]
     fn stream_description_escapes_strings() {
         let d = StreamDescription {
             device: "weird \"name\" \\ \u{1}".to_string(),
             platform: "ios".to_string(),
-            width: 1170,
-            height: 2532,
+            width_points: 390.0,
+            height_points: 844.0,
+            width_pixels: 1170,
+            height_pixels: 2532,
+            density_dpi: None,
             orientation: "landscape".to_string(),
         };
         let json = String::from_utf8(d.encode()).unwrap();
@@ -358,7 +435,8 @@ mod tests {
         // escaped, U+0001 as the six-character \u0001 escape.
         let expected = concat!(
             "{\"device\":\"weird \\\"name\\\" \\\\ \\u0001\",",
-            "\"platform\":\"ios\",\"width\":1170,\"height\":2532,",
+            "\"platform\":\"ios\",\"width_points\":390,\"height_points\":844,",
+            "\"width_pixels\":1170,\"height_pixels\":2532,",
             "\"orientation\":\"landscape\"}"
         );
         assert_eq!(json, expected);
@@ -374,6 +452,6 @@ mod tests {
             WireError::UnknownFrameType(0x7f).to_string(),
             "unknown wire frame type 0x7f"
         );
-        assert!(WireError::ZeroDimension.to_string().contains("zero width"));
+        assert!(WireError::ZeroDensity.to_string().contains("zero density"));
     }
 }
