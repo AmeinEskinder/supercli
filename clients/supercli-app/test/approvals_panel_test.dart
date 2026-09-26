@@ -124,6 +124,31 @@ void main() {
         );
       }
     });
+
+    test('overlay shows the authenticated device name from the Host body',
+        () {
+      // Wire shape of GET /mobile/bootstrap pendingApprovals after the
+      // device-identity fix: the Host renders "Device: <name>" from the
+      // authenticated principal, never a caller-supplied session label.
+      final approval = PendingApproval.fromJson({
+        'id': 'appr-device',
+        'kind': 'git-file-op',
+        'title': 'git push requested by paired controller',
+        'body': 'Operation: git push\nPath: /mobile/git/push\n'
+            "Device: Osman's Phone",
+        'callerSessionID': 'spoofed-session-label',
+        'requestedAtUnixMs': 1000,
+      });
+      final node = McpApprovalPanel(approval: approval).build() as UiColumn;
+      final detail = node.children
+          .whereType<UiText>()
+          .firstWhere((t) => t.id == 'mcp-approval-body');
+      expect(detail.text, contains("Device: Osman's Phone"));
+      // The caller-supplied session label is wire metadata only; the
+      // overlay must not render it as the requester's identity.
+      expect(detail.text, isNot(contains('spoofed-session-label')));
+      expect(detail.text, isNot(contains('Session:')));
+    });
   });
 
   group('ApprovalsPanel', () {

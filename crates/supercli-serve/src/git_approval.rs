@@ -50,6 +50,38 @@ pub fn is_mutating_git_route(method: &str, path: &str) -> bool {
 /// Approval timeout for git/file operations (matches devices.rs).
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Display identity for the approval: the AUTHENTICATED device name, taken
+/// from the request principal. The principal is attached by the Bearer-token
+/// auth layer (`principal_for_bearer` in mobile.rs) from the Host's device
+/// store — it is never caller-controlled. A caller-supplied session label
+/// must never be shown as the requester's identity (it is spoofable).
+fn authenticated_device_name(request: &ControllerRequest) -> String {
+    match &request.principal {
+        supercli_core::controller_api::ControllerPrincipal::PairedDevice {
+            name,
+            device_id,
+            ..
+        } => {
+            let name = name.trim();
+            if name.is_empty() {
+                device_id.clone()
+            } else {
+                name.to_string()
+            }
+        }
+        supercli_core::controller_api::ControllerPrincipal::OwnerTransport {
+            subject,
+            transport,
+            ..
+        } => subject
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| transport.clone()),
+    }
+}
+
 /// Check approval for a mutating git/file route.
 ///
 /// Returns `Ok(())` if the operation may proceed (human allowed via
@@ -101,9 +133,14 @@ pub fn check_git_approval(
     //    Follows the devices.rs pattern: HubGate -> ApprovalHub.request().
     //    The hub is passed in from mobile.rs (not the global, which is
     //    for the device routes).
+    //    The displayed requester identity is the AUTHENTICATED device name
+    //    from the request principal — never the caller-supplied session_id,
+    //    which is attacker-controlled (mobile.rs takes it from the request
+    //    body, falling back to "controller").
     let title = format!("{op_name} requested by paired controller");
+    let device_name = authenticated_device_name(request);
     let body = format!(
-        "Operation: {op_name}\nPath: {}\nSession: {session_id}",
+        "Operation: {op_name}\nPath: {}\nDevice: {device_name}",
         request.path
     );
     // request() blocks on the channel until a human answers via the desktop
@@ -327,5 +364,141 @@ mod tests {
 
         let result = handle.join().expect("thread panicked");
         assert!(result.is_ok(), "explicit Allow should permit, got {result:?}");
+    }
+
+    fn request_with_principal(
+        principal: supercli_core::controller_api::ControllerPrincipal,
+    ) -> ControllerRequest {
+        ControllerRequest {
+            id: Some("test-123".to_string()),
+            method: "POST".to_string(),
+            path: "/mobile/git/push".to_string(),
+            query: std::collections::HashMap::new(),
+            body: serde_json::json!({}),
+            content_type: None,
+            body_base64: None,
+            principal,
+        }
+    }
+
+    /// Queue a git-push approval in a thread and return the displayed body.
+    /// The thread is denied afterwards so it cannot block the test.
+    fn queued_approval_body(
+        req: ControllerRequest,
+        caller_session_id: &str,
+    ) -> String {
+        let hub = Arc::new(ApprovalHub::default());
+        let hub_clone = hub.clone();
+        let session = caller_session_id.to_string();
+        let handle =
+            std::thread::spawn(move || check_git_approval(&req, &session, &hub_clone));
+
+        let (approval_id, body) = {
+            let mut found = None;
+            for _ in 0..50 {
+                let pending = hub.list_json();
+                if let Some(first) = pending.first() {
+                    let id = first.get("id").and_then(|v| v.as_str()).map(str::to_string);
+                    let body = first
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
+                    if let (Some(id), Some(body)) = (id, body) {
+                        found = Some((id, body));
+                        break;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            found.expect("approval should be queued")
+        };
+
+        // Deny so the blocked thread exits; the body was already captured.
+        let _ = hub.answer(&approval_id, false, Some("test-human".to_string()), "nonce-body");
+        let _ = handle.join().expect("thread panicked");
+        body
+    }
+
+    /// The displayed requester identity comes from the AUTHENTICATED device
+    /// name (principal set by the Bearer-token auth layer), never from the
+    /// caller-supplied session label. A spoofed session_id must not appear
+    /// in the approval body.
+    #[test]
+    fn approval_body_shows_authenticated_device_name_not_caller_session_label() {
+        let req = request_with_principal(
+            supercli_core::controller_api::ControllerPrincipal::PairedDevice {
+                device_id: "device-abc".to_string(),
+                name: "Osman's Phone".to_string(),
+                principal_id: None,
+            },
+        );
+        // mobile.rs takes this string from the request body ("sessionID"),
+        // falling back to "controller" — it is caller-controlled.
+        let body = queued_approval_body(req, "attacker-spoofed-label");
+        assert!(
+            body.contains("Device: Osman's Phone"),
+            "body must show the authenticated device name, got:\n{body}"
+        );
+        assert!(
+            !body.contains("attacker-spoofed-label"),
+            "body must NOT echo the caller-supplied session label, got:\n{body}"
+        );
+        assert!(
+            !body.contains("Session:"),
+            "body must not carry a Session: identity line, got:\n{body}"
+        );
+    }
+
+    /// Empty device name falls back to the (Host-assigned) device id, still
+    /// authenticated — never to the caller label.
+    #[test]
+    fn approval_body_falls_back_to_device_id_when_name_empty() {
+        let req = request_with_principal(
+            supercli_core::controller_api::ControllerPrincipal::PairedDevice {
+                device_id: "device-abc".to_string(),
+                name: "   ".to_string(),
+                principal_id: None,
+            },
+        );
+        let body = queued_approval_body(req, "controller");
+        assert!(
+            body.contains("Device: device-abc"),
+            "body must fall back to the device id, got:\n{body}"
+        );
+        assert!(
+            !body.contains("Session:"),
+            "body must not carry a Session: identity line, got:\n{body}"
+        );
+    }
+
+    /// Owner transports (local/SSH/server-token) show the authenticated
+    /// subject, falling back to the transport name.
+    #[test]
+    fn approval_body_uses_owner_transport_subject() {
+        let req = request_with_principal(
+            supercli_core::controller_api::ControllerPrincipal::OwnerTransport {
+                transport: "ssh".to_string(),
+                subject: Some("osman-laptop".to_string()),
+                principal_id: None,
+            },
+        );
+        let body = queued_approval_body(req, "controller");
+        assert!(
+            body.contains("Device: osman-laptop"),
+            "body must show the owner subject, got:\n{body}"
+        );
+
+        let req = request_with_principal(
+            supercli_core::controller_api::ControllerPrincipal::OwnerTransport {
+                transport: "local".to_string(),
+                subject: None,
+                principal_id: None,
+            },
+        );
+        let body = queued_approval_body(req, "controller");
+        assert!(
+            body.contains("Device: local"),
+            "body must fall back to the transport, got:\n{body}"
+        );
     }
 }
