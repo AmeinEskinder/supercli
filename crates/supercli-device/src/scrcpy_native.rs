@@ -717,15 +717,6 @@ pub fn fallback_adb_input(serial: &DeviceId, input_args: &[&str]) -> Result<(), 
 /// How long to wait for each TCP connect to the forwarded scrcpy sockets.
 const SOCKET_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How long to poll for the server's listening socket after `app_process`.
-///
-/// 45 s: on a swiftshader (software-GL) emulator the JVM start plus
-/// MediaCodec init can take well over 15 s on first boot; giving up early
-/// was the prime suspect for CI run #2's fast panic (exit 101) in
-/// `ScrcpyNative::connect`. The poll loop logs progress so a future timeout
-/// is visible in the test output instead of silent.
-const SERVER_START_POLL_TIMEOUT: Duration = Duration::from_secs(45);
-
 fn adb_forward(serial: &DeviceId, local_port: u16) -> Result<(), DeviceError> {
     let spec = format!("tcp:{local_port}");
     run_tool_ok(
@@ -840,37 +831,146 @@ fn connect_socket(port: u16) -> Result<TcpStream, DeviceError> {
     let addr: SocketAddr = format!("127.0.0.1:{port}")
         .parse()
         .map_err(|_| DeviceError::Parse(format!("bad loopback port: {port}")))?;
-    eprintln!("scrcpy: stage=video_connect_wait port={port}");
-    let start = std::time::Instant::now();
-    let deadline = start + SERVER_START_POLL_TIMEOUT;
-    let mut logged_secs = 0u64;
+    // Simple connect with timeout. NOTE: with `adb forward` this succeeds
+    // as soon as the forward accepts locally — even if the server isn't
+    // listening on the device yet. Do NOT treat a successful connect as
+    // proof the server is up; use the dummy-byte probe below for that.
+    eprintln!("scrcpy: stage=socket_connect_wait port={port}");
+    match TcpStream::connect_timeout(&addr, SOCKET_CONNECT_TIMEOUT) {
+        Ok(s) => {
+            eprintln!("scrcpy: stage=socket_connected port={port}");
+            Ok(s)
+        }
+        Err(e) => Err(DeviceError::Io(e)),
+    }
+}
+
+/// Connect the video (first) socket.
+///
+/// NOTE: with `adb forward` the TCP connect succeeds as soon as the
+/// forward accepts locally — even if the server isn't listening on the
+/// device yet. A successful connect is NOT proof the server is up; the
+/// dummy-byte read (after the control socket is connected) is the real
+/// liveness check.
+fn connect_video_socket(port: u16) -> Result<TcpStream, DeviceError> {
+    connect_socket(port)
+}
+
+/// Perform the v2.x forward-tunnel socket handshake against an already-
+/// forwarded `port`.
+///
+/// Returns `(video_stream, control_stream, header)`.
+///
+/// Ordering (critical — any other order deadlocks):
+/// 1. Connect socket #1 (video).
+/// 2. Connect socket #2 (control) IMMEDIATELY. The server accepts ALL
+///    sockets first and only then writes anything; waiting for the video
+///    header before opening control deadlocks.
+/// 3. Read the 1-byte dummy on the video socket. If EOF/reset here, the
+///    server isn't listening yet (adb forward accepts locally before the
+///    device-side listener exists): close both sockets and retry the whole
+///    handshake every 100ms for up to 10s.
+/// 4. Read the 76-byte header on the video socket (64-byte NUL-padded
+///    device name + u32-BE codec id + u32-BE width + u32-BE height).
+///
+/// `pub(crate)` so the unit test can drive it against a scripted fake
+/// server without adb or a device.
+pub(crate) fn handshake_video_control(
+    port: u16,
+) -> Result<(TcpStream, TcpStream, VideoHeader), DeviceError> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut attempts = 0u32;
     loop {
-        match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
-            Ok(s) => {
-                eprintln!(
-                    "scrcpy: stage=video_connected after={}ms",
-                    start.elapsed().as_millis()
-                );
-                return Ok(s);
-            }
+        attempts += 1;
+        // 1. Video socket.
+        let mut video = match connect_video_socket(port) {
+            Ok(s) => s,
             Err(e) => {
                 if std::time::Instant::now() >= deadline {
-                    eprintln!(
-                        "scrcpy: stage=video_connect_timeout after={}ms last_err={e}",
-                        start.elapsed().as_millis()
-                    );
-                    return Err(DeviceError::Io(e));
+                    return Err(e);
                 }
-                let elapsed_secs = start.elapsed().as_secs();
-                // One line every 5 s so a slow (but alive) server start is
-                // visible; silence here + eventual timeout = server died.
-                if elapsed_secs >= logged_secs + 5 {
-                    logged_secs = elapsed_secs;
-                    eprintln!("scrcpy: still waiting for video socket ({elapsed_secs}s) ...");
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+        };
+        // 2. Control socket IMMEDIATELY.
+        let control_stream = match connect_socket(port) {
+            Ok(s) => s,
+            Err(e) => {
+                drop(video);
+                if std::time::Instant::now() >= deadline {
+                    return Err(e);
                 }
-                std::thread::sleep(Duration::from_millis(200));
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+        };
+        eprintln!("scrcpy: stage=control_connected attempts={attempts}");
+
+        // 3. Dummy byte: the server writes it once both sockets are
+        //    accepted. EOF/reset here means the server isn't listening yet.
+        video
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .map_err(DeviceError::Io)?;
+        let mut dummy = [0u8; 1];
+        match video.read_exact(&mut dummy) {
+            Ok(()) => {
+                eprintln!(
+                    "scrcpy: stage=video_dummy_ok attempts={attempts} byte=0x{:02x}",
+                    dummy[0]
+                );
+            }
+            Err(e)
+                if e.kind() == std::io::ErrorKind::UnexpectedEof
+                    || e.kind() == std::io::ErrorKind::ConnectionReset =>
+            {
+                eprintln!(
+                    "scrcpy: stage=video_dummy_eof attempts={attempts} (server not listening yet)"
+                );
+                drop(video);
+                drop(control_stream);
+                if std::time::Instant::now() >= deadline {
+                    return Err(DeviceError::Io(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "scrcpy video dummy byte not received within 10s; server never listened",
+                    )));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => {
+                drop(video);
+                drop(control_stream);
+                return Err(DeviceError::Io(e));
             }
         }
+
+        // 4. Header: 64-byte device name + codec meta.
+        video
+            .set_read_timeout(Some(SOCKET_CONNECT_TIMEOUT))
+            .map_err(DeviceError::Io)?;
+        let mut reader = VideoStreamReader::new(video);
+        let header = match reader.read_header() {
+            Ok(h) => h,
+            Err(e) => {
+                return Err(DeviceError::Parse(format!(
+                    "scrcpy video header unreadable: {e}"
+                )))
+            }
+        };
+        if header.codec != *b"h264" {
+            return Err(DeviceError::Parse(format!(
+                "unexpected scrcpy video codec: {:?} (only h264 is supported)",
+                header.codec
+            )));
+        }
+        eprintln!(
+            "scrcpy: stage=header_ok codec=h264 size={}x{} device='{}'",
+            header.width, header.height, header.device_name
+        );
+        // Get the video stream back from the reader.
+        let video = reader.into_inner();
+        return Ok((video, control_stream, header));
     }
 }
 
@@ -889,9 +989,16 @@ pub struct ScrcpyNative {
 
 impl ScrcpyNative {
     /// Connect to the device: verify/deploy the server jar, forward the
-    /// port, start the server, open the video socket (reads the 76-byte
-    /// header) and then the control socket. Socket order is video-then-
-    /// control; opening them in any other order hangs the server.
+    /// port, start the server, then perform the v2.x forward-tunnel
+    /// handshake:
+    ///
+    /// 1. Connect socket #1 (video); read the 1-byte dummy (with retry:
+    ///    adb forward accepts locally before the server listens).
+    /// 2. Connect socket #2 (control) IMMEDIATELY. The server accepts ALL
+    ///    sockets first and only then writes anything; waiting for the
+    ///    video header before opening control deadlocks.
+    /// 3. Read the 76-byte header on the video socket (64-byte device name
+    ///    + u32 codec + u32 width + u32 height, big-endian).
     pub fn connect(device_serial: &str) -> Result<Self, DeviceError> {
         if !tool_on_path("adb") {
             return Err(DeviceError::ToolMissing("adb".to_string()));
@@ -908,29 +1015,11 @@ impl ScrcpyNative {
         spawn_server(&serial)?;
         eprintln!("scrcpy: stage=server_spawned version={SCRCPY_SERVER_VERSION}");
 
-        // Video socket first: read and validate the stream header.
-        let video = connect_socket(port)?;
-        video
-            .set_read_timeout(Some(SOCKET_CONNECT_TIMEOUT))
-            .map_err(DeviceError::Io)?;
-        let mut reader = VideoStreamReader::new(&video);
-        let header = reader
-            .read_header()
-            .map_err(|e| DeviceError::Parse(format!("scrcpy video header unreadable: {e}")))?;
-        if header.codec != *b"h264" {
-            return Err(DeviceError::Parse(format!(
-                "unexpected scrcpy video codec: {:?} (only h264 is supported)",
-                header.codec
-            )));
-        }
-        eprintln!(
-            "scrcpy: stage=header_ok codec=h264 size={}x{} device='{}'",
-            header.width, header.height, header.device_name
-        );
+        // v2.x forward-tunnel handshake: video dummy probe, control
+        // immediately, then the 76-byte header. See handshake_video_control
+        // for why this exact order is required (deadlock otherwise).
+        let (video, control_stream, header) = handshake_video_control(port)?;
 
-        // Control socket second (audio is disabled, so this is socket #2).
-        let control_stream = connect_socket(port)?;
-        eprintln!("scrcpy: stage=control_connected");
         let control = ControlChannel::new(
             control_stream,
             header.width.min(u16::MAX as u32) as u16,
@@ -1357,5 +1446,101 @@ mod tests {
         let err =
             fallback_adb_input(&DeviceId::new("emulator-5554"), &["tap", "1", "1"]).unwrap_err();
         assert!(matches!(err, DeviceError::ToolMissing(_)));
+    }
+
+    // -- v2.x forward-tunnel handshake ---------------------------------------
+    //
+    // Regression test for the CI run #8 deadlock (2026-09-26): with
+    // tunnel_forward=true the server accepts ALL sockets first (video,
+    // then control) and only then writes anything. A client that waits
+    // for the video header before opening the control socket deadlocks.
+    //
+    // The fake server below reproduces the exact server ordering:
+    // accept video, accept control, THEN write (dummy + header). If the
+    // handshake ever regresses to header-before-control, this test hangs
+    // and fails (the 10s dummy-probe deadline keeps it bounded).
+
+    #[test]
+    fn handshake_accepts_both_sockets_before_writing() {
+        use std::io::Write;
+        use std::net::TcpListener;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // Record the order the server accepted the sockets.
+        let (order_tx, order_rx) = mpsc::channel::<&'static str>();
+
+        let server = std::thread::spawn(move || {
+            // Accept video first...
+            let (mut video, _) = listener.accept().unwrap();
+            order_tx.send("video").unwrap();
+            // ...then control, BEFORE writing anything (the real server's
+            // ordering with tunnel_forward=true).
+            let (mut control, _) = listener.accept().unwrap();
+            order_tx.send("control").unwrap();
+
+            // Now write to video: 1 dummy byte, 64-byte device name,
+            // 12-byte codec meta (u32 codec, u32 width, u32 height).
+            video.write_all(&[0x00]).unwrap();
+            let mut name = [0u8; 64];
+            name[..9].copy_from_slice(b"fake-dev\x00");
+            video.write_all(&name).unwrap();
+            video.write_all(b"h264").unwrap();
+            video.write_all(&1080u32.to_be_bytes()).unwrap();
+            video.write_all(&2400u32.to_be_bytes()).unwrap();
+            video.flush().unwrap();
+
+            // Hold the control socket open briefly so the client sees a
+            // live peer, then close both.
+            std::thread::sleep(Duration::from_millis(200));
+            drop(control);
+            drop(video);
+        });
+
+        // The handshake must complete without deadlock.
+        let (_video, _control, header) = handshake_video_control(port)
+            .expect("handshake against fake server must succeed");
+
+        assert_eq!(header.device_name, "fake-dev");
+        assert_eq!(header.codec, *b"h264");
+        assert_eq!(header.width, 1080);
+        assert_eq!(header.height, 2400);
+
+        // The server must have accepted video before control.
+        assert_eq!(order_rx.recv_timeout(Duration::from_secs(5)).unwrap(), "video");
+        assert_eq!(order_rx.recv_timeout(Duration::from_secs(5)).unwrap(), "control");
+
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn handshake_rejects_wrong_codec() {
+        use std::io::Write;
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server = std::thread::spawn(move || {
+            let (mut video, _) = listener.accept().unwrap();
+            let (_control, _) = listener.accept().unwrap();
+            video.write_all(&[0x00]).unwrap();
+            video.write_all(&[0u8; 64]).unwrap();
+            video.write_all(b"h265").unwrap(); // wrong codec
+            video.write_all(&1080u32.to_be_bytes()).unwrap();
+            video.write_all(&2400u32.to_be_bytes()).unwrap();
+            video.flush().unwrap();
+            std::thread::sleep(Duration::from_millis(200));
+        });
+
+        let err = handshake_video_control(port).unwrap_err();
+        assert!(
+            matches!(err, DeviceError::Parse(ref m) if m.contains("unexpected scrcpy video codec")),
+            "expected codec parse error, got: {err:?}"
+        );
+        server.join().unwrap();
     }
 }
