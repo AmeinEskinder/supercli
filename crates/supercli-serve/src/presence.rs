@@ -288,7 +288,7 @@ mod tests {
     fn mobile_presence_is_exact_per_device_published_and_expires() {
         let home = tempfile::tempdir().unwrap();
         let hub = PresenceHub::new(home.path());
-        hub.touch_output("session-a", &device("phone-1", "Tommy's iPhone"), 100_000);
+        hub.touch_output("session-a", &device("phone-1", "Alex's iPhone"), 100_000);
         hub.touch_output("session-a", &device("ipad-1", "iPad"), 100_001);
         assert_eq!(
             hub.viewing_device_ids("session-a", 100_002),
@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(wire["sessions"]["session-a"].as_array().unwrap().len(), 2);
         assert_eq!(
             wire["sessions"]["session-a"][1]["device"],
-            "Tommy's iPhone (phone-1)"
+            "Alex's iPhone (phone-1)"
         );
 
         assert!(hub.prune(116_000));

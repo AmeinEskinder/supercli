@@ -1226,8 +1226,8 @@ mod tests {
                     monthly_tokens: Vec::new(),
                     project_usage: Vec::new(),
                 },
-                claude("Claude Code", "tommy@uxthemes.com"),
-                claude("Claude Code · work", "work@uxthemes.com"),
+                claude("Claude Code", "alex@example.com"),
+                claude("Claude Code · work", "work@example.com"),
             ],
         }
     }
@@ -1698,7 +1698,7 @@ mod tests {
             .is_some_and(|line| line.contains("Codex Pro")));
         assert!(screen.contains("Codex Pro"), "provider and badge\n{screen}");
         assert!(
-            !screen.contains("tommy@uxthemes.com") && !screen.contains("work@uxthemes.com"),
+            !screen.contains("alex@example.com") && !screen.contains("work@example.com"),
             "emails stay out of the main list\n{screen}"
         );
         assert!(screen.contains("Claude · work"), "second account\n{screen}");
@@ -1777,7 +1777,7 @@ mod tests {
     fn account_email_remains_available_in_detail() {
         let (screen, _) = render(72, 30, true);
         assert!(
-            screen.contains("tommy@uxthemes.com"),
+            screen.contains("alex@example.com"),
             "account detail\n{screen}"
         );
     }

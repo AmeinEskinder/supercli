@@ -282,7 +282,7 @@ final class RemoteControlProtocolTests: XCTestCase {
             token: payload.token,
             device: .init(
                 id: "phone-1",
-                name: "Tommy's iPhone",
+                name: "Alex's iPhone",
                 platform: "iOS",
                 appVersion: "1.0"
             )
