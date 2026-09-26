@@ -248,3 +248,9 @@ do not use gpuidart. Each needs a native gpuidart port:
 - **markdown editor** (from `supercli-markdown`, `markdown-text-area` feature): rich text editing
 - **usage view** (from `supercli-usage`): charts/meters for usage data
 **Blocks:** unifying the app surfaces on gpuidart; removing the legacy bridge.
+
+### P1-2. Empty-state icon/label rendering (sessions table)
+**Status:** Bug observed in rendered proof screenshots (Amein, 2026-09-26).
+**Symptom:** When the sessions table is empty, gpuidart renders an inbox icon plus a stray '✕' glyph where the empty-state label should be (see `docs/internal/proofs/proof-screenshots/approve-after.png` — "No pending approvals" state).
+**Expected:** The empty-state label text renders (no stray glyphs).
+**Note:** Do NOT patch around this in supercli-app; this is a gpuidart renderer issue for Amein.
