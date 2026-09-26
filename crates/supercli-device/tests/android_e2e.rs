@@ -8,128 +8,193 @@
 //! What it proves:
 //! 1. `ScrcpyNative::connect` against a real emulator (jar deploy + SHA-256,
 //!    port forward, server start, H.264 header parse).
-//! 2. >= 600 real H.264 packets read; fps measured over 60 s.
+//! 2. fps measured over 60 s WHILE THE SCREEN ANIMATES: scrcpy only emits
+//!    frames when the picture changes, so a static home screen reads ~3 fps
+//!    and the number means nothing. We launch Settings and fling-scroll in
+//!    a loop via the control channel during the window, and report the
+//!    animated fps.
 //! 3. Tap-to-next-frame latency p50/p95: native control channel vs
-//!    `adb shell input` (20 trials each).
+//!    `adb shell input` (20 trials each). Each trial taps something that
+//!    visibly toggles (swipe-up opens the app drawer, HOME closes it); a
+//!    trial with no frame within 1 s is a "miss" counted in metrics, NOT a
+//!    fatal error (a tap that changes nothing produces no frames).
 //! 4. A two-pointer pinch completes without error and the stream survives.
 //!
 //! Methodology note (honest): "tap-to-frame" here = time from tap injection
-//! to the arrival of the next encoded H.264 packet. At ~60 fps a packet
-//! arrives roughly every 16 ms regardless, so this metric = injection cost
-//! + time-to-next-frame-boundary. The *comparison* between the two injection
-//! paths is the point, not the absolute number.
+//! to the arrival of the next encoded H.264 packet.
+//!
+//! At ~60 fps a packet arrives roughly every 16 ms regardless, so this
+//! metric = injection cost + time-to-next-frame-boundary. The *comparison*
+//! between the two injection paths is the point, not the absolute number.
 
 #![cfg(feature = "device")]
 
 use std::fs;
+use std::net::TcpStream;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use supercli_device::scrcpy_native::{
-    AndroidKeycode, ScrcpyNative, TouchAction, fallback_adb_input,
+    swipe_control, AndroidKeycode, ControlChannel, ScrcpyNative, TouchAction, VideoStreamReader,
 };
-use supercli_device::{DeviceError, DeviceId};
+use supercli_device::DeviceError;
 
 const PACKET_TARGET: usize = 600;
 const FPS_WINDOW: Duration = Duration::from_secs(60);
 const TAP_TRIALS: usize = 20;
+/// Per-trial frame deadline. No frame in this long after a gesture = the
+/// gesture produced no visible change: count a "miss", do not fail.
+const FRAME_DEADLINE: Duration = Duration::from_secs(1);
 
 fn percentile(mut xs: Vec<f64>, p: f64) -> f64 {
-    assert!(!xs.is_empty(), "percentile of empty sample");
+    if xs.is_empty() {
+        return 0.0;
+    }
     xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let idx = ((p / 100.0) * (xs.len() as f64 - 1.0)).round() as usize;
     xs[idx.min(xs.len() - 1)]
 }
 
 fn mean(xs: &[f64]) -> f64 {
+    if xs.is_empty() {
+        return 0.0;
+    }
     xs.iter().sum::<f64>() / xs.len() as f64
 }
 
-struct Metrics {
-    kvm_present: bool,
-    device: String,
-    video_w: u32,
-    video_h: u32,
-    packets_read: usize,
-    keyframes: usize,
-    fps: f64,
-    control_p50_ms: f64,
-    control_p95_ms: f64,
-    control_mean_ms: f64,
-    adb_p50_ms: f64,
-    adb_p95_ms: f64,
-    adb_mean_ms: f64,
-    pinch_ok: bool,
-    home_key_ok: bool,
-}
-
-impl Metrics {
-    fn to_json(&self) -> String {
-        format!(
-            concat!(
-                "{{\n",
-                "  \"kvm_present\": {},\n",
-                "  \"device\": \"{}\",\n",
-                "  \"video_width\": {},\n",
-                "  \"video_height\": {},\n",
-                "  \"packets_read\": {},\n",
-                "  \"keyframes\": {},\n",
-                "  \"fps_60s\": {:.2},\n",
-                "  \"control_tap_to_frame_ms\": {{\"p50\": {:.2}, \"p95\": {:.2}, \"mean\": {:.2}, \"n\": {}}},\n",
-                "  \"adb_tap_to_frame_ms\": {{\"p50\": {:.2}, \"p95\": {:.2}, \"mean\": {:.2}, \"n\": {}}},\n",
-                "  \"pinch_ok\": {},\n",
-                "  \"home_key_ok\": {}\n",
-                "}}"
-            ),
-            self.kvm_present,
-            self.device,
-            self.video_w,
-            self.video_h,
-            self.packets_read,
-            self.keyframes,
-            self.fps,
-            self.control_p50_ms,
-            self.control_p95_ms,
-            self.control_mean_ms,
-            TAP_TRIALS,
-            self.adb_p50_ms,
-            self.adb_p95_ms,
-            self.adb_mean_ms,
-            TAP_TRIALS,
-            self.pinch_ok,
-            self.home_key_ok,
-        )
+/// Run `adb -s <serial> shell <args>`. Used for the deliberate adb-path
+/// comparison trials and for launching Settings (not a fallback here).
+fn adb_shell(serial: &str, args: &[&str]) -> Result<(), DeviceError> {
+    use std::process::Command;
+    let status = Command::new("adb")
+        .arg("-s")
+        .arg(serial)
+        .arg("shell")
+        .args(args)
+        .status()
+        .map_err(DeviceError::Io)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(DeviceError::Parse(format!(
+            "adb shell {} exited {status}",
+            args.join(" ")
+        )))
     }
 }
 
-/// Time from tap injection to the arrival of the next H.264 packet.
-fn tap_latency_control(
+/// Fling-scroll on the control channel half of a split client.
+fn fling(
+    control: &mut ControlChannel<TcpStream>,
+    w: u32,
+    h: u32,
+    up: bool,
+) -> Result<(), DeviceError> {
+    let (y0, y1) = if up {
+        (h * 3 / 4, h / 4)
+    } else {
+        (h / 4, h * 3 / 4)
+    };
+    swipe_control(control, w / 2, y0, w / 2, y1, Duration::from_millis(180))
+        .map_err(DeviceError::Io)
+}
+
+/// Gestures used by the latency trials. Each one visibly toggles the
+/// screen: swipe-up opens the app drawer, HOME returns to the launcher.
+#[derive(Clone, Copy)]
+enum Gesture {
+    SwipeUp,
+    Home,
+}
+
+impl Gesture {
+    fn name(self) -> &'static str {
+        match self {
+            Gesture::SwipeUp => "swipe-up(drawer)",
+            Gesture::Home => "HOME",
+        }
+    }
+}
+
+/// Wait up to [`FRAME_DEADLINE`] for the next H.264 packet after a gesture.
+/// `Ok(Some(latency))` — a frame arrived; `Ok(None)` — "miss", no frame in
+/// time (the gesture changed nothing on screen); counted, never fatal.
+///
+/// The 1 s socket timeout means a single `next()` either returns a whole
+/// packet or times out cleanly: on loopback a packet's bytes arrive
+/// together, so a timeout implies an idle screen, never a torn header.
+fn wait_for_frame(client: &mut ScrcpyNative, t0: Instant) -> Result<Option<Duration>, DeviceError> {
+    client.set_video_read_timeout(Some(FRAME_DEADLINE))?;
+    // Scope ends the `&mut client` borrow from the stream before the
+    // timeout is restored below.
+    let out = {
+        let mut iter = client.start_video_stream();
+        match iter.next() {
+            Some(Ok(_)) => Ok(Some(t0.elapsed())),
+            Some(Err(DeviceError::Io(e)))
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                Ok(None)
+            }
+            Some(Err(e)) => Err(e),
+            None => Err(DeviceError::Parse(
+                "video stream ended during latency trial".to_string(),
+            )),
+        }
+    };
+    // Restore the streaming default.
+    client.set_video_read_timeout(Some(Duration::from_secs(10)))?;
+    out
+}
+
+/// One control-channel trial: inject the gesture, then wait for a frame.
+fn trial_control(
     client: &mut ScrcpyNative,
-    x: u32,
-    y: u32,
-) -> Result<Duration, DeviceError> {
+    gesture: Gesture,
+) -> Result<Option<Duration>, DeviceError> {
     let t0 = Instant::now();
-    client.tap(x, y)?;
-    // Fresh reader: the previous one consumed whole packets only, so we are
-    // at a packet boundary (VideoStreamReader does no buffering).
-    let mut iter = client.start_video_stream();
-    match iter.next() {
-        Some(Ok(_pkt)) => Ok(t0.elapsed()),
-        Some(Err(e)) => Err(e),
-        None => Err(DeviceError::Parse(
-            "video stream ended during latency trial".to_string(),
-        )),
+    match gesture {
+        Gesture::SwipeUp => {
+            let (w, h) = client.video_size();
+            client.swipe(w / 2, h * 3 / 4, w / 2, h / 4, Duration::from_millis(300))?;
+        }
+        Gesture::Home => {
+            client.press_key(AndroidKeycode::Home)?;
+        }
     }
+    wait_for_frame(client, t0)
 }
 
-fn tap_latency_adb(serial: &str, x: u32, y: u32) -> Result<Duration, DeviceError> {
-    let xs = x.to_string();
-    let ys = y.to_string();
+/// One adb-path trial: same gestures via `adb shell input`, frame wait on
+/// the client's own video stream. Injection cost includes the adb spawn.
+fn trial_adb(
+    serial: &str,
+    client: &mut ScrcpyNative,
+    gesture: Gesture,
+) -> Result<Option<Duration>, DeviceError> {
     let t0 = Instant::now();
-    fallback_adb_input(&DeviceId::new(serial), &["tap", &xs, &ys])?;
-    // NOTE: the adb path has no handle on the video socket; the caller
-    // measures against its own stream. This helper only times the injection.
-    Ok(t0.elapsed())
+    let (w, h) = client.video_size();
+    match gesture {
+        Gesture::SwipeUp => {
+            adb_shell(
+                serial,
+                &[
+                    "input",
+                    "swipe",
+                    &(w / 2).to_string(),
+                    &(h * 3 / 4).to_string(),
+                    &(w / 2).to_string(),
+                    &(h / 4).to_string(),
+                    "300",
+                ],
+            )?;
+        }
+        Gesture::Home => {
+            adb_shell(serial, &["input", "keyevent", "3"])?;
+        }
+    }
+    wait_for_frame(client, t0)
 }
 
 /// Wait for the emulator to finish booting, polling
@@ -159,6 +224,69 @@ fn wait_for_boot(serial: &str) -> Result<(), DeviceError> {
     }
 }
 
+struct Metrics {
+    kvm_present: bool,
+    device: String,
+    video_w: u32,
+    video_h: u32,
+    packets_read: usize,
+    keyframes: usize,
+    fps_animating: f64,
+    control_p50_ms: f64,
+    control_p95_ms: f64,
+    control_mean_ms: f64,
+    control_n: usize,
+    control_misses: usize,
+    adb_p50_ms: f64,
+    adb_p95_ms: f64,
+    adb_mean_ms: f64,
+    adb_n: usize,
+    adb_misses: usize,
+    pinch_ok: bool,
+    home_key_ok: bool,
+}
+
+impl Metrics {
+    fn to_json(&self) -> String {
+        format!(
+            concat!(
+                "{{\n",
+                "  \"kvm_present\": {},\n",
+                "  \"device\": \"{}\",\n",
+                "  \"video_width\": {},\n",
+                "  \"video_height\": {},\n",
+                "  \"packets_read\": {},\n",
+                "  \"keyframes\": {},\n",
+                "  \"fps_animating_60s\": {:.2},\n",
+                "  \"control_tap_to_frame_ms\": {{\"p50\": {:.2}, \"p95\": {:.2}, \"mean\": {:.2}, \"n\": {}, \"misses\": {}}},\n",
+                "  \"adb_tap_to_frame_ms\": {{\"p50\": {:.2}, \"p95\": {:.2}, \"mean\": {:.2}, \"n\": {}, \"misses\": {}}},\n",
+                "  \"pinch_ok\": {},\n",
+                "  \"home_key_ok\": {}\n",
+                "}}"
+            ),
+            self.kvm_present,
+            self.device,
+            self.video_w,
+            self.video_h,
+            self.packets_read,
+            self.keyframes,
+            self.fps_animating,
+            self.control_p50_ms,
+            self.control_p95_ms,
+            self.control_mean_ms,
+            self.control_n,
+            self.control_misses,
+            self.adb_p50_ms,
+            self.adb_p95_ms,
+            self.adb_mean_ms,
+            self.adb_n,
+            self.adb_misses,
+            self.pinch_ok,
+            self.home_key_ok,
+        )
+    }
+}
+
 fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     let kvm_present = Path::new("/dev/kvm").exists();
     eprintln!("e2e: /dev/kvm present = {kvm_present}");
@@ -180,82 +308,139 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     let home_key_ok = client.press_key(AndroidKeycode::Home).is_ok();
     eprintln!("e2e: HOME key ok = {home_key_ok}");
 
-    let cx = vw / 2;
-    let cy = vh / 2;
+    // --- Phase 1: fps WHILE ANIMATING (60 s) --------------------------------
+    // scrcpy only emits frames when the picture changes, so fps on a static
+    // screen is ~3 and meaningless. Launch Settings and fling-scroll in a
+    // loop via the control channel while reading packets; the split borrow
+    // lets us drive input and read video simultaneously.
+    eprintln!("e2e: launching Settings for the animated fps window ...");
+    adb_shell(
+        serial,
+        &["am", "start", "-n", "com.android.settings/.Settings"],
+    )?;
+    std::thread::sleep(Duration::from_secs(3));
 
-    // --- Phase 1: fps over 60 s, >= 600 packets ---------------------------
-    eprintln!("e2e: reading H.264 packets for 60 s ...");
-    let mut packets_read = 0usize;
-    let mut keyframes = 0usize;
-    let start = Instant::now();
-    {
-        let mut iter = client.start_video_stream();
+    eprintln!("e2e: reading H.264 packets for 60 s while fling-scrolling ...");
+    let (packets_read, keyframes, fps_animating) = {
+        let (video, control) = client.split();
+        video
+            .set_read_timeout(Some(Duration::from_millis(200)))
+            .map_err(DeviceError::Io)?;
+        let mut reader = VideoStreamReader::new(video);
+        let mut packets_read = 0usize;
+        let mut keyframes = 0usize;
+        let start = Instant::now();
+        // Fling immediately, then every 900 ms, alternating direction.
+        let mut last_fling = Instant::now() - Duration::from_secs(60);
+        let mut fling_up = true;
         while start.elapsed() < FPS_WINDOW {
-            match iter.next() {
-                Some(Ok(pkt)) => {
+            if last_fling.elapsed() >= Duration::from_millis(900) {
+                fling(control, vw, vh, fling_up)?;
+                fling_up = !fling_up;
+                last_fling = Instant::now();
+            }
+            match reader.next_packet() {
+                Ok(Some(pkt)) => {
                     packets_read += 1;
                     if packets_read == 1 {
                         eprintln!("e2e: stage=first_packet");
                     }
-                    if packets_read.is_multiple_of(100) {
+                    if packets_read.is_multiple_of(200) {
                         eprintln!("e2e: stage=packets n={packets_read}");
                     }
                     if pkt.is_keyframe {
                         keyframes += 1;
                     }
                 }
-                Some(Err(e)) => return Err(e),
-                None => {
+                Ok(None) => {
                     return Err(DeviceError::Parse(
-                        "video stream ended during fps window".to_string(),
+                        "video stream ended during animated fps window".to_string(),
                     ))
                 }
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(e) => return Err(DeviceError::Io(e)),
             }
         }
-    }
-    let elapsed_s = start.elapsed().as_secs_f64();
-    let fps = packets_read as f64 / elapsed_s;
-    eprintln!("e2e: {packets_read} packets ({keyframes} keyframes) in {elapsed_s:.1}s = {fps:.1} fps");
+        let elapsed_s = start.elapsed().as_secs_f64();
+        let fps = packets_read as f64 / elapsed_s;
+        video
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .map_err(DeviceError::Io)?;
+        (packets_read, keyframes, fps)
+    };
+    eprintln!(
+        "e2e: {packets_read} packets ({keyframes} keyframes) in 60 s while animating = {fps_animating:.1} fps"
+    );
+
+    // Let the encoder flush the animation tail; deterministic state: Home.
+    std::thread::sleep(Duration::from_secs(1));
+    client.press_key(AndroidKeycode::Home)?;
+    std::thread::sleep(Duration::from_millis(500));
 
     // --- Phase 2: tap-to-frame latency, control channel --------------------
-    eprintln!("e2e: {TAP_TRIALS} control-channel tap trials ...");
-    let mut control_ms = Vec::with_capacity(TAP_TRIALS);
+    // Alternate swipe-up (opens the app drawer) and HOME (closes it): every
+    // trial visibly toggles the screen. A trial with no frame within 1 s is
+    // a miss (gesture changed nothing), counted — never fatal.
+    eprintln!("e2e: {TAP_TRIALS} control-channel trials (swipe-up/HOME alternating) ...");
+    let mut control_ms: Vec<f64> = Vec::with_capacity(TAP_TRIALS);
+    let mut control_misses = 0usize;
     for i in 0..TAP_TRIALS {
-        // Vary the tap point slightly so each tap is a distinct input.
-        let x = cx.saturating_sub(40) + (i as u32 * 4 % 80);
-        let d = tap_latency_control(&mut client, x, cy)?;
-        control_ms.push(d.as_secs_f64() * 1000.0);
-        eprintln!("e2e: control trial {i}: {:.1} ms", control_ms[i]);
+        let gesture = if i % 2 == 0 {
+            Gesture::SwipeUp
+        } else {
+            Gesture::Home
+        };
+        match trial_control(&mut client, gesture)? {
+            Some(d) => {
+                let ms = d.as_secs_f64() * 1000.0;
+                eprintln!("e2e: control trial {i} ({}): {ms:.1} ms", gesture.name());
+                control_ms.push(ms);
+            }
+            None => {
+                eprintln!(
+                    "e2e: control trial {i} ({}): MISS (no frame within 1 s)",
+                    gesture.name()
+                );
+                control_misses += 1;
+            }
+        }
     }
 
     // --- Phase 3: tap-to-frame latency, adb shell input --------------------
-    // The adb path cannot share the client's video socket (borrow rules), so
-    // we time injection here and add the frame-boundary wait measured once
-    // via the stream below. Honest split: injection vs frame wait.
-    eprintln!("e2e: {TAP_TRIALS} adb-shell-input tap trials ...");
-    let mut adb_ms = Vec::with_capacity(TAP_TRIALS);
+    // Same alternating gestures via `adb shell input`; frame wait on the
+    // client's own video stream. The comparison between the two injection
+    // paths is the point of the metric.
+    eprintln!("e2e: {TAP_TRIALS} adb-shell-input trials (swipe-up/HOME alternating) ...");
+    let mut adb_ms: Vec<f64> = Vec::with_capacity(TAP_TRIALS);
+    let mut adb_misses = 0usize;
     for i in 0..TAP_TRIALS {
-        let x = cx.saturating_sub(40) + (i as u32 * 4 % 80);
-        let t0 = Instant::now();
-        tap_latency_adb(serial, x, cy)?;
-        // Now wait for the next frame on our own stream, same as control.
-        let mut iter = client.start_video_stream();
-        match iter.next() {
-            Some(Ok(_)) => {}
-            Some(Err(e)) => return Err(e),
+        let gesture = if i % 2 == 0 {
+            Gesture::SwipeUp
+        } else {
+            Gesture::Home
+        };
+        match trial_adb(serial, &mut client, gesture)? {
+            Some(d) => {
+                let ms = d.as_secs_f64() * 1000.0;
+                eprintln!("e2e: adb trial {i} ({}): {ms:.1} ms", gesture.name());
+                adb_ms.push(ms);
+            }
             None => {
-                return Err(DeviceError::Parse(
-                    "video stream ended during adb trial".to_string(),
-                ))
+                eprintln!(
+                    "e2e: adb trial {i} ({}): MISS (no frame within 1 s)",
+                    gesture.name()
+                );
+                adb_misses += 1;
             }
         }
-        let d = t0.elapsed();
-        adb_ms.push(d.as_secs_f64() * 1000.0);
-        eprintln!("e2e: adb trial {i}: {:.1} ms", adb_ms[i]);
     }
 
     // --- Phase 4: pinch (two pointers) ------------------------------------
     eprintln!("e2e: pinch gesture (two pointers) ...");
+    let cx = vw / 2;
+    let cy = vh / 2;
     let pinch_ok = (|| -> Result<(), DeviceError> {
         let x0a = cx.saturating_sub(120);
         let x1a = cx + 120;
@@ -293,13 +478,17 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
         video_h: vh,
         packets_read,
         keyframes,
-        fps,
+        fps_animating,
         control_p50_ms: percentile(control_ms.clone(), 50.0),
         control_p95_ms: percentile(control_ms.clone(), 95.0),
         control_mean_ms: mean(&control_ms),
+        control_n: control_ms.len(),
+        control_misses,
         adb_p50_ms: percentile(adb_ms.clone(), 50.0),
         adb_p95_ms: percentile(adb_ms.clone(), 95.0),
         adb_mean_ms: mean(&adb_ms),
+        adb_n: adb_ms.len(),
+        adb_misses,
         pinch_ok,
         home_key_ok,
     })
@@ -311,10 +500,8 @@ fn android_headless_e2e() {
         eprintln!("SKIP android_headless_e2e: set SUPERCLI_ANDROID_E2E=1 for a real emulator");
         return;
     }
-    let serial =
-        std::env::var("ANDROID_SERIAL").unwrap_or_else(|_| "emulator-5554".to_string());
-    let metrics_out =
-        std::env::var("METRICS_OUT").unwrap_or_else(|_| "metrics.json".to_string());
+    let serial = std::env::var("ANDROID_SERIAL").unwrap_or_else(|_| "emulator-5554".to_string());
+    let metrics_out = std::env::var("METRICS_OUT").unwrap_or_else(|_| "metrics.json".to_string());
 
     let m = match run_e2e(&serial) {
         Ok(m) => m,
@@ -329,10 +516,23 @@ fn android_headless_e2e() {
 
     assert!(
         m.packets_read >= PACKET_TARGET,
-        "expected >= {PACKET_TARGET} packets, got {}",
+        "expected >= {PACKET_TARGET} packets while animating, got {}",
         m.packets_read
     );
-    assert!(m.fps > 5.0, "fps suspiciously low: {:.1}", m.fps);
+    assert!(
+        m.fps_animating > 5.0,
+        "fps suspiciously low while animating: {:.1}",
+        m.fps_animating
+    );
+    // The toggle gestures must work: at least half the control trials must
+    // produce a frame. (Misses are expected occasionally; total failure
+    // means the gesture path is broken.)
+    assert!(
+        m.control_n >= TAP_TRIALS / 2,
+        "too many control misses: {}/{} trials produced no frame",
+        m.control_misses,
+        TAP_TRIALS
+    );
     assert!(m.pinch_ok, "pinch gesture failed");
     assert!(m.home_key_ok, "HOME key failed");
 }
