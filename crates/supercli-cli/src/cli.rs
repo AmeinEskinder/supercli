@@ -1034,6 +1034,7 @@ pub fn run(args: &[String]) -> i32 {
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "ideas" => Ok(crate::ideas_cli::run(&args[1..])),
+        "memory" => Ok(crate::memory_cli::run(&args[1..])),
         "migrate" => {
             if args[1..].iter().any(|a| a == "--from-unpeel") {
                 Ok(crate::import_unpeel_cli::run_from_unpeel(&args[1..]))

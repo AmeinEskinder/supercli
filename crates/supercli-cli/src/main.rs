@@ -22,6 +22,7 @@ mod init_cli;
 mod integrations_cli;
 mod link_cli;
 mod mcp_cli;
+mod memory_cli;
 mod migrate_cli;
 mod open_cli;
 mod schedule_cli;

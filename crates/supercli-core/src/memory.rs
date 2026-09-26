@@ -134,9 +134,10 @@ pub fn load_memory(home: &Path) -> MemoryStore {
     store
 }
 
-/// Persist long-term facts only. Best-effort: a memory write must never
-/// break the caller.
-pub fn save_memory(home: &Path, store: &MemoryStore) {
+/// Persist long-term facts only. Atomic: write temp + fsync + rename, so a
+/// crash never leaves a torn memory.json. Best-effort: a memory write must
+/// never break the caller. Returns true if durably written.
+pub fn save_memory(home: &Path, store: &MemoryStore) -> bool {
     let filtered = MemoryStore {
         entries: store
             .entries
@@ -145,9 +146,38 @@ pub fn save_memory(home: &Path, store: &MemoryStore) {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
     };
-    if let Ok(text) = serde_json::to_string_pretty(&filtered) {
-        let _ = fs::write(memory_path(home), text);
+    let path = memory_path(home);
+    if let Some(dir) = path.parent() {
+        if fs::create_dir_all(dir).is_err() {
+            return false;
+        }
     }
+    let text = match serde_json::to_string_pretty(&filtered) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+    let tmp = path.with_extension("json.tmp");
+    let write_ok = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.flush()?;
+        f.sync_all()?;
+        Ok(())
+    })();
+    if write_ok.is_err() {
+        let _ = fs::remove_file(&tmp);
+        return false;
+    }
+    if fs::rename(&tmp, &path).is_err() {
+        let _ = fs::remove_file(&tmp);
+        return false;
+    }
+    true
 }
 
 #[cfg(test)]
@@ -191,7 +221,7 @@ mod tests {
         s1.set("turn.scratch", "tmp", Scope::Session, Some("s1"));
         s1.set("user.name", "amein", Scope::Session, Some("s1"));
         s1.promote("user.name");
-        save_memory(&dir, &s1);
+        assert!(save_memory(&dir, &s1));
 
         // Session 2 (simulated restart): session facts are gone, long-term stays.
         let s2 = load_memory(&dir);
