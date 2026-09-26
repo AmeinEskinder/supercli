@@ -4,7 +4,7 @@
 #
 # What it does, in order:
 #   1. Fetches the currently released app + CLI for OLD_VERSION from
-#      supercli.com (cached under $CACHE) unless OLD_APP / OLD_CLI are given.
+#      superc.li (cached under $CACHE) unless OLD_APP / OLD_CLI are given.
 #   2. Seeds a fresh isolated home: project + starred custom preset via the
 #      OLD CLI, then launches the OLD released app and creates two shell
 #      sessions THROUGH it (its /mcp/start-session bridge), archives one,
@@ -52,7 +52,7 @@ rm -rf "$HOME_ISO" "$REPORT"; mkdir -p "$HOME_ISO" "$REPORT" "$CACHE"
 step "old artifacts ($OLD_VERSION, channel $CHANNEL)"
 if [ -z "${OLD_APP:-}" ]; then
   dmg="$CACHE/Supercli-$OLD_VERSION.dmg"
-  [ -f "$dmg" ] || curl -fsSL -o "$dmg" "https://supercli.com/releases/$CHANNEL/Supercli-$OLD_VERSION.dmg"
+  [ -f "$dmg" ] || curl -fsSL -o "$dmg" "https://superc.li/releases/$CHANNEL/Supercli-$OLD_VERSION.dmg"
   OLD_APP="$CACHE/Supercli-$OLD_VERSION.app"
   if [ ! -d "$OLD_APP" ]; then
     mnt="$(hdiutil attach -nobrowse -readonly "$dmg" | tail -1 | awk '{print $NF}')"
@@ -61,7 +61,7 @@ if [ -z "${OLD_APP:-}" ]; then
 fi
 if [ -z "${OLD_CLI:-}" ]; then
   tgz="$CACHE/supercli-$OLD_VERSION-macos-universal.tar.gz"
-  [ -f "$tgz" ] || curl -fsSL -o "$tgz" "https://supercli.com/releases/$CHANNEL/cli/supercli-$OLD_VERSION-macos-universal.tar.gz"
+  [ -f "$tgz" ] || curl -fsSL -o "$tgz" "https://superc.li/releases/$CHANNEL/cli/supercli-$OLD_VERSION-macos-universal.tar.gz"
   mkdir -p "$CACHE/cli-$OLD_VERSION"; tar -xzf "$tgz" -C "$CACHE/cli-$OLD_VERSION"
   OLD_CLI="$CACHE/cli-$OLD_VERSION/supercli"
 fi

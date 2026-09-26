@@ -6,7 +6,7 @@
 //  carrying end-to-end encrypted `/mobile/*` request/response frames
 //  (`RelayProtocol.swift`). The relay authenticates the
 //  socket with the per-device relayToken; the content is AES-GCM sealed
-//  with the per-device e2eKey, so the relay — and supercli.com — can read
+//  with the per-device e2eKey, so the relay — and superc.li — can read
 //  none of it. Lazily connected; any failure tears the connection down and
 //  the next request reconnects with a fresh handshake. This implementation
 //  is shared verbatim by iPhone/iPad and macOS Controllers.

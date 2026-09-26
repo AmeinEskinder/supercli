@@ -18,7 +18,7 @@ final class LicenseManagerTests: XCTestCase {
         )
         XCTAssertEqual(
             LicenseConfig.apiBaseURL(environment: [:]),
-            URL(string: "https://supercli.com")!
+            URL(string: "https://superc.li")!
         )
     }
 
@@ -59,7 +59,7 @@ final class LicenseManagerTests: XCTestCase {
     func testLicenseConfigIgnoresInvalidAPIOverride() {
         XCTAssertEqual(
             LicenseConfig.apiBaseURL(environment: ["SUPERCLI_LICENSE_API_BASE_URL": "not a url"]),
-            URL(string: "https://supercli.com")!
+            URL(string: "https://superc.li")!
         )
     }
 

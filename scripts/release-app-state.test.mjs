@@ -19,7 +19,7 @@ function artifact(channel, key, overrides = {}) {
   return {
     key,
     path: `/releases/${key}`,
-    url: `https://supercli.com/releases/${key}`,
+    url: `https://superc.li/releases/${key}`,
     filename: key.split('/').at(-1),
     bytes: 123,
     sha256: 'a'.repeat(64),
@@ -41,7 +41,7 @@ test('direct checks catch immutable artifacts omitted from latest.json', async (
       assert.equal(options.method, 'HEAD')
       return response(url.includes('.zip') ? 200 : 404)
     },
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'beta',
     version: '0.2.0',
     artifactKinds: ['dmg', 'zip'],
@@ -50,7 +50,7 @@ test('direct checks catch immutable artifacts omitted from latest.json', async (
 
   assert.deepEqual(found, [{
     kind: 'zip',
-    url: 'https://supercli.com/releases/beta/Unpeel-0.2.0.zip'
+    url: 'https://superc.li/releases/beta/Unpeel-0.2.0.zip'
   }])
 })
 
@@ -58,7 +58,7 @@ test('manifest HTTP and shape errors fail closed', async () => {
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(503),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -67,7 +67,7 @@ test('manifest HTTP and shape errors fail closed', async () => {
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(200, { channel: 'beta', version: '0.1.0' }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -93,7 +93,7 @@ test('published artifact metadata is fully validated before preservation', async
 
   await assert.doesNotReject(readPublishedAppLatest({
     fetchImpl: async () => response(200, manifest),
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'beta',
     timeoutMs: 0
   }))
@@ -104,7 +104,7 @@ test('published artifact metadata is fully validated before preservation', async
         ...manifest,
         dmg: { ...dmg, sha256: 'not-a-digest' }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -116,7 +116,7 @@ test('published artifact metadata is fully validated before preservation', async
         ...manifest,
         latest_dmg: { ...latestDmg, bytes: latestDmg.bytes + 1 }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -126,7 +126,7 @@ test('published artifact metadata is fully validated before preservation', async
   await assert.rejects(
     readPublishedAppLatest({
       fetchImpl: async () => response(200, missingMutableAlias),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),

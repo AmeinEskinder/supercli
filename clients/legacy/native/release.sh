@@ -153,11 +153,11 @@ fi
 # Feed URL the app checks for this channel — must match where we publish the
 # appcast so a build of channel X actually sees channel X's updates.
 case "$CHANNEL" in
-  stable) FEED_URL="https://supercli.com/appcast.xml" ;;
-  beta)   FEED_URL="https://supercli.com/appcast-beta.xml" ;;
-  alpha)  FEED_URL="https://supercli.com/appcast-alpha.xml" ;;
+  stable) FEED_URL="https://superc.li/appcast.xml" ;;
+  beta)   FEED_URL="https://superc.li/appcast-beta.xml" ;;
+  alpha)  FEED_URL="https://superc.li/appcast-alpha.xml" ;;
 esac
-BASE_URL="${SUPERCLI_RELEASE_BASE_URL:-https://supercli.com}"
+BASE_URL="${SUPERCLI_RELEASE_BASE_URL:-https://superc.li}"
 DOWNLOAD_PREFIX="$BASE_URL/releases/$CHANNEL/"
 
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"

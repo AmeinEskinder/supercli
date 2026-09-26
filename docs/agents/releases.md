@@ -48,7 +48,7 @@ The pipeline (each step reuses an existing script):
    cleaned per-channel staging dir (one ZIP → one appcast item; stale
    ZIPs/deltas are never re-advertised).
 6. `generate_appcast` (Sparkle CLI, EdDSA key from the login Keychain) — sign the
-   ZIP and write `appcast.xml` with URLs under `https://supercli.com/releases/<channel>/`.
+   ZIP and write `appcast.xml` with URLs under `https://superc.li/releases/<channel>/`.
 7. `scripts/publish-cloudflare-release.mjs` — upload DMG + ZIP + appcast +
    `latest.json` to R2.
 
@@ -101,7 +101,7 @@ fallbacks.
 The CLI installs with:
 
 ```sh
-curl -fsSL https://supercli.com/install.sh | sh
+curl -fsSL https://superc.li/install.sh | sh
 ```
 
 - `/install.sh` is served by the releases worker (`supercli-cloud:apps/releases/src/worker.mjs`),
@@ -153,7 +153,7 @@ curl -fsSL https://supercli.com/install.sh | sh
   without publishing. Versioned keys are immutable at the CDN — bump the
   version rather than `--force`.
 - **Supercli Apps** (design, usage, markdown) ship through one generalized
-  lane: `curl -fsSL https://supercli.com/install/<app>/install.sh | sh`,
+  lane: `curl -fsSL https://superc.li/install/<app>/install.sh | sh`,
   served from the single `scripts/install-app.sh` template (published per
   channel like `install.sh`) with
   the same substitutions, checksum-sidecar requirement, and install-dir

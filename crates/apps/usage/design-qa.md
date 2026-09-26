@@ -2,9 +2,9 @@
 
 **Source visual truth**
 
-- `/Users/tommyvedvik/Desktop/HPxcbhqaQAALsPO.jpg`
+- `~/Desktop/reference-claude-card-light.jpg`
 - 1440 × 1690 px, light appearance, OpenUsage expanded Claude share card.
-- `/Users/tommyvedvik/.supercli/dropped-images/drop-1787739788372-94CEA20D-7735-454F-AC73-671AF83E58FD.png`
+- `~/.supercli/dropped-images/reference-dark-dashboard.png`
 - 1464 × 1442 px, dark appearance, pre-change Ratatui dashboard showing the
   card fills and drag-handle glyph targeted by the refinement.
 

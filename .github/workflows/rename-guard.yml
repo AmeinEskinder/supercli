@@ -62,3 +62,70 @@ jobs:
             exit 1
           fi
           echo "PASS: 0 unpeel references outside allowlist."
+
+      - name: Check for supercli.com references (third-party domain)
+        run: |
+          set -euo pipefail
+          echo "Scanning for 'supercli.com' (third-party domain, must be superc.li)..."
+          matches=$(grep -rli 'supercli\.com' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=.dart_tool \
+            --exclude='rename-guard.yml' \
+            --exclude='fresh-clone-verify.sh' \
+            | grep -v -e '^./clients/legacy/' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "FAIL: supercli.com references found (must be superc.li):"
+            echo "$matches"
+            exit 1
+          fi
+          echo "PASS: 0 supercli.com references outside clients/legacy."
+
+      - name: Check for original-contributor identity references
+        run: |
+          set -euo pipefail
+          echo "Scanning for original-contributor identity (tommy/vedvik/uxthemes/claude-501)..."
+          matches=$(grep -riE 'tommy|vedvik|uxthemes|claude-501' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=gpuidart \
+            --exclude-dir=.dart_tool \
+            --exclude='*.lock' \
+            --exclude='rename-guard.yml' \
+            --exclude='fresh-clone-verify.sh' \
+            | grep -v -e '^./clients/gpuidart/' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "FAIL: original-contributor identity references found:"
+            echo "$matches" | head -20
+            exit 1
+          fi
+          echo "Scanning for non-placeholder /Users/<name> paths..."
+          user_matches=$(grep -rhoE '/Users/[a-zA-Z0-9_.-]+' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=gpuidart \
+            --exclude-dir=.dart_tool \
+            | grep -v -e '^./clients/gpuidart/' | sort -u \
+            | grep -v -e '^/Users/me$' -e '^/Users/test$' -e '^/Users/testing$' \
+                      -e '^/Users/example$' -e '^/Users/exampleuser$' \
+                      -e '^/Users/alice$' -e '^/Users/x$' -e '^/Users/t$' \
+            || true)
+          if [ -n "$user_matches" ]; then
+            echo "FAIL: non-placeholder /Users/<name> paths found:"
+            echo "$user_matches" | head -20
+            exit 1
+          fi
+          echo "Checking vendored binaries for embedded identity strings..."
+          for bin in $(find . \( -name '*.a' -o -name '*.dylib' -o -name '*.so' \) 2>/dev/null | grep -v -e '/.git/' -e '/target/' -e 'gpuidart'); do
+            n=$(strings "$bin" 2>/dev/null | grep -ciE 'tommy|vedvik|uxthemes|claude-501|/Users/[a-z]' || true)
+            if [ "$n" != "0" ]; then echo "FAIL: $bin contains $n identity mentions"; exit 1; fi
+          done
+          echo "PASS: 0 contributor-identity references."

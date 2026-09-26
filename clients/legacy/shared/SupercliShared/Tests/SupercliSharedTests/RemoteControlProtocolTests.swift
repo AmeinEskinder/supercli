@@ -282,7 +282,7 @@ final class RemoteControlProtocolTests: XCTestCase {
             token: payload.token,
             device: .init(
                 id: "phone-1",
-                name: "Tommy's iPhone",
+                name: "Alex's iPhone",
                 platform: "iOS",
                 appVersion: "1.0"
             )
@@ -295,7 +295,7 @@ final class RemoteControlProtocolTests: XCTestCase {
             authToken: "auth-token",
             pairedAtUnixMs: 1_789_996_800_000,
             relayCredentials: RelayCredentials(
-                relayURL: URL(string: "wss://relay.supercli.com")!,
+                relayURL: URL(string: "wss://relay.superc.li")!,
                 macID: payload.macID,
                 relayToken: "relay-token",
                 e2eKey: Data(repeating: 7, count: 32)

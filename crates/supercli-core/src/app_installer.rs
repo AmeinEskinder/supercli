@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 use crate::apps_mcp::{self, CatalogApp};
 
-const DEFAULT_BASE_URL: &str = "https://supercli.com";
+const DEFAULT_BASE_URL: &str = "https://superc.li";
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_SIDECAR_BYTES: usize = 4 * 1024;
 

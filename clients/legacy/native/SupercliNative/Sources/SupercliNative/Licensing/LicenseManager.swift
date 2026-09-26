@@ -34,7 +34,7 @@ enum LicenseConfig {
     /// `bun run keygen` in apps/website.
     static let bundledPublicKeyBase64 = "6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54="
 
-    private static let productionAPIBaseURL = URL(string: "https://supercli.com")!
+    private static let productionAPIBaseURL = URL(string: "https://superc.li")!
     private static let publicKeyOverrideEnvKey = "SUPERCLI_LICENSE_PUBLIC_KEY"
     private static let apiBaseURLOverrideEnvKey = "SUPERCLI_LICENSE_API_BASE_URL"
     static let developmentBuildInfoPlistKey = "SupercliDevelopmentBuild"
@@ -158,7 +158,7 @@ final class LicenseManager: ObservableObject {
     }
 
     /// The stored key while the license is active — used by the Supercli
-    /// Remote uplink to fetch relay entitlements from supercli.com.
+    /// Remote uplink to fetch relay entitlements from superc.li.
     var currentLicenseKey: String? {
         guard state.isActive else { return nil }
         return storedLicenseKey
@@ -332,7 +332,7 @@ final class LicenseManager: ObservableObject {
                         "/api/deactivate",
                         body: ["key": key, "device_id": Self.deviceID]
                     )
-                    lastError = "The key was accepted, but couldn't be saved securely. Link stayed off; if the seat remains assigned, release it at supercli.com/account before retrying."
+                    lastError = "The key was accepted, but couldn't be saved securely. Link stayed off; if the seat remains assigned, release it at superc.li/account before retrying."
                     return
                 }
                 guard licenseStateGeneration == activationGeneration else {
@@ -357,7 +357,7 @@ final class LicenseManager: ObservableObject {
                     )
                     storedLicenseKey = nil
                     state = .unlicensed
-                    lastError = "The key was accepted, but Link was disabled while activation finished: \(localError). If the seat remains assigned, release it at supercli.com/account."
+                    lastError = "The key was accepted, but Link was disabled while activation finished: \(localError). If the seat remains assigned, release it at superc.li/account."
                     return
                 }
                 storedLicenseKey = key
@@ -408,10 +408,10 @@ final class LicenseManager: ObservableObject {
                 body: ["key": stored, "device_id": Self.deviceID]
             )
             if result["ok"] as? Bool != true {
-                lastError = "Link is off locally. Release the seat from your account at supercli.com/account."
+                lastError = "Link is off locally. Release the seat from your account at superc.li/account."
             }
         } catch {
-            lastError = "Link is off locally. Release the seat from your account at supercli.com/account."
+            lastError = "Link is off locally. Release the seat from your account at superc.li/account."
         }
     }
 

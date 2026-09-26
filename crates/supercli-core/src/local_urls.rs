@@ -658,7 +658,7 @@ mod tests {
     #[test]
     fn ignores_non_loopback_hosts() {
         assert!(
-            extract_local_urls("https://supercli.com:443/x http://example.com:3000").is_empty()
+            extract_local_urls("https://superc.li:443/x http://example.com:3000").is_empty()
         );
     }
 

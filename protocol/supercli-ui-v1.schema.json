@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://supercli.com/protocol/supercli-ui-v1.schema.json",
+  "$id": "https://superc.li/protocol/supercli-ui-v1.schema.json",
   "title": "Supercli UI protocol v1 message",
   "description": "One newline-delimited message exchanged by an Supercli App and Host. Unknown properties are permitted and ignored as an additive-compatibility allowance; message, node, primitive, color, constraint, spacing, and event-value discriminators are closed for v1. An omitted optional field uses the default stated on its definition. Optional values accept either omission or explicit JSON null; canonical Rust output omits them. Revisions and event integers stay within JavaScript's exactly representable safe-integer range for future web renderers.",
   "$ref": "#/$defs/message",

@@ -47,7 +47,7 @@ choice uses the same persisted start-state shape as Supercli Design under
 / `$SUPERCLI_APP_CONFIG_HOME`). A command-line path always bypasses the launcher.
 
 Standalone first: it is a complete editor in any terminal with no Supercli
-present. When [Supercli](https://supercli.com) is installed, Supercli recognizes
+present. When [Supercli](https://superc.li) is installed, Supercli recognizes
 the `supercli-markdown` CLI directly from `PATH`: the session row takes the
 App's name and live project/workspace accent, and the sidebar shows which note
 you're editing. No App registry write is required.
@@ -93,7 +93,7 @@ gray selection, keyboard mode, scrollbars, native drop destinations,
 ## Install
 
 ```sh
-curl -fsSL https://supercli.com/install/markdown/install.sh | sh
+curl -fsSL https://superc.li/install/markdown/install.sh | sh
 ```
 
 The checksum-verified installer places the CLI on `PATH`; Supercli discovers it
