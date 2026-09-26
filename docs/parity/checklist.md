@@ -188,8 +188,8 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 161 | [DESKTOP] | Local-site globe button with open URL / stop server menu | missing | clients/supercli-app/lib/screens/localsitemenu.dart (4-line re-export, bbd8b70) | - |
 | 162 | [DESKTOP] | Titlebar "Open in" menu for 24 external editors/terminals/git clients | missing | - | - |
 | 163 | [DESKTOP] | Session launcher (pick a tool) and empty state | partial | clients/supercli-app/lib/screens/sessionlauncherview.dart (35 lines, bbd8b70) | - |
-| 164 | [DESKTOP] | ⌘K command palette (sessions, projects, presets, commands) | partial | clients/supercli-app/lib/screens/commandpaletteview.dart (61 lines, bbd8b70) | screens_test.dart (palette) |
-| 165 | [DESKTOP] | ⌃Tab MRU session switcher | missing | - | - |
+| 164 | [DESKTOP] | ⌘K command palette (sessions, projects, presets, commands) | partial | `clients/supercli-app/lib/screens/commandpaletteview.dart` (FuzzyMatch, CommandPaletteState, RLE fallback render), `lib/keybindings.dart`, `lib/widgets/list_navigation.dart` | `test/command_palette_test.dart` (33 tests) |
+| 165 | [DESKTOP] | ⌃Tab MRU session switcher | partial | `clients/supercli-app/lib/screens/commandpaletteview.dart` (MruSwitcher, MruSwitcherView) | `test/command_palette_test.dart` (33 tests) |
 | 166 | [DESKTOP] | ⌘1–9 session switching and ⌃1–9 project switching with held-key hints | missing | - | - |
 | 167 | [DESKTOP] | Recent activity page (⇧⌘R) and titlebar activity bell dropdown | partial | clients/supercli-app/lib/screens/recentactivityview.dart, globalactivitymenu.dart (bbd8b70) | - |
 | 168 | [DESKTOP] | Toast notifications (for example, device connected) | done | clients/supercli-app/lib/screens/toastcenter.dart (queue-driven, auto-dismiss TTL, click-to-focus; RLE fallback) + lib/notifications.dart (NotificationQueue: FIFO, bounded eviction, TTL prune) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: queue FIFO/evict/TTL/dismiss, toast render/dismiss/focus); screenshot docs/internal/proofs/proof-screenshots/parity-approvals.png |
