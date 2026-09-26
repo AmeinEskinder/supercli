@@ -48,6 +48,7 @@ final class SidebarSession {
 
   String get id => summary.id;
   String get title => summary.title;
+  String get displayTitle => summary.displayTitle;
   int get unreadCount => summary.unreadCount;
 }
 

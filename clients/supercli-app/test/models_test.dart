@@ -34,6 +34,152 @@ void main() {
     });
   });
 
+  group('SessionSummary display labels', () {
+    test('displayTitle prefers a meaningful Host title', () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 'My feature work',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        command: 'claude',
+        cwd: '/home/osman/proj',
+        agentId: 'claude',
+      );
+      expect(s.displayTitle, 'My feature work');
+    });
+
+    test('displayTitle falls back to agent + folder when title is the command',
+        () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 'claude',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        command: 'claude',
+        cwd: '/home/osman/projects/foo',
+        agentId: 'claude',
+      );
+      expect(s.displayTitle, 'Claude · ~/projects/foo');
+    });
+
+    test('displayTitle falls back to folder for a plain terminal', () {
+      final s = SessionSummary(
+        id: 'a',
+        title: '',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        cwd: '/tmp/work',
+      );
+      expect(s.displayTitle, '/tmp/work');
+    });
+
+    test('displayTitle falls back to Terminal when nothing is known', () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 'Untitled',
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(s.displayTitle, 'Terminal');
+    });
+
+    test('subtitle shows agent and cwd with the command as secondary text',
+        () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 'My feature work',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        command: 'claude --dangerously-skip-permissions',
+        cwd: '/home/osman/proj',
+        agentId: 'claude',
+      );
+      expect(s.subtitle,
+          'Claude · ~/proj — claude --dangerously-skip-permissions');
+    });
+
+    test('subtitle omits the command when it is the display title', () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 'claude',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        command: 'claude',
+        cwd: '/home/osman/proj',
+        agentId: 'claude',
+      );
+      // displayTitle is 'Claude · ~/proj'; command 'claude' differs, so it
+      // still appears as secondary text.
+      expect(s.subtitle, contains('claude'));
+    });
+
+    test('agentLabel prefers the app name, else capitalizes the runtime id',
+        () {
+      final withApp = SessionSummary(
+        id: 'a',
+        title: 't',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        agentId: 'supercli.app.design',
+        appName: 'Supercli Design',
+      );
+      expect(withApp.agentLabel, 'Supercli Design');
+      final withRuntime = SessionSummary(
+        id: 'b',
+        title: 't',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        agentId: 'claude',
+      );
+      expect(withRuntime.agentLabel, 'Claude');
+      final none = SessionSummary(
+        id: 'c',
+        title: 't',
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(none.agentLabel, '');
+    });
+
+    test('shortCwd abbreviates home and long paths', () {
+      SessionSummary cwd(String c) => SessionSummary(
+            id: 'a',
+            title: 't',
+            updatedAt: DateTime.utc(2026, 1, 1),
+            cwd: c,
+          );
+      expect(cwd('/home/osman').shortCwd, '~');
+      expect(cwd('/home/osman/proj').shortCwd, '~/proj');
+      expect(cwd('/home/osman/a/b/c').shortCwd, '~/…/b/c');
+      expect(cwd('/tmp').shortCwd, '/tmp');
+      expect(cwd('/var/log/nginx').shortCwd, '…/log/nginx');
+      expect(cwd('').shortCwd, '');
+    });
+
+    test('fromJson parses the Host wire fields', () {
+      final s = SessionSummary.fromJson({
+        'id': 's1',
+        'title': 'claude',
+        'updatedAtUnixMs': 1780000000000,
+        'command': 'claude',
+        'cwd': '/home/osman/proj',
+        'activeRuntimeID': 'claude',
+        'activeAppName': 'Supercli Design',
+      });
+      expect(s.command, 'claude');
+      expect(s.cwd, '/home/osman/proj');
+      expect(s.agentId, 'claude');
+      expect(s.appName, 'Supercli Design');
+      expect(s.updatedAt.millisecondsSinceEpoch, 1780000000000);
+      expect(s.displayTitle, 'Supercli Design · ~/proj');
+    });
+
+    test('toJson round-trips the new fields', () {
+      final s = SessionSummary(
+        id: 'a',
+        title: 't',
+        updatedAt: DateTime.utc(2026, 1, 1),
+        command: 'zsh',
+        cwd: '/tmp',
+        agentId: '',
+      );
+      final back = SessionSummary.fromJson(s.toJson());
+      expect(back.command, 'zsh');
+      expect(back.cwd, '/tmp');
+    });
+  });
+
   group('PendingApproval', () {
     test('fromJson parses all fields', () {
       final a = PendingApproval.fromJson({

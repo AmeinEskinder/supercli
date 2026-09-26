@@ -26,7 +26,7 @@ final class SessionGalleryPanel {
   TableDataset dataset() => TableDataset(
         'session-gallery',
         columns: const ['Session', 'Updated'],
-        rows: sessions.map((s) => [s.title, '']).toList(),
+        rows: sessions.map((s) => [s.displayTitle, s.subtitle]).toList(),
       );
 }
 

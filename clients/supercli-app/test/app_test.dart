@@ -46,7 +46,25 @@ void main() {
         ];
       final dataset = app.sessionDataset;
       expect(dataset.id, 'sessions');
-      expect(dataset.columns, ['Title', 'Updated']);
+      expect(dataset.columns, ['Session', 'Details', 'Updated']);
+    });
+
+    test('session dataset shows human titles with command as secondary text',
+        () {
+      final app = SupercliApp()
+        ..sessions = [
+          SessionSummary(
+            id: 's1',
+            title: 'claude',
+            updatedAt: DateTime.now(),
+            command: 'claude',
+            cwd: '/home/osman/proj',
+            agentId: 'claude',
+          ),
+        ];
+      final dataset = app.sessionDataset;
+      expect(dataset.row(0)[0], 'Claude · ~/proj');
+      expect(dataset.row(0)[1], contains('claude'));
     });
   });
 
