@@ -1,20 +1,15 @@
 # Android APK assembly — FROZEN. The Dioxus mobile launcher is under
-# clients/legacy/dioxus/ per Amein 2026-09-26. Manual dispatch only.
-# The gpuidart mobile app will get its own workflow when mobile shells land.
+# clients/legacy/dioxus/ per Amein 2026-09-26.
+# DISABLED 2026-09-26: push/PR triggers removed. Manual dispatch only via the
+# Actions tab. The gpuidart mobile app will get its own workflow when mobile
+# shells land.
 
-name: Android APK (Dioxus, legacy frozen)
+name: Android APK (Dioxus, legacy frozen, DISABLED)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['track-b*', main]
-    paths:
-      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-client/**'
-      - '.github/workflows/android.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-client/**'
+  # push: DISABLED — legacy Dioxus tree is frozen, no CI triggers.
+  # pull_request: DISABLED — legacy Dioxus tree is frozen, no CI triggers.
 
 env:
   RUST_VERSION: "1.88.0"

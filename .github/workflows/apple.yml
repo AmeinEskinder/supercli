@@ -1,22 +1,13 @@
 # Dioxus launchers are FROZEN under clients/legacy/dioxus/ per Amein 2026-09-26.
-# This workflow no longer triggers on legacy changes. Manual dispatch only.
-# The gpuidart app (clients/supercli-app/) will get its own workflow.
-name: Apple prep (Dioxus, legacy frozen)
+# DISABLED 2026-09-26: push/PR triggers removed. Manual dispatch only via the
+# Actions tab. The gpuidart app (clients/supercli-app/) will get its own
+# workflow.
+name: Apple prep (Dioxus, legacy frozen, DISABLED)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['track-b*', main]
-    paths:
-      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-client/**'
-      - 'tests/device/**'
-      - '.github/workflows/apple.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-client/**'
-      - 'tests/device/**'
-      - '.github/workflows/apple.yml'
+  # push: DISABLED — legacy Dioxus tree is frozen, no CI triggers.
+  # pull_request: DISABLED — legacy Dioxus tree is frozen, no CI triggers.
 
 permissions:
   contents: read

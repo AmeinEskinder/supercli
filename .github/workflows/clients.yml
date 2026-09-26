@@ -1,21 +1,13 @@
 # The Apple clients are FROZEN under clients/legacy/ per Amein 2026-09-26.
-# This workflow no longer triggers on legacy client changes. The gpuidart
-# app (clients/supercli-app/) will get its own workflow when ready.
-# Kept for manual dispatch only.
-name: Apple clients (legacy, frozen)
+# DISABLED 2026-09-26: push/PR triggers removed. Manual dispatch only via the
+# Actions tab. The gpuidart app (clients/supercli-app/) will get its own
+# workflow when ready.
+name: Apple clients (legacy, frozen, DISABLED)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['track-b*', main]
-    paths:
-      # Legacy clients are frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-native-bridge/**'
-      - '.github/workflows/clients.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-native-bridge/**'
-      - '.github/workflows/clients.yml'
+  # push: DISABLED — legacy clients are frozen, no CI triggers.
+  # pull_request: DISABLED — legacy clients are frozen, no CI triggers.
 
 permissions:
   contents: read
