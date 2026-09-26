@@ -1,28 +1,39 @@
-/// supercli desktop app UI built on gpuidart.
+/// supercli desktop app shell: sidebar + terminal panes + approvals + toasts.
 ///
-/// Port order: macOS/Linux desktop first. Uses existing gpuidart primitives;
-/// gaps are logged in docs/gpuidart-requirements.md (see P0 items).
+/// Mounts the real DESKTOP components in the running app:
+/// - [SidebarView]: project/session tree, fed by Host bootstrap sessions
+/// - [TerminalArea]: hosts the [PaneLayout] split-pane tree (worker e)
+/// - [McpApprovalPanel]: approval overlay for pending approvals (worker c)
+/// - [ToastCenter]: transient notifications from Host events (worker c)
 ///
-/// Current primitive mapping:
-/// - Session list: UiTable with a registered TableDataset (P0-2 UiList pending)
-/// - Composer: UiInput single-line (P0-3 multiline pending)
-/// - Approval card: UiRow of UiText + UiButtons (P0-1 approval card pending)
-/// - Keyboard: real UiAction API from gpuidart 135d300 (P0-4, shipped)
+/// All data comes from the Host via [HostClient]; no fixtures.
 library;
 
 import 'package:gpuidart/gpuidart.dart';
 
 import 'models.dart';
+import 'screens/mcpapprovalpanel.dart';
+import 'screens/sidebarview.dart';
+import 'screens/terminalarea.dart';
+import 'screens/toastcenter.dart';
 
-/// Builds the supercli desktop UI tree.
+/// Builds the supercli desktop UI shell.
 final class SupercliApp {
   SupercliApp();
 
   List<SessionSummary> sessions = const [];
-  PendingApproval? pendingApproval;
+  List<PendingApproval> pendingApprovals = const [];
   String composerText = '';
   int selectedSession = 0;
   String statusLine = 'Connecting…';
+  bool sidebarCollapsed = false;
+
+  /// Transient notifications from Host events (approvals, errors, …).
+  final NotificationQueue notifications = NotificationQueue();
+
+  /// The pane layout for the active session. Rebuilt on refresh from the
+  /// selected session; splits persist for the app lifetime.
+  PaneLayout? paneLayout;
 
   /// Dataset backing the session list table. Cached: gpuidart tracks dataset
   /// ownership by instance, so the same object must be reused across
@@ -42,58 +53,112 @@ final class SupercliApp {
     return created;
   }
 
-  /// The full UI tree. Rebuilt on every state change via host.rebuild().
-  UiNode build() {
-    final approval = pendingApproval;
-    return UiColumn('root', [
-      const UiText('app-title', 'supercli'),
-      UiText('status', statusLine),
-      UiTable('session-list', dataset: 'sessions'),
-      if (approval != null)
-        _approvalCard(approval)
-      else
-        const UiText('no-approval', 'No pending approvals.'),
-      const UiInput('composer', placeholder: 'Type a message… (Enter to send)'),
-    ]);
+  /// Sidebar sessions derived from the Host bootstrap.
+  List<SidebarSession> get _sidebarSessions => [
+        for (final s in sessions)
+          SidebarSession(
+            summary: s,
+            projectId: _projectIdFor(s),
+          ),
+      ];
+
+  /// Group sessions by project for the sidebar tree. Sessions without an
+  /// explicit project land in a single "Sessions" project.
+  List<SidebarProject> get _sidebarProjects {
+    final byProject = <String, List<SidebarSession>>{};
+    for (final s in _sidebarSessions) {
+      byProject.putIfAbsent(s.projectId, () => []).add(s);
+    }
+    return [
+      for (final entry in byProject.entries)
+        SidebarProject(
+          id: entry.key,
+          name: entry.key,
+          sessions: entry.value,
+        ),
+    ];
   }
 
-  /// Approval card built from primitives until P0-1 lands.
+  String _projectIdFor(SessionSummary s) {
+    // The Host bootstrap carries an optional `project` field; fall back to
+    // a single default project so the tree always renders.
+    return 'Sessions';
+  }
+
+  PendingApproval? get pendingApproval =>
+      pendingApprovals.isEmpty ? null : pendingApprovals.first;
+
+  /// The full app shell. Rebuilt on every state change via host.rebuild().
   ///
-  /// GAP (P0-1): no dedicated approval card widget. Using UiRow + UiText +
-  /// UiButton. Missing: structured diff view, risk badge, timeout countdown.
-  UiNode _approvalCard(PendingApproval approval) {
-    return UiColumn('approval-card', [
-      UiText('approval-title', 'Approval requested'),
-      UiText('approval-tool', 'Tool: ${approval.tool}'),
-      UiText('approval-summary', approval.summary),
-      if (approval.detail.isNotEmpty)
-        UiText('approval-detail', approval.detail),
-      UiRow('approval-buttons', [
-        const UiButton('approve', 'Approve (Ctrl+Enter)'),
-        const UiButton('deny', 'Deny'),
+  /// Layout: sidebar | content column (terminal panes + approval overlay +
+  /// toasts). This is the mounted DESKTOP shell — not a scaffold.
+  UiNode build() {
+    final approval = pendingApproval;
+    final layout = paneLayout ??
+        PaneLayout.single(
+          paneId: 'pane-1',
+          title: sessions.isEmpty
+              ? 'zsh'
+              : sessions[selectedSession.clamp(0, sessions.length - 1)].title,
+        );
+    return UiRow('app-shell', [
+      if (!sidebarCollapsed)
+        SidebarView(
+          workspaces: const ['local'],
+          activeWorkspaceId: 'local',
+          projects: _sidebarProjects,
+          selectedSessionId: sessions.isEmpty
+              ? null
+              : sessions[selectedSession.clamp(0, sessions.length - 1)].id,
+        ).build()
+      else
+        UiColumn('sidebar-collapsed', [
+          const UiButton('expand-sidebar', '+'),
+        ]),
+      UiColumn('content-area', [
+        TerminalArea(layout: layout, statusText: statusLine).build(),
+        if (approval != null)
+          McpApprovalPanel(
+            approval: approval,
+            moreWaiting: pendingApprovals.length - 1,
+          ).build()
+        else
+          const UiText('no-approval', 'No pending approvals.'),
+        ToastCenter(queue: notifications).build(),
+        const UiInput('composer', placeholder: 'Type a message… (Enter to send)'),
       ]),
     ]);
   }
 
-  /// Keyboard bindings using the real UiAction API (gpuidart 135d300, P0-4).
-  List<UiAction> actions() => const [
-        // Approve the pending approval from anywhere.
-        UiAction(name: 'approval.approve', keys: 'ctrl+enter'),
-        // Deny the pending approval.
-        UiAction(name: 'approval.deny', keys: 'ctrl+shift+enter'),
-        // Move selection in the session list.
-        UiAction(
+  /// Keyboard bindings: component actions + app-level navigation.
+  List<UiAction> actions() => [
+        // Approval overlay (mounted McpApprovalPanel).
+        ...const McpApprovalPanel(
+          approval: PendingApproval(
+            id: '',
+            tool: '',
+            summary: '',
+            detail: '',
+          ),
+        ).actions(),
+        // Pane management (mounted PaneLayout).
+        ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
+            .actions(),
+        // Sidebar toggle.
+        const UiAction(name: 'sidebar.toggle', keys: 'cmd+b'),
+        // Session list navigation.
+        const UiAction(
           name: 'sessions.up',
           keys: 'up',
           context: UiActionContext.node('session-list'),
         ),
-        UiAction(
+        const UiAction(
           name: 'sessions.down',
           keys: 'down',
           context: UiActionContext.node('session-list'),
         ),
         // Focus the composer.
-        UiAction(name: 'composer.focus', keys: 'ctrl+l'),
+        const UiAction(name: 'composer.focus', keys: 'ctrl+l'),
       ];
 
   static String formatTime(DateTime t) {

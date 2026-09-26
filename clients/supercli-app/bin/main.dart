@@ -22,6 +22,7 @@ import 'package:http/io_client.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/notifications.dart';
 
 Future<void> main(List<String> args) async {
   final host = _parseArg(args, '--host=') ?? '127.0.0.1';
@@ -66,12 +67,31 @@ Future<void> main(List<String> args) async {
       final boot = await client.bootstrap();
       final sessions = HostClient.sessionsFromBootstrap(boot);
       final approvals = HostClient.approvalsFromBootstrap(boot);
+      final prevApprovalIds = app.pendingApprovals.map((a) => a.id).toSet();
       app.sessions = sessions;
-      app.pendingApproval = approvals.isEmpty ? null : approvals.first;
+      app.pendingApprovals = approvals;
+      // Toast on newly arrived approvals (drives the ToastCenter).
+      for (final a in approvals) {
+        if (!prevApprovalIds.contains(a.id)) {
+          app.notifications.add(AppNotification(
+            id: 'approval-${a.id}',
+            title: 'Approval requested',
+            message: '${a.tool}: ${a.summary}',
+            severity: NotificationSeverity.warning,
+            focusTarget: 'mcp-approval-overlay',
+          ));
+        }
+      }
       app.statusLine =
           'Connected — ${sessions.length} sessions, ${approvals.length} pending approval(s).';
     } on HostException catch (e) {
       app.statusLine = 'Host error: $e';
+      app.notifications.add(AppNotification(
+        id: 'host-error',
+        title: 'Host error',
+        message: '$e',
+        severity: NotificationSeverity.error,
+      ));
     }
     final host = gpui;
     if (host != null) {
@@ -179,10 +199,10 @@ Future<void> _handleClick(
 ) async {
   final approval = app.pendingApproval;
   if (approval == null) return;
-  if (event.id == 'approve') {
+  if (event.id == 'mcp-allow' || event.id == 'approve') {
     await client.answerApproval(ApprovalAnswer.approve(approval.id));
     await refresh();
-  } else if (event.id == 'deny') {
+  } else if (event.id == 'mcp-deny' || event.id == 'deny') {
     await client.answerApproval(ApprovalAnswer.deny(approval.id));
     await refresh();
   }

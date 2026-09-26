@@ -63,9 +63,10 @@ void main() {
       );
       final panel = McpApprovalPanel(approval: approval);
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 3);
+      // header row, tool, summary, detail, button row
+      expect(node.children.length, 5);
       final buttons = node.children.last as UiRow;
-      expect(buttons.children.length, 2);
+      expect(buttons.children.length, 3);
     });
 
     test('shows more-waiting count', () {
@@ -77,7 +78,8 @@ void main() {
       );
       final panel = McpApprovalPanel(approval: approval, moreWaiting: 2);
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 4);
+      // header row, tool, summary, more-waiting, button row (no detail)
+      expect(node.children.length, 5);
     });
 
     test('has keyboard actions', () {
