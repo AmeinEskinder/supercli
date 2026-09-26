@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -64,7 +64,7 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
 }
 
 /// Query the DB via the sqlite3 CLI. Returns None if sqlite3 is missing.
-fn db_query(home: &PathBuf, sql: &str) -> Option<String> {
+fn db_query(home: &Path, sql: &str) -> Option<String> {
     let db = home.join("runs.db");
     if !db.exists() {
         return None;

@@ -521,6 +521,11 @@ struct AttemptResult {
 /// the [`AutonomousPolicy`] caps, retries per policy, and appends exactly
 /// one [`RunRecord`] per trigger — on every outcome, including validation
 /// refusal and overlap skips.
+///
+/// Callback invoked with the durable run id immediately after the run is
+/// created (before any tool executes).
+type OnRunCreatedCallback = Box<dyn Fn(&str) + Send + Sync>;
+
 pub struct ScheduledRunner<C: RunClock = SystemClock> {
     guard: RunGuard,
     clock: C,
@@ -533,7 +538,7 @@ pub struct ScheduledRunner<C: RunClock = SystemClock> {
     /// the run is created (before any tool executes). Used by tests to
     /// synchronize on run creation (e.g., SIGKILL tests that must wait
     /// until the run exists before killing).
-    on_run_created: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    on_run_created: Option<OnRunCreatedCallback>,
 }
 
 impl<C: RunClock> ScheduledRunner<C> {
@@ -917,10 +922,8 @@ impl<C: RunClock> ScheduledRunner<C> {
             let input_hash = step_input_hash(&format!("{}:{}", call.tool, call.arguments));
             let intent = if let Some((run_id, _)) = durable {
                 if let Some(db) = self.runs_db.as_ref() {
-                    match db.begin_step(run_id, step_no, StepKind::Tool, &input_hash) {
-                        Ok(intent) => Some(intent),
-                        Err(_) => None,
-                    }
+                    db.begin_step(run_id, step_no, StepKind::Tool, &input_hash)
+                        .ok()
                 } else {
                     None
                 }

@@ -42,6 +42,18 @@ struct PendingGrant {
     ack: std::sync::mpsc::Sender<Result<(), String>>,
 }
 
+/// Parameters for `GrantQueue::submit`: the audit + grant fields of a
+/// `PendingGrant` before the ack channel is attached.
+struct GrantSubmitParams {
+    audit_actor: String,
+    audit_scope: String,
+    audit_tool: String,
+    audit_grant_key: String,
+    kind: String,
+    caller: String,
+    target: Option<String>,
+}
+
 /// Global grant write queue.
 struct GrantQueue {
     queue: Mutex<VecDeque<PendingGrant>>,
@@ -77,16 +89,7 @@ impl GrantQueue {
     /// If the writer thread has died, fails immediately with an error
     /// (never hangs). The caller must treat this as Ambiguous (the write
     /// may or may not have been persisted).
-    fn submit(
-        &self,
-        audit_actor: String,
-        audit_scope: String,
-        audit_tool: String,
-        audit_grant_key: String,
-        kind: String,
-        caller: String,
-        target: Option<String>,
-    ) -> Result<(), String> {
+    fn submit(&self, params: GrantSubmitParams) -> Result<(), String> {
         // Fail fast if the writer is dead. Otherwise we'd enqueue and hang
         // forever waiting for an ack that will never come.
         {
@@ -102,13 +105,13 @@ impl GrantQueue {
 
         let (tx, rx) = std::sync::mpsc::channel();
         let pending = PendingGrant {
-            audit_actor,
-            audit_scope,
-            audit_tool,
-            audit_grant_key,
-            kind,
-            caller,
-            target,
+            audit_actor: params.audit_actor,
+            audit_scope: params.audit_scope,
+            audit_tool: params.audit_tool,
+            audit_grant_key: params.audit_grant_key,
+            kind: params.kind,
+            caller: params.caller,
+            target: params.target,
             ack: tx,
         };
 
@@ -235,6 +238,7 @@ fn writer_loop_for(queue: &GrantQueue) {
 /// 2. Apply all grant mutations to the map.
 /// 3. Write grants.json once (temp + fsync + rename + fsync dir).
 /// 4. Ack all callers.
+///
 /// Same as `commit_batch` but with an explicit home directory.
 fn commit_batch_at(batch: Vec<PendingGrant>, home: &std::path::Path) -> Result<(), String> {
     if batch.is_empty() {
@@ -285,7 +289,7 @@ fn commit_batch_at(batch: Vec<PendingGrant>, home: &std::path::Path) -> Result<(
         let _ = p.ack.send(ack_result.clone());
     }
 
-    ack_result.map_err(|e| e)
+    ack_result
 }
 
 /// Apply a single grant mutation to the map (same logic as persist_grant).
@@ -416,15 +420,15 @@ pub fn persist_grant_grouped(
         return Ok(());
     };
 
-    grant_queue().submit(
+    grant_queue().submit(GrantSubmitParams {
         audit_actor,
         audit_scope,
         audit_tool,
         audit_grant_key,
-        kind.to_string(),
-        caller.to_string(),
-        target.map(|s| s.to_string()),
-    )
+        kind: kind.to_string(),
+        caller: caller.to_string(),
+        target: target.map(|s| s.to_string()),
+    })
 }
 
 /// Submit a connector grant for group commit. Blocks until durably committed.
@@ -452,15 +456,15 @@ pub fn persist_connector_grant_grouped(
         .map(|d| format!("human:{d}"))
         .unwrap_or_else(|| "unknown".to_string());
 
-    grant_queue().submit(
-        actor,
-        "connector".to_string(),
-        "connector".to_string(),
-        grant_key,
-        "connector".to_string(),
-        caller.to_string(),
-        Some(format!("{connector}:{tool}")),
-    )
+    grant_queue().submit(GrantSubmitParams {
+        audit_actor: actor,
+        audit_scope: "connector".to_string(),
+        audit_tool: "connector".to_string(),
+        audit_grant_key: grant_key,
+        kind: "connector".to_string(),
+        caller: caller.to_string(),
+        target: Some(format!("{connector}:{tool}")),
+    })
 }
 
 /// Direct (non-grouped) grant persist: the pre-group-commit path.
@@ -549,15 +553,15 @@ mod tests {
                         crate::grant_store::escape_component(&caller),
                         crate::grant_store::escape_component(&target)
                     );
-                    q.submit(
-                        "human:test-device".to_string(),
-                        "write".to_string(),
-                        "write".to_string(),
-                        grant_key,
-                        "write".to_string(),
+                    q.submit(GrantSubmitParams {
+                        audit_actor: "human:test-device".to_string(),
+                        audit_scope: "write".to_string(),
+                        audit_tool: "write".to_string(),
+                        audit_grant_key: grant_key,
+                        kind: "write".to_string(),
                         caller,
-                        Some(target),
-                    )
+                        target: Some(target),
+                    })
                     .expect("grouped write must succeed");
                 }
             }));
@@ -598,6 +602,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)] // Intentional: verifies the removed direct path fails closed.
     fn direct_path_is_removed() {
         // Phase 13 v2 (a): The direct path must be gone from production.
         // This test ensures persist_grant_direct returns an error.
@@ -628,15 +633,15 @@ mod tests {
         }
         // Now submit should fail fast (not hang).
         let start = std::time::Instant::now();
-        let result = q.submit(
-            "human:test".to_string(),
-            "write".to_string(),
-            "write".to_string(),
-            "write:a:b".to_string(),
-            "write".to_string(),
-            "a".to_string(),
-            Some("b".to_string()),
-        );
+        let result = q.submit(GrantSubmitParams {
+            audit_actor: "human:test".to_string(),
+            audit_scope: "write".to_string(),
+            audit_tool: "write".to_string(),
+            audit_grant_key: "write:a:b".to_string(),
+            kind: "write".to_string(),
+            caller: "a".to_string(),
+            target: Some("b".to_string()),
+        });
         let elapsed = start.elapsed();
         assert!(result.is_err(), "submit must fail if writer is dead");
         let err = result.unwrap_err();
@@ -687,15 +692,15 @@ mod tests {
                 // Wait for all submitters to be ready, then submit together.
                 b_clone.wait();
                 let start = std::time::Instant::now();
-                let result = q_clone.submit(
-                    format!("human:test-{i}"),
-                    "write".to_string(),
-                    "write".to_string(),
-                    format!("write:caller-{i}:target-{i}"),
-                    "write".to_string(),
-                    format!("caller-{i}"),
-                    Some(format!("target-{i}")),
-                );
+                let result = q_clone.submit(GrantSubmitParams {
+                    audit_actor: format!("human:test-{i}"),
+                    audit_scope: "write".to_string(),
+                    audit_tool: "write".to_string(),
+                    audit_grant_key: format!("write:caller-{i}:target-{i}"),
+                    kind: "write".to_string(),
+                    caller: format!("caller-{i}"),
+                    target: Some(format!("target-{i}")),
+                });
                 let elapsed = start.elapsed();
                 (result, elapsed)
             }));

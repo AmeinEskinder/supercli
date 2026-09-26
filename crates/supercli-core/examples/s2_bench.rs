@@ -10,10 +10,18 @@
 //! (MCP + phone + etc.). Each thread performs n persists, measuring
 //! latency of each. Reports throughput and p50/p95/p99.
 
+//! Note: this benchmark intentionally exercises `persist_grant_direct`
+//! (deprecated/removed from production) to compare it against the grouped
+//! path. That is the benchmark's purpose.
+#![allow(deprecated)]
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};
 use std::time::Instant;
 use supercli_core::grant_writer::{persist_grant_direct, persist_grant_grouped};
+
+/// Signature shared by the direct and grouped persist paths.
+type PersistFn = fn(&str, &str, Option<&str>, Option<&str>) -> Result<(), String>;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -34,12 +42,11 @@ fn main() {
     std::fs::create_dir_all(&home).unwrap();
     std::env::set_var("SUPERCLI_HOME", &home);
 
-    let persist: fn(&str, &str, Option<&str>, Option<&str>) -> Result<(), String> =
-        if mode == "direct" {
-            persist_grant_direct
-        } else {
-            persist_grant_grouped
-        };
+    let persist: PersistFn = if mode == "direct" {
+        persist_grant_direct
+    } else {
+        persist_grant_grouped
+    };
 
     let errors = Arc::new(AtomicU64::new(0));
     let barrier = Arc::new(Barrier::new(concurrency));

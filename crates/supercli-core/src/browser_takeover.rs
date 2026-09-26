@@ -1189,10 +1189,7 @@ mod tests {
             use base64::Engine as _;
             base64::engine::general_purpose::STANDARD.encode(FAKE_PNG)
         };
-        loop {
-            let Ok((opcode, payload)) = read_frame(stream) else {
-                break;
-            };
+        while let Ok((opcode, payload)) = read_frame(stream) {
             if opcode == 0x8 {
                 break;
             }

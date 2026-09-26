@@ -68,6 +68,7 @@ fn acquire_audit_lock(audit_path: &std::path::Path) -> Result<AuditLock, String>
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&lock_path)
             .map_err(|e| format!("open audit lock {}: {e}", lock_path.display()))?;
         // Non-blocking flock with poll + 30s timeout (fail closed).
@@ -143,14 +144,9 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Get the hash of the last entry, or None if the log is empty/missing.
-fn last_entry_hash() -> Result<Option<String>, String> {
-    last_entry_hash_at(&audit_path())
-}
-
 fn last_entry_hash_at(path: &std::path::Path) -> Result<Option<String>, String> {
     use std::io::{Read, Seek, SeekFrom};
-    let mut file = match std::fs::File::open(&path) {
+    let mut file = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.to_string()),
