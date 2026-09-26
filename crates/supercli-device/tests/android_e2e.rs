@@ -157,22 +157,39 @@ where
 /// (older versions use `mResumedActivity`), so match either; poll for up
 /// to 10 s instead of checking once because the launch can be slow.
 fn wait_settings_resumed(serial: &str) -> Result<(), DeviceError> {
-    for _ in 0..20 {
+    // Lines mentioning resume from the last poll, logged on failure so the
+    // CI annotations show what the emulator actually reports.
+    let mut last_resum_lines: Vec<String> = Vec::new();
+    for poll in 0..20 {
         let out = adb_shell_output(serial, &["dumpsys", "activity", "activities"])?;
+        let mut field_seen = false;
+        last_resum_lines.clear();
         for line in out.lines() {
             let t = line.trim();
+            if t.to_lowercase().contains("resum") && last_resum_lines.len() < 20 {
+                last_resum_lines.push(t.to_string());
+            }
             // Separator-agnostic match: Android 14 emits
             // `topResumedActivity=ActivityRecord{...}` (with `=`), older
             // dumps use `topResumedActivity:`/`mResumedActivity:`.
+            // Scan ALL lines: the field can appear once per display/section
+            // and the first occurrence is not necessarily Settings.
             if t.contains("mResumedActivity") || t.contains("topResumedActivity") {
                 eprintln!("e2e: resumed-activity field: {t}");
                 if t.contains("com.android.settings") {
                     return Ok(());
                 }
-                break;
+                field_seen = true;
             }
         }
+        if !field_seen {
+            eprintln!("e2e: poll {poll}: no resumed-activity field in dumpsys output");
+        }
         std::thread::sleep(Duration::from_millis(500));
+    }
+    eprintln!("e2e: lines mentioning 'resum' on final dumpsys poll:");
+    for l in &last_resum_lines {
+        eprintln!("e2e:   {l}");
     }
     Err(DeviceError::Parse(
         "com.android.settings was not the resumed activity after am start".to_string(),
