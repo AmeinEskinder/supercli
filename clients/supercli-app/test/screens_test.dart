@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 void main() {
   group('RootView', () {
     test('builds sidebar + content layout', () {
-      final sidebar = SidebarView(sections: const []);
+      final sidebar = SidebarView(projects: const []);
       final content = TerminalArea(panes: []);
       final root = RootView(sidebar: sidebar, content: content);
       final node = root.build();
@@ -19,7 +19,7 @@ void main() {
     });
 
     test('collapsed sidebar shows expand button', () {
-      final sidebar = SidebarView(sections: const []);
+      final sidebar = SidebarView(projects: const []);
       final content = TerminalArea(panes: []);
       final root = RootView(
           sidebar: sidebar, content: content, sidebarCollapsed: true);
@@ -29,24 +29,27 @@ void main() {
   });
 
   group('SidebarView', () {
-    test('builds filter + new session + sections', () {
-      final sidebar = SidebarView(sections: [
-        SidebarSection(
-          id: 'active',
-          title: 'Active',
+    test('builds dots + filter + new session + archived', () {
+      final sidebar = SidebarView(projects: [
+        SidebarProject(
+          id: 'pr1',
+          name: 'supercli',
           sessions: [
-            SessionSummary(
-                id: 's1',
-                title: 'api-server',
-                updatedAt: DateTime.now()),
+            SidebarSession(
+                summary: SessionSummary(
+                    id: 's1',
+                    title: 'api-server',
+                    updatedAt: DateTime.now())),
           ],
         ),
       ]);
       final node = sidebar.build() as UiColumn;
-      // filter input + new session button + section title + table
-      expect(node.children.length, 4);
-      expect(node.children[0], isA<UiInput>());
-      expect(node.children[1], isA<UiButton>());
+      // workspace dots + filter input + new session button +
+      // project tree + archived button
+      expect(node.children.length, 5);
+      expect(node.children[0], isA<UiRow>());
+      expect(node.children[1], isA<UiInput>());
+      expect(node.children[2], isA<UiButton>());
     });
   });
 
