@@ -101,10 +101,11 @@ void main() {
         return http.Response('{"ok":true}', 200);
       });
       final client = clientWith(mock);
-      await client.gitStage('/repo', ['a.dart', 'b.dart']);
+      await client.gitStage('/repo', ['a.dart', 'b.dart'], approved: true);
       final decoded = jsonDecode(body!) as Map<String, dynamic>;
       expect(decoded['path'], '/repo');
       expect(decoded['files'], ['a.dart', 'b.dart']);
+      expect(decoded['approved'], true);
       client.close();
     });
 
@@ -112,7 +113,7 @@ void main() {
       final mock = MockClient((_) async => http.Response('nothing to commit', 422));
       final client = clientWith(mock);
       expect(
-        () => client.gitCommit('/repo', 'msg'),
+        () => client.gitCommit('/repo', 'msg', approved: true),
         throwsA(isA<HostException>()),
       );
       client.close();
@@ -125,9 +126,9 @@ void main() {
         return http.Response('{"ok":true}', 200);
       });
       final client = clientWith(mock);
-      await client.gitFetch('/repo');
-      await client.gitPull('/repo');
-      await client.gitPush('/repo');
+      await client.gitFetch('/repo', approved: true);
+      await client.gitPull('/repo', approved: true);
+      await client.gitPush('/repo', approved: true);
       expect(paths, ['/mobile/git/fetch', '/mobile/git/pull', '/mobile/git/push']);
       client.close();
     });
@@ -173,7 +174,7 @@ void main() {
         return http.Response('{"ok":true,"bytesWritten":5}', 200);
       });
       final client = clientWith(mock);
-      await client.filesWrite('/repo/a.dart', 'hello');
+      await client.filesWrite('/repo/a.dart', 'hello', approved: true);
       final decoded = jsonDecode(body!) as Map<String, dynamic>;
       expect(decoded['path'], '/repo/a.dart');
       expect(utf8.decode(base64Decode(decoded['contentBase64'] as String)), 'hello');

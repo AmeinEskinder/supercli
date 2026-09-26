@@ -204,6 +204,27 @@ final class HostClient {
     }
   }
 
+  /// POST a mutating git op. The Host requires `"approved": true` in the
+  /// body (security: mutating ops need explicit user consent per request).
+  Future<void> _gitPostApproved(
+    String route,
+    String repoPath, {
+    required bool approved,
+    Map<String, Object>? extra,
+  }) async {
+    final response = await _post(route, {
+      'path': repoPath,
+      'approved': approved,
+      ...?extra,
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        '$route failed: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
   /// GET `/mobile/workspace-settings` — read the workspace settings
   /// (`settings.workspace.get`). Returns the raw wire map in the same
   /// camelCase shape `AppSettings.fromHostJson` parses. Throws
@@ -219,25 +240,36 @@ final class HostClient {
     }
     throw HostException('settings get returned unexpected body');
   /// POST /mobile/git/stage — `git add` the given repo-relative paths.
-  Future<void> gitStage(String repoPath, List<String> files) =>
-      _gitPost('/mobile/git/stage', repoPath, {'files': files});
+  /// Requires [approved]: the Host rejects mutating ops without explicit
+  /// per-request user consent.
+  Future<void> gitStage(String repoPath, List<String> files,
+          {required bool approved}) =>
+      _gitPostApproved('/mobile/git/stage', repoPath,
+          approved: approved, extra: {'files': files});
 
   /// POST /mobile/git/unstage — `git restore --staged`.
-  Future<void> gitUnstage(String repoPath, List<String> files) =>
-      _gitPost('/mobile/git/unstage', repoPath, {'files': files});
+  Future<void> gitUnstage(String repoPath, List<String> files,
+          {required bool approved}) =>
+      _gitPostApproved('/mobile/git/unstage', repoPath,
+          approved: approved, extra: {'files': files});
 
   /// POST /mobile/git/commit.
-  Future<void> gitCommit(String repoPath, String message) =>
-      _gitPost('/mobile/git/commit', repoPath, {'message': message});
+  Future<void> gitCommit(String repoPath, String message,
+          {required bool approved}) =>
+      _gitPostApproved('/mobile/git/commit', repoPath,
+          approved: approved, extra: {'message': message});
 
   /// POST /mobile/git/fetch — `git fetch --prune`.
-  Future<void> gitFetch(String repoPath) => _gitPost('/mobile/git/fetch', repoPath);
+  Future<void> gitFetch(String repoPath, {required bool approved}) =>
+      _gitPostApproved('/mobile/git/fetch', repoPath, approved: approved);
 
   /// POST /mobile/git/pull — `git pull --ff-only`.
-  Future<void> gitPull(String repoPath) => _gitPost('/mobile/git/pull', repoPath);
+  Future<void> gitPull(String repoPath, {required bool approved}) =>
+      _gitPostApproved('/mobile/git/pull', repoPath, approved: approved);
 
   /// POST /mobile/git/push.
-  Future<void> gitPush(String repoPath) => _gitPost('/mobile/git/push', repoPath);
+  Future<void> gitPush(String repoPath, {required bool approved}) =>
+      _gitPostApproved('/mobile/git/push', repoPath, approved: approved);
 
   // ------------------------------------------------------------------
   // Files routes.
@@ -276,10 +308,15 @@ final class HostClient {
   }
 
   /// POST /mobile/files/write — atomically write a file (base64 content).
-  Future<void> filesWrite(String path, String content) async {
+  /// Requires [approved]: the Host rejects writes without explicit
+  /// per-request user consent, and only allows writes inside registered
+  /// project roots (never dotfiles).
+  Future<void> filesWrite(String path, String content,
+      {required bool approved}) async {
     final response = await _post('/mobile/files/write', {
       'path': path,
       'contentBase64': base64Encode(utf8.encode(content)),
+      'approved': approved,
     });
     if (response.statusCode != 200) {
       throw HostException(
