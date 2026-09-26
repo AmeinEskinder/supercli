@@ -1309,11 +1309,11 @@ mod tests {
         assert_eq!(s, 200);
         assert_eq!(body, r#"{"devices":[]}"#);
 
-        // Touch validation
+        // Touch validation (device points: finite, >= 0, no upper bound)
         let (s, _, _) = handle_device_http(
             "POST",
             "/api/devices/d1/touch",
-            br#"{"x":1.5,"y":0.5,"action":"down"}"#,
+            br#"{"x":-1.0,"y":0.5,"action":"down"}"#,
         );
         assert_eq!(s, 400);
         let (s, _, _) = handle_device_http(
@@ -1363,6 +1363,7 @@ mod tests {
                 platform: "android".into(),
                 state: "running".into(),
                 name: "Pixel_8".into(),
+                connection_type: "usb".into(),
             }])
         }
         fn touch(&self, id: &str, input: &TouchInput) -> Result<(), String> {
@@ -1505,9 +1506,12 @@ mod tests {
 
     #[test]
     fn points_to_pixels_conversion() {
-        // 1080px @420dpi <-> 411pt: round-trip through the wire units.
-        assert_eq!(points_to_pixels(411.0, 420), 1080);
-        assert_eq!(points_to_pixels(914.0, 420), 2400);
+        // 1080px @420dpi <-> 411.43pt, 2400px @420dpi <-> 914.29pt:
+        // round-trip through the wire units. Note the truncated values
+        // 411pt/914pt do NOT round-trip (1079/2399) — the fractional
+        // part carries the pixel.
+        assert_eq!(points_to_pixels(411.43, 420), 1080);
+        assert_eq!(points_to_pixels(914.29, 420), 2400);
         assert_eq!(points_to_pixels(0.0, 420), 0);
         assert_eq!(points_to_pixels(336.0, 480), 1008);
     }
