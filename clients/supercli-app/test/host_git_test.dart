@@ -101,11 +101,13 @@ void main() {
         return http.Response('{"ok":true}', 200);
       });
       final client = clientWith(mock);
-      await client.gitStage('/repo', ['a.dart', 'b.dart'], approved: true);
+      await client.gitStage('/repo', ['a.dart', 'b.dart']);
       final decoded = jsonDecode(body!) as Map<String, dynamic>;
       expect(decoded['path'], '/repo');
       expect(decoded['files'], ['a.dart', 'b.dart']);
-      expect(decoded['approved'], true);
+      // No client-supplied approval flag: the Host gates mutating ops through
+      // the ApprovalHub (human approval via the approval UI).
+      expect(decoded.containsKey('approved'), isFalse);
       client.close();
     });
 
@@ -113,7 +115,7 @@ void main() {
       final mock = MockClient((_) async => http.Response('nothing to commit', 422));
       final client = clientWith(mock);
       expect(
-        () => client.gitCommit('/repo', 'msg', approved: true),
+        () => client.gitCommit('/repo', 'msg'),
         throwsA(isA<HostException>()),
       );
       client.close();
@@ -126,9 +128,9 @@ void main() {
         return http.Response('{"ok":true}', 200);
       });
       final client = clientWith(mock);
-      await client.gitFetch('/repo', approved: true);
-      await client.gitPull('/repo', approved: true);
-      await client.gitPush('/repo', approved: true);
+      await client.gitFetch('/repo');
+      await client.gitPull('/repo');
+      await client.gitPush('/repo');
       expect(paths, ['/mobile/git/fetch', '/mobile/git/pull', '/mobile/git/push']);
       client.close();
     });
@@ -174,7 +176,7 @@ void main() {
         return http.Response('{"ok":true,"bytesWritten":5}', 200);
       });
       final client = clientWith(mock);
-      await client.filesWrite('/repo/a.dart', 'hello', approved: true);
+      await client.filesWrite('/repo/a.dart', 'hello');
       final decoded = jsonDecode(body!) as Map<String, dynamic>;
       expect(decoded['path'], '/repo/a.dart');
       expect(utf8.decode(base64Decode(decoded['contentBase64'] as String)), 'hello');

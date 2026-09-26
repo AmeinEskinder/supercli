@@ -9,6 +9,7 @@ import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/keybindings.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/platform_keys.dart';
 import 'package:supercli_app/screens/commandpaletteview.dart';
 import 'package:supercli_app/widgets/list_navigation.dart';
 import 'package:test/test.dart';
@@ -331,10 +332,11 @@ void main() {
       expect(ids, contains('action:pane.splitRight'));
       expect(ids, contains('action:approval.approve'));
       expect(ids, contains('action:composer.focus'));
-      // Shortcuts match the registered UiAction chords.
+      // Shortcuts match the registered UiAction chords (platform primary
+      // modifier: meta on macOS, ctrl on Linux/Windows).
       final byId = {for (final c in commands) c.id: c};
-      expect(byId['action:sidebar.toggle']!.shortcut, 'cmd+b');
-      expect(byId['action:pane.splitRight']!.shortcut, 'cmd+d');
+      expect(byId['action:sidebar.toggle']!.shortcut, '$currentPrimaryModifier+b');
+      expect(byId['action:pane.splitRight']!.shortcut, '$currentPrimaryModifier+d');
     });
 
     test('paletteCommands includes live sessions as session entries', () {
@@ -563,7 +565,7 @@ void main() {
       expect(byId['action:pane.focusNext']!.shortcut, isEmpty);
       expect(byId['action:pane.focusPrev']!.shortcut, isEmpty);
       // Other actions still advertise their real chords.
-      expect(byId['action:sidebar.toggle']!.shortcut, 'cmd+b');
+      expect(byId['action:sidebar.toggle']!.shortcut, '$currentPrimaryModifier+b');
     });
   });
 

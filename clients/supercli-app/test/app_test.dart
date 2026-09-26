@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/platform_keys.dart';
 
 void main() {
   group('SupercliApp shell tree', () {
@@ -52,6 +53,12 @@ void main() {
   group('SupercliApp keyboard actions (UiAction API)', () {
     test('declares approve/deny/list/focus bindings', () {
       final app = SupercliApp();
+      // MCP approval actions are only registered when the approval panel is
+      // mounted (gpuidart rejects action contexts that aren't nodes in the
+      // tree), so seed a pending approval.
+      app.pendingApprovals = const [
+        PendingApproval(id: 'a1', tool: 'tool', summary: 's', detail: 'd'),
+      ];
       final actions = app.actions();
       final byName = {for (final a in actions) a.name: a};
 
@@ -60,7 +67,8 @@ void main() {
       expect(byName['sessions.up']!.keys, 'up');
       expect(byName['sessions.down']!.keys, 'down');
       expect(byName['composer.focus']!.keys, 'ctrl+l');
-      expect(byName['sidebar.toggle']!.keys, 'cmd+b');
+      // Platform primary modifier: meta (Cmd) on macOS, ctrl on Linux/Windows.
+      expect(byName['sidebar.toggle']!.keys, '$currentPrimaryModifier+b');
     });
 
     test('list navigation is scoped to the sidebar node', () {
