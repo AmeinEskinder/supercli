@@ -103,6 +103,13 @@ adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
 sleep 3
 adb -s "$SERIAL" shell ps -A | grep -i scrcpy || echo "inter-run: no scrcpy process left (good)"
 
+# Amein (run #18): force-stop Settings before the 720 run so it starts
+# cold. A warm Settings ("Activity not started, its current task has been
+# brought to the front") raced the resumed-activity check in run #18.
+echo "=== stage: inter_run_force_stop_settings ==="
+adb -s "$SERIAL" shell "am force-stop com.android.settings" || true
+sleep 1
+
 echo "=== stage: cargo_test_720_start ==="
 set +e
 SUPERCLI_ANDROID_E2E=1 \

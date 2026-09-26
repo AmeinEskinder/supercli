@@ -152,13 +152,20 @@ where
 /// Verify Settings is the resumed (foreground) activity after `am start`.
 /// Without this check a scroll loop can run against a non-resumed app,
 /// producing a meaningless 0-frame gfxinfo window.
+///
+/// Amein (run #18): on Android 14 the dumpsys field is `topResumedActivity`
+/// (older versions use `mResumedActivity`), so match either; poll for up
+/// to 10 s instead of checking once because the launch can be slow.
 fn wait_settings_resumed(serial: &str) -> Result<(), DeviceError> {
-    for _ in 0..10 {
+    for _ in 0..20 {
         let out = adb_shell_output(serial, &["dumpsys", "activity", "activities"])?;
         for line in out.lines() {
             let t = line.trim();
-            if t.starts_with("mResumedActivity:") {
-                eprintln!("e2e: mResumedActivity: {t}");
+            // Separator-agnostic match: Android 14 emits
+            // `topResumedActivity=ActivityRecord{...}` (with `=`), older
+            // dumps use `topResumedActivity:`/`mResumedActivity:`.
+            if t.contains("mResumedActivity") || t.contains("topResumedActivity") {
+                eprintln!("e2e: resumed-activity field: {t}");
                 if t.contains("com.android.settings") {
                     return Ok(());
                 }
@@ -417,11 +424,14 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     eprintln!("e2e: launching Settings for the animated fps window ...");
     // Retry once: on the second run of a two-run job the emulator can be
     // briefly unresponsive while the previous scrcpy server tears down.
+    // Amein (run #18): use -W so am waits until the launch completes,
+    // then poll for the resumed activity (warm starts just bring the task
+    // to front, which can race the resumed check).
     let mut launched = false;
     for attempt in 1..=2 {
         match adb_shell(
             serial,
-            &["am", "start", "-n", "com.android.settings/.Settings"],
+            &["am", "start", "-W", "-n", "com.android.settings/.Settings"],
         ) {
             Ok(()) => {
                 launched = true;

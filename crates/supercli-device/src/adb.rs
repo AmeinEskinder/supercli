@@ -344,6 +344,47 @@ impl DeviceBackend for AdbBackend {
         // scrcpy tier uses; tried when `scrcpy` is not on PATH.
         uiautomator_dump(id)
     }
+
+    fn density_dpi(&self, id: &DeviceId) -> Result<u32, DeviceError> {
+        // `adb shell wm density` prints e.g. "Physical density: 420".
+        let out = Self::adb(Some(id), &["shell", "wm", "density"])?;
+        parse_wm_density(&out.stdout_lossy())
+            .ok_or_else(|| DeviceError::Parse("could not parse `wm density` output".to_string()))
+    }
+
+    fn key(&self, id: &DeviceId, keycode: &str) -> Result<(), DeviceError> {
+        let code = match keycode {
+            "home" => "KEYCODE_HOME",
+            "back" => "KEYCODE_BACK",
+            "power" => "KEYCODE_POWER",
+            "lock" => "KEYCODE_POWER",
+            other => {
+                return Err(DeviceError::Unsupported(format!(
+                    "adb: unknown keycode '{other}'"
+                )))
+            }
+        };
+        Self::adb(Some(id), &["shell", "input", "keyevent", code])?;
+        Ok(())
+    }
+}
+
+/// Parse the density integer out of `adb shell wm density` output.
+/// Accepts "Physical density: 420" and "Override density: 420".
+pub fn parse_wm_density(output: &str) -> Option<u32> {
+    for line in output.lines() {
+        let line = line.trim();
+        for prefix in ["Physical density:", "Override density:"] {
+            if let Some(rest) = line.strip_prefix(prefix) {
+                if let Ok(dpi) = rest.trim().parse::<u32>() {
+                    if dpi > 0 {
+                        return Some(dpi);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Keep the 120 s helper referenced so the import set stays honest even if
@@ -356,6 +397,19 @@ fn _timeout_probe() {
 #[cfg(all(test, feature = "device"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_wm_density_reads_physical_and_override() {
+        assert_eq!(parse_wm_density("Physical density: 420\n"), Some(420));
+        assert_eq!(
+            parse_wm_density("Physical density: 420\nOverride density: 320\n"),
+            Some(420)
+        );
+        assert_eq!(parse_wm_density("Override density: 480\n"), Some(480));
+        assert_eq!(parse_wm_density(""), None);
+        assert_eq!(parse_wm_density("Physical density: 0\n"), None);
+        assert_eq!(parse_wm_density("garbage\n"), None);
+    }
 
     #[test]
     fn parse_adb_devices_skips_header_and_blanks() {
