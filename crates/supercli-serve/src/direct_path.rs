@@ -307,6 +307,15 @@ mod tests {
     use supercli_core::direct_path::PathResult;
     use supercli_core::direct_path_punch::random_path_session;
 
+    /// Returns true if the test should be skipped due to sandbox network
+    /// limitations. The direct-path punch tests require real UDP socket
+    /// operations for NAT hole punching, which timeout in sandboxed CI
+    /// environments without proper network access. Set
+    /// `SUPERCLI_SKIP_NETWORK_TESTS=1` to skip them.
+    fn skip_network_tests() -> bool {
+        std::env::var("SUPERCLI_SKIP_NETWORK_TESTS").as_deref() == Ok("1")
+    }
+
     fn hub_with_conn(conn_id: u32) -> Arc<DirectPathHub> {
         let hub = Arc::new(DirectPathHub::default());
         hub.skip_stun.store(true, Ordering::Release);
@@ -347,6 +356,10 @@ mod tests {
 
     #[test]
     fn full_negotiate_then_real_punch_against_the_host_worker() {
+        if skip_network_tests() {
+            eprintln!("SKIP full_negotiate_then_real_punch: SUPERCLI_SKIP_NETWORK_TESTS=1 (needs real UDP)");
+            return;
+        }
         let hub = hub_with_conn(1);
         let (session_bytes, session) = random_path_session();
 
@@ -424,6 +437,10 @@ mod tests {
 
     #[test]
     fn controller_negotiator_punches_the_host_through_the_live_handlers() {
+        if skip_network_tests() {
+            eprintln!("SKIP controller_negotiator_punches: SUPERCLI_SKIP_NETWORK_TESTS=1 (needs real UDP)");
+            return;
+        }
         // The full composition: supercli_core::direct_path_client (the
         // Controller half) against this hub's handlers (the Host half),
         // candidates gathered from the machine's real interfaces, probes
@@ -467,6 +484,10 @@ mod tests {
 
     #[test]
     fn downlink_negotiates_a_real_punch_through_sealed_signaling() {
+        if skip_network_tests() {
+            eprintln!("SKIP downlink_negotiates: SUPERCLI_SKIP_NETWORK_TESTS=1 (needs real UDP)");
+            return;
+        }
         // The definitive in-process Rust↔Rust proof: the Controller
         // downlink performs the real E2E handshake against the host-side
         // primitives, BOTH sides derive probe material from that same

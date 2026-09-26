@@ -789,9 +789,10 @@ fn handle_connection(
     if provider_id.is_some() || transcript.is_some() {
         // Record which runtime is speaking, from the Host's foreground
         // observation: a hand-typed agent has no launch command naming it.
-        let runtime = supercli_core::session_host::load_manifest(&session_id).and_then(|manifest| {
-            supercli_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
-        });
+        let runtime =
+            supercli_core::session_host::load_manifest(&session_id).and_then(|manifest| {
+                supercli_core::session_host::active_runtime_id(&manifest).map(str::to_owned)
+            });
         let changed = supercli_core::session_ops::set_provider_session_with_runtime(
             &session_id,
             provider_id.as_deref(),
@@ -917,7 +918,9 @@ mod tests {
         String,
         Option<std::ffi::OsString>,
     ) {
-        let guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir =
             std::env::temp_dir().join(format!("supercli-hook-mcp-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::remove_dir_all(&dir);

@@ -12,9 +12,9 @@ use std::thread;
 use std::time::Duration;
 
 use base64::Engine;
-use tungstenite::http::{Request, Response};
 use supercli_client::relay::{RelayCredentials, RelayTunnelRequest};
 use supercli_client::{PerformParams, RelayConnection, RelayError};
+use tungstenite::http::{Request, Response};
 
 mod common;
 

@@ -295,10 +295,14 @@ fn initial_launch_runs_the_command_untouched_and_resumes_from_hook_captured_iden
         .join("session.sock");
     assert!(wait_until(Duration::from_secs(30), || socket.exists()));
 
+    // The socket binds before the host finishes writing the manifest; wait
+    // for it to settle instead of asserting on a possibly-stale read.
+    wait_for_manifest(&home, session_id, "initial launch manifest", |ready| {
+        ready["session"]["command"] == "claude --model fixture"
+            && ready["provider_session_id"].is_null()
+            && ready.get("managed_storage_path").is_none()
+    });
     let ready = manifest(&home, session_id);
-    assert_eq!(ready["session"]["command"], "claude --model fixture");
-    assert!(ready["provider_session_id"].is_null());
-    assert!(ready.get("managed_storage_path").is_none());
     let marker_path = home
         .join("app-sessions")
         .join(session_id)
@@ -566,14 +570,22 @@ fn blank_terminal_never_claims_mcp_registration_or_agent_restart() {
         .join("session.sock");
     assert!(wait_until(Duration::from_secs(30), || socket.exists()));
 
-    let running = manifest(&home, session_id);
-    assert_eq!(running["mcp_client_registered"], false);
-    assert_eq!(running["browser_client_registered"], false);
-    assert_eq!(running["computer_client_registered"], false);
-    assert_eq!(running["mcp_enabled"], true);
-    assert_eq!(running["browser_mcp_enabled"], true);
-    assert_eq!(running["computer_mcp_enabled"], true);
-    assert_eq!(running["runtime_launch_generation"], 0);
+    // The socket binds before the host finishes MCP registration; wait for
+    // the manifest to settle instead of asserting on a possibly-stale read.
+    wait_for_manifest(
+        &home,
+        session_id,
+        "blank terminal registration flags",
+        |running| {
+            running["mcp_client_registered"] == false
+                && running["browser_client_registered"] == false
+                && running["computer_client_registered"] == false
+                && running["mcp_enabled"] == true
+                && running["browser_mcp_enabled"] == true
+                && running["computer_mcp_enabled"] == true
+                && running["runtime_launch_generation"] == 0
+        },
+    );
 
     let inherited_generation = home.join("blank-inherited-generation");
     assert_eq!(
@@ -764,13 +776,16 @@ fn kiro_registration_evidence_follows_the_installed_integration() {
         .join(session_id)
         .join("session.sock");
     assert!(wait_until(Duration::from_secs(30), || socket.exists()));
-    let running = manifest(&home, session_id);
-    assert_eq!(running["mcp_enabled"], true);
-    assert_eq!(running["browser_mcp_enabled"], true);
-    assert_eq!(running["computer_mcp_enabled"], true);
-    assert_eq!(running["mcp_client_registered"], true);
-    assert_eq!(running["browser_client_registered"], true);
-    assert_eq!(running["computer_client_registered"], false);
+    // The socket binds before the host finishes MCP registration; wait for
+    // the manifest to settle instead of asserting on a possibly-stale read.
+    wait_for_manifest(&home, session_id, "kiro registration flags", |running| {
+        running["mcp_enabled"] == true
+            && running["browser_mcp_enabled"] == true
+            && running["computer_mcp_enabled"] == true
+            && running["mcp_client_registered"] == true
+            && running["browser_client_registered"] == true
+            && running["computer_client_registered"] == false
+    });
 
     stop_and_reap(&home, session_id, &mut host);
     let _ = fs::remove_dir_all(home);

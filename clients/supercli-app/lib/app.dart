@@ -24,14 +24,23 @@ final class SupercliApp {
   int selectedSession = 0;
   String statusLine = 'Connecting…';
 
-  /// Dataset backing the session list table.
-  TableDataset get sessionDataset => TableDataset(
-        'sessions',
-        columns: const ['Title', 'Updated'],
-        rows: sessions
-            .map((s) => [s.title, _formatTime(s.updatedAt)])
-            .toList(),
-      );
+  /// Dataset backing the session list table. Cached: gpuidart tracks dataset
+  /// ownership by instance, so the same object must be reused across
+  /// `GpuiHost.open` and `replaceDataset` calls.
+  TableDataset? _sessionDataset;
+  TableDataset get sessionDataset {
+    final cached = _sessionDataset;
+    if (cached != null) return cached;
+    final created = TableDataset(
+      'sessions',
+      columns: const ['Title', 'Updated'],
+      rows: sessions
+          .map((s) => [s.title, formatTime(s.updatedAt)])
+          .toList(),
+    );
+    _sessionDataset = created;
+    return created;
+  }
 
   /// The full UI tree. Rebuilt on every state change via host.rebuild().
   UiNode build() {
@@ -87,7 +96,7 @@ final class SupercliApp {
         UiAction(name: 'composer.focus', keys: 'ctrl+l'),
       ];
 
-  static String _formatTime(DateTime t) {
+  static String formatTime(DateTime t) {
     final now = DateTime.now();
     final diff = now.difference(t);
     if (diff.inMinutes < 1) return 'just now';

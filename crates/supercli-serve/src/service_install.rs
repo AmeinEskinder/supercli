@@ -518,7 +518,10 @@ mod tests {
 
     #[test]
     fn unit_file_names_are_scoped() {
-        assert_eq!(ServiceScope::Machine.systemd_unit(), "supercli-serve.service");
+        assert_eq!(
+            ServiceScope::Machine.systemd_unit(),
+            "supercli-serve.service"
+        );
         assert_eq!(workspace().systemd_unit(), "supercli-serve-teama.service");
         assert_eq!(workspace().launchd_label(), "com.supercli.serve.teama");
     }

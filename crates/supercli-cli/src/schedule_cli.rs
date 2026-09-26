@@ -348,7 +348,7 @@ fn run_once(args: &[String]) -> Result<i32, String> {
             _ if id.is_none() && !arg.starts_with("--") => id = Some(arg.clone()),
             _ => {
                 return Err(
-                    "usage: supercli schedule run-once <id> [--json] [--no-durable]".to_string()
+                    "usage: supercli schedule run-once <id> [--json] [--no-durable]".to_string(),
                 )
             }
         }
@@ -454,11 +454,7 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     for arg in args {
         match arg.as_str() {
             "--no-durable" => no_durable = true,
-            _ => {
-                return Err(
-                    "usage: supercli schedule daemon [--no-durable]".to_string()
-                )
-            }
+            _ => return Err("usage: supercli schedule daemon [--no-durable]".to_string()),
         }
     }
     let home = app_paths::ensure_supercli_home().map_err(|e| e.to_string())?;

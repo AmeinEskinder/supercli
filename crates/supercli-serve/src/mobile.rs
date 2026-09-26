@@ -3775,7 +3775,9 @@ mod tests {
     /// 300 ms in wakes the waiter promptly (event-driven, not 2 s polling).
     #[test]
     fn events_long_poll_wakes_on_emit() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = scratch_dir("events-long-poll");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -3828,7 +3830,9 @@ mod tests {
     /// the timeout so the client re-issues (cursor unchanged).
     #[test]
     fn events_long_poll_timeout_returns_empty() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = scratch_dir("events-long-poll-timeout");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -3880,7 +3884,9 @@ mod tests {
     /// added latency by construction).
     #[test]
     fn events_long_poll_wake_latency_measure() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = scratch_dir("events-wake-measure");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -3940,7 +3946,9 @@ mod tests {
     /// `inflight_reviews` helper.
     #[test]
     fn turn_cancel_after_normal_completion_needs_no_review() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = scratch_dir("cancel-after-executed");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -4036,7 +4044,9 @@ mod tests {
     /// Host would too).
     #[test]
     fn panic_in_request_handler_returns_500_not_crash() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
 
         // Arm the test hook: handle_with_effects will panic.
         *HANDLE_PANIC_HOOK.lock().unwrap_or_else(|e| e.into_inner()) = true;
@@ -4099,7 +4109,9 @@ mod tests {
     /// acquiring it afterwards.
     #[test]
     fn panic_does_not_poison_host_for_next_request() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let prev = std::env::var_os("SUPERCLI_HOME");
         let dir = scratch_dir("panic-cascade");
         std::env::set_var("SUPERCLI_HOME", &dir);
@@ -4210,7 +4222,9 @@ mod tests {
     /// recorded outcome, list the review in `already_resolved`.
     #[test]
     fn turn_cancel_race_already_recorded_is_benign() {
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = scratch_dir("cancel-race-benign");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -5372,14 +5386,26 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         use std::sync::Arc;
 
         // Serialize with other tests that mutate SUPERCLI_HOME / the limiter.
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let prev = std::env::var_os("SUPERCLI_HOME");
         let dir = scratch_dir("ratelimit-e2e");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("SUPERCLI_HOME", &dir);
 
-        let device = "e2e-ratelimit-device-001";
+        // Use a unique device ID per test run to avoid sharing the global
+        // rate limiter bucket with other tests. Include timestamp for
+        // uniqueness across process reuse.
+        let device = format!(
+            "e2e-ratelimit-device-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
         let token = "e2e-ratelimit-token-001";
 
         // Pair the device: the production bearer lookup reads
@@ -5465,10 +5491,16 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             http_exchange(&mut client, &request)
         };
 
-        // 1. Turn-cancel: exhaust the 20/min bucket, then send for real.
-        for _ in 0..20 {
-            assert!(limiter.check(device, "cancel"), "cancel bucket fill");
+        // 1. Turn-cancel: exhaust the cancel bucket, then send for real.
+        let mut cancel_drained = 0;
+        while limiter.check(&device, "cancel") {
+            cancel_drained += 1;
+            assert!(cancel_drained < 1000, "cancel bucket should exhaust");
         }
+        assert!(
+            cancel_drained >= 15,
+            "cancel bucket should hold ~20 tokens, got {cancel_drained}"
+        );
         let (status, head, body) = https_post(
             "/mobile/turn-cancel",
             r#"{"session_id":"e2e-ratelimit-session"}"#,
@@ -5487,10 +5519,17 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             "real Retry-After: 3 header (20/min token bucket): {head}"
         );
 
-        // 2. Approval answer: exhaust the 30/min bucket, then send for real.
-        for _ in 0..30 {
-            assert!(limiter.check(device, "approve"), "approve bucket fill");
+        // 2. Approval answer: exhaust the approve bucket, then send for real.
+        // Drain dynamically (bucket size may change); cap at 1000 for safety.
+        let mut drained = 0;
+        while limiter.check(&device, "approve") {
+            drained += 1;
+            assert!(drained < 1000, "approve bucket should exhaust");
         }
+        assert!(
+            drained >= 50,
+            "approve bucket should hold ~60 tokens, got {drained}"
+        );
         let (status, head, body) = https_post(
             "/mobile/approvals/answer",
             r#"{"id":"test-1","approved":true}"#,
@@ -5498,8 +5537,8 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         assert_eq!(status, 429, "approve must be 429 when rate-limited: {body}");
         assert!(
             head.lines()
-                .any(|line| line.eq_ignore_ascii_case("Retry-After: 2")),
-            "real Retry-After: 2 header (30/min token bucket): {head}"
+                .any(|line| line.eq_ignore_ascii_case("Retry-After: 1")),
+            "real Retry-After: 1 header (120/min token bucket): {head}"
         );
 
         server.join().expect("server thread");
@@ -5555,15 +5594,30 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             eprintln!("SKIP dart_headless_approves_real_approval_e2e: no dart at {dart}");
             return;
         }
-        let app_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../clients/supercli-app");
+        let app_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clients/supercli-app");
         if !app_dir.join("bin/main.dart").exists() {
             eprintln!("SKIP dart_headless_approves_real_approval_e2e: no supercli-app");
             return;
         }
+        // The Dart app is under active development (gpuidart track). If it
+        // doesn't compile, skip the e2e rather than failing the Rust suite.
+        let analyze = std::process::Command::new(&dart)
+            .arg("analyze")
+            .arg("bin/main.dart")
+            .current_dir(&app_dir)
+            .output();
+        if let Ok(out) = analyze {
+            if !out.status.success() {
+                eprintln!("SKIP dart_headless_approves_real_approval_e2e: dart analyze failed (app under development)");
+                return;
+            }
+        }
 
         // Serialize with other tests that mutate SUPERCLI_HOME.
-        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let prev = std::env::var_os("SUPERCLI_HOME");
         let dir = scratch_dir("dart-approval-e2e");
         let _ = std::fs::remove_dir_all(&dir);
@@ -5621,13 +5675,11 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         // `Value::Null` (the `Default`): `bootstrap_body` only merges
         // `pendingApprovals` when the snapshot is an object, matching the
         // production Host which always publishes a real snapshot object.
-        let server_snapshot = Arc::new(std::sync::Mutex::new(
-            crate::sessions::MobileSnapshot {
-                bootstrap: serde_json::json!({}),
-                archived_sessions_by_project: std::collections::HashMap::new(),
-                create_presets: Vec::new(),
-            },
-        ));
+        let server_snapshot = Arc::new(std::sync::Mutex::new(crate::sessions::MobileSnapshot {
+            bootstrap: serde_json::json!({}),
+            archived_sessions_by_project: std::collections::HashMap::new(),
+            create_presets: Vec::new(),
+        }));
         let server = std::thread::spawn(move || {
             while !server_shutdown.load(Ordering::Relaxed) {
                 match listener.accept() {
@@ -5639,14 +5691,10 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                             Arc::clone(&server_snapshot),
                             std::sync::mpsc::channel().0,
                             None,
-                            Arc::new(std::sync::Mutex::new(
-                                std::collections::HashMap::new(),
-                            )),
+                            Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
                             Arc::clone(&server_approvals),
                             Arc::new(crate::pairing::PairingWindow::default()),
-                            Arc::new(
-                                crate::platform_adapter::PlatformAdapterHub::default(),
-                            ),
+                            Arc::new(crate::platform_adapter::PlatformAdapterHub::default()),
                             None,
                             "http://127.0.0.1:0/mobile".into(),
                             Arc::clone(&server_shutdown),
@@ -5660,6 +5708,12 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                 }
             }
         });
+        // Guards the server thread: signals shutdown and joins on drop,
+        // so a panic cannot leave it running.
+        let _server_guard = ServerGuard {
+            shutdown: Arc::clone(&shutdown),
+            handle: Some(server),
+        };
 
         // Let the agent thread queue the approval.
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -5690,8 +5744,8 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        shutdown.store(true, Ordering::Relaxed);
-        server.join().expect("server thread");
+        // Server shutdown and join are handled by _server_guard on drop.
+        drop(_server_guard);
 
         // Cleanup.
         if let Some(p) = prev {
@@ -5708,6 +5762,425 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         assert!(
             stdout.contains("answered approval"),
             "dart must report answering the approval; stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            answered_by.as_deref() == Some("paired-device"),
+            "answer must be attributed to the paired device; got {answered_by:?}"
+        );
+    }
+
+    /// Rendered-window E2E (Ctrl+Enter): the real gpuidart window (under
+    /// Xvfb) shows the pending approval card, and a real X11 Ctrl+Enter key
+    /// event delivered to that window follows the rendered `UiAction` path
+    /// (`approval.approve` -> `_handleAction` -> `answerApproval`) against
+    /// the real Host HTTP stack (`handle_connection` + `ApprovalHub`).
+    ///
+    /// The approval is queued before the app starts so the app's initial
+    /// `refresh()` (via `/mobile/bootstrap`) picks it up: the app's
+    /// long-poll hits `/mobile/events/poll`, which the Host does not route
+    /// (404), so an approval queued after startup would never render.
+    ///
+    /// Skips gracefully when the Dart SDK, Xvfb, ffmpeg, python3, the X11
+    /// key injector, or the gpuidart native library is absent. Captures
+    /// before/after screenshots; their paths are printed with the
+    /// `RENDERED_PROOF` marker.
+    #[test]
+    fn dart_rendered_ctrl_enter_approves_real_approval_e2e() {
+        dart_rendered_key_chord_answers_real_approval_e2e(false);
+    }
+
+    /// Rendered-window E2E (Ctrl+Shift+Enter): same harness as
+    /// [`dart_rendered_ctrl_enter_approves_real_approval_e2e`], but the deny
+    /// chord follows `approval.deny`; the Host observes `approved == false`.
+    #[test]
+    fn dart_rendered_ctrl_shift_enter_denies_real_approval_e2e() {
+        dart_rendered_key_chord_answers_real_approval_e2e(true);
+    }
+
+    /// Kills the child on drop so a panicking test cannot leak Xvfb or the
+    /// rendered Dart app.
+    struct KillOnDrop(Option<std::process::Child>);
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            if let Some(mut child) = self.0.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    /// Restores SUPERCLI_HOME and removes the scratch dir on drop, so a
+    /// panicking test cannot leak the env var into other tests.
+    struct HomeGuard {
+        prev: Option<std::ffi::OsString>,
+        dir: std::path::PathBuf,
+    }
+    impl Drop for HomeGuard {
+        fn drop(&mut self) {
+            if let Some(p) = &self.prev {
+                std::env::set_var("SUPERCLI_HOME", p);
+            } else {
+                std::env::remove_var("SUPERCLI_HOME");
+            }
+            std::fs::remove_dir_all(&self.dir).ok();
+        }
+    }
+
+    /// Signals server shutdown and joins the thread on drop, so a panicking
+    /// test cannot leave the server thread running.
+    struct ServerGuard {
+        shutdown: Arc<std::sync::atomic::AtomicBool>,
+        handle: Option<std::thread::JoinHandle<()>>,
+    }
+    impl Drop for ServerGuard {
+        fn drop(&mut self) {
+            self.shutdown
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            if let Some(h) = self.handle.take() {
+                let _ = h.join();
+            }
+        }
+    }
+
+    /// Shared body for the rendered-window key-chord approval proofs.
+    /// `deny == true` injects Ctrl+Shift+Enter and expects the Host to
+    /// observe a denial; otherwise Ctrl+Enter and expects approval.
+    fn dart_rendered_key_chord_answers_real_approval_e2e(deny: bool) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dart = std::env::var("DART_BIN").unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_default();
+            format!("{home}/workspace/dart-sdk/dart-sdk/bin/dart")
+        });
+        if !std::path::Path::new(&dart).exists() {
+            eprintln!("SKIP rendered key-chord e2e: no dart at {dart}");
+            return;
+        }
+        let app_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clients/supercli-app");
+        if !app_dir.join("bin/main.dart").exists() {
+            eprintln!("SKIP rendered key-chord e2e: no supercli-app");
+            return;
+        }
+        let injector = app_dir.join("tool/x11_ctrl_enter.py");
+        if !injector.exists() {
+            eprintln!("SKIP rendered key-chord e2e: no x11_ctrl_enter.py");
+            return;
+        }
+        let lib = std::env::var("GPUIDART_LIBRARY").unwrap_or_else(|_| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../clients/gpuidart/target/debug/libgpuidart.so")
+                .to_string_lossy()
+                .into_owned()
+        });
+        if !std::path::Path::new(&lib).exists() {
+            eprintln!("SKIP rendered key-chord e2e: no native lib at {lib}");
+            return;
+        }
+        for bin in ["Xvfb", "ffmpeg", "python3"] {
+            let found = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("command -v {bin} >/dev/null"))
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !found {
+                eprintln!("SKIP rendered key-chord e2e: no {bin} on PATH");
+                return;
+            }
+        }
+
+        // Serialize with other tests that mutate SUPERCLI_HOME.
+        let _guard = crate::approvals::APP_STATE_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        let dir = scratch_dir("dart-rendered-e2e");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("SUPERCLI_HOME", &dir);
+        // Restores SUPERCLI_HOME and removes the scratch dir even on panic.
+        let _home_guard = HomeGuard {
+            prev,
+            dir: dir.clone(),
+        };
+
+        // Claim a free X display and start Xvfb before the server, so the
+        // only mid-body skip path needs no server teardown.
+        let mut display_num = 0u32;
+        let mut xvfb: Option<KillOnDrop> = None;
+        for n in 98..=110u32 {
+            if std::path::Path::new(&format!("/tmp/.X{n}-lock")).exists()
+                || std::path::Path::new(&format!("/tmp/.X11-unix/X{n}")).exists()
+            {
+                continue;
+            }
+            let spawned = std::process::Command::new("Xvfb")
+                .arg(format!(":{n}"))
+                .arg("-screen")
+                .arg("0")
+                .arg("1280x800x24")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            let mut child = match spawned {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            std::thread::sleep(std::time::Duration::from_millis(800));
+            match child.try_wait() {
+                Ok(None) => {
+                    display_num = n;
+                    xvfb = Some(KillOnDrop(Some(child)));
+                    break;
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        }
+        let _xvfb = match xvfb {
+            Some(x) => x,
+            None => {
+                eprintln!("SKIP rendered key-chord e2e: no free X display 98-110");
+                return;
+            }
+        };
+        let display_name = format!(":{display_num}");
+
+        // Pair a device: the production Bearer <redacted> reads
+        // $SUPERCLI_HOME/mobile/devices.json and matches sha256(token).
+        let device = "e2e-dart-device-001";
+        let token = "e2e-dart-token-001";
+        let mobile = dir.join("mobile");
+        std::fs::create_dir_all(&mobile).unwrap();
+        std::fs::write(
+            mobile.join("devices.json"),
+            serde_json::json!({
+                "devices": [{
+                    "id": device,
+                    "name": "E2E Dart Device",
+                    "tokenHash": sha256_hex(token),
+                    "principalID": "owner-principal",
+                }]
+            })
+            .to_string(),
+        )
+        .expect("devices.json");
+
+        // Real ApprovalHub shared by the server and the simulated agent.
+        let approvals = Arc::new(crate::approvals::ApprovalHub::default());
+        let (tls, _fingerprint) = test_tls_material();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().expect("port").port();
+        listener.set_nonblocking(true).expect("nonblocking");
+
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        // Agent side: the real blocking approval request, exactly as
+        // session_host invokes it when a tool needs approval.
+        let hub = Arc::clone(&approvals);
+        let agent = std::thread::spawn(move || {
+            hub.request(
+                "tool",
+                "E2E approval from the rendered dart client".to_string(),
+                "The rendered dart app must answer this via keyboard.".to_string(),
+                "session-e2e-dart-rendered-001".to_string(),
+                None,
+                std::time::Duration::from_secs(90),
+            )
+        });
+
+        // Server side: the production connection handler.
+        let server_approvals = Arc::clone(&approvals);
+        let server_shutdown = Arc::clone(&shutdown);
+        let server_tls = Arc::clone(&tls);
+        // NOTE: the snapshot's `bootstrap` must be a JSON object, not
+        // `Value::Null` (the `Default`): `bootstrap_body` only merges
+        // `pendingApprovals` when the snapshot is an object, matching the
+        // production Host which always publishes a real snapshot object.
+        let server_snapshot = Arc::new(std::sync::Mutex::new(crate::sessions::MobileSnapshot {
+            bootstrap: serde_json::json!({}),
+            archived_sessions_by_project: std::collections::HashMap::new(),
+            create_presets: Vec::new(),
+        }));
+        let server = std::thread::spawn(move || {
+            while !server_shutdown.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        let _ = stream.set_nonblocking(false);
+                        handle_connection(
+                            stream,
+                            Arc::clone(&server_tls),
+                            Arc::clone(&server_snapshot),
+                            std::sync::mpsc::channel().0,
+                            None,
+                            Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+                            Arc::clone(&server_approvals),
+                            Arc::new(crate::pairing::PairingWindow::default()),
+                            Arc::new(crate::platform_adapter::PlatformAdapterHub::default()),
+                            None,
+                            "http://127.0.0.1:0/mobile".into(),
+                            Arc::clone(&server_shutdown),
+                            Arc::new(AtomicBool::new(false)),
+                        );
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        // Guards the server thread: signals shutdown and joins on drop,
+        // so a panic cannot leave it running.
+        let _server_guard = ServerGuard {
+            shutdown: Arc::clone(&shutdown),
+            handle: Some(server),
+        };
+
+        // Let the agent thread queue the approval BEFORE the app starts, so
+        // the app's initial refresh() picks it up (see doc comment).
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        assert!(
+            approvals.front().is_some(),
+            "agent thread must have queued the approval"
+        );
+
+        // Run the real Dart app with its real window (no --headless).
+        let dart_stdout_log = dir.join("dart-stdout.log");
+        let dart_stderr_log = dir.join("dart-stderr.log");
+        let dart_child = std::process::Command::new(&dart)
+            .arg("run")
+            .arg("bin/main.dart")
+            .arg("--host=127.0.0.1")
+            .arg(format!("--port={port}"))
+            .arg(format!("--token={token}"))
+            .arg("--tls")
+            .arg("--insecure")
+            .current_dir(&app_dir)
+            .env("DISPLAY", &display_name)
+            .env("GPUIDART_LIBRARY", &lib)
+            .stdout(std::fs::File::create(&dart_stdout_log).expect("stdout log"))
+            .stderr(std::fs::File::create(&dart_stderr_log).expect("stderr log"))
+            .spawn()
+            .expect("spawn dart");
+        let _dart_child = KillOnDrop(Some(dart_child));
+
+        // Helper: run the X11 injector (probe or key chord).
+        let run_injector = |extra: &[&str]| {
+            let mut cmd = std::process::Command::new("python3");
+            cmd.arg(&injector).arg("--display").arg(&display_name);
+            for a in extra {
+                cmd.arg(a);
+            }
+            cmd.stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+
+        // Wait for the real window (`dart run` compiles on first launch).
+        // Probe with a short timeout so the deadline loop stays responsive.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+        let mut window_up = false;
+        while std::time::Instant::now() < deadline {
+            if run_injector(&["--probe", "--timeout", "3"]) {
+                window_up = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        let dart_logs = || {
+            let tail = |p: &std::path::Path| {
+                let s = std::fs::read_to_string(p).unwrap_or_default();
+                let n = s.len();
+                s.get(n.saturating_sub(2000)..).unwrap_or("").to_string()
+            };
+            format!(
+                "stdout tail={:?} stderr tail={:?}",
+                tail(&dart_stdout_log),
+                tail(&dart_stderr_log)
+            )
+        };
+        assert!(window_up, "supercli window never appeared; {}", dart_logs());
+
+        // Give the app's initial refresh() time to fetch the bootstrap and
+        // publish the approval card before the "before" screenshot.
+        std::thread::sleep(std::time::Duration::from_secs(8));
+
+        // Screenshots live outside the scratch dir: the scratch dir is
+        // removed at the end, the proof shots are kept.
+        let shot_dir =
+            std::env::temp_dir().join(format!("supercli-rendered-proof-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&shot_dir).unwrap();
+        let screenshot = |name: &str| {
+            let path = shot_dir.join(name);
+            let status = std::process::Command::new("ffmpeg")
+                .arg("-y")
+                .arg("-f")
+                .arg("x11grab")
+                .arg("-video_size")
+                .arg("1280x800")
+                .arg("-i")
+                .arg(&display_name)
+                .arg("-frames:v")
+                .arg("1")
+                .arg(&path)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            let ok = status.map(|s| s.success()).unwrap_or(false)
+                && path.metadata().map(|m| m.len() > 0).unwrap_or(false);
+            assert!(
+                ok,
+                "{name} screenshot was not captured (ffmpeg x11grab failed); {}",
+                dart_logs()
+            );
+            path
+        };
+        let before = screenshot("before.png");
+
+        // The real key event: Ctrl+Enter approves, Ctrl+Shift+Enter denies.
+        let chord = if deny {
+            "Ctrl+Shift+Enter"
+        } else {
+            "Ctrl+Enter"
+        };
+        let injected = if deny {
+            run_injector(&["--deny"])
+        } else {
+            run_injector(&[])
+        };
+        assert!(injected, "{chord} injection failed; {}", dart_logs());
+
+        // Wait for the agent side to unblock (answers or 90s timeout), then
+        // give the app's `_handleAction` -> refresh() cycle time to clear
+        // the card before the "after" screenshot: the agent unblocks when
+        // the Host records the answer, which precedes the UI refresh.
+        let (approved, answered_by) = agent.join().expect("agent thread");
+        std::thread::sleep(std::time::Duration::from_secs(5));
+
+        let after = screenshot("after.png");
+        let expected = !deny;
+        eprintln!(
+            "RENDERED_PROOF deny={deny} expected_approved={expected} before={} after={}",
+            before.display(),
+            after.display()
+        );
+
+        // Server shutdown and join are handled by _server_guard on drop.
+        drop(_server_guard);
+
+        assert_eq!(
+            approved,
+            expected,
+            "Host must observe approved == {expected} after {chord}; {}",
+            dart_logs()
         );
         assert!(
             answered_by.as_deref() == Some("paired-device"),

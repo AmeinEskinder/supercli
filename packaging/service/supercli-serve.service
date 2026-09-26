@@ -21,7 +21,7 @@
 # ~/.supercli/hooks/trace.log.
 
 [Unit]
-Description=SuperCLI Host service
+Description=Supercli Host service
 
 [Service]
 ExecStart=/usr/local/bin/supercli serve

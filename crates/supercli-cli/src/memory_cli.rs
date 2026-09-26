@@ -46,7 +46,9 @@ pub fn run(args: &[String]) -> i32 {
                 .map(String::as_str)
                 .collect();
             if value_parts.is_empty() {
-                return fail("usage: supercli memory set <key> <value...> [--session <id>] [--longterm]");
+                return fail(
+                    "usage: supercli memory set <key> <value...> [--session <id>] [--longterm]",
+                );
             }
             let value = value_parts.join(" ");
             let longterm = args.iter().any(|a| a == "--longterm");
@@ -133,10 +135,13 @@ pub fn run(args: &[String]) -> i32 {
                 println!("no memory facts");
             } else {
                 for k in &keys {
-                    let scope = store.scope_of(k).map(|s| match s {
-                        memory::Scope::Session => "session",
-                        memory::Scope::LongTerm => "longterm",
-                    }).unwrap_or("?");
+                    let scope = store
+                        .scope_of(k)
+                        .map(|s| match s {
+                            memory::Scope::Session => "session",
+                            memory::Scope::LongTerm => "longterm",
+                        })
+                        .unwrap_or("?");
                     println!("[{scope}] {k}");
                 }
             }

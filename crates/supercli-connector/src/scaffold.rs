@@ -285,8 +285,10 @@ mod tests {
     #[test]
     fn scaffolded_stub_answers_mcp() {
         let s = scaffold("demo", ScaffoldOptions::default()).unwrap();
-        let dir =
-            std::env::temp_dir().join(format!("supercli-conn-scaffold-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-conn-scaffold-test-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("connector");

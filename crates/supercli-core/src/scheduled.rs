@@ -521,6 +521,11 @@ struct AttemptResult {
 /// the [`AutonomousPolicy`] caps, retries per policy, and appends exactly
 /// one [`RunRecord`] per trigger — on every outcome, including validation
 /// refusal and overlap skips.
+///
+/// Callback invoked with the durable run id immediately after the run is
+/// created (before any tool executes).
+type OnRunCreatedCallback = Box<dyn Fn(&str) + Send + Sync>;
+
 pub struct ScheduledRunner<C: RunClock = SystemClock> {
     guard: RunGuard,
     clock: C,
@@ -529,6 +534,11 @@ pub struct ScheduledRunner<C: RunClock = SystemClock> {
     /// refuses to fire (audits a Failed record) instead of running
     /// unjournaled. Explicit opt-out via [`Self::allow_unjournaled`].
     durable_required: bool,
+    /// Optional callback invoked with the durable run id immediately after
+    /// the run is created (before any tool executes). Used by tests to
+    /// synchronize on run creation (e.g., SIGKILL tests that must wait
+    /// until the run exists before killing).
+    on_run_created: Option<OnRunCreatedCallback>,
 }
 
 impl<C: RunClock> ScheduledRunner<C> {
@@ -538,6 +548,7 @@ impl<C: RunClock> ScheduledRunner<C> {
             clock,
             runs_db: None,
             durable_required: true,
+            on_run_created: None,
         }
     }
 
@@ -568,6 +579,17 @@ impl<C: RunClock> ScheduledRunner<C> {
     /// Set the unjournaled opt-out on an existing runner.
     pub fn set_allow_unjournaled(&mut self) {
         self.durable_required = false;
+    }
+
+    /// Set a callback invoked with the durable run id immediately after the
+    /// run is created (before any tool executes). Used by tests to
+    /// synchronize on run creation.
+    pub fn on_run_created<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str) + Send + Sync + 'static,
+    {
+        self.on_run_created = Some(Box::new(f));
+        self
     }
 
     /// Fire one trigger for `spec` against `session_dir`, driving
@@ -710,6 +732,10 @@ impl<C: RunClock> ScheduledRunner<C> {
                             let _ = db.claim_run(&id);
                             // Transition QUEUED -> EXECUTING_TOOLS.
                             let _ = db.transition(&id, RunState::Queued, RunState::ExecutingTools);
+                            // Notify the run-created callback (test synchronization).
+                            if let Some(cb) = self.on_run_created.as_ref() {
+                                cb(&id);
+                            }
                             Some((id, 0))
                         }
                         Err(_) => None,
@@ -896,10 +922,8 @@ impl<C: RunClock> ScheduledRunner<C> {
             let input_hash = step_input_hash(&format!("{}:{}", call.tool, call.arguments));
             let intent = if let Some((run_id, _)) = durable {
                 if let Some(db) = self.runs_db.as_ref() {
-                    match db.begin_step(run_id, step_no, StepKind::Tool, &input_hash) {
-                        Ok(intent) => Some(intent),
-                        Err(_) => None,
-                    }
+                    db.begin_step(run_id, step_no, StepKind::Tool, &input_hash)
+                        .ok()
                 } else {
                     None
                 }

@@ -40,6 +40,74 @@ use std::sync::{Arc, Mutex, Once, RwLock};
 use std::time::Duration;
 use supercli_device::DeviceBackend;
 
+use crate::approvals::ApprovalHub;
+use supercli_device::danger::{ApprovalDecision, ApprovalGate, DangerousOp, GuardedBackend};
+
+// ---------------------------------------------------------------------------
+// Approval-gated dangerous device operations
+// ---------------------------------------------------------------------------
+
+/// Global ApprovalHub, installed once by the Host at startup via
+/// [`set_approval_hub`]. Device dangerous operations (install/uninstall/erase)
+/// are gated through [`HubGate`] → this hub, so a human must approve/deny.
+static APPROVAL_HUB: RwLock<Option<Arc<ApprovalHub>>> = RwLock::new(None);
+
+/// Install the Host's ApprovalHub for device dangerous-operation gating.
+/// Called once at server startup; may be called again in tests.
+pub fn set_approval_hub(hub: Arc<ApprovalHub>) {
+    if let Ok(mut guard) = APPROVAL_HUB.write() {
+        *guard = Some(hub);
+    }
+}
+
+fn approval_hub() -> Option<Arc<ApprovalHub>> {
+    APPROVAL_HUB.read().ok().and_then(|guard| guard.clone())
+}
+
+/// [`ApprovalGate`] over the production [`ApprovalHub`].
+///
+/// A denial, timeout, or no-human-present maps to `approved: false`, which
+/// surfaces as [`supercli_device::DeviceError::Denied`] with zero backend
+/// calls. Fail-closed by construction.
+pub struct HubGate {
+    hub: Arc<ApprovalHub>,
+    session: String,
+    timeout: Duration,
+}
+
+impl HubGate {
+    pub fn new(hub: Arc<ApprovalHub>, session: String, timeout: Duration) -> Self {
+        HubGate {
+            hub,
+            session,
+            timeout,
+        }
+    }
+
+    /// Build a HubGate from the globally installed ApprovalHub, if present.
+    pub fn from_global(session: String, timeout: Duration) -> Option<Self> {
+        approval_hub().map(|hub| HubGate::new(hub, session, timeout))
+    }
+}
+
+impl ApprovalGate for HubGate {
+    fn decide(&self, op: &DangerousOp) -> ApprovalDecision {
+        let (approved, answered_by) = self.hub.request(
+            "device-danger",
+            op.title(),
+            op.body(),
+            self.session.clone(),
+            None,
+            self.timeout,
+        );
+        if approved {
+            ApprovalDecision::allow(answered_by, "approval-hub")
+        } else {
+            ApprovalDecision::deny("approval-hub: denied, timed out, or no human present")
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Unified wire format (§9.3)
 // ---------------------------------------------------------------------------
@@ -287,6 +355,17 @@ pub trait DeviceProvider: Send + Sync {
     fn next_stream_chunk(&self, id: &str) -> Option<Vec<u8>>;
     /// Next log line, or `None` when the log source ends / times out.
     fn next_log_line(&self, id: &str) -> Option<String>;
+    /// Approval-gated app install. The `gate` (production: [`HubGate`] →
+    /// the real [`ApprovalHub`]) must approve before the backend is touched.
+    /// Default: not supported (safe for providers that don't offer install).
+    fn install_gated(
+        &self,
+        _id: &str,
+        _path: &std::path::Path,
+        _gate: &dyn ApprovalGate,
+    ) -> Result<(), String> {
+        Err("install not supported by this provider".to_string())
+    }
 }
 
 /// Default provider before supercli-device is wired: every call fails with an
@@ -438,6 +517,27 @@ impl DeviceBackendProvider {
 
     fn density_dpi(&self, idx: usize, id: &supercli_device::DeviceId) -> u32 {
         self.backends[idx].backend.density_dpi(id).unwrap_or(160)
+    }
+
+    /// Approval-gated app install. The `gate` (production: [`HubGate`] →
+    /// the real [`ApprovalHub`]) must approve before the backend is touched;
+    /// denial (or timeout, or no human) returns an error and the backend
+    /// sees zero calls.
+    pub fn install_gated(
+        &self,
+        id: &str,
+        path: &std::path::Path,
+        gate: &dyn ApprovalGate,
+    ) -> Result<(), String> {
+        let idx = self.resolve(id)?;
+        let entry = &self.backends[idx];
+        let platform = match entry.name {
+            "simctl" | "baguette" => supercli_device::Platform::IOS,
+            _ => supercli_device::Platform::Android,
+        };
+        let device_id = supercli_device::DeviceId::new(id);
+        let guarded = GuardedBackend::new(entry.backend.clone(), gate, platform, None);
+        guarded.install(&device_id, path).map_err(|e| e.to_string())
     }
 }
 
@@ -693,6 +793,9 @@ pub enum DeviceRoute {
     A11y(String),
     StreamWs(String),
     LogsWs(String),
+    /// Approval-gated app install. The gate (HubGate → ApprovalHub) must
+    /// approve before the backend is touched.
+    Install(String),
     NotFound,
 }
 
@@ -718,6 +821,7 @@ pub fn parse_device_route(method: &str, path: &str) -> DeviceRoute {
                     ("POST", id, "touch") => DeviceRoute::Touch(id.to_string()),
                     ("POST", id, "key") => DeviceRoute::Key(id.to_string()),
                     ("POST", id, "text") => DeviceRoute::Text(id.to_string()),
+                    ("POST", id, "install") => DeviceRoute::Install(id.to_string()),
                     ("GET", id, "a11y") => DeviceRoute::A11y(id.to_string()),
                     ("GET", "stream", device_id) => DeviceRoute::StreamWs(device_id.to_string()),
                     ("GET", "logs", device_id) => DeviceRoute::LogsWs(device_id.to_string()),
@@ -805,6 +909,35 @@ pub fn handle_device_http(method: &str, path: &str, body: &[u8]) -> (u16, String
             Ok(tree) => (200, tree.to_string(), "application/json"),
             Err(e) => (502, json_error(&e), "application/json"),
         },
+        DeviceRoute::Install(id) => {
+            let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+            match v.get("path").and_then(|p| p.as_str()) {
+                Some(path_str) => {
+                    let path = std::path::Path::new(path_str);
+                    match HubGate::from_global(format!("device-{id}"), Duration::from_secs(120)) {
+                        Some(gate) => match provider().install_gated(&id, path, &gate) {
+                            Ok(()) => (200, r#"{"ok":true}"#.to_string(), "application/json"),
+                            Err(e) if e.starts_with("denied by approval gate:") => {
+                                (403, json_error(&e), "application/json")
+                            }
+                            Err(e) => (502, json_error(&e), "application/json"),
+                        },
+                        None => (
+                            503,
+                            json_error(
+                                "approval hub not available; install requires human approval",
+                            ),
+                            "application/json",
+                        ),
+                    }
+                }
+                None => (
+                    400,
+                    json_error("install requires {path: \"/path/to/app.apk\"}"),
+                    "application/json",
+                ),
+            }
+        }
         DeviceRoute::StreamWs(_) | DeviceRoute::LogsWs(_) => (
             426,
             json_error("websocket upgrade required"),
@@ -1603,5 +1736,166 @@ mod tests {
         // hardware is attached); the point is it no longer fails as unwired.
         let devices = provider().list_devices().expect("list");
         assert!(devices.iter().all(|d| !d.id.is_empty()));
+    }
+
+    /// HubGate with no answerer times out -> denied (fail-closed).
+    #[test]
+    fn hub_gate_timeout_denies() {
+        use supercli_device::danger::{ApprovalGate, DangerousOp, DangerousOpKind};
+        use supercli_device::DeviceId;
+
+        let hub = Arc::new(ApprovalHub::default());
+        let gate = HubGate::new(hub, "test-session".to_string(), Duration::from_millis(200));
+        let op = DangerousOp {
+            kind: DangerousOpKind::Install,
+            device: DeviceId::new("emulator-5554"),
+            target: "/tmp/app.apk".to_string(),
+            detail: "app.apk".to_string(),
+        };
+        // No one answers; recv_timeout expires -> approved=false.
+        let decision = gate.decide(&op);
+        assert!(!decision.approved, "timeout must deny");
+        assert!(decision.approved_by.is_none());
+    }
+
+    /// HubGate denial via explicit human deny -> Denied, zero backend calls.
+    /// (Uses a deny gate directly; the HubGate path is covered above.)
+    #[test]
+    fn install_gated_denial_produces_zero_backend_calls() {
+        use std::sync::Mutex;
+        use supercli_device::danger::{ApprovalDecision, ApprovalGate, DangerousOp};
+        use supercli_device::{DeviceBackend, DeviceError, DeviceId, DeviceInfo, DeviceStream};
+
+        struct DenyGate;
+        impl ApprovalGate for DenyGate {
+            fn decide(&self, _op: &DangerousOp) -> ApprovalDecision {
+                ApprovalDecision::deny("test: no dangerous ops")
+            }
+        }
+
+        /// Minimal backend that records install calls.
+        struct RecordingBackend {
+            calls: Mutex<Vec<String>>,
+        }
+        impl DeviceBackend for RecordingBackend {
+            fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError> {
+                Ok(vec![DeviceInfo {
+                    id: DeviceId::new("emulator-5554"),
+                    platform: supercli_device::Platform::Android,
+                    state: supercli_device::DeviceState::Running,
+                    name: "test".to_string(),
+                }])
+            }
+            fn install(&self, _id: &DeviceId, path: &std::path::Path) -> Result<(), DeviceError> {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push(format!("install {}", path.display()));
+                Ok(())
+            }
+            fn boot(&self, _id: &DeviceId) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn stop(&self, _id: &DeviceId) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn launch(&self, _id: &DeviceId, _app_id: &str) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn screenshot(&self, _id: &DeviceId) -> Result<Vec<u8>, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn logs(&self, _id: &DeviceId, _clear: bool) -> Result<String, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn tap(&self, _id: &DeviceId, _x: u32, _y: u32) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn type_text(&self, _id: &DeviceId, _text: &str) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn swipe(
+                &self,
+                _id: &DeviceId,
+                _x1: u32,
+                _y1: u32,
+                _x2: u32,
+                _y2: u32,
+                _duration_ms: u32,
+            ) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn stream(&self, _id: &DeviceId) -> Result<DeviceStream, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn describe_ui(&self, _id: &DeviceId) -> Result<String, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+        }
+
+        let backend = Arc::new(RecordingBackend {
+            calls: Mutex::new(Vec::new()),
+        });
+        let provider = DeviceBackendProvider::new(
+            vec![BackendEntry {
+                name: "adb",
+                backend: backend.clone(),
+            }],
+            None,
+        );
+        // Refresh to populate routing.
+        let _ = provider.refresh();
+
+        let gate = DenyGate;
+        let err = provider
+            .install_gated("emulator-5554", std::path::Path::new("/tmp/app.apk"), &gate)
+            .unwrap_err();
+        assert!(
+            err.contains("denied by approval gate"),
+            "expected denial, got: {err}"
+        );
+        assert!(
+            backend.calls.lock().unwrap().is_empty(),
+            "denied install must not touch backend"
+        );
+    }
+
+    /// Safe routes (touch/key/text/a11y) do NOT require the ApprovalHub.
+    /// They work (or fail for other reasons) without a hub installed.
+    #[test]
+    fn safe_routes_remain_ungated() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
+        // Ensure no hub is installed (clear any from other tests).
+        if let Ok(mut guard) = APPROVAL_HUB.write() {
+            *guard = None;
+        }
+        set_provider(Arc::new(UnwiredProvider));
+
+        // Touch without a hub: fails because unwired, NOT because of approval.
+        let (status, body, _) = handle_device_http(
+            "POST",
+            "/api/devices/emulator-5554/touch",
+            br#"{"x":100,"y":200,"action":"down"}"#,
+        );
+        assert_eq!(status, 502); // unwired backend, not 503 (no hub) or 403 (denied)
+        assert!(
+            !body.contains("approval"),
+            "touch must not mention approval: {body}"
+        );
+
+        // Install without a hub: 503 (requires approval, hub unavailable).
+        let (status, body, _) = handle_device_http(
+            "POST",
+            "/api/devices/emulator-5554/install",
+            br#"{"path":"/tmp/app.apk"}"#,
+        );
+        assert_eq!(
+            status, 503,
+            "install without hub must be 503, got {status}: {body}"
+        );
+        assert!(
+            body.contains("approval"),
+            "install must mention approval: {body}"
+        );
     }
 }

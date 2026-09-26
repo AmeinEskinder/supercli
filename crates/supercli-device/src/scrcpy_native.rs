@@ -879,6 +879,32 @@ fn pick_free_port() -> Result<u16, DeviceError> {
         .map_err(DeviceError::Io)
 }
 
+/// Wait for any previous scrcpy server (app_process) to be fully gone.
+///
+/// Amein's fix (run #23): the 720 CI run starts right after the full-res
+/// session tears down ("Terminated" in its stderr). If the old app_process
+/// is still dying, the new server crashes with NPE in
+/// DisplayManager.getDisplayInfo (DisplayManager.java:89) from
+/// Device.<init>. Poll `pidof app_process` until empty, then settle 2s.
+fn wait_for_old_server_gone(serial: &DeviceId) -> Result<(), DeviceError> {
+    for _ in 0..20 {
+        let out = std::process::Command::new("adb")
+            .args(["-s", serial.as_str(), "shell", "pidof", "app_process"])
+            .output()
+            .map_err(DeviceError::Io)?;
+        let pids = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if pids.is_empty() {
+            eprintln!("scrcpy: no old app_process running; settling 2s");
+            std::thread::sleep(Duration::from_secs(2));
+            return Ok(());
+        }
+        eprintln!("scrcpy: waiting for old app_process to exit (pids: {pids})");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    eprintln!("scrcpy: warning: old app_process still present after 10s; proceeding anyway");
+    Ok(())
+}
+
 /// Spawn the scrcpy server on the device, detached (it runs until the video
 /// socket closes or the device reboots; `cleanup` defaults to true so the
 /// jar is removed from /data/local/tmp on exit).
@@ -903,6 +929,11 @@ fn spawn_server(serial: &DeviceId, scid: &str) -> Result<(), DeviceError> {
     // scid (per-session, hex): the v2.7 server parses it as hex and binds
     // the abstract socket `scrcpy_<hex8>` (DesktopConnection.getSocketName),
     // so concurrent sessions never collide on the bare `scrcpy` name.
+    // Amein's fix (run #23): wait for the previous session's server to be
+    // fully gone before starting a new one, otherwise the new server can
+    // crash with NPE in DisplayManager.getDisplayInfo.
+    wait_for_old_server_gone(serial)?;
+
     let max_size_arg = std::env::var("SCRCPY_MAX_SIZE")
         .ok()
         .filter(|v| !v.trim().is_empty())
@@ -911,67 +942,90 @@ fn spawn_server(serial: &DeviceId, scid: &str) -> Result<(), DeviceError> {
     let server_cmd = format!(
         "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
          tunnel_forward=true audio=false control=true cleanup=false scid={scid} \
-         video_codec=h264 max_fps=60{max_size_arg}",
+         video_codec=h264 max_fps=60 display_id=0{max_size_arg}",
         SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");
     // Capture the server's own stdout/stderr to files: if the server dies
     // (bind failure, bad args, encoder error) its log lines survive in the
     // CI artifacts instead of vanishing with the adb shell session.
-    let stdout_log = server_log_path(scid, "stdout");
-    let stderr_log = server_log_path(scid, "stderr");
-    let stdout_file = std::fs::File::create(&stdout_log).map_err(DeviceError::Io)?;
-    let stderr_file = std::fs::File::create(&stderr_log).map_err(DeviceError::Io)?;
-    eprintln!(
-        "scrcpy: server logs: {} {}",
-        stdout_log.display(),
-        stderr_log.display()
-    );
-    let mut child = std::process::Command::new("adb")
-        .args(["-s", serial.as_str(), "shell", &server_cmd])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::from(stdout_file))
-        .stderr(std::process::Stdio::from(stderr_file))
-        .spawn()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                DeviceError::ToolMissing("adb".to_string())
-            } else {
-                DeviceError::Io(e)
+    // Amein's fix (run #23): retry the server start up to 3 times with
+    // backoff. The 720 run can hit a transient NPE in the server's
+    // Device.<init> if the emulator is still settling; a retry usually
+    // succeeds.
+    let mut last_err: Option<DeviceError> = None;
+    for attempt in 1..=3 {
+        if attempt > 1 {
+            let backoff = Duration::from_secs(2 * attempt as u64);
+            eprintln!("scrcpy: retrying server start in {backoff:?} (attempt {attempt}/3)");
+            std::thread::sleep(backoff);
+            // The failed attempt may have left a dying app_process behind;
+            // wait for it to clear before retrying.
+            let _ = wait_for_old_server_gone(serial);
+        }
+        let stdout_log = server_log_path(scid, "stdout");
+        let stderr_log = server_log_path(scid, "stderr");
+        let stdout_file = std::fs::File::create(&stdout_log).map_err(DeviceError::Io)?;
+        let stderr_file = std::fs::File::create(&stderr_log).map_err(DeviceError::Io)?;
+        eprintln!(
+            "scrcpy: server logs: {} {}",
+            stdout_log.display(),
+            stderr_log.display()
+        );
+        let mut child = std::process::Command::new("adb")
+            .args(["-s", serial.as_str(), "shell", &server_cmd])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::from(stdout_file))
+            .stderr(std::process::Stdio::from(stderr_file))
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    DeviceError::ToolMissing("adb".to_string())
+                } else {
+                    DeviceError::Io(e)
+                }
+            })?;
+        // Give the server a moment to start, then verify it's actually running.
+        // If app_process exited immediately (wrong args, jar not found, version
+        // mismatch), the adb client exits too — catch that here with a clear
+        // error instead of a mysterious 45s socket timeout.
+        std::thread::sleep(Duration::from_secs(3));
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                // The adb client exited => the server command failed fast.
+                // The server's own output is in the log files; surface it.
+                let stdout = std::fs::read_to_string(&stdout_log).unwrap_or_default();
+                let stderr = std::fs::read_to_string(&stderr_log).unwrap_or_default();
+                eprintln!(
+                    "scrcpy: stage=server_died_immediately status={status} attempt={attempt}/3"
+                );
+                eprintln!("scrcpy: server stdout: {stdout}");
+                eprintln!("scrcpy: server stderr: {stderr}");
+                last_err = Some(DeviceError::Parse(format!(
+                    "scrcpy server died immediately (status {status}); stdout: {stdout}; stderr: {stderr}"
+                )));
+                // Fall through to the retry loop.
             }
-        })?;
-    // Give the server a moment to start, then verify it's actually running.
-    // If app_process exited immediately (wrong args, jar not found, version
-    // mismatch), the adb client exits too — catch that here with a clear
-    // error instead of a mysterious 45s socket timeout.
-    std::thread::sleep(Duration::from_secs(3));
-    match child.try_wait() {
-        Ok(Some(status)) => {
-            // The adb client exited => the server command failed fast.
-            // The server's own output is in the log files; surface it.
-            let stdout = std::fs::read_to_string(&stdout_log).unwrap_or_default();
-            let stderr = std::fs::read_to_string(&stderr_log).unwrap_or_default();
-            eprintln!("scrcpy: stage=server_died_immediately status={status}");
-            eprintln!("scrcpy: server stdout: {stdout}");
-            eprintln!("scrcpy: server stderr: {stderr}");
-            return Err(DeviceError::Parse(format!(
-                "scrcpy server died immediately (status {status}); stdout: {stdout}; stderr: {stderr}"
-            )));
-        }
-        Ok(None) => {
-            // Still running — the server is up (or at least the adb shell
-            // session is alive). The socket poll will confirm.
-            eprintln!("scrcpy: stage=server_process_alive");
-        }
-        Err(e) => {
-            eprintln!("scrcpy: warning: try_wait failed: {e}");
+            Ok(None) => {
+                // Still running — the server is up (or at least the adb shell
+                // session is alive). The socket poll will confirm.
+                eprintln!("scrcpy: stage=server_process_alive");
+                // Intentionally leak the child handle: the adb shell session
+                // must stay alive for the server's lifetime. Dropping the
+                // Child without waiting detaches it (the OS reaps it on exit).
+                std::mem::forget(child);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("scrcpy: warning: try_wait failed: {e}");
+                std::mem::forget(child);
+                return Ok(());
+            }
         }
     }
-    // Intentionally leak the child handle: the adb shell session must stay
-    // alive for the server's lifetime. Dropping the Child without waiting
-    // detaches it (the OS reaps it on exit).
-    std::mem::forget(child);
-    Ok(())
+    Err(last_err.unwrap_or(DeviceError::Parse(
+        "scrcpy server failed to start after 3 attempts".to_string(),
+    )))
 }
 
 fn connect_socket(port: u16) -> Result<TcpStream, DeviceError> {

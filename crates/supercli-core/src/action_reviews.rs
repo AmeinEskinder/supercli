@@ -1791,9 +1791,7 @@ mod tests {
     #[test]
     fn record_review_feeds_human_decisions_to_profile() {
         // Serialize SUPERCLI_HOME mutation (see app_paths docs).
-        let _guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK
-            .lock()
-            .unwrap();
+        let _guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK.lock().unwrap();
         let home = test_dir("profile-home");
         let session_dir = home.join("session-1");
         std::fs::create_dir_all(&session_dir).unwrap();

@@ -68,6 +68,9 @@ tar = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+# rusqlite for integration tests that read runs.db directly (replaces the
+# sqlite3 CLI, which is an undeclared external dependency).
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 [build-dependencies]
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -77,10 +80,17 @@ toml = { version = "0.8", optional = true }
 name = "ssh_host_probe"
 required-features = ["native-host"]
 
-[[example]]
+[[bin]]
 name = "durable_chaos_helper"
+path = "src/bin/durable_chaos_helper.rs"
 required-features = ["native-host"]
 
-[[example]]
+[[bin]]
 name = "scheduled_kill_helper"
+path = "src/bin/scheduled_kill_helper.rs"
+required-features = ["native-host"]
+
+[[bin]]
+name = "subagent_kill_helper"
+path = "src/bin/subagent_kill_helper.rs"
 required-features = ["native-host"]

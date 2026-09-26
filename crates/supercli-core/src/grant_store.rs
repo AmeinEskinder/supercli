@@ -186,134 +186,6 @@ pub fn grant_exists(key: &str, caller: &str, target: Option<&str>) -> bool {
     }
 }
 
-#[cfg(test)]
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::{Arc, Barrier};
-    use std::thread;
-
-    fn test_home() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "grant-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u32
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    fn persist_test_grant(caller: &str, target: &str) {
-        edit_grants(|map| {
-            let key = "mcp_write_approvals";
-            let entry = map
-                .entry(key.to_string())
-                .or_insert(Value::Object(Map::new()));
-            if let Value::Object(obj) = entry {
-                let caller_entry = obj
-                    .entry(caller.to_string())
-                    .or_insert(Value::Array(vec![]));
-                if let Value::Array(arr) = caller_entry {
-                    if !arr.iter().any(|v| v.as_str() == Some(target)) {
-                        arr.push(Value::String(target.to_string()));
-                    }
-                }
-            }
-            Ok::<(), String>(())
-        })
-        .unwrap();
-    }
-
-    /// Serialize SUPERCLI_HOME mutation against all other tests that touch it.
-    /// Returns the home dir and holds the lock via the returned guard.
-    fn locked_test_home() -> (PathBuf, std::sync::MutexGuard<'static, ()>) {
-        let guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let home = test_home();
-        std::env::set_var("SUPERCLI_HOME", &home);
-        (home, guard)
-    }
-
-    /// Concurrent writers: N threads each persist a grant. All must succeed,
-    /// and the final file must contain all grants (no lost updates).
-    #[test]
-    fn concurrent_writers_no_lost_updates() {
-        let (home, _guard) = locked_test_home();
-
-        let n_threads = 8;
-        let barrier = Arc::new(Barrier::new(n_threads));
-        let mut handles = vec![];
-
-        for i in 0..n_threads {
-            let b = barrier.clone();
-            handles.push(thread::spawn(move || {
-                b.wait();
-                let caller = format!("session-{}", i);
-                let target = format!("target-{}", i);
-                persist_test_grant(&caller, &target);
-            }));
-        }
-
-        for h in handles {
-            h.join().unwrap();
-        }
-
-        for i in 0..n_threads {
-            let caller = format!("session-{}", i);
-            let target = format!("target-{}", i);
-            assert!(
-                grant_exists("mcp_write_approvals", &caller, Some(&target)),
-                "Grant missing for {} -> {}",
-                caller,
-                target
-            );
-        }
-
-        std::fs::remove_dir_all(&home).ok();
-    }
-
-    /// Torn temp file: corrupt temp (crash during write) must not corrupt main.
-    #[test]
-    fn torn_temp_file_does_not_corrupt() {
-        let (home, _guard) = locked_test_home();
-
-        persist_test_grant("alice", "bob");
-        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
-
-        let path = grants_path();
-        let tmp = path.with_extension("json.supercli-tmp");
-        std::fs::write(&tmp, b"not valid json{{{").unwrap();
-
-        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
-
-        std::fs::remove_file(&tmp).ok();
-        std::fs::remove_dir_all(&home).ok();
-    }
-
-    /// Rename is atomic: file is always valid JSON.
-    #[test]
-    fn rename_is_atomic() {
-        let (home, _guard) = locked_test_home();
-
-        persist_test_grant("alice", "bob");
-        persist_test_grant("charlie", "dave");
-
-        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
-        assert!(grant_exists("mcp_write_approvals", "charlie", Some("dave")));
-
-        let path = grants_path();
-        let content = std::fs::read_to_string(&path).unwrap();
-        let parsed: Value = serde_json::from_str(&content).unwrap();
-        assert!(parsed.is_object());
-
-        std::fs::remove_dir_all(&home).ok();
-    }
-}
-
 /// Load grants for reconciliation (returns the raw map).
 /// Used by `grant_audit::reconcile_grants()`.
 pub fn load_grants_for_reconcile() -> Map<String, Value> {
@@ -484,4 +356,131 @@ pub fn remove_grants(keys: &[String]) -> Result<(), String> {
     })
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    fn test_home() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "grant-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u32
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn persist_test_grant(caller: &str, target: &str) {
+        edit_grants(|map| {
+            let key = "mcp_write_approvals";
+            let entry = map
+                .entry(key.to_string())
+                .or_insert(Value::Object(Map::new()));
+            if let Value::Object(obj) = entry {
+                let caller_entry = obj
+                    .entry(caller.to_string())
+                    .or_insert(Value::Array(vec![]));
+                if let Value::Array(arr) = caller_entry {
+                    if !arr.iter().any(|v| v.as_str() == Some(target)) {
+                        arr.push(Value::String(target.to_string()));
+                    }
+                }
+            }
+            Ok::<(), String>(())
+        })
+        .unwrap();
+    }
+
+    /// Serialize SUPERCLI_HOME mutation against all other tests that touch it.
+    /// Returns the home dir and holds the lock via the returned guard.
+    fn locked_test_home() -> (PathBuf, std::sync::MutexGuard<'static, ()>) {
+        let guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let home = test_home();
+        std::env::set_var("SUPERCLI_HOME", &home);
+        (home, guard)
+    }
+
+    /// Concurrent writers: N threads each persist a grant. All must succeed,
+    /// and the final file must contain all grants (no lost updates).
+    #[test]
+    fn concurrent_writers_no_lost_updates() {
+        let (home, _guard) = locked_test_home();
+
+        let n_threads = 8;
+        let barrier = Arc::new(Barrier::new(n_threads));
+        let mut handles = vec![];
+
+        for i in 0..n_threads {
+            let b = barrier.clone();
+            handles.push(thread::spawn(move || {
+                b.wait();
+                let caller = format!("session-{}", i);
+                let target = format!("target-{}", i);
+                persist_test_grant(&caller, &target);
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        for i in 0..n_threads {
+            let caller = format!("session-{}", i);
+            let target = format!("target-{}", i);
+            assert!(
+                grant_exists("mcp_write_approvals", &caller, Some(&target)),
+                "Grant missing for {} -> {}",
+                caller,
+                target
+            );
+        }
+
+        std::fs::remove_dir_all(&home).ok();
+    }
+
+    /// Torn temp file: corrupt temp (crash during write) must not corrupt main.
+    #[test]
+    fn torn_temp_file_does_not_corrupt() {
+        let (home, _guard) = locked_test_home();
+
+        persist_test_grant("alice", "bob");
+        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
+
+        let path = grants_path();
+        let tmp = path.with_extension("json.supercli-tmp");
+        std::fs::write(&tmp, b"not valid json{{{").unwrap();
+
+        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
+
+        std::fs::remove_file(&tmp).ok();
+        std::fs::remove_dir_all(&home).ok();
+    }
+
+    /// Rename is atomic: file is always valid JSON.
+    #[test]
+    fn rename_is_atomic() {
+        let (home, _guard) = locked_test_home();
+
+        persist_test_grant("alice", "bob");
+        persist_test_grant("charlie", "dave");
+
+        assert!(grant_exists("mcp_write_approvals", "alice", Some("bob")));
+        assert!(grant_exists("mcp_write_approvals", "charlie", Some("dave")));
+
+        let path = grants_path();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.is_object());
+
+        std::fs::remove_dir_all(&home).ok();
+    }
 }

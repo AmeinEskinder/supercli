@@ -34,7 +34,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use supercli_device::scrcpy_native::{
-    AndroidKeycode, ScrcpyNative, TouchAction, VideoStreamReader,
+    swipe_control, AndroidKeycode, ScrcpyNative, TouchAction, VideoStreamReader,
 };
 use supercli_device::DeviceError;
 
@@ -156,27 +156,52 @@ where
 /// Amein (run #18): on Android 14 the dumpsys field is `topResumedActivity`
 /// (older versions use `mResumedActivity`), so match either; poll for up
 /// to 10 s instead of checking once because the launch can be slow.
-fn wait_settings_resumed(serial: &str) -> Result<(), DeviceError> {
-    for _ in 0..20 {
+/// Poll for Settings being the resumed activity.
+///
+/// Returns `Ok(true)` if Settings resumed, `Ok(false)` if it did not resume
+/// after retries (caller should fall back to launcher-swipe animation rather
+/// than failing — the fps metric is not gated, and CI emulator slowness can
+/// leave Settings at INITIALIZING).
+///
+/// Amein (run #24): poll for up to 20 s; the Settings launch exists only to
+/// animate the screen for the (ungated) fps metric.
+fn wait_settings_resumed(serial: &str) -> Result<bool, DeviceError> {
+    // Lines mentioning resume from the last poll, logged on failure so the
+    // CI annotations show what the emulator actually reports.
+    let mut last_resum_lines: Vec<String> = Vec::new();
+    for poll in 0..40 {
         let out = adb_shell_output(serial, &["dumpsys", "activity", "activities"])?;
+        let mut field_seen = false;
+        last_resum_lines.clear();
         for line in out.lines() {
             let t = line.trim();
+            if t.to_lowercase().contains("resum") && last_resum_lines.len() < 20 {
+                last_resum_lines.push(t.to_string());
+            }
             // Separator-agnostic match: Android 14 emits
             // `topResumedActivity=ActivityRecord{...}` (with `=`), older
             // dumps use `topResumedActivity:`/`mResumedActivity:`.
+            // Scan ALL lines: the field can appear once per display/section
+            // and the first occurrence is not necessarily Settings.
             if t.contains("mResumedActivity") || t.contains("topResumedActivity") {
                 eprintln!("e2e: resumed-activity field: {t}");
                 if t.contains("com.android.settings") {
-                    return Ok(());
+                    return Ok(true);
                 }
-                break;
+                field_seen = true;
             }
+        }
+        if !field_seen {
+            eprintln!("e2e: poll {poll}: no resumed-activity field in dumpsys output");
         }
         std::thread::sleep(Duration::from_millis(500));
     }
-    Err(DeviceError::Parse(
-        "com.android.settings was not the resumed activity after am start".to_string(),
-    ))
+    eprintln!("e2e: Settings not resumed after 20 s; lines mentioning 'resum' on final poll:");
+    for l in &last_resum_lines {
+        eprintln!("e2e:   {l}");
+    }
+    // Not an error: caller falls back to launcher-swipe animation.
+    Ok(false)
 }
 
 /// Gestures used by the latency trials. Each one visibly toggles the
@@ -313,6 +338,10 @@ struct Metrics {
     packets_read: usize,
     keyframes: usize,
     fps_animating: f64,
+    /// How the screen was animated during the fps window: "settings-scroll"
+    /// or "launcher-swipe" (fallback when Settings didn't resume; Amein run
+    /// #24). The fps metric is recorded, not gated, either way.
+    fps_source: String,
     /// The emulator's OWN render rate (dumpsys gfxinfo) during the scroll
     /// window. If this is ~60 but scrcpy fps is 2, the encoder (not the
     /// renderer) is the bottleneck.
@@ -353,6 +382,7 @@ impl Metrics {
                 "  \"packets_read\": {},\n",
                 "  \"keyframes\": {},\n",
                 "  \"fps_animating_60s\": {:.2},\n",
+                "  \"fps_source\": \"{}\",\n",
                 "  \"render_fps_gfxinfo\": {:.2},\n",
                 "  \"gfxinfo_frames_rendered\": {},\n",
                 "  \"control_tap_to_frame_ms\": {{\"p50\": {:.2}, \"p95\": {:.2}, \"mean\": {:.2}, \"n\": {}, \"misses\": {}}},\n",
@@ -369,6 +399,7 @@ impl Metrics {
             self.packets_read,
             self.keyframes,
             self.fps_animating,
+            self.fps_source,
             self.render_fps,
             self.gfxinfo_frames,
             self.control_p50_ms,
@@ -448,12 +479,25 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     // Amein (run #16): verify the app is actually resumed before trusting
     // any fps number — a 0-frame gfxinfo window means the animation driver
     // missed, not that the stream is broken.
-    wait_settings_resumed(serial)?;
-    eprintln!("e2e: Settings resumed, starting 60 s scroll window ...");
+    // Amein (run #24): if Settings doesn't resume (CI emulator slowness),
+    // don't fail — fall back to launcher-swipe animation. The fps metric
+    // is not gated; the stream/packet/tap/pinch gates stay.
+    let settings_resumed = wait_settings_resumed(serial)?;
+    let fps_source: String;
+    let gfx_package: &str;
+    if settings_resumed {
+        eprintln!("e2e: Settings resumed, starting 60 s scroll window ...");
+        fps_source = "settings-scroll".to_string();
+        gfx_package = "com.android.settings";
+    } else {
+        eprintln!("e2e: Settings not resumed; falling back to launcher-swipe animation ...");
+        fps_source = "launcher-swipe".to_string();
+        gfx_package = "com.google.android.apps.nexuslauncher";
+    }
 
-    eprintln!("e2e: reading H.264 packets for 60 s while scroll-animating ...");
+    eprintln!("e2e: reading H.264 packets for 60 s while animating (fps_source={fps_source}) ...");
     let ((packets_read, keyframes, fps_animating), render_fps, gfxinfo_frames) =
-        measure_render_rate(serial, "com.android.settings", || {
+        measure_render_rate(serial, gfx_package, || {
             let (video, control) = client.split();
             video
                 .set_read_timeout(Some(Duration::from_millis(200)))
@@ -462,19 +506,44 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
             let mut packets_read = 0usize;
             let mut keyframes = 0usize;
             let start = Instant::now();
-            // Scroll immediately, then every 250 ms, alternating direction:
-            // a single-direction scroll stalls at the list end, while
-            // alternating keeps the list animating for the whole window.
-            let mut last_scroll = Instant::now() - Duration::from_secs(60);
+            // Animate the screen so scrcpy emits frames (static screens yield
+            // ~3 fps, which is meaningless).
+            //
+            // Settings path: scroll immediately, then every 250 ms,
+            // alternating direction — a single-direction scroll stalls at the
+            // list end, while alternating keeps the list animating.
+            //
+            // Launcher fallback (Amein run #24): open/close the app drawer
+            // every 300 ms via control-channel swipes. Swipe up from the
+            // bottom opens the drawer; swipe down closes it.
+            let mut last_anim = Instant::now() - Duration::from_secs(60);
             let mut scroll_down = true;
+            let mut drawer_open = false;
             while start.elapsed() < FPS_WINDOW {
-                if last_scroll.elapsed() >= Duration::from_millis(250) {
-                    let vscroll = if scroll_down { 1.0 } else { -1.0 };
-                    control
-                        .inject_scroll(vw / 2, vh / 2, 0.0, vscroll)
+                if settings_resumed {
+                    if last_anim.elapsed() >= Duration::from_millis(250) {
+                        let vscroll = if scroll_down { 1.0 } else { -1.0 };
+                        control
+                            .inject_scroll(vw / 2, vh / 2, 0.0, vscroll)
+                            .map_err(DeviceError::Io)?;
+                        scroll_down = !scroll_down;
+                        last_anim = Instant::now();
+                    }
+                } else if last_anim.elapsed() >= Duration::from_millis(300) {
+                    // Alternate drawer open/close swipes.
+                    let (x0, y0, x1, y1) = if drawer_open {
+                        // Close: swipe down from upper-middle to lower-middle.
+                        (vw / 2, vh * 3 / 10, vw / 2, vh * 8 / 10)
+                    } else {
+                        // Open: swipe up from bottom edge to middle.
+                        (vw / 2, vh * 9 / 10, vw / 2, vh * 4 / 10)
+                    };
+                    // No ControlChannel::swipe method; use the free swipe_control.
+                    // (control is &mut from split(); reborrow it.)
+                    swipe_control(&mut *control, x0, y0, x1, y1, Duration::from_millis(200))
                         .map_err(DeviceError::Io)?;
-                    scroll_down = !scroll_down;
-                    last_scroll = Instant::now();
+                    drawer_open = !drawer_open;
+                    last_anim = Instant::now();
                 }
                 match reader.next_packet() {
                     Ok(Some(pkt)) => {
@@ -619,6 +688,7 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
         packets_read,
         keyframes,
         fps_animating,
+        fps_source,
         render_fps,
         gfxinfo_frames,
         control_p50_ms: percentile(control_ms.clone(), 50.0),

@@ -958,9 +958,9 @@ impl SessionConnectors {
                                 escalated_actor = Some(outcome.actor);
                             }
                             Err(rejection) => {
-                                let decider = rejection.actor.unwrap_or_else(|| {
-                                    "human:unanswered-prompt".to_string()
-                                });
+                                let decider = rejection
+                                    .actor
+                                    .unwrap_or_else(|| "human:unanswered-prompt".to_string());
                                 let completion = if rejection.declined {
                                     format!("declined by {decider}")
                                 } else {
@@ -974,9 +974,7 @@ impl SessionConnectors {
                                 // never ran.
                                 self.record_outcome(
                                     &review_id,
-                                    crate::action_reviews::AttemptOutcome::NeverRan {
-                                        reason,
-                                    },
+                                    crate::action_reviews::AttemptOutcome::NeverRan { reason },
                                     &decider,
                                 );
                                 self.audit_attempt(&AttemptAudit {
@@ -2851,7 +2849,9 @@ provides = ["oauthy.echo"]
                 if v.get("type").and_then(|t| t.as_str()) != Some("attempt_outcome") {
                     return None;
                 }
-                v.get("actor").and_then(|a| a.as_str()).map(|s| s.to_string())
+                v.get("actor")
+                    .and_then(|a| a.as_str())
+                    .map(|s| s.to_string())
             })
             .collect()
     }
@@ -2898,7 +2898,10 @@ provides = ["oauthy.echo"]
         );
         let inflight =
             crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
-        assert!(inflight.is_empty(), "no in-flight reviews remain: {inflight:?}");
+        assert!(
+            inflight.is_empty(),
+            "no in-flight reviews remain: {inflight:?}"
+        );
         std::env::remove_var("SUPERCLI_COUNT_FILE");
         clear_approval_stub();
     }
