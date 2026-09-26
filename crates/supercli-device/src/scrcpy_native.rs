@@ -684,6 +684,34 @@ impl<W: Write> ControlChannel<W> {
     }
 }
 
+/// Swipe gesture on a control channel: Down → interpolated Moves → Up on
+/// pointer 0. `duration` is spread evenly across the move steps; short
+/// durations (≈150–200 ms) read as flings on the device.
+///
+/// Free function (generic over the sink) so callers holding a split
+/// borrow of [`ScrcpyNative`] can drive the control channel while reading
+/// the video socket; [`ScrcpyNative::swipe`] is the sequential convenience
+/// wrapper.
+pub fn swipe_control<W: Write>(
+    control: &mut ControlChannel<W>,
+    x0: u32,
+    y0: u32,
+    x1: u32,
+    y1: u32,
+    duration: Duration,
+) -> std::io::Result<()> {
+    const STEPS: u32 = 12;
+    control.inject_touch(TouchAction::Down, 0, x0, y0)?;
+    for s in 1..=STEPS {
+        let t = s as f32 / STEPS as f32;
+        let x = (x0 as f32 + (x1 as f32 - x0 as f32) * t) as u32;
+        let y = (y0 as f32 + (y1 as f32 - y0 as f32) * t) as u32;
+        control.inject_touch(TouchAction::Move, 0, x, y)?;
+        std::thread::sleep(duration / STEPS);
+    }
+    control.inject_touch(TouchAction::Up, 0, x1, y1)
+}
+
 // ---------------------------------------------------------------------------
 // Last-resort fallback: adb shell input
 // ---------------------------------------------------------------------------
@@ -1053,6 +1081,38 @@ impl ScrcpyNative {
         VideoPacketIter {
             reader: VideoStreamReader::new(&self.video),
         }
+    }
+
+    /// Borrow the video socket and the control channel disjointly, so a
+    /// caller can drive input on the control channel while simultaneously
+    /// reading frames from the video socket (e.g. measuring fps while the
+    /// screen animates). The two sockets are independent TCP streams, so
+    /// holding both borrows at once is safe.
+    pub fn split(&mut self) -> (&TcpStream, &mut ControlChannel<TcpStream>) {
+        (&self.video, &mut self.control)
+    }
+
+    /// Adjust the video socket read timeout (10 s after [`ScrcpyNative::connect`]).
+    /// Short timeouts let a caller poll for a frame with a deadline (a
+    /// trial with no frame in time is a "miss", not a fatal error); restore
+    /// the default afterwards with `set_video_read_timeout(Some(10s))`.
+    pub fn set_video_read_timeout(&self, timeout: Option<Duration>) -> Result<(), DeviceError> {
+        self.video
+            .set_read_timeout(timeout)
+            .map_err(DeviceError::Io)
+    }
+
+    /// Swipe gesture: Down → interpolated Moves → Up on pointer 0.
+    /// See [`swipe_control`].
+    pub fn swipe(
+        &mut self,
+        x0: u32,
+        y0: u32,
+        x1: u32,
+        y1: u32,
+        duration: Duration,
+    ) -> Result<(), DeviceError> {
+        swipe_control(&mut self.control, x0, y0, x1, y1, duration).map_err(DeviceError::Io)
     }
 
     /// Multi-touch injection. `pointer_id` distinguishes concurrent
@@ -1500,8 +1560,8 @@ mod tests {
         });
 
         // The handshake must complete without deadlock.
-        let (_video, _control, header) = handshake_video_control(port)
-            .expect("handshake against fake server must succeed");
+        let (_video, _control, header) =
+            handshake_video_control(port).expect("handshake against fake server must succeed");
 
         assert_eq!(header.device_name, "fake-dev");
         assert_eq!(header.codec, *b"h264");
@@ -1509,8 +1569,14 @@ mod tests {
         assert_eq!(header.height, 2400);
 
         // The server must have accepted video before control.
-        assert_eq!(order_rx.recv_timeout(Duration::from_secs(5)).unwrap(), "video");
-        assert_eq!(order_rx.recv_timeout(Duration::from_secs(5)).unwrap(), "control");
+        assert_eq!(
+            order_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "video"
+        );
+        assert_eq!(
+            order_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "control"
+        );
 
         server.join().unwrap();
     }
@@ -1542,5 +1608,35 @@ mod tests {
             "expected codec parse error, got: {err:?}"
         );
         server.join().unwrap();
+    }
+
+    #[test]
+    fn swipe_control_sends_down_moves_up() {
+        use std::time::Duration;
+
+        let mut ch = ControlChannel::new(Vec::new(), 1080, 2400);
+        swipe_control(&mut ch, 540, 1800, 540, 600, Duration::from_millis(120)).unwrap();
+        let bytes = ch.into_inner();
+        // Down + 12 interpolated Moves + Up, 32 bytes each.
+        assert_eq!(bytes.len(), 14 * 32, "expected 14 touch messages");
+        let msg = |i: usize| &bytes[i * 32..(i + 1) * 32];
+        // Every message is INJECT_TOUCH_EVENT.
+        for i in 0..14 {
+            assert_eq!(msg(i)[0], control_type::INJECT_TOUCH_EVENT, "msg {i} type");
+        }
+        assert_eq!(msg(0)[1], TouchAction::Down as u8, "first msg action");
+        for i in 1..13 {
+            assert_eq!(msg(i)[1], TouchAction::Move as u8, "msg {i} action");
+        }
+        assert_eq!(msg(13)[1], TouchAction::Up as u8, "last msg action");
+        // Y interpolates monotonically from 1800 down to 600.
+        let y = |i: usize| u32::from_be_bytes(msg(i)[14..18].try_into().unwrap());
+        assert_eq!(y(0), 1800);
+        assert_eq!(y(13), 600);
+        let mut prev = y(0);
+        for i in 1..14 {
+            assert!(y(i) <= prev, "y must not increase during an upward swipe");
+            prev = y(i);
+        }
     }
 }

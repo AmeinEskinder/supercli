@@ -4,10 +4,18 @@
 # emulator with KVM (no window, no audio), then drives it through
 # crates/supercli-device/src/scrcpy_native.rs:
 #   - connects (jar deploy + SHA-256, port forward, server start)
-#   - reads >= 600 real H.264 packets, measures fps over 60 s
+#   - fps measured over 60 s WHILE ANIMATING (Settings + fling-scroll loop:
+#     scrcpy only emits frames on screen change, so static-screen fps is
+#     meaningless)
 #   - tap-to-frame p50/p95: native control channel vs `adb shell input`
+#     (20 trials each, swipe-up/HOME alternating; no-frame-in-1s = miss)
 #   - two-pointer pinch
 # Uploads: screenshot.png, test-10s.mkv, metrics.json.
+#
+# Device profile: pixel_7 (1080x2400) so the numbers mean something; the
+# default tiny skin (320x640) is not representative. max_size is unset.
+# disable-animations=false: we WANT the screen animating for the fps window,
+# and animated drawer/HOME transitions give the latency trials frames.
 #
 # Choice of runner action: ReactiveCircus/android-emulator-runner@v2 is the
 # de-facto standard (used by google/iosched etc.); it handles SDK install,
@@ -56,6 +64,10 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # Real device profile (1080x2400); the default skin is 320x640.
+          profile: pixel_7
+          # We measure fps while animating: keep window animations on.
+          disable-animations: false
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back webcam0
           # Single line: the action runs each script: line as its own sh -c,
           # so the multi-line e2e logic lives in android-e2e.sh.
