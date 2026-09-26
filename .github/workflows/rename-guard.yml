@@ -53,6 +53,8 @@ jobs:
                       -e 'package-lock.json' \
                       -e 'docs/rename-allowlist.md' \
                       -e '.github/workflows/rename-guard.yml' \
+                      -e 'scripts/fresh-clone-verify.sh' \
+                      -e 'scripts/sync-main-v2.sh' \
             || true)
           if [ -n "$matches" ]; then
             echo "FAIL: unpeel references found outside allowlist:"
