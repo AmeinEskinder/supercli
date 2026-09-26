@@ -120,6 +120,18 @@ adb -s "$SERIAL" logcat -d 2>/dev/null | grep -i scrcpy > "$GITHUB_WORKSPACE/e2e
 adb -s "$SERIAL" shell ps -A 2>/dev/null | grep -i -E "scrcpy|app_process" \
   > "$GITHUB_WORKSPACE/e2e-server-ps.txt" 2>/dev/null || true
 
+# On failure, surface the tail of e2e.log as workflow annotations. These
+# are visible on the public run page AND via the unauthenticated check-runs
+# API, so a failure can be diagnosed without artifact-download auth.
+if [ "$TEST_STATUS" -ne 0 ]; then
+  echo "::error::android e2e cargo test exited $TEST_STATUS"
+  grep -E "panicked|FAILED|failures:|e2e: (FATAL|stage=)" "$GITHUB_WORKSPACE/e2e.log" 2>/dev/null \
+    | tail -15 | while IFS= read -r line; do
+      # Annotations must be single-line; truncate pathological lines.
+      echo "::error::${line:0:400}"
+    done
+fi
+
 # Screenshot artifact (best effort on failure).
 adb -s "$SERIAL" exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png" 2>/dev/null || true
 
