@@ -6,24 +6,14 @@
 //! through an [`ApprovalGate`] first, and every decision — allow or deny —
 //! is appended to a JSONL audit log.
 //!
-//! Wiring into the product approval flow: implement [`ApprovalGate`] on top
-//! of the Host's approval hub (e.g. `supercli-serve`'s `ApprovalHub::request`
+//! Wiring into the product approval flow: the production [`ApprovalGate`]
+//! is `HubGate` in the `supercli-cli` crate (`device_cli` module) — it
+//! cannot live here because this crate is `std`-only and must not depend
+//! on `supercli-serve`. `HubGate` calls the Host's `ApprovalHub::request`
 //! with kind `"device-danger"`, title from [`DangerousOp::title`], body from
-//! [`DangerousOp::body`]); a denial (or timeout) must map to
-//! `approved: false`, which surfaces as [`DeviceError::Denied`].
-//!
-//! ```ignore
-//! struct HubGate { hub: Arc<ApprovalHub>, session: String }
-//! impl ApprovalGate for HubGate {
-//!     fn decide(&self, op: &DangerousOp) -> ApprovalDecision {
-//!         let (approved, by) = self.hub.request(
-//!             "device-danger", op.title(), op.body(),
-//!             self.session.clone(), None, Duration::from_secs(120),
-//!         );
-//!         ApprovalDecision { approved, approved_by: by, note: "hub".into() }
-//!     }
-//! }
-//! ```
+//! [`DangerousOp::body`]; a denial (or timeout, or no-human-present) maps
+//! to `approved: false`, which surfaces as [`DeviceError::Denied`] with
+//! zero backend calls.
 //!
 //! Compiled only with the `device` cargo feature.
 
