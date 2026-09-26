@@ -449,4 +449,45 @@ pub mod emit {
         };
         crate::runner::run_observers(&dispatcher, entity, event, doc_id, &doc, &ctx, 0);
     }
+
+    /// Build a `ToolCall.before_execute` hook for
+    /// `supercli_core::session_connectors::SessionConnectors`.
+    ///
+    /// The returned closure dispatches synchronously through the registry
+    /// (priority-ordered, 2s default timeout, tighten-only, crash/timeout
+    /// fails closed) and maps the outcome to
+    /// `supercli_core::session_connectors::BeforeExecuteDecision`.
+    /// When no handlers are registered it is a fast no-op returning
+    /// `Allow`.
+    pub fn before_execute_hook() -> supercli_core::session_connectors::BeforeExecuteHook {
+        Box::new(
+            |ctx: &supercli_core::session_connectors::BeforeExecuteContext| {
+                use supercli_core::session_connectors::BeforeExecuteDecision;
+                let doc = serde_json::json!({
+                    "tool": ctx.tool,
+                    "arguments": ctx.arguments,
+                    "attempt_id": ctx.attempt_id,
+                });
+                let outcome = emit_sync(
+                    crate::DocType::ToolCall,
+                    crate::DocEvent::BeforeExecute,
+                    &ctx.attempt_id,
+                    doc,
+                    &ctx.session_dir,
+                    &ctx.actor,
+                );
+                match outcome {
+                    None => BeforeExecuteDecision::Allow,
+                    Some(o) => match o.decision {
+                        crate::HookDecision::Allow => BeforeExecuteDecision::Allow,
+                        crate::HookDecision::Escalate => BeforeExecuteDecision::Escalate,
+                        crate::HookDecision::Reject => BeforeExecuteDecision::Reject(
+                            o.reject_reason
+                                .unwrap_or_else(|| "hook rejected".to_string()),
+                        ),
+                    },
+                }
+            },
+        )
+    }
 }

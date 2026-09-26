@@ -249,6 +249,36 @@ impl std::error::Error for ToolCallFailure {}
 /// listener is the in-process fast path.
 pub type OutcomeListener = Box<dyn Fn(&str, &crate::action_reviews::AttemptOutcome) + Send + Sync>;
 
+/// Tighten-only decision from a ToolCall `before_execute` hook.
+///
+/// Mirrors `supercli_events::HookDecision` without depending on that crate
+/// (which depends on `supercli_core` — the dependency would be circular).
+/// `Escalate` means Allow → Ask: meaningful only when the tool's policy was
+/// `Allow`; after the approval gate has passed, an escalated `Allow` call
+/// fails closed rather than running unapproved.
+#[derive(Debug, Clone)]
+pub enum BeforeExecuteDecision {
+    Allow,
+    Escalate,
+    Reject(String),
+}
+
+/// Owned context passed to a [`BeforeExecuteHook`].
+#[derive(Debug, Clone)]
+pub struct BeforeExecuteContext {
+    pub tool: String,
+    pub arguments: serde_json::Value,
+    pub attempt_id: String,
+    pub session_dir: PathBuf,
+    pub actor: String,
+}
+
+/// Synchronous hook invoked after the write-ahead review is fsynced and
+/// before any tool bytes are sent (the `ToolCall.before_execute` event).
+/// Installed by the Host/CLI; `None` means no handlers (fast path).
+pub type BeforeExecuteHook =
+    Box<dyn Fn(&BeforeExecuteContext) -> BeforeExecuteDecision + Send + Sync>;
+
 pub struct SessionConnectors {
     session_id: String,
     session_dir: PathBuf,
@@ -282,6 +312,14 @@ pub struct SessionConnectors {
     /// only fires after the durable record exists, so events are never
     /// emitted first.
     outcome_listener: Option<OutcomeListener>,
+    /// Optional synchronous `ToolCall.before_execute` hook. Invoked after
+    /// the write-ahead review is fsynced and before any tool bytes are
+    /// sent. A `Reject` records `NeverRan { reason: "hook_rejected" }` and
+    /// the tool does not run; an `Escalate` on an `Allow`-policy call fails
+    /// closed (the approval gate has already passed). Installed by the
+    /// Host/CLI via [`Self::set_before_execute_hook`]; `None` is the fast
+    /// path (no hooks configured).
+    before_execute_hook: Option<BeforeExecuteHook>,
 }
 
 impl SessionConnectors {
@@ -296,6 +334,7 @@ impl SessionConnectors {
             actor: None,
             lease_fence: None,
             outcome_listener: None,
+            before_execute_hook: None,
         };
         set.refresh();
         set
@@ -327,6 +366,15 @@ impl SessionConnectors {
     /// fires only after the durable outcome record exists.
     pub fn set_outcome_listener(&mut self, listener: OutcomeListener) {
         self.outcome_listener = Some(listener);
+    }
+
+    /// Install the synchronous `ToolCall.before_execute` hook. The hook
+    /// runs after the write-ahead review is fsynced and before any tool
+    /// bytes are sent; see the `before_execute_hook` field for the
+    /// tighten-only semantics. Typically installed once at startup by the
+    /// Host/CLI from `supercli_events`.
+    pub fn set_before_execute_hook(&mut self, hook: BeforeExecuteHook) {
+        self.before_execute_hook = Some(hook);
     }
 
     /// Durably record a terminal attempt outcome and notify the listener.
@@ -846,6 +894,54 @@ impl SessionConnectors {
             Ok(entry) => entry.review_id,
             Err(e) => return Err(ToolCallFailure::review_failed(e.to_string())),
         };
+        // Doc event: ToolCall.before_execute (synchronous, tighten-only).
+        // Fires after the write-ahead review is fsynced and before any
+        // tool bytes are sent (docs/events.md §3.3). A rejection records
+        // NeverRan (the tool provably never ran) and fails closed; an
+        // escalation on an Allow-policy call also fails closed because the
+        // approval gate has already passed and no approval was obtained.
+        if let Some(hook) = &self.before_execute_hook {
+            let ctx = BeforeExecuteContext {
+                tool: name.to_string(),
+                arguments: arguments.clone(),
+                attempt_id: attempt_id.to_string(),
+                session_dir: self.session_dir.clone(),
+                actor: actor.to_string(),
+            };
+            match hook(&ctx) {
+                BeforeExecuteDecision::Allow => {}
+                BeforeExecuteDecision::Escalate => {
+                    if policy == ApprovalPolicy::Allow {
+                        let reason =
+                            "hook escalated Allow->Ask after the approval gate; refusing to run unapproved";
+                        self.record_outcome(
+                            &review_id,
+                            crate::action_reviews::AttemptOutcome::NeverRan {
+                                reason: reason.to_string(),
+                            },
+                            actor,
+                        );
+                        return Err(ToolCallFailure::failed(format!(
+                            "tool {name:?} blocked by before_execute hook: {reason}"
+                        )));
+                    }
+                    // Policy was already Ask (human approved) or Deny:
+                    // escalate is a no-op, cannot loosen.
+                }
+                BeforeExecuteDecision::Reject(hook_reason) => {
+                    self.record_outcome(
+                        &review_id,
+                        crate::action_reviews::AttemptOutcome::NeverRan {
+                            reason: format!("hook_rejected: {hook_reason}"),
+                        },
+                        actor,
+                    );
+                    return Err(ToolCallFailure::failed(format!(
+                        "tool {name:?} rejected by before_execute hook: {hook_reason}"
+                    )));
+                }
+            }
+        }
         let args: HashMap<String, Value> = arguments
             .as_object()
             .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -2517,5 +2613,137 @@ provides = ["oauthy.echo"]
         // The hash chain still verifies with the outcome appended.
         crate::action_reviews::verify_review_chain(&fx.session_dir)
             .expect("chain verifies after outcome");
+    }
+
+    /// Read the review log JSONL and return the outcome strings recorded.
+    fn review_outcomes(session_dir: &Path) -> Vec<String> {
+        let log = std::fs::read_to_string(session_dir.join(crate::action_reviews::REVIEWS_FILE))
+            .expect("review log readable");
+        log.lines()
+            .filter_map(|line| {
+                let v: serde_json::Value = serde_json::from_str(line).ok()?;
+                if v.get("type").and_then(|t| t.as_str()) != Some("attempt_outcome") {
+                    return None;
+                }
+                v.get("outcome")
+                    .and_then(|o| o.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn before_execute_hook_fires_with_tool_context() {
+        let fx = Fixture::new();
+        fx.attach("allowy", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-ctx", &fx.session_dir);
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
+        let seen_clone = seen.clone();
+        set.set_before_execute_hook(Box::new(move |ctx: &BeforeExecuteContext| {
+            seen_clone
+                .lock()
+                .unwrap()
+                .push((ctx.tool.clone(), ctx.actor.clone()));
+            BeforeExecuteDecision::Allow
+        }));
+        set.set_actor("human:test-device".to_string());
+        let out = set
+            .call_tool("allowy.echo", &json!({"msg": "hi"}))
+            .expect("allow hook lets the tool run");
+        assert!(out.contains("echo:"), "{out}");
+        let calls = seen.lock().unwrap();
+        assert_eq!(calls.len(), 1, "hook fires exactly once per tool call");
+        assert_eq!(calls[0].0, "allowy.echo");
+        assert_eq!(calls[0].1, "human:test-device");
+    }
+
+    #[test]
+    fn before_execute_reject_blocks_execution_and_records_never_ran() {
+        let fx = Fixture::new();
+        // Counting mock: proves the connector is never invoked.
+        let count_file = fx.dir.join("hook-reject-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-reject", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Reject("test policy says no".to_string())
+        }));
+        let err = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect_err("rejected tool call must fail");
+        assert!(
+            err.message.contains("rejected by before_execute hook"),
+            "error names the hook: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains("test policy says no"),
+            "error carries the hook reason: {}",
+            err.message
+        );
+        // The mock connector was never invoked: zero tool bytes sent.
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 0, "rejected tool must never execute");
+        // The outcome is NeverRan (terminal), not in-flight.
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "never_ran"),
+            "rejection records never_ran: {outcomes:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(
+            inflight.is_empty(),
+            "rejected call must not look in-flight: {inflight:?}"
+        );
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
+    }
+
+    #[test]
+    fn before_execute_escalate_on_allow_fails_closed() {
+        let fx = Fixture::new();
+        let count_file = fx.dir.join("hook-escalate-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-escalate", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Escalate
+        }));
+        // Policy is Allow, so the approval gate already passed with no
+        // human approval: escalate must fail closed, not run unapproved.
+        let err = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect_err("escalated allow-policy call must fail closed");
+        assert!(
+            err.message.contains("before_execute hook"),
+            "error names the hook: {}",
+            err.message
+        );
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 0, "escalated tool must never execute");
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "never_ran"),
+            "escalation records never_ran: {outcomes:?}"
+        );
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
     }
 }
