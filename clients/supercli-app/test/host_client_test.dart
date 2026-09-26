@@ -98,5 +98,86 @@ void main() {
       expect(() => client.listSessions(), throwsA(isA<HostException>()));
       client.close();
     });
+
+    test('settingsSet POSTs to /mobile/workspace-settings', () async {
+      String? seenPath;
+      Map<String, dynamic>? seenBody;
+      final mock = MockClient((request) async {
+        seenPath = request.url.path;
+        expect(request.method, 'POST');
+        seenBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response('{"ok":true}', 200);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      await client.settingsSet({
+        'autoStopArchiveMinutes': 120,
+        'browserDefaultAccess': 'ask',
+      });
+      expect(seenPath, '/mobile/workspace-settings');
+      expect(seenBody?['autoStopArchiveMinutes'], 120);
+      expect(seenBody?['browserDefaultAccess'], 'ask');
+      client.close();
+    });
+
+    test('settingsSet throws HostException on validation error', () async {
+      final mock = MockClient((request) async {
+        return http.Response('{"error":"bad value"}', 400);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      expect(
+        () => client.settingsSet({'autoStopArchiveMinutes': 45}),
+        throwsA(isA<HostException>()),
+      );
+      client.close();
+    });
+
+    test('settingsGet GETs /mobile/workspace-settings and parses', () async {
+      String? seenPath;
+      String? seenMethod;
+      final mock = MockClient((request) async {
+        seenPath = request.url.path;
+        seenMethod = request.method;
+        return http.Response(
+          jsonEncode({
+            'autoStopArchiveMinutes': 240,
+            'browserDefaultAccess': 'on',
+            'experimentalSettings': {'sessionsMcp': false},
+          }),
+          200,
+        );
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      final settings = await client.settingsGet();
+      expect(seenMethod, 'GET');
+      expect(seenPath, '/mobile/workspace-settings');
+      expect(settings['autoStopArchiveMinutes'], 240);
+      expect(settings['browserDefaultAccess'], 'on');
+      expect(
+        (settings['experimentalSettings'] as Map)['sessionsMcp'],
+        false,
+      );
+      client.close();
+    });
+
+    test('settingsGet throws HostException on non-200', () async {
+      final mock = MockClient((request) async {
+        return http.Response('nope', 503);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      expect(() => client.settingsGet(), throwsA(isA<HostException>()));
+      client.close();
+    });
   });
 }

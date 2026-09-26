@@ -2,17 +2,18 @@
 /// Transcripts, Notifications, Advanced.
 ///
 /// The settings model mirrors the Host's `settings.workspace.set` allowlist
-/// (see `crates/supercli-cli/src/settings_cli.rs` and the Host's
-/// `controller_host.rs` whitelist):
-///   experimental_features.sessions_mcp   true | false
-///   experimental_features.browser_mcp    true | false
-///   browser_default_access               on | ask | off
-///   mcp_nonchild_write_access            ask | allow | deny
-///   mcp_worktree_access                  true | false
-///   mcp_auto_add_browser_screenshots     true | false
-///   auto_stop_archive_minutes            0 | 30 | 60 | 120 | 240 | 480 | 1440
-///   sidebar_stopped_limit                0 | 3 | 5 | 10 | 15 | 25
-///   theme                                system | light | dark
+/// (see `crates/supercli-core/src/controller_host.rs`
+/// `workspace_settings_response`, served at `POST /mobile/workspace-settings`
+/// and read back via `GET /mobile/workspace-settings`):
+///   experimentalSettings.sessionsMcp   true | false
+///   experimentalSettings.browserMcp    true | false
+///   browserDefaultAccess               on | ask | off
+///   mcpNonchildWriteAccess             ask | allow | deny
+///   mcpWorktreeAccess                  true | false
+///   mcpAutoAddBrowserScreenshots       true | false
+///   autoStopArchiveMinutes             0 | 30 | 60 | 120 | 240 | 480 | 1440
+///   sidebarStoppedLimit                0 | 3 | 5 | 10 | 15 | 25
+///   appearanceSettings.theme           system | light | dark
 ///
 /// Desktop-only preferences (appearance, notifications, advanced) live in the
 /// local app state and are not sent to the Host.
@@ -136,38 +137,67 @@ final class AppSettings {
   String sessionsFolder;
   bool traceLog;
 
-  /// Host wire format for `settings.workspace.set` (allowlisted keys only).
+  /// Host wire format for `POST /mobile/workspace-settings`
+  /// (`settings.workspace.set`): camelCase keys matching the Host's
+  /// `workspace_settings_response` whitelist in
+  /// `crates/supercli-core/src/controller_host.rs`. The GET route returns
+  /// the same shape, so this round-trips.
   Map<String, Object> toHostJson() => {
-        'experimental_features.sessions_mcp': sessionsMcp,
-        'experimental_features.browser_mcp': browserMcp,
-        'browser_default_access': browserDefaultAccess.name,
-        'mcp_nonchild_write_access': writePolicy.name,
-        'mcp_worktree_access': worktreeAccess,
-        'mcp_auto_add_browser_screenshots': autoAddBrowserScreenshots,
-        'auto_stop_archive_minutes': autoStopArchiveMinutes,
-        'sidebar_stopped_limit': sidebarStoppedLimit,
-        'theme': theme.name,
+        'experimentalSettings': {
+          'sessionsMcp': sessionsMcp,
+          'browserMcp': browserMcp,
+        },
+        'browserDefaultAccess': browserDefaultAccess.name,
+        'mcpNonchildWriteAccess': writePolicy.name,
+        'mcpWorktreeAccess': worktreeAccess,
+        'mcpAutoAddBrowserScreenshots': autoAddBrowserScreenshots,
+        'autoStopArchiveMinutes': autoStopArchiveMinutes,
+        'sidebarStoppedLimit': sidebarStoppedLimit,
+        'appearanceSettings': {
+          'theme': theme.name,
+        },
       };
 
+  /// Parse the `GET /mobile/workspace-settings` response body (same
+  /// camelCase wire format as [toHostJson]). Missing keys fall back to
+  /// the model defaults.
   factory AppSettings.fromHostJson(Map<String, dynamic> json) {
     T get<T>(String key, T fallback) {
       final v = json[key];
       return v is T ? v : fallback;
     }
 
+    Map<String, dynamic> nested(String key) {
+      final v = json[key];
+      return v is Map<String, dynamic>
+          ? v
+          : v is Map
+              ? Map<String, dynamic>.from(v as Map)
+              : <String, dynamic>{};
+    }
+
+    final experimental = nested('experimentalSettings');
+    final appearance = nested('appearanceSettings');
+
+    T nget<T>(Map<String, dynamic> m, String key, T fallback) {
+      final v = m[key];
+      return v is T ? v : fallback;
+    }
+
     return AppSettings(
-      sessionsMcp: get<bool>('experimental_features.sessions_mcp', true),
-      browserMcp: get<bool>('experimental_features.browser_mcp', false),
+      sessionsMcp: nget<bool>(experimental, 'sessionsMcp', true),
+      browserMcp: nget<bool>(experimental, 'browserMcp', false),
       browserDefaultAccess: BrowserDefaultAccess.fromWire(
-          get<String>('browser_default_access', 'ask')),
-      writePolicy:
-          WritePolicy.fromWire(get<String>('mcp_nonchild_write_access', 'ask')),
-      worktreeAccess: get<bool>('mcp_worktree_access', false),
+          get<String>('browserDefaultAccess', 'ask')),
+      writePolicy: WritePolicy.fromWire(
+          get<String>('mcpNonchildWriteAccess', 'ask')),
+      worktreeAccess: get<bool>('mcpWorktreeAccess', false),
       autoAddBrowserScreenshots:
-          get<bool>('mcp_auto_add_browser_screenshots', false),
-      autoStopArchiveMinutes: get<int>('auto_stop_archive_minutes', 60),
-      sidebarStoppedLimit: get<int>('sidebar_stopped_limit', 10),
-      theme: ThemeMode.fromWire(get<String>('theme', 'system')),
+          get<bool>('mcpAutoAddBrowserScreenshots', false),
+      autoStopArchiveMinutes: get<int>('autoStopArchiveMinutes', 60),
+      sidebarStoppedLimit: get<int>('sidebarStoppedLimit', 10),
+      theme: ThemeMode.fromWire(
+          nget<String>(appearance, 'theme', get<String>('theme', 'system'))),
     );
   }
 

@@ -30,8 +30,12 @@ for upstream.
   public `rows` getter. Tests use the index API.
 - `UiRow`/`UiColumn` take `(id, children)`; `UiButton`/`UiText` take
   `(id, label)`; `UiInput(id, {placeholder})`; `UiTable(id, {dataset})`.
-- Host persistence: `AppSettings.toHostJson()` serializes only the Host
-  allowlist (`settings.workspace.set`). There is no `host_client.dart`
-  `settingsSet` endpoint in this repo yet — the model builds the call payload
-  (`setCall(key, value)`) but no transport is wired. Desktop-only keys
-  (theme, accent, terminal font, notifications) are local state only.
+- Host persistence: `AppSettings.toHostJson()` serializes the Host
+  allowlist (`settings.workspace.set`) in the camelCase wire format;
+  `HostClient.settingsSet` (POST `/mobile/workspace-settings`) and
+  `settingsGet` (GET `/mobile/workspace-settings`) provide the transport,
+  and `SettingsController` (settings_controller.dart) loads on startup and
+  persists edits with a debounce, surfacing failures via `onError` for the
+  ToastCenter. Desktop-only keys (accent, terminal font, notifications)
+  are local state only. Note: `theme` IS Host-managed via
+  `appearanceSettings.theme`.

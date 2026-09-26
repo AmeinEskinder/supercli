@@ -15,7 +15,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('AppSettings', () {
-    test('toHostJson uses allowlisted keys', () {
+    test('toHostJson uses Host camelCase wire format', () {
       final s = AppSettings(
         sessionsMcp: true,
         browserMcp: false,
@@ -27,20 +27,23 @@ void main() {
         theme: ThemeMode.dark,
       );
       final json = s.toHostJson();
-      expect(json['experimental_features.sessions_mcp'], true);
-      expect(json['experimental_features.browser_mcp'], false);
-      expect(json['browser_default_access'], 'ask');
-      expect(json['mcp_nonchild_write_access'], 'deny');
-      expect(json['mcp_worktree_access'], true);
-      expect(json['auto_stop_archive_minutes'], 120);
-      expect(json['sidebar_stopped_limit'], 5);
-      expect(json['theme'], 'dark');
+      final experimental = json['experimentalSettings'] as Map<String, Object>;
+      expect(experimental['sessionsMcp'], true);
+      expect(experimental['browserMcp'], false);
+      expect(json['browserDefaultAccess'], 'ask');
+      expect(json['mcpNonchildWriteAccess'], 'deny');
+      expect(json['mcpWorktreeAccess'], true);
+      expect(json['autoStopArchiveMinutes'], 120);
+      expect(json['sidebarStoppedLimit'], 5);
+      final appearance = json['appearanceSettings'] as Map<String, Object>;
+      expect(appearance['theme'], 'dark');
     });
 
     test('fromHostJson round-trips', () {
       final s = AppSettings(writePolicy: WritePolicy.allow);
       final json = s.toHostJson();
-      final back = AppSettings.fromHostJson(json);
+      final back = AppSettings.fromHostJson(
+          Map<String, dynamic>.from(json.map((k, v) => MapEntry(k, v))));
       expect(back.writePolicy, WritePolicy.allow);
       expect(back.theme, s.theme);
       expect(back.autoStopArchiveMinutes, s.autoStopArchiveMinutes);
@@ -48,13 +51,24 @@ void main() {
 
     test('fromHostJson tolerates unknown values', () {
       final back = AppSettings.fromHostJson({
-        'theme': 'neon',
-        'mcp_nonchild_write_access': 'sometimes',
-        'browser_default_access': 'maybe',
+        'appearanceSettings': {'theme': 'neon'},
+        'mcpNonchildWriteAccess': 'sometimes',
+        'browserDefaultAccess': 'maybe',
       });
       expect(back.theme, ThemeMode.system);
       expect(back.writePolicy, WritePolicy.ask);
       expect(back.browserDefaultAccess, BrowserDefaultAccess.ask);
+    });
+
+    test('fromHostJson reads nested experimental settings', () {
+      final back = AppSettings.fromHostJson({
+        'experimentalSettings': {
+          'sessionsMcp': false,
+          'browserMcp': true,
+        },
+      });
+      expect(back.sessionsMcp, false);
+      expect(back.browserMcp, true);
     });
 
     test('setCall builds single-key payload', () {
