@@ -92,16 +92,20 @@ void main() {
   });
 
   group('TerminalPaneView', () {
-    test('builds pane with header and lines', () {
+    test('builds pane with header, terminal node, and fallback grid', () {
       final pane = TerminalPaneView(
         paneId: 'p1',
         title: 'zsh',
         lines: const ['\$ ls', 'src/'],
       );
       final node = pane.build() as UiColumn;
-      expect(node.children.length, 2);
+      // header + UiTerminal node + fallback grid
+      expect(node.children.length, 3);
       expect(node.children[0], isA<UiRow>());
-      expect(node.children[1], isA<UiColumn>());
+      expect(node.children[1], isA<UiTerminal>());
+      expect(node.children[2], isA<UiColumn>());
+      // The lines made it into the terminal state.
+      expect(pane.state.grid[0][0].char, '\$');
     });
 
     test('find bar renders when visible', () {
@@ -111,7 +115,14 @@ void main() {
         findBarVisible: true,
       );
       final node = pane.build() as UiColumn;
-      expect(node.children.length, 3);
+      // header + find bar + UiTerminal node + fallback grid
+      expect(node.children.length, 4);
+    });
+
+    test('exposes terminal key bindings', () {
+      final pane = TerminalPaneView(paneId: 'p1', title: 'zsh');
+      final actions = pane.actions();
+      expect(actions.map((a) => a.name), contains('terminal.key.up'));
     });
   });
 
