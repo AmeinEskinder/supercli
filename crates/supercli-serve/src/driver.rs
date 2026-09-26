@@ -2066,12 +2066,19 @@ pub fn run(mut report: impl FnMut(ServeEvent)) -> Result<(), String> {
     for event in events {
         report(event);
     }
+    // Document-lifecycle hook observer deliveries: at-least-once via the
+    // durable outbox, replayed on boot. The worker owns its shutdown flag
+    // so a hook-script hang can never block Host shutdown.
+    let hook_shutdown = Arc::new(AtomicBool::new(false));
+    let hook_worker = crate::hook_observer::start(Arc::clone(&hook_shutdown));
     while !SHUTDOWN_REQUESTED.load(Ordering::Acquire) {
         for event in driver.tick() {
             report(event);
         }
         std::thread::sleep(LOOP_INTERVAL);
     }
+    hook_shutdown.store(true, Ordering::Release);
+    let _ = hook_worker.join();
     for event in driver.shutdown_events() {
         report(event);
     }

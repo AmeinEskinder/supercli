@@ -347,6 +347,9 @@ fn run_once(args: &[String]) -> Result<i32, String> {
     }
     let session_dir = session_host::session_dir(&spec.session_id);
     let mut executor = SessionConnectors::resolve(&spec.session_id, &session_dir);
+    // Wire ToolCall.before_execute doc-event hooks (no-op when no
+    // hooks.toml is configured).
+    executor.set_before_execute_hook(supercli_events::emit::before_execute_hook());
     let runner = ScheduledRunner::new(SystemClock);
     match runner.run_trigger(spec, &session_dir, &mut executor) {
         Ok(record) => {
@@ -431,8 +434,11 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     let mut make_executor = |session_id: &str, session_dir: &Path| {
         // Fresh connector set per trigger: no state leaks between runs,
         // and the runner puts it in autonomous mode for the run's duration.
-        Box::new(SessionConnectors::resolve(session_id, session_dir))
-            as Box<dyn supercli_core::scheduled::ScheduledToolExecutor>
+        let mut connectors = SessionConnectors::resolve(session_id, session_dir);
+        // Wire ToolCall.before_execute doc-event hooks (no-op when no
+        // hooks.toml is configured).
+        connectors.set_before_execute_hook(supercli_events::emit::before_execute_hook());
+        Box::new(connectors) as Box<dyn supercli_core::scheduled::ScheduledToolExecutor>
     };
     loop {
         let report = scheduler.tick(

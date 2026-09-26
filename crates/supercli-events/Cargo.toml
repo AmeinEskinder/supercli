@@ -1,0 +1,23 @@
+[package]
+name = "supercli-events"
+version = "0.9.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+authors = ["Supercli"]
+description = "Frappe-style document lifecycle events (doc_events) for supercli"
+
+[features]
+# Phase 2: embedded scripting (Rhai or WASM). Not implemented in Phase 1;
+# the handler JSON contract is identical so Phase 1 handlers port by
+# transliteration.
+events-script = []
+
+[dependencies]
+supercli-core = { path = "../supercli-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+toml = { version = "0.8" }
+
+[dev-dependencies]
+tempfile = { version = "3" }

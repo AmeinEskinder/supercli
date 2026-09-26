@@ -83,6 +83,7 @@ supercli — run and steer CLI agent sessions
   supercli workspaces [list | add <name> | remove <name>]
   supercli schedule add|list|pause|resume|remove|run-once|daemon
                                   scheduled autonomous sessions (opt-in)
+  supercli hooks list|test|trace   document lifecycle hooks (hooks.toml)
   supercli ideas add|list|done      capture and track ideas
   supercli migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
@@ -335,9 +336,48 @@ fn new_session(args: &Args) -> Result<(), String> {
     };
     let cols = args.number("cols").unwrap_or(120) as u16;
     let rows_n = args.number("rows").unwrap_or(32) as u16;
+    // Document-lifecycle event: Session/autoname. Fires during name
+    // assignment; a hook may propose a different id via patch.
+    let mut session = session;
+    {
+        let proposed_id = uuid::Uuid::new_v4().to_string().to_lowercase();
+        if let Some(outcome) = supercli_events::emit::emit_sync(
+            supercli_events::DocType::Session,
+            supercli_events::DocEvent::Autoname,
+            &proposed_id,
+            serde_json::json!({"id": proposed_id, "cwd": cwd}),
+            &supercli_core::app_paths::supercli_home(),
+            "human:cli",
+        ) {
+            if outcome.decision.is_reject() {
+                let reason = outcome
+                    .reject_reason
+                    .unwrap_or_else(|| "hook rejected session name".to_string());
+                return Err(format!("session autoname rejected: {reason}"));
+            }
+            if let Some(new_id) = outcome.patched_doc.get("id").and_then(|v| v.as_str()) {
+                if !new_id.is_empty() {
+                    session.id = new_id.to_string();
+                }
+            }
+        }
+        if session.id.is_empty() {
+            session.id = proposed_id;
+        }
+    }
     let id = supercli_core::session_ops::spawn_session(session, &cwd, None, cols, rows_n)?;
     supercli_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
         .map_err(|error| format!("session {id} did not become ready: {error}"))?;
+    // Document-lifecycle event: Session/AfterInsert. Fires after the session
+    // is durable and ready; observers cannot mutate the outcome.
+    supercli_events::emit::emit_observer(
+        supercli_events::DocType::Session,
+        supercli_events::DocEvent::AfterInsert,
+        &id,
+        serde_json::json!({"id": id, "cwd": cwd}),
+        &supercli_core::app_paths::supercli_home(),
+        "human:cli",
+    );
     if args.has("json") {
         println!("{}", serde_json::json!({ "id": id }));
     } else {
@@ -1015,9 +1055,40 @@ pub fn run(args: &[String]) -> i32 {
                     .and_then(|row| supercli_core::session_ops::restore_session(&row.id).map(|_| 0))
             }
         }
-        "rm" | "remove" | "close" => reference_arg()
-            .and_then(|reference| resolve(&reference))
-            .and_then(|row| supercli_core::session_ops::remove_session(&row.id).map(|_| 0)),
+        "rm" | "remove" | "close" => reference_arg().and_then(|reference| {
+            resolve(&reference).and_then(|row| {
+                // Document-lifecycle event: Session/on_trash. Fires BEFORE
+                // the delete; a hook may reject (veto) the delete.
+                if let Some(outcome) = supercli_events::emit::emit_sync(
+                    supercli_events::DocType::Session,
+                    supercli_events::DocEvent::OnTrash,
+                    &row.id,
+                    serde_json::json!({"id": row.id}),
+                    &supercli_core::app_paths::supercli_home(),
+                    "human:cli",
+                ) {
+                    if outcome.decision.is_reject() {
+                        let reason = outcome
+                            .reject_reason
+                            .unwrap_or_else(|| "hook vetoed session delete".to_string());
+                        return Err(format!("session delete vetoed: {reason}"));
+                    }
+                }
+                let result = supercli_core::session_ops::remove_session(&row.id).map(|_| 0);
+                // Document-lifecycle event: Session/after_delete (observer).
+                if result.is_ok() {
+                    supercli_events::emit::emit_observer(
+                        supercli_events::DocType::Session,
+                        supercli_events::DocEvent::AfterDelete,
+                        &row.id,
+                        serde_json::json!({"id": row.id}),
+                        &supercli_core::app_paths::supercli_home(),
+                        "human:cli",
+                    );
+                }
+                result
+            })
+        }),
         "transcript" => transcript(&parsed).map(|_| 0),
         "open" => Ok(crate::open_cli::run(&args[1..])),
         "settings" => match args.get(1).map(String::as_str) {
@@ -1033,6 +1104,7 @@ pub fn run(args: &[String]) -> i32 {
         },
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
+        "hooks" => Ok(crate::hooks_cli::run(&args[1..])),
         "ideas" => Ok(crate::ideas_cli::run(&args[1..])),
         "memory" => Ok(crate::memory_cli::run(&args[1..])),
         "migrate" => {

@@ -13,6 +13,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use supercli_core::app_paths;
+
 /// Serializes the SUPERCLI_HOME-mutating tests: they point SUPERCLI_HOME at a
 /// temp dir so they never touch the real ~/.supercli. Shared crate-wide so
 /// every test that mutates SUPERCLI_HOME serializes on one lock.
@@ -192,6 +194,24 @@ impl ApprovalHub {
         let (tx, rx): (Sender<ApprovalAnswer>, Receiver<ApprovalAnswer>) =
             std::sync::mpsc::channel();
         let id = uuid::Uuid::new_v4().to_string();
+        // Document-lifecycle event: Approval/BeforeSubmit (sync). Handlers
+        // may tighten (escalate/reject) but never loosen. A rejection blocks
+        // the approval before it is queued.
+        if let Some(outcome) = supercli_events::emit::emit_sync(
+            supercli_events::DocType::Approval,
+            supercli_events::DocEvent::BeforeSubmit,
+            &id,
+            serde_json::json!({"id": id, "kind": kind, "title": title}),
+            &supercli_core::app_paths::supercli_home(),
+            "human:host",
+        ) {
+            if outcome.decision == supercli_events::HookDecision::Reject {
+                let reason = outcome
+                    .reject_reason
+                    .unwrap_or_else(|| "hook rejected".to_string());
+                return (false, Some(format!("hook: {reason}")));
+            }
+        }
         if let Ok(mut guard) = self.pending.lock() {
             guard.push(PendingApproval {
                 id: id.clone(),
@@ -250,6 +270,7 @@ impl ApprovalHub {
         };
         let entry = guard.remove(index);
         self.bump_generation();
+        let answered_by_for_doc = answered_by.clone();
         let sent = entry.responder.send((approved, answered_by)).is_ok();
         drop(guard);
         // Record the decision for idempotent retries. Only store if the
@@ -261,6 +282,28 @@ impl ApprovalHub {
         if let Ok(mut store) = self.resolved.lock() {
             store.insert(id.to_string(), approved, nonce.to_string());
         }
+        // Doc event: Approval on_submit (approved) / on_cancel (denied).
+        // Fires after the decision is durably recorded; observers only.
+        let event = if approved {
+            supercli_events::DocEvent::OnSubmit
+        } else {
+            supercli_events::DocEvent::OnCancel
+        };
+        let doc = serde_json::json!({
+            "id": id,
+            "approved": approved,
+            "answered_by": answered_by_for_doc,
+            "kind": entry.kind,
+            "title": entry.title,
+        });
+        supercli_events::emit::emit_observer(
+            supercli_events::DocType::Approval,
+            event,
+            id,
+            doc,
+            &app_paths::supercli_home(),
+            "system:approval-hub",
+        );
         if sent {
             AnswerOutcome::Applied(approved)
         } else {

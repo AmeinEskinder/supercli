@@ -249,6 +249,37 @@ impl std::error::Error for ToolCallFailure {}
 /// listener is the in-process fast path.
 pub type OutcomeListener = Box<dyn Fn(&str, &crate::action_reviews::AttemptOutcome) + Send + Sync>;
 
+/// Tighten-only decision from a ToolCall `before_execute` hook.
+///
+/// Mirrors `supercli_events::HookDecision` without depending on that crate
+/// (which depends on `supercli_core` — the dependency would be circular).
+/// `Escalate` means Allow → Ask (docs/events.md §4.2): the call is routed
+/// into the normal approval flow with the attached reason, and runs only
+/// if the user approves. Meaningful only when the tool's policy was
+/// `Allow`; on `Ask`/`Deny` it is a no-op (cannot loosen).
+#[derive(Debug, Clone)]
+pub enum BeforeExecuteDecision {
+    Allow,
+    Escalate(String),
+    Reject(String),
+}
+
+/// Owned context passed to a [`BeforeExecuteHook`].
+#[derive(Debug, Clone)]
+pub struct BeforeExecuteContext {
+    pub tool: String,
+    pub arguments: serde_json::Value,
+    pub attempt_id: String,
+    pub session_dir: PathBuf,
+    pub actor: String,
+}
+
+/// Synchronous hook invoked after the write-ahead review is fsynced and
+/// before any tool bytes are sent (the `ToolCall.before_execute` event).
+/// Installed by the Host/CLI; `None` means no handlers (fast path).
+pub type BeforeExecuteHook =
+    Box<dyn Fn(&BeforeExecuteContext) -> BeforeExecuteDecision + Send + Sync>;
+
 pub struct SessionConnectors {
     session_id: String,
     session_dir: PathBuf,
@@ -282,6 +313,15 @@ pub struct SessionConnectors {
     /// only fires after the durable record exists, so events are never
     /// emitted first.
     outcome_listener: Option<OutcomeListener>,
+    /// Optional synchronous `ToolCall.before_execute` hook. Invoked after
+    /// the write-ahead review is fsynced and before any tool bytes are
+    /// sent. A `Reject` records `NeverRan { reason: "hook_rejected" }` and
+    /// the tool does not run; an `Escalate` on an `Allow`-policy call
+    /// re-enters the normal approval flow with the hook's reason attached
+    /// (the tool runs only if the user approves). Installed by the
+    /// Host/CLI via [`Self::set_before_execute_hook`]; `None` is the fast
+    /// path (no hooks configured).
+    before_execute_hook: Option<BeforeExecuteHook>,
 }
 
 impl SessionConnectors {
@@ -296,6 +336,7 @@ impl SessionConnectors {
             actor: None,
             lease_fence: None,
             outcome_listener: None,
+            before_execute_hook: None,
         };
         set.refresh();
         set
@@ -327,6 +368,15 @@ impl SessionConnectors {
     /// fires only after the durable outcome record exists.
     pub fn set_outcome_listener(&mut self, listener: OutcomeListener) {
         self.outcome_listener = Some(listener);
+    }
+
+    /// Install the synchronous `ToolCall.before_execute` hook. The hook
+    /// runs after the write-ahead review is fsynced and before any tool
+    /// bytes are sent; see the `before_execute_hook` field for the
+    /// tighten-only semantics. Typically installed once at startup by the
+    /// Host/CLI from `supercli_events`.
+    pub fn set_before_execute_hook(&mut self, hook: BeforeExecuteHook) {
+        self.before_execute_hook = Some(hook);
     }
 
     /// Durably record a terminal attempt outcome and notify the listener.
@@ -678,7 +728,7 @@ impl SessionConnectors {
                         err,
                     ));
                 }
-                match request_tool_approval(&self.session_id, &connector, name, None, None) {
+                match request_tool_approval(&self.session_id, &connector, name, None, None, None) {
                     Ok(outcome) => outcome.actor,
                     Err(rejection) => {
                         // A declined prompt is a denial decision by the
@@ -758,6 +808,7 @@ impl SessionConnectors {
             name,
             Some(replaces_attempt),
             Some(&hash),
+            None,
         ) {
             Ok(outcome) => outcome.actor,
             Err(rejection) => {
@@ -846,6 +897,133 @@ impl SessionConnectors {
             Ok(entry) => entry.review_id,
             Err(e) => return Err(ToolCallFailure::review_failed(e.to_string())),
         };
+        // Doc event: ToolCall.before_execute (synchronous, tighten-only).
+        // Fires after the write-ahead review is fsynced and before any
+        // tool bytes are sent (docs/events.md §3.3). A rejection records
+        // NeverRan (the tool provably never ran) and fails closed. An
+        // escalation means Allow -> Ask (docs/events.md §4.2): the call
+        // re-enters the normal approval flow with the hook's reason
+        // attached, and runs only if the user approves. (The decision is
+        // computed first so no borrow of `self` is held while the
+        // approval prompt — a `&mut self` path — runs.)
+        let hook_decision = self.before_execute_hook.as_ref().map(|hook| {
+            let ctx = BeforeExecuteContext {
+                tool: name.to_string(),
+                arguments: arguments.clone(),
+                attempt_id: attempt_id.to_string(),
+                session_dir: self.session_dir.clone(),
+                actor: actor.to_string(),
+            };
+            hook(&ctx)
+        });
+        // When a hook escalates an Allow-policy call and the user
+        // approves, the human becomes the effective authorizer for the
+        // rest of this attempt.
+        let mut escalated_actor: Option<String> = None;
+        if let Some(decision) = hook_decision {
+            match decision {
+                BeforeExecuteDecision::Allow => {}
+                BeforeExecuteDecision::Escalate(hook_reason) => {
+                    if policy == ApprovalPolicy::Allow {
+                        if self.autonomous {
+                            // No human present to answer the escalated
+                            // prompt: fail closed, consistent with the Ask
+                            // path in `call_tool_detailed`.
+                            let reason = format!(
+                                "hook escalated Allow->Ask ({hook_reason}) but no human can answer in autonomous mode"
+                            );
+                            self.record_outcome(
+                                &review_id,
+                                crate::action_reviews::AttemptOutcome::NeverRan {
+                                    reason: reason.clone(),
+                                },
+                                actor,
+                            );
+                            return Err(ToolCallFailure::denied(
+                                crate::scheduled::DenyReason::NoHumanPresent,
+                                format!(
+                                    "tool {name:?} escalated to approval by before_execute hook: {reason}"
+                                ),
+                            ));
+                        }
+                        match request_tool_approval(
+                            &self.session_id,
+                            connector,
+                            name,
+                            None,
+                            None,
+                            Some(&hook_reason),
+                        ) {
+                            Ok(outcome) => {
+                                escalated_actor = Some(outcome.actor);
+                            }
+                            Err(rejection) => {
+                                let decider = rejection.actor.unwrap_or_else(|| {
+                                    "human:unanswered-prompt".to_string()
+                                });
+                                let completion = if rejection.declined {
+                                    format!("declined by {decider}")
+                                } else {
+                                    "did not complete".to_string()
+                                };
+                                let reason = format!(
+                                    "hook escalated Allow->Ask ({hook_reason}); approval {completion}"
+                                );
+                                // The write-ahead review already exists, so
+                                // close it out terminally: the tool provably
+                                // never ran.
+                                self.record_outcome(
+                                    &review_id,
+                                    crate::action_reviews::AttemptOutcome::NeverRan {
+                                        reason,
+                                    },
+                                    &decider,
+                                );
+                                self.audit_attempt(&AttemptAudit {
+                                    connector,
+                                    tool: name,
+                                    policy,
+                                    approved: Some(false),
+                                    arguments,
+                                    attempt_id,
+                                    args_hash,
+                                    review_id: Some(&review_id),
+                                    request_sent_at: None,
+                                    outcome: "denied",
+                                    retryable: false,
+                                    replaces_attempt,
+                                    error: Some(&rejection.message),
+                                });
+                                if rejection.declined {
+                                    return Err(ToolCallFailure::denied(
+                                        crate::scheduled::DenyReason::AskDeclined,
+                                        rejection.message,
+                                    ));
+                                }
+                                // No decision was made: surface the prompt
+                                // failure distinctly rather than as a denial.
+                                return Err(ToolCallFailure::failed(rejection.message));
+                            }
+                        }
+                    }
+                    // Policy was already Ask (human approved) or Deny:
+                    // escalate is a no-op, cannot loosen.
+                }
+                BeforeExecuteDecision::Reject(hook_reason) => {
+                    self.record_outcome(
+                        &review_id,
+                        crate::action_reviews::AttemptOutcome::NeverRan {
+                            reason: format!("hook_rejected: {hook_reason}"),
+                        },
+                        actor,
+                    );
+                    return Err(ToolCallFailure::failed(format!(
+                        "tool {name:?} rejected by before_execute hook: {hook_reason}"
+                    )));
+                }
+            }
+        }
+        let actor: &str = escalated_actor.as_deref().unwrap_or(actor);
         let args: HashMap<String, Value> = arguments
             .as_object()
             .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -1203,6 +1381,7 @@ fn request_tool_approval(
     tool: &str,
     replaces_attempt: Option<&str>,
     args_hash: Option<&str>,
+    hook_reason: Option<&str>,
 ) -> Result<ApprovalOutcome, ApprovalRejection> {
     let response = match crate::mcp_host::app_request_with_timeout(
         APPROVE_ROUTE,
@@ -1212,6 +1391,7 @@ fn request_tool_approval(
             "tool": tool,
             "replaces_attempt": replaces_attempt,
             "args_hash": args_hash,
+            "hook_reason": hook_reason,
         }),
         Duration::from_secs(130),
     ) {
@@ -2517,5 +2697,261 @@ provides = ["oauthy.echo"]
         // The hash chain still verifies with the outcome appended.
         crate::action_reviews::verify_review_chain(&fx.session_dir)
             .expect("chain verifies after outcome");
+    }
+
+    /// Read the review log JSONL and return the outcome strings recorded.
+    fn review_outcomes(session_dir: &Path) -> Vec<String> {
+        let log = std::fs::read_to_string(session_dir.join(crate::action_reviews::REVIEWS_FILE))
+            .expect("review log readable");
+        log.lines()
+            .filter_map(|line| {
+                let v: serde_json::Value = serde_json::from_str(line).ok()?;
+                if v.get("type").and_then(|t| t.as_str()) != Some("attempt_outcome") {
+                    return None;
+                }
+                v.get("outcome")
+                    .and_then(|o| o.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn before_execute_hook_fires_with_tool_context() {
+        let fx = Fixture::new();
+        fx.attach("allowy", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-ctx", &fx.session_dir);
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
+        let seen_clone = seen.clone();
+        set.set_before_execute_hook(Box::new(move |ctx: &BeforeExecuteContext| {
+            seen_clone
+                .lock()
+                .unwrap()
+                .push((ctx.tool.clone(), ctx.actor.clone()));
+            BeforeExecuteDecision::Allow
+        }));
+        set.set_actor("human:test-device".to_string());
+        let out = set
+            .call_tool("allowy.echo", &json!({"msg": "hi"}))
+            .expect("allow hook lets the tool run");
+        assert!(out.contains("echo:"), "{out}");
+        let calls = seen.lock().unwrap();
+        assert_eq!(calls.len(), 1, "hook fires exactly once per tool call");
+        assert_eq!(calls[0].0, "allowy.echo");
+        assert_eq!(calls[0].1, "human:test-device");
+    }
+
+    #[test]
+    fn before_execute_reject_blocks_execution_and_records_never_ran() {
+        let fx = Fixture::new();
+        // Counting mock: proves the connector is never invoked.
+        let count_file = fx.dir.join("hook-reject-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-reject", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Reject("test policy says no".to_string())
+        }));
+        let err = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect_err("rejected tool call must fail");
+        assert!(
+            err.message.contains("rejected by before_execute hook"),
+            "error names the hook: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains("test policy says no"),
+            "error carries the hook reason: {}",
+            err.message
+        );
+        // The mock connector was never invoked: zero tool bytes sent.
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 0, "rejected tool must never execute");
+        // The outcome is NeverRan (terminal), not in-flight.
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "never_ran"),
+            "rejection records never_ran: {outcomes:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(
+            inflight.is_empty(),
+            "rejected call must not look in-flight: {inflight:?}"
+        );
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
+    }
+
+    /// One-shot loopback stub for the approval bridge
+    /// (`/mcp/approve-connector`). Answers the next approval POST with
+    /// `body`, then closes. Returns the port to advertise via
+    /// `SUPERCLI_APP_PORT`.
+    fn approval_stub(body: &'static str) -> u16 {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+        let port = listener.local_addr().expect("local addr").port();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            // Drain the request headers so the client sees a clean reply.
+            let mut request = [0u8; 8192];
+            let mut seen = 0;
+            while seen < request.len() {
+                let n = stream.read(&mut request[seen..]).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                seen += n;
+                if request[..seen].windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        });
+        port
+    }
+
+    /// Point the approval bridge and the supercli home at the fixture, so
+    /// the escalated prompt hits [`approval_stub`] and no real frontend.
+    /// Env vars are removed by the caller at the end of the test; the
+    /// fixture lock serializes all of this.
+    fn use_approval_stub(fx: &Fixture, port: u16) {
+        std::env::set_var("SUPERCLI_APP_PORT", port.to_string());
+        std::env::set_var("SUPERCLI_HOME", &fx.dir);
+    }
+
+    fn clear_approval_stub() {
+        std::env::remove_var("SUPERCLI_APP_PORT");
+        std::env::remove_var("SUPERCLI_HOME");
+    }
+
+    /// Read the actor recorded on the attempt_outcome entries.
+    fn review_outcome_actors(session_dir: &std::path::Path) -> Vec<String> {
+        let log = std::fs::read_to_string(session_dir.join(crate::action_reviews::REVIEWS_FILE))
+            .expect("review log readable");
+        log.lines()
+            .filter_map(|line| {
+                let v: serde_json::Value = serde_json::from_str(line).ok()?;
+                if v.get("type").and_then(|t| t.as_str()) != Some("attempt_outcome") {
+                    return None;
+                }
+                v.get("actor").and_then(|a| a.as_str()).map(|s| s.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn before_execute_escalate_on_allow_routes_to_approval_and_runs_once_on_approve() {
+        let fx = Fixture::new();
+        // The user approves the escalated prompt.
+        let port = approval_stub(r#"{"approved": true, "answered_by": "test-device"}"#);
+        use_approval_stub(&fx, port);
+        let count_file = fx.dir.join("hook-escalate-approve-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-escalate-approve", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Escalate("test wants a human to look".to_string())
+        }));
+        // Escalate means Allow -> Ask: the approval card appears, the user
+        // approves, and the tool runs exactly once.
+        let out = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect("approved escalated call must run");
+        assert!(out.contains("echo:"), "{out}");
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 1, "approved escalated tool must run exactly once");
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "executed"),
+            "approved escalation records executed: {outcomes:?}"
+        );
+        let actors = review_outcome_actors(&fx.session_dir);
+        assert!(
+            actors.iter().any(|a| a == "human:test-device"),
+            "the human approver is the effective authorizer: {actors:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(inflight.is_empty(), "no in-flight reviews remain: {inflight:?}");
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
+        clear_approval_stub();
+    }
+
+    #[test]
+    fn before_execute_escalate_on_allow_denied_by_user_does_not_run() {
+        let fx = Fixture::new();
+        // The user declines the escalated prompt.
+        let port = approval_stub(r#"{"approved": false, "answered_by": "test-device"}"#);
+        use_approval_stub(&fx, port);
+        let count_file = fx.dir.join("hook-escalate-deny-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-escalate-deny", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Escalate("test wants a human to look".to_string())
+        }));
+        let err = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect_err("declined escalated call must not run");
+        assert!(
+            err.message.contains("declined"),
+            "error reports the decline: {}",
+            err.message
+        );
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 0, "declined escalated tool must never execute");
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "never_ran"),
+            "declined escalation records never_ran: {outcomes:?}"
+        );
+        let actors = review_outcome_actors(&fx.session_dir);
+        assert!(
+            actors.iter().any(|a| a == "human:test-device"),
+            "the decliner is recorded: {actors:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(
+            inflight.is_empty(),
+            "declined call must not look in-flight: {inflight:?}"
+        );
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
+        clear_approval_stub();
     }
 }
