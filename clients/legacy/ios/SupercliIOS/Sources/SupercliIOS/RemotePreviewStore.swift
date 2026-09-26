@@ -2043,7 +2043,7 @@ extension RemoteBootstrapSnapshot {
 
     static let mock = RemoteBootstrapSnapshot(
         macID: "mac-studio",
-        macName: "Tommy's Mac Studio",
+        macName: "Alex's Mac Studio",
         folders: [
             .init(id: "folder-product", name: "Product", colorID: "blue", sortOrder: 0),
             .init(id: "folder-client", name: "Client Work", colorID: "purple", sortOrder: 1),

@@ -1480,9 +1480,9 @@ mod tests {
 
     #[test]
     fn target_is_an_opaque_safe_ssh_destination() {
-        let target = SshTarget::parse("ssh://tommy@studio").unwrap();
-        assert_eq!(target.destination(), "tommy@studio");
-        assert_eq!(target.uri(), "ssh://tommy@studio");
+        let target = SshTarget::parse("ssh://dev@studio").unwrap();
+        assert_eq!(target.destination(), "dev@studio");
+        assert_eq!(target.uri(), "ssh://dev@studio");
 
         for invalid in [
             "studio",

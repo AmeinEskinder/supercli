@@ -302,7 +302,7 @@ private final class KeyboardHeightObserver: ObservableObject {
     }
 }
 
-/// The one phone terminal size (was "Small" of a three-way picker; Tommy
+/// The one phone terminal size (was "Small" of a three-way picker; the team
 /// chose a single size, 2026-07-02). Denser than the desktop's 13pt so more
 /// content fits; the auto-fit column math scales from it via cell metrics.
 let phoneTerminalFontSize: CGFloat = 11

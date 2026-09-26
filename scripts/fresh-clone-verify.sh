@@ -92,6 +92,43 @@ if [ -n "$domain_matches" ]; then
 fi
 echo "domain guard PASS"
 
+echo "--- 4c. contributor identity scrub (no original-developer identity) ---"
+ident_matches=$(grep -riE 'tommy|vedvik|uxthemes|claude-501' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=gpuidart \
+  --exclude-dir=.dart_tool \
+  --exclude='*.lock' \
+  --exclude='rename-guard.yml' \
+  --exclude='fresh-clone-verify.sh' \
+  2>/dev/null | grep -v -e '^./clients/gpuidart/' || true)
+# /Users/<name> paths: flag only non-placeholder usernames (me/test/example/etc are neutral fixtures)
+user_matches=$(grep -rhoE '/Users/[a-zA-Z0-9_.-]+' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=gpuidart \
+  --exclude-dir=.dart_tool \
+  2>/dev/null | grep -v -e '^./clients/gpuidart/' | sort -u | grep -v -e '^/Users/me$' -e '^/Users/test$' -e '^/Users/testing$' -e '^/Users/example$' -e '^/Users/exampleuser$' -e '^/Users/alice$' -e '^/Users/x$' -e '^/Users/t$' || true)
+if [ -n "$ident_matches" ]; then
+  echo "FAIL: original-contributor identity references found:"
+  echo "$ident_matches" | head -20
+  exit 1
+fi
+if [ -n "$user_matches" ]; then
+  echo "FAIL: non-placeholder /Users/<name> paths found (possible identity leak):"
+  echo "$user_matches" | head -20
+  exit 1
+fi
+for bin in $(find . \( -name '*.a' -o -name '*.dylib' -o -name '*.so' \) 2>/dev/null | grep -v -e '/.git/' -e '/target/' -e 'gpuidart'); do
+  n=$(strings "$bin" 2>/dev/null | grep -ciE 'tommy|vedvik|uxthemes|claude-501|/Users/[a-z]' || true)
+  if [ "$n" != "0" ]; then echo "FAIL: $bin contains $n identity mentions"; exit 1; fi
+done
+echo "identity scrub PASS"
+
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
 for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md; do
   if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi
