@@ -385,10 +385,26 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     // records the emulator's OWN render rate, so we can tell whether the
     // renderer or the (software) encoder is the fps bottleneck on CI.
     eprintln!("e2e: launching Settings for the animated fps window ...");
-    adb_shell(
-        serial,
-        &["am", "start", "-n", "com.android.settings/.Settings"],
-    )?;
+    // Retry once: on the second run of a two-run job the emulator can be
+    // briefly unresponsive while the previous scrcpy server tears down.
+    let mut launched = false;
+    for attempt in 1..=2 {
+        match adb_shell(
+            serial,
+            &["am", "start", "-n", "com.android.settings/.Settings"],
+        ) {
+            Ok(()) => {
+                launched = true;
+                break;
+            }
+            Err(e) if attempt == 1 => {
+                eprintln!("e2e: am start attempt 1 failed ({e:?}), retrying in 5 s ...");
+                std::thread::sleep(Duration::from_secs(5));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    assert!(launched);
     std::thread::sleep(Duration::from_secs(3));
 
     eprintln!("e2e: reading H.264 packets for 60 s while fling-scrolling ...");

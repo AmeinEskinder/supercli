@@ -93,6 +93,16 @@ FULL_STATUS=$?
 set -e
 echo "=== stage: cargo_test_fullres_done exit=$FULL_STATUS ==="
 
+# Clean up the first run's scrcpy server before the second run: the server
+# exits when the client's video socket closes, but not instantly — a
+# lingering server from the full-res run would fight the 720 run's server
+# for the display (the 720 run's `am start` failed with exit 224 when this
+# cleanup was missing).
+echo "=== stage: inter_run_cleanup ==="
+adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
+sleep 3
+adb -s "$SERIAL" shell ps -A | grep -i scrcpy || echo "inter-run: no scrcpy process left (good)"
+
 echo "=== stage: cargo_test_720_start ==="
 set +e
 SUPERCLI_ANDROID_E2E=1 \
