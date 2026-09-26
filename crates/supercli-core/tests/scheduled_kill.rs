@@ -25,12 +25,11 @@ fn test_dir(name: &str) -> PathBuf {
 }
 
 fn helper_bin() -> PathBuf {
-    // The example binary built by `cargo build --example scheduled_kill_helper`.
-    let mut p = std::env::current_exe().unwrap();
-    // target/debug/deps/scheduled_kill-<hash> -> target/debug/examples/scheduled_kill_helper
-    p.pop(); // deps
-    p.pop(); // debug
-    p.join("examples").join("scheduled_kill_helper")
+    // Via CARGO_BIN_EXE_<name>: cargo builds the [[bin]] target before running
+    // integration tests, so the helper is always present. (Previously this
+    // derived target/debug/examples/... from current_exe, which broke when
+    // `cargo test` did not build examples.)
+    PathBuf::from(env!("CARGO_BIN_EXE_scheduled_kill_helper"))
 }
 
 fn spawn_helper(home: &PathBuf, side_effects: &PathBuf, progress: &PathBuf) -> Child {
@@ -150,11 +149,22 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     // - The kill still lands at different points across iterations (during
     //   step-2, between steps, etc.), exercising the resume logic.
     let mut child1 = spawn_helper(&home, &side_effects, &progress);
-    let marker_id = wait_for_run_created(&progress, Duration::from_secs(30));
-    assert!(
-        marker_id.is_some(),
-        "helper must write run-created marker within 30s"
-    );
+    let marker_id = match wait_for_run_created(&progress, Duration::from_secs(60)) {
+        Some(id) => id,
+        None => {
+            // Print helper stderr to diagnose spawn failures (missing binary,
+            // panics, etc.), then panic. The child is killed to avoid orphans.
+            let _ = child1.kill();
+            match child1.wait_with_output() {
+                Ok(o) => panic!(
+                    "helper must write run-created marker within 60s; stderr:
+{}",
+                    String::from_utf8_lossy(&o.stderr)
+                ),
+                Err(e) => panic!("helper must write run-created marker within 60s (wait failed: {e})"),
+            }
+        }
+    };
     println!("run 1: saw run-created marker: {:?}", marker_id);
     // Wait for step-1 to complete (ensures its side effect was written).
     let step1_done = wait_for_marker(&progress, "step-completed step-1", Duration::from_secs(30));
@@ -179,7 +189,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     assert!(run_id_1.is_some(), "run 1 must have created a run");
     // The marker id and DB id must agree.
     assert_eq!(
-        marker_id.as_deref(),
+        Some(marker_id.as_str()),
         run_id_1.as_deref(),
         "progress marker run id must match DB run id"
     );

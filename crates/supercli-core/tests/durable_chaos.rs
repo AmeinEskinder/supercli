@@ -71,39 +71,12 @@ impl XorShift64 {
 }
 
 /// Locate the compiled helper binary: `<target>/debug/examples/durable_chaos_helper`.
+/// Locate the compiled helper binary via CARGO_BIN_EXE.
+/// cargo builds the [[bin]] target before running integration tests,
+/// so the helper is always present (previously derived from current_exe,
+/// which broke when `cargo test` did not build examples).
 fn helper_binary() -> PathBuf {
-    // Ensure the example is built.
-    let status = Command::new("cargo")
-        .args(["build", "--example", "durable_chaos_helper"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env(
-            "PATH",
-            format!(
-                "{}/.cargo/bin:{}",
-                std::env::var("HOME").unwrap_or_else(|_| "/home/hatch".into()),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
-        .status()
-        .expect("cargo build --example failed to spawn");
-    assert!(
-        status.success(),
-        "cargo build --example durable_chaos_helper failed"
-    );
-
-    // target/debug/examples/durable_chaos_helper, derived from the test binary.
-    let test_exe = std::env::current_exe().expect("current_exe");
-    // .../target/debug/deps/<test>-<hash> -> .../target/debug
-    let mut dir = test_exe
-        .parent()
-        .expect("deps dir")
-        .parent()
-        .expect("debug dir")
-        .to_path_buf();
-    dir.push("examples");
-    dir.push("durable_chaos_helper");
-    assert!(dir.exists(), "helper binary not found at {}", dir.display());
-    dir
+    PathBuf::from(env!("CARGO_BIN_EXE_durable_chaos_helper"))
 }
 
 fn spawn_helper(helper: &Path, run_id: &str, home: &Path, side_effects: &Path) -> Child {

@@ -28,11 +28,9 @@ fn test_dir(name: &str) -> PathBuf {
 }
 
 fn helper_bin() -> PathBuf {
-    // target/debug/deps/subagent_kill-<hash> -> target/debug/examples/subagent_kill_helper
-    let mut p = std::env::current_exe().unwrap();
-    p.pop(); // deps
-    p.pop(); // debug
-    p.join("examples").join("subagent_kill_helper")
+    // Via CARGO_BIN_EXE_<name>: cargo builds the [[bin]] target before running
+    // integration tests, so the helper is always present.
+    PathBuf::from(env!("CARGO_BIN_EXE_subagent_kill_helper"))
 }
 
 fn spawn_helper(home: &PathBuf, side_effects: &PathBuf) -> Child {
