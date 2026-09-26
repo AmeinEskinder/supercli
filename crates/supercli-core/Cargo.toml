@@ -76,3 +76,7 @@ toml = { version = "0.8", optional = true }
 [[example]]
 name = "ssh_host_probe"
 required-features = ["native-host"]
+
+[[example]]
+name = "durable_chaos_helper"
+required-features = ["native-host"]
