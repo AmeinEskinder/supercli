@@ -10,6 +10,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'host_models.dart';
 import 'models.dart';
 
 /// Thrown when the Host is unreachable or returns an error.
@@ -149,7 +150,56 @@ final class HostClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HostException(
         'settings set failed: ${response.body}',
-        statusCode: response.statusCode,
+  // ------------------------------------------------------------------
+  // Git routes (crates/supercli-core/src/host_git.rs).
+  // ------------------------------------------------------------------
+
+  /// GET /mobile/git/status — branch, ahead/behind, changed files.
+  Future<GitStatus> gitStatus(String repoPath) async {
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/git/status',
+      queryParameters: {'path': repoPath},
+    );
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    _checkOk(response, 'git status');
+    return GitStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// GET /mobile/git/diff — unified diff of one file against HEAD.
+  Future<String> gitDiff(String repoPath, String file) async {
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/git/diff',
+      queryParameters: {'path': repoPath, 'file': file},
+    );
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    _checkOk(response, 'git diff');
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['diff'] as String?) ?? '';
+  }
+
+  /// GET /mobile/git/history — recent commits.
+  Future<List<GitHistoryCommit>> gitHistory(String repoPath, {int limit = 50}) async {
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/git/history',
+      queryParameters: {'path': repoPath, 'limit': '$limit'},
+    );
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    _checkOk(response, 'git history');
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final commits = (body['commits'] as List?) ?? const [];
+    return commits
+        .map((c) => GitHistoryCommit.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> _gitPost(String route, String repoPath, [Map<String, Object>? extra]) async {
+    final response = await _post(route, {'path': repoPath, ...?extra});
+    if (response.statusCode != 200) {
+      throw HostException(
+        '$route failed: ${response.body}',        statusCode: response.statusCode,
       );
     }
   }
@@ -168,7 +218,91 @@ final class HostClient {
       return Map<String, dynamic>.from(body);
     }
     throw HostException('settings get returned unexpected body');
+  /// POST /mobile/git/stage — `git add` the given repo-relative paths.
+  Future<void> gitStage(String repoPath, List<String> files) =>
+      _gitPost('/mobile/git/stage', repoPath, {'files': files});
+
+  /// POST /mobile/git/unstage — `git restore --staged`.
+  Future<void> gitUnstage(String repoPath, List<String> files) =>
+      _gitPost('/mobile/git/unstage', repoPath, {'files': files});
+
+  /// POST /mobile/git/commit.
+  Future<void> gitCommit(String repoPath, String message) =>
+      _gitPost('/mobile/git/commit', repoPath, {'message': message});
+
+  /// POST /mobile/git/fetch — `git fetch --prune`.
+  Future<void> gitFetch(String repoPath) => _gitPost('/mobile/git/fetch', repoPath);
+
+  /// POST /mobile/git/pull — `git pull --ff-only`.
+  Future<void> gitPull(String repoPath) => _gitPost('/mobile/git/pull', repoPath);
+
+  /// POST /mobile/git/push.
+  Future<void> gitPush(String repoPath) => _gitPost('/mobile/git/push', repoPath);
+
+  // ------------------------------------------------------------------
+  // Files routes.
+  // ------------------------------------------------------------------
+
+  /// GET /mobile/files/list — directory listing (dirs first, then files).
+  Future<List<HostFileEntry>> filesList(String path) async {
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/files/list',
+      queryParameters: {'path': path},
+    );
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
+    _checkOk(response, 'files list');
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final entries = (body['entries'] as List?) ?? const [];
+    return entries
+        .map((e) => HostFileEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
+
+  /// GET /mobile/files/read — read a file page (base64 body).
+  Future<String> filesRead(String path, {int offset = 0, int? limit}) async {
+    final params = {'path': path, 'offset': '$offset'};
+    if (limit != null) params['limit'] = '$limit';
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/files/read',
+      queryParameters: params,
+    );
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
+    _checkOk(response, 'files read');
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final b64 = (body['dataBase64'] as String?) ?? '';
+    return utf8.decode(base64Decode(b64));
+  }
+
+  /// POST /mobile/files/write — atomically write a file (base64 content).
+  Future<void> filesWrite(String path, String content) async {
+    final response = await _post('/mobile/files/write', {
+      'path': path,
+      'contentBase64': base64Encode(utf8.encode(content)),
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        'files write failed: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Usage route.
+  // ------------------------------------------------------------------
+
+  /// GET /mobile/usage/stats — Host session counts + provider transcript presence.
+  Future<UsageStats> usageStats() async {
+    final response = await _get('/mobile/usage/stats');
+    return UsageStats.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  void _checkOk(http.Response response, String what) {
+    if (response.statusCode != 200) {
+      throw HostException('$what failed', statusCode: response.statusCode);
+    }  }
 
   /// POST `/mobile/browser/takeover` — browser takeover over CDP.
   ///
