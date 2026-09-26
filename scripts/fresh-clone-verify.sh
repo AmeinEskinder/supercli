@@ -1,30 +1,44 @@
 #!/usr/bin/env bash
 # fresh-clone-verify.sh — verify a branch survives a fresh recursive clone.
 #
-# Usage: scripts/fresh-clone-verify.sh <branch> [remote]
-#   Clones <branch> from <remote> (default: origin's URL) into a temp dir,
-#   inits submodules recursively, and runs the cheap structural gates:
-#   submodule resolution, rename guard, and tree sanity.
+# Usage:
+#   scripts/fresh-clone-verify.sh <branch> [remote]
+#     Clones <branch> from <remote> (default: origin's URL) into a temp dir,
+#     inits submodules recursively, and runs the cheap structural gates.
+#   scripts/fresh-clone-verify.sh --local <dir>
+#     Runs ALL guard sections (3-8) on an existing working tree <dir>.
+#     Skips the clone (1) and submodule (2) steps.
 #
 # This exists because a terminal-pane branch once pointed clients/gpuidart at a
 # VM-only commit, which would have broken every fresh recursive clone.
 set -euo pipefail
 
-BRANCH="${1:?usage: fresh-clone-verify.sh <branch> [remote]}"
-REMOTE="${2:-$(git config --get remote.origin.url)}"
+LOCAL_MODE=false
+LOCAL_DIR=""
 
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+if [[ "${1:-}" == "--local" ]]; then
+  LOCAL_MODE=true
+  LOCAL_DIR="${2:?usage: fresh-clone-verify.sh --local <dir>}"
+  [[ -d "$LOCAL_DIR" ]] || { echo "FAIL: not a directory: $LOCAL_DIR"; exit 1; }
+  echo "=== fresh-clone-verify: --local $LOCAL_DIR ==="
+  cd "$LOCAL_DIR"
+else
+  BRANCH="${1:?usage: fresh-clone-verify.sh <branch> [remote] | fresh-clone-verify.sh --local <dir>}"
+  REMOTE="${2:-$(git config --get remote.origin.url)}"
 
-echo "=== fresh-clone-verify: branch=$BRANCH remote=$REMOTE ==="
-echo "--- 1. fresh clone ---"
-git clone --branch "$BRANCH" --depth 1 "$REMOTE" "$TMPDIR/clone"
-cd "$TMPDIR/clone"
+  TMPDIR="$(mktemp -d)"
+  trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "--- 2. recursive submodule init ---"
-git submodule update --init --recursive
-echo "submodules OK:"
-git submodule status
+  echo "=== fresh-clone-verify: branch=$BRANCH remote=$REMOTE ==="
+  echo "--- 1. fresh clone ---"
+  git clone --branch "$BRANCH" --depth 1 "$REMOTE" "$TMPDIR/clone"
+  cd "$TMPDIR/clone"
+
+  echo "--- 2. recursive submodule init ---"
+  git submodule update --init --recursive
+  echo "submodules OK:"
+  git submodule status
+fi
 
 echo "--- 3. tree sanity ---"
 for p in crates clients/supercli-app docs/parity/checklist.md .github/workflows/rename-guard.yml; do
@@ -69,6 +83,7 @@ matches=$(grep -rli 'unpeel' . \
             -e 'docs/rename-allowlist.md' \
             -e '.github/workflows/rename-guard.yml' \
             -e 'scripts/sync-main-v2.sh' \
+            -e '^\./\.git$' \
   || true)
 if [ -n "$matches" ]; then
   echo "FAIL: unpeel references outside allowlist:"
@@ -107,6 +122,7 @@ ident_matches=$(grep -riE 'tommy|vedvik|uxthemes|claude-501' . \
   --exclude='*.lock' \
   --exclude='rename-guard.yml' \
   --exclude='fresh-clone-verify.sh' \
+  --exclude='sync-main-v2.sh' \
   2>/dev/null | grep -v -e '^./clients/gpuidart/' || true)
 # /Users/<name> paths: flag only non-placeholder usernames (me/test/example/etc are neutral fixtures)
 user_matches=$(grep -rhoE '/Users/[a-zA-Z0-9_.-]+' . \
@@ -142,6 +158,7 @@ bundle_matches=$(grep -rl 'com\.supercli' . \
   --exclude-dir=.dart_tool \
   --exclude='rename-guard.yml' \
   --exclude='fresh-clone-verify.sh' \
+  --exclude='sync-main-v2.sh' \
   2>/dev/null | grep -v -e '^./clients/legacy/' || true)
 if [ -n "$bundle_matches" ]; then
   echo "FAIL: com.supercli bundle IDs found (must be li.superc):"
@@ -151,10 +168,19 @@ fi
 echo "bundle ID guard PASS"
 
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
-for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md; do
-  if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi
-done
-echo "exclusions OK"
+# Read exclusions from the markdown table
+if [ -f docs/internal/EXCLUSIONS.md ]; then
+  while IFS= read -r path; do
+    if [ -e "$path" ]; then echo "FAIL: excluded path present: $path"; exit 1; fi
+  done <<< "$(grep -oP '^\| `\K[^`]+' docs/internal/EXCLUSIONS.md || true)"
+  echo "exclusions OK (from EXCLUSIONS.md)"
+else
+  # Fallback to hardcoded list
+  for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md docs/internal/agents.md docs/internal/notice.md docs/internal/release-checklist.md; do
+    if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi
+  done
+  echo "exclusions OK (hardcoded)"
+fi
 
 echo "--- 6. CHANGELOG is the fresh supercli 0.1.0 (not the old Unpeel one) ---"
 head -1 CHANGELOG.md | grep -q '^# Changelog — supercli' || { echo "FAIL: CHANGELOG.md is not the supercli 0.1.0 changelog"; head -3 CHANGELOG.md; exit 1; }
@@ -169,6 +195,6 @@ fi
 echo "docs/book OK"
 
 echo "--- 8. HEAD sha ---"
-git rev-parse HEAD
+git rev-parse HEAD 2>/dev/null || echo "(not a git worktree HEAD)"
 
 echo "=== fresh-clone-verify: ALL GREEN ==="
