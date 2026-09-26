@@ -487,7 +487,10 @@ mod tests {
     fn supercli_storage_and_ssh_material_are_denied_under_home() {
         let fixture = fixture();
         let supercli = fixture.home.join(".supercli/app-state.json");
-        assert_eq!(status(read(&fixture.scope, supercli.to_str().unwrap())), 403);
+        assert_eq!(
+            status(read(&fixture.scope, supercli.to_str().unwrap())),
+            403
+        );
         assert_eq!(status(read(&fixture.scope, "~/.ssh/id_ed25519")), 403);
         let listing = fixture
             .scope

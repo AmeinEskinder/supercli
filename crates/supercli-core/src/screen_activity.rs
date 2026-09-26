@@ -141,7 +141,8 @@ mod tests {
             working: vec!["esc to interrupt".into(), "• Working".into()],
             idle_prompt: vec!["›".into()],
         };
-        let idle = "────\n⠁      ⠄\n› Ask Codex to do anything\n  gpt-6-astra xhigh · ~/Dev/supercli";
+        let idle =
+            "────\n⠁      ⠄\n› Ask Codex to do anything\n  gpt-6-astra xhigh · ~/Dev/supercli";
         assert_eq!(classify(idle, &rules), Some(ScreenActivity::Idle));
         let working = "• Working (12s • Esc to interrupt)\n› ";
         assert_eq!(classify(working, &rules), Some(ScreenActivity::Working));

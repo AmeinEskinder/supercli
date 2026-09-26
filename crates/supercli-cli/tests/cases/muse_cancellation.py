@@ -76,7 +76,7 @@ def real_muse(case, binary):
 
 
 def check(case):
-    binary = os.environ.get("UNPEEL_MUSE_TEST_BINARY")
+    binary = os.environ.get("SUPERCLI_MUSE_TEST_BINARY")
     if binary:
         real_muse(case, binary)
     else:

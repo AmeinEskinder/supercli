@@ -1,4 +1,4 @@
-# unpeel-usage
+# supercli-usage
 
 Local AI usage & credits at a glance — a small, fast standalone App Kit app.
 One component tree is interpreted by [Ratatui](https://ratatui.rs) in every
@@ -20,28 +20,28 @@ logins; Codex, Claude, Grok, and Muse history stays local.
 ## Install
 
 ```sh
-curl -fsSL https://unpeel.com/install/usage/install.sh | sh
+curl -fsSL https://supercli.com/install/usage/install.sh | sh
 ```
 
-The checksum-verified installer places `unpeel-usage` on `PATH`, where Unpeel
-detects it automatically. No registration command or `~/.unpeel/apps` write
+The checksum-verified installer places `supercli-usage` on `PATH`, where Supercli
+detects it automatically. No registration command or `~/.supercli/apps` write
 is needed. To build and install from source, keep App Kit beside the App repo:
 
 ```sh
 mkdir -p ~/Dev && cd ~/Dev
-git clone https://github.com/unpeel-com/unpeel-app-kit.git
-git clone https://github.com/unpeel-com/unpeel-app-usage.git
-cargo install --locked --path unpeel-app-usage
+git clone https://github.com/supercli-com/supercli-app-kit.git
+git clone https://github.com/supercli-com/supercli-app-usage.git
+cargo install --locked --path supercli-app-usage
 ```
 
-The selected provider uses `unpeel-app-kit`'s shared `SelectableRow`: one
+The selected provider uses `supercli-app-kit`'s shared `SelectableRow`: one
 full-width adaptive gray row with an exact two-cell content inset. The list
 prioritizes quota readings over
 account metadata: `5-hour` is Claude's rolling five-hour allowance, `7-day` is
 the overall weekly allowance, and `Fable 7-day` is that model's weekly
 allowance. Every percentage is the amount used. Email addresses and reset
 dates/times stay in the detail view instead of crowding the list.
-Unpeel's automatic Session title shows `Usage (N%)`, where N is the average
+Supercli's automatic Session title shows `Usage (N%)`, where N is the average
 weekly percentage used across accounts with available weekly quotas. It updates
 on each scan, excludes overlapping session/model limits and dollar totals, and
 falls back to `Usage` when no weekly percentage is available. A manually renamed
@@ -72,7 +72,7 @@ and acknowledges each revision; no renderer invents display data or usage
 transforms.
 
 The **Current project** row attributes local history to the Git project from
-which each agent session was launched. In Unpeel, every background refresh
+which each agent session was launched. In Supercli, every background refresh
 resolves the App's Host-owned `AppContext::current_root()`, so the row follows
 the Session's project/worktree even when the App process directory differs.
 A standalone run uses its process working directory. Worktrees are folded
@@ -86,7 +86,7 @@ or a subscription charge. History or working-directory metadata absent from
 local logs cannot be reconstructed.
 
 The shared design-system primitives come directly from
-[`unpeel-app-kit`](https://github.com/unpeel-com/unpeel-app-kit):
+[`supercli-app-kit`](https://github.com/supercli-com/supercli-app-kit):
 `SelectableRow`, the dark and light `KitTheme` selection colors, and
 `VerticalScrollbar`. Usage retains its OSC 11 appearance detection; when
 the terminal cannot report an appearance, the selected row uses
@@ -97,7 +97,7 @@ terminal-native reverse video instead of assuming a dark background.
 The dashboard queries the terminal's background color when it starts, then
 selects a complete light or dark palette. If that query is unsupported it uses
 `COLORFGBG` where reliable; otherwise it falls back to terminal-default colors,
-which follow the host theme without needing detection. Inside Unpeel, the live
+which follow the host theme without needing detection. Inside Supercli, the live
 background query takes priority because `COLORFGBG` records the appearance from
 when that shell started and cannot change with the surrounding pane.
 
@@ -107,9 +107,9 @@ Set the top-level config value to force a palette:
 theme = "light" # "auto", "light", or "dark"
 ```
 
-For a one-off override, use `UNPEEL_USAGE_THEME=light unpeel-usage`. The
+For a one-off override, use `SUPERCLI_USAGE_THEME=light supercli-usage`. The
 environment variable accepts the same three values and takes precedence over
-`~/.config/unpeel-usage/config.toml`. Press `t` in the dashboard to cycle
+`~/.config/supercli-usage/config.toml`. Press `t` in the dashboard to cycle
 adaptive, light, and dark palettes for the current session.
 
 The provider detail hierarchy is inspired by the grouped dashboard in
@@ -174,13 +174,13 @@ session history remains local and available.
 
 The normal account-switching workflow is supported: use `/logout`, then sign in
 to the next Claude account in the same `~/.claude` profile. On refresh,
-unpeel-usage recognizes the changed account email and keeps the previous
+supercli-usage recognizes the changed account email and keeps the previous
 account as a **saved** card. The signed-in account is live; logged-out cards
 show their last successful limits and update again the next time that account
 is signed in.
 
 Only the email, plan, limits, and fetch time are retained for up to 90 days in
-`~/Library/Caches/unpeel-usage/claude-accounts.json`. OAuth access and refresh
+`~/Library/Caches/supercli-usage/claude-accounts.json`. OAuth access and refresh
 tokens are never copied. Because shared Claude transcripts contain no account
 identity, Usage Trend and the Today / Yesterday / Last 30 Days estimates remain
 combined and appear only on the active profile card.
@@ -203,8 +203,8 @@ dirs = ["~/claude-accounts/personal"]
 
 ## Alerts
 
-Alerts are an Unpeel App feature available only when `unpeel-usage` is running
-in an Unpeel-hosted session. Press `a` to open the Ratatui dialog. Its
+Alerts are an Supercli App feature available only when `supercli-usage` is running
+in an Supercli-hosted session. Press `a` to open the Ratatui dialog. Its
 independent options are all off by default:
 
 - **Close to a limit** — 80% used or pacing that projects an early run-out
@@ -212,9 +212,9 @@ independent options are all off by default:
 - **Available again** — a previously constrained quota resets
 
 The dialog changes the current session. The matching booleans under `[alerts]`
-in `~/.config/unpeel-usage/config.toml` can opt in by default on future runs.
-Enabled events create a first-class Unpeel **Alert**: it appears in Recent and
-the desktop/mobile activity dropdowns, and the native Unpeel Host delivers its
+in `~/.config/supercli-usage/config.toml` can opt in by default on future runs.
+Enabled events create a first-class Supercli **Alert**: it appears in Recent and
+the desktop/mobile activity dropdowns, and the native Supercli Host delivers its
 own macOS banner and phone push. Alerts do not change the session's Busy, Idle,
 or Attention state. Standalone runs have no alert control and send no
 notifications.
@@ -222,10 +222,10 @@ notifications.
 The same config section retains `codex_used_percent`, `credits_low_usd`, and
 `claude_block_usd` for card severity and personal budget thresholds.
 
-## Unpeel
+## Supercli
 
-`unpeel-usage` is a standalone tool first. When Unpeel is installed it also
-detects the `unpeel-usage` CLI directly from `PATH`: the session row takes the
+`supercli-usage` is a standalone tool first. When Supercli is installed it also
+detects the `supercli-usage` CLI directly from `PATH`: the session row takes the
 App's name and live project/workspace accent, and the sidebar shows a status
 line like `Codex 3% · Claude $3.24 · Grok 14% · Muse $1.20`. App Kit's shared
 `AppReporter` owns the small plain-file plus loopback-HTTP integration; the
@@ -238,20 +238,20 @@ semantic actions. A scoped human or agent participant with interaction grants
 can open providers, return to the catalog, and refresh through the same Page
 actions without receiving command or admin authority.
 
-When an Unpeel home exists (`$UNPEEL_HOME`, or `~/.unpeel`), its
+When an Supercli home exists (`$SUPERCLI_HOME`, or `~/.supercli`), its
 `app-state.json` presets select and order the dashboard providers. Codex,
 Claude, Grok, and Muse are included at their first matching preset position;
 additional launch variants are deduplicated, while all detected Claude
-accounts remain grouped there. Without an Unpeel folder or a readable presets
+accounts remain grouped there. Without an Supercli folder or a readable presets
 array, the standalone order is Codex, Claude, Grok, then Muse. The synthesized
 Current project and Total usage rows stay last in either mode.
 
 ## Commands
 
-- `unpeel-usage` — the dashboard
-- `unpeel-usage report` — one-shot plain-text snapshot for scripts and
+- `supercli-usage` — the dashboard
+- `supercli-usage report` — one-shot plain-text snapshot for scripts and
   status bars (intentionally non-TUI so it remains pipe-friendly)
-- `unpeel-usage --version` — print the installed App version
+- `supercli-usage --version` — print the installed App version
 
 ## Development
 
@@ -261,18 +261,18 @@ cargo run -- report    # one-shot text output (no TTY needed)
 cargo test
 ```
 
-To use a development build inside Unpeel, put its output directory on `PATH`;
+To use a development build inside Supercli, put its output directory on `PATH`;
 the Host then discovers it through the same central CLI catalog as an
 installed build, without a registration write:
 
 ```sh
 cargo build
-PATH="$PWD/target/debug:$PATH" unpeel-usage
+PATH="$PWD/target/debug:$PATH" supercli-usage
 ```
 
-Config lives at `~/.config/unpeel-usage/config.toml`; delete it to restore
+Config lives at `~/.config/supercli-usage/config.toml`; delete it to restore
 defaults. Data is re-scanned every `refresh_secs` (and on `r`), and the
 sidebar status line updates on every scan. The bottom row keeps `a alert` and
-`r refresh` visible inside Unpeel, using the stronger foreground only for the
+`r refresh` visible inside Supercli, using the stronger foreground only for the
 shortcut letters. While either a manual or scheduled scan is actually
 running, the action becomes a disabled `r refreshing…` status.

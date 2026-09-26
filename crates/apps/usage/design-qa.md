@@ -4,15 +4,15 @@
 
 - `/Users/tommyvedvik/Desktop/HPxcbhqaQAALsPO.jpg`
 - 1440 × 1690 px, light appearance, OpenUsage expanded Claude share card.
-- `/Users/tommyvedvik/.unpeel/dropped-images/drop-1787739788372-94CEA20D-7735-454F-AC73-671AF83E58FD.png`
+- `/Users/tommyvedvik/.supercli/dropped-images/drop-1787739788372-94CEA20D-7735-454F-AC73-671AF83E58FD.png`
 - 1464 × 1442 px, dark appearance, pre-change Ratatui dashboard showing the
   card fills and drag-handle glyph targeted by the refinement.
 
 **Rendered implementation**
 
-- `/tmp/unpeel-usage-design-qa/claude-flat-light.png`
+- `/tmp/supercli-usage-design-qa/claude-flat-light.png`
 - 840 × 704 px, representing an 84 × 32 Ratatui viewport at 10 × 22 px per terminal cell.
-- `/tmp/unpeel-usage-design-qa/scrollbar-fixed.png`
+- `/tmp/supercli-usage-design-qa/scrollbar-fixed.png`
 - 720 × 384 px, showing exact 72 × 8 Ratatui top and bottom scroll states at
   10 × 22 px per terminal cell, separated by 32 px for comparison.
 - Native terminal UI; CSS size and browser device density do not apply. The capture uses a 1× rasterization of the Ratatui `TestBackend` cell grid.
@@ -31,7 +31,7 @@
 **Focused-region comparison evidence**
 
 - The scrollbar pass uses
-  `/tmp/unpeel-usage-design-qa/scrollbar-before-crop.png`, a 164 × 1400 px
+  `/tmp/supercli-usage-design-qa/scrollbar-before-crop.png`, a 164 × 1400 px
   right-edge crop of the supplied dark app screenshot, alongside the exact
   post-fix top/bottom raster. The post-fix thumb visibly begins on the first
   track row and ends on the final track row; the bottom card border remains

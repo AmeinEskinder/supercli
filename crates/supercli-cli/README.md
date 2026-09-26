@@ -1,12 +1,12 @@
-# unpeel-cli
+# supercli-cli
 
-The `unpeel` binary: a terminal UI over the same hosted sessions, shared
+The `supercli` binary: a terminal UI over the same hosted sessions, shared
 state, and markers as the Mac app — two UIs, one state. Best experienced in
-[Ghostty](https://ghostty.org) (the same terminal engine Unpeel's own
+[Ghostty](https://ghostty.org) (the same terminal engine Supercli's own
 surfaces use); any modern terminal works. On a Linux server or
 an app-less Mac it is also the **headless host**: it hosts sessions, pairs
 phones, serves the `/mobile` protocol, and supervises the `__remote__`
-server. As a controller, `unpeel --host ssh://HOST` scopes the whole UI to a
+server. As a controller, `supercli --host ssh://HOST` scopes the whole UI to a
 remote host over the SSH transport (pure client — creates no local state).
 
 Notable modules: `sessions.rs`/`ui.rs` (sidebar + Ghostty-fed terminal),

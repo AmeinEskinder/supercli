@@ -1,4 +1,4 @@
-"""The screen fallback tier: a recognized agent with no Unpeel integration
+"""The screen fallback tier: a recognized agent with no Supercli integration
 animates busy/idle from its screen, never notifies, and yields to hooks.
 
 A fake `claude` (no integration installed in the private HOME) draws Claude's

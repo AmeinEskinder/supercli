@@ -6,8 +6,8 @@ process-boundary gap: it sends every case in that same fixture over the real
 ``host.sock`` framed contract after launching the runtime exactly as each
 product surface does:
 
-* native app: bundled ``unpeel-host __serve__``;
-* headless CLI: ``unpeel serve``.
+* native app: bundled ``supercli-host __serve__``;
+* headless CLI: ``supercli serve``.
 
 Platform capability adapters are covered separately.  These two launches use
 the same adapter-free fixture, so their status vector must be identical; any
@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from harness import BINARY, CRATES, Home, mcp_post, mobile_request, run, run_cli  # noqa: E402
 
 
-HOST_BINARY = os.path.join(CRATES, "target", "debug", "unpeel-host")
+HOST_BINARY = os.path.join(CRATES, "target", "debug", "supercli-host")
 CONFORMANCE_FIXTURE = os.path.join(
     os.path.dirname(CRATES), "protocol", "host-conformance-v1.json"
 )
@@ -41,7 +41,7 @@ class HostLaunch:
         self.home = home
         self.log_path = home.path("host-launch.log")
         self.log = open(self.log_path, "w")
-        environment = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1")
+        environment = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1")
         self.process = subprocess.Popen(
             [executable, *arguments],
             cwd=CRATES,

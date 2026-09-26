@@ -4,7 +4,7 @@ state, so a change in either shows up in the other AT ONCE.
 Shared state lives on disk, but disk alone is slow to notice: the app
 coalesces file events at 0.5s and falls back to a 5s rescan, and the TUI
 polls at 1s. So whoever writes also pings every other instance registered
-in ~/.unpeel/app-ports (unpeel-core::state_bus). This case drives that bus
+in ~/.supercli/app-ports (supercli-core::state_bus). This case drives that bus
 from both ends."""
 
 import sys, os, json, time, urllib.request
@@ -25,7 +25,7 @@ def ping(port, change):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s1", label="first session", project_id="p")
 
     token = home.pair_device()

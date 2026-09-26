@@ -1,4 +1,4 @@
-"""`unpeel serve install|uninstall|status` — per-user service packaging.
+"""`supercli serve install|uninstall|status` — per-user service packaging.
 
 Drives both service-manager flavors through fake `launchctl`/`systemctl`
 shims on PATH with HOME redirected into the fixture, so the case never
@@ -69,20 +69,20 @@ def body(case):
         with open(log_path, "w"):
             pass
 
-    def cli(args, manager, unpeel_home=None, timeout=30):
+    def cli(args, manager, supercli_home=None, timeout=30):
         env = dict(
             os.environ,
             HOME=home.root,
             PATH=f"{shim_dir}:{os.environ.get('PATH', '')}",
-            UNPEEL_TEST="1",
-            UNPEEL_SERVICE_MANAGER=manager,
+            SUPERCLI_TEST="1",
+            SUPERCLI_SERVICE_MANAGER=manager,
             SHIM_LOG=log_path,
             SHIM_STATE=state_dir,
             XDG_CONFIG_HOME=os.path.join(home.root, ".config"),
         )
-        env.pop("UNPEEL_HOME", None)
-        if unpeel_home is not None:
-            env["UNPEEL_HOME"] = unpeel_home
+        env.pop("SUPERCLI_HOME", None)
+        if supercli_home is not None:
+            env["SUPERCLI_HOME"] = supercli_home
         return subprocess.run(
             [BINARY, *args],
             capture_output=True,
@@ -93,7 +93,7 @@ def body(case):
         )
 
     # Data that install/uninstall must never touch.
-    real_dir = os.path.join(home.root, ".unpeel")
+    real_dir = os.path.join(home.root, ".supercli")
     os.makedirs(real_dir, exist_ok=True)
     sentinel = os.path.join(real_dir, "app-state.json")
     with open(sentinel, "w") as handle:
@@ -101,7 +101,7 @@ def body(case):
 
     # ── launchd (macOS) flavor ────────────────────────────────────────────
     plist = os.path.join(
-        home.root, "Library", "LaunchAgents", "com.unpeel.serve.plist"
+        home.root, "Library", "LaunchAgents", "com.supercli.serve.plist"
     )
     installed = cli(["serve", "install"], "launchd")
     with open(plist) as handle:
@@ -168,7 +168,7 @@ def body(case):
     # ── systemd (Linux) flavor ────────────────────────────────────────────
     clear_log()
     unit = os.path.join(
-        home.root, ".config", "systemd", "user", "unpeel-serve.service"
+        home.root, ".config", "systemd", "user", "supercli-serve.service"
     )
     sysd = cli(["serve", "install"], "systemd")
     with open(unit) as handle:
@@ -179,8 +179,8 @@ def body(case):
         and "ExecStart=" in unit_body
         and " serve" in unit_body
         and "systemctl --user daemon-reload" in shim_log()
-        and "systemctl --user enable unpeel-serve.service" in shim_log()
-        and "systemctl --user restart unpeel-serve.service" in shim_log(),
+        and "systemctl --user enable supercli-serve.service" in shim_log()
+        and "systemctl --user restart supercli-serve.service" in shim_log(),
         sysd.stdout[:300] + shim_log()[-400:] + unit_body[:200],
     )
     case.check(
@@ -201,7 +201,7 @@ def body(case):
         and "WantedBy=graphical-session.target" in graphical_body
         and "WantedBy=default.target" not in graphical_body
         and f"ExecStart=" in graphical_body
-        and "systemctl --user enable unpeel-serve.service" in shim_log()
+        and "systemctl --user enable supercli-serve.service" in shim_log()
         and "graphical-session.target" in graphical.stdout,
         graphical.stdout[:300] + shim_log()[-400:] + graphical_body[:300],
     )
@@ -210,7 +210,7 @@ def body(case):
     case.check(
         "a graphical install consults graphical-session.target and starts the unit while it is active",
         "systemctl --user is-active graphical-session.target" in shim_log()
-        and "systemctl --user restart unpeel-serve.service" in shim_log(),
+        and "systemctl --user restart supercli-serve.service" in shim_log(),
         shim_log()[-400:],
     )
     clear_log()
@@ -219,9 +219,9 @@ def body(case):
     case.check(
         "with no desktop session up, the graphical unit is enabled but not started (the target will)",
         graphical_idle.returncode == 0
-        and "systemctl --user enable unpeel-serve.service" in shim_log()
+        and "systemctl --user enable supercli-serve.service" in shim_log()
         and "systemctl --user is-active graphical-session.target" in shim_log()
-        and "systemctl --user restart unpeel-serve.service" not in shim_log(),
+        and "systemctl --user restart supercli-serve.service" not in shim_log(),
         shim_log()[-400:],
     )
     graphical_status = cli(["serve", "status"], "systemd")
@@ -254,18 +254,18 @@ def body(case):
     )
     clear_log()
     scoped_unit = os.path.join(
-        home.root, ".config", "systemd", "user", "unpeel-serve-teama.service"
+        home.root, ".config", "systemd", "user", "supercli-serve-teama.service"
     )
-    scoped = cli(["serve", "install"], "systemd", unpeel_home=workspace_home)
+    scoped = cli(["serve", "install"], "systemd", supercli_home=workspace_home)
     scoped_body = ""
     if os.path.exists(scoped_unit):
         with open(scoped_unit) as handle:
             scoped_body = handle.read()
     case.check(
-        "a registered UNPEEL_HOME installs a scoped single-workspace unit",
+        "a registered SUPERCLI_HOME installs a scoped single-workspace unit",
         scoped.returncode == 0
         and "--workspace teama serve" in scoped_body
-        and "systemctl --user enable unpeel-serve-teama.service" in shim_log(),
+        and "systemctl --user enable supercli-serve-teama.service" in shim_log(),
         scoped.stdout[:300] + scoped.stderr[:200] + scoped_body[:200],
     )
 
@@ -273,14 +273,14 @@ def body(case):
     lock_path = os.path.join(workspace_home, "serve.lock")
     with open(lock_path, "a+") as lease:
         fcntl.flock(lease, fcntl.LOCK_EX)
-        live = cli(["serve", "status"], "systemd", unpeel_home=workspace_home)
+        live = cli(["serve", "status"], "systemd", supercli_home=workspace_home)
         fcntl.flock(lease, fcntl.LOCK_UN)
     case.check(
         "scoped status reads the existing workspace serve lease (exit 0 while held)",
         live.returncode == 0 and "running" in live.stdout,
         live.stdout[:300],
     )
-    scoped_removed = cli(["serve", "uninstall"], "systemd", unpeel_home=workspace_home)
+    scoped_removed = cli(["serve", "uninstall"], "systemd", supercli_home=workspace_home)
     case.check(
         "scoped uninstall removes only its unit and leaves workspace data alone",
         scoped_removed.returncode == 0
@@ -292,18 +292,18 @@ def body(case):
     )
 
     unregistered = cli(
-        ["serve", "install"], "systemd", unpeel_home=home.path("not-registered")
+        ["serve", "install"], "systemd", supercli_home=home.path("not-registered")
     )
     case.check(
-        "an unregistered UNPEEL_HOME is refused instead of minting a unit",
+        "an unregistered SUPERCLI_HOME is refused instead of minting a unit",
         unregistered.returncode != 0
         and "not a registered workspace" in unregistered.stderr,
         unregistered.stderr[:300],
     )
 
-    launchd_scoped = cli(["serve", "install"], "launchd", unpeel_home=workspace_home)
+    launchd_scoped = cli(["serve", "install"], "launchd", supercli_home=workspace_home)
     scoped_plist = os.path.join(
-        home.root, "Library", "LaunchAgents", "com.unpeel.serve.teama.plist"
+        home.root, "Library", "LaunchAgents", "com.supercli.serve.teama.plist"
     )
     scoped_plist_body = ""
     if os.path.exists(scoped_plist):
@@ -312,12 +312,12 @@ def body(case):
     case.check(
         "a scoped LaunchAgent carries the workspace label and arguments",
         launchd_scoped.returncode == 0
-        and "<string>com.unpeel.serve.teama</string>" in scoped_plist_body
+        and "<string>com.supercli.serve.teama</string>" in scoped_plist_body
         and "<string>--workspace</string>" in scoped_plist_body
         and "<string>teama</string>" in scoped_plist_body,
         scoped_plist_body[:400],
     )
-    cli(["serve", "uninstall"], "launchd", unpeel_home=workspace_home)
+    cli(["serve", "uninstall"], "launchd", supercli_home=workspace_home)
 
 
 run("serve_install", body)

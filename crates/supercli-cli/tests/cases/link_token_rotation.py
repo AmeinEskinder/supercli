@@ -49,7 +49,7 @@ def rewrite_devices(home, mutate):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s1", label="a session", project_id="p")
     home.pair_device()
     first_hash = "ab" * 32
@@ -67,9 +67,9 @@ def body(case):
     api.set_transient(True)
     relay = case.track(FakeRelay())
     env = {
-        "UNPEEL_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
-        "UNPEEL_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
-        "UNPEEL_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
+        "SUPERCLI_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
+        "SUPERCLI_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
+        "SUPERCLI_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
     }
     service = case.serve(env=env)
     connected = service.wait_for(lambda: relay.snapshot()[1] == 1, timeout=15)

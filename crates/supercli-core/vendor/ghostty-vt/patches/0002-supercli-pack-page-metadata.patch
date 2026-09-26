@@ -1,4 +1,4 @@
-Unpeel: pack page metadata ahead of the cell array (lazy-resident cells).
+Supercli: pack page metadata ahead of the cell array (lazy-resident cells).
 
 Why: the private "pty-core" design record, 'Round 4, Lane 2'. Page memory comes from
 mmap (zeroed, unresident) and only the bytes init WRITES become resident.
@@ -12,7 +12,7 @@ share one or two OS pages and the untouched cell array stays unresident
 until output arrives. Offsets are only ever read from Page.Layout, so no
 consumer changes; availableBitsForGrid uses the equivalent front-of-page
 formula. Applied only when building the vendored libghostty-vt.a for
-unpeel-host (build.sh); the app's GhosttyKit build is untouched.
+supercli-host (build.sh); the app's GhosttyKit build is untouched.
 
 diff --git a/src/terminal/page.zig b/src/terminal/page.zig
 index 6edba68..982e98a 100644
@@ -30,7 +30,7 @@ index 6edba68..982e98a 100644
 -        const cells_start = alignForward(usize, rows_end, @alignOf(Cell));
 -        const cells_end = cells_start + (cells_count * @sizeOf(Cell));
 -
-+        // Unpeel: metadata regions (styles, graphemes, strings, hyperlinks)
++        // Supercli: metadata regions (styles, graphemes, strings, hyperlinks)
 +        // are laid out FIRST and the cell array LAST. Every metadata region
 +        // is written at init (set tables and items are zeroed, allocator
 +        // bitmaps are filled, map metadata is cleared) while cells are only
@@ -74,7 +74,7 @@ index 6edba68..982e98a 100644
 -        const grapheme_map_start = alignBackward(usize, string_alloc_start - l.grapheme_map_layout.total_size, GraphemeMap.base_align.toByteUnits());
 -        const grapheme_alloc_start = alignBackward(usize, grapheme_map_start - l.grapheme_alloc_layout.total_size, GraphemeAlloc.base_align.toByteUnits());
 -        const styles_start = alignBackward(usize, grapheme_alloc_start - l.styles_layout.total_size, StyleSet.base_align.toByteUnits());
-+        // Unpeel: the meta members are laid out at the FRONT of the page
++        // Supercli: the meta members are laid out at the FRONT of the page
 +        // (see layout()), so the grid gets everything from the end of the
 +        // last meta member to the end of the page.
 +        const styles_start = l.total_size - l.rows_start;

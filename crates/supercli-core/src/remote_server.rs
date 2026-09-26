@@ -142,7 +142,9 @@ pub fn remote_state_path() -> PathBuf {
 /// The native app's paired-device store (`MobilePairingStore`); shared so a
 /// device paired through the app UI is a valid credential here too.
 pub fn paired_devices_path() -> PathBuf {
-    app_paths::supercli_home().join("mobile").join("devices.json")
+    app_paths::supercli_home()
+        .join("mobile")
+        .join("devices.json")
 }
 
 // ---------------------------------------------------------------------------

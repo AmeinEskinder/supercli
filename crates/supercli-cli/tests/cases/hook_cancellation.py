@@ -70,7 +70,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "plugins":
     sys.exit(0)
 tty.setraw(0)
 def hook():
-    # Real Muse scrubs Unpeel's environment out of hook subprocesses. Exercise
+    # Real Muse scrubs Supercli's environment out of hook subprocesses. Exercise
     # the reporter's parent-environment recovery through the same boundary.
     env = {key: os.environ[key] for key in ("HOME", "PATH")} if "muse-code" in REPORTER else None
     event = "BeforeAgent" if "/gemini/" in REPORTER else "UserPromptSubmit"
@@ -111,12 +111,12 @@ while True:
 
     def hook(event, deliver=True):
         manifest = home.manifests()[session_id]
-        env = dict(os.environ, **environment, UNPEEL_HOME=home.root,
-                   UNPEEL_SESSION_ID=session_id, UNPEEL_SESSION_DIR=session_dir,
-                   UNPEEL_RUNTIME_GENERATION=str(manifest["runtime_launch_generation"]),
-                   UNPEEL_APP_PORT=str(ready["hookPort"]) if deliver else "",
-                   UNPEEL_APP_PORT_REGISTRY_FILE=home.path("no-ports"),
-                   UNPEEL_HOOK_TRACE_FILE=home.path("hooks", "trace.log"))
+        env = dict(os.environ, **environment, SUPERCLI_HOME=home.root,
+                   SUPERCLI_SESSION_ID=session_id, SUPERCLI_SESSION_DIR=session_dir,
+                   SUPERCLI_RUNTIME_GENERATION=str(manifest["runtime_launch_generation"]),
+                   SUPERCLI_APP_PORT=str(ready["hookPort"]) if deliver else "",
+                   SUPERCLI_APP_PORT_REGISTRY_FILE=home.path("no-ports"),
+                   SUPERCLI_HOOK_TRACE_FILE=home.path("hooks", "trace.log"))
         payload = {"hook_event_name": event}
         if runtime == "gemini":
             payload = {"hook_event_name": {"UserPromptSubmit": "BeforeAgent", "Stop": "AfterAgent", "PermissionRequest": "Notification"}[event], "notification_type": "ToolPermission"}

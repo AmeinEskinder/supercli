@@ -1,8 +1,8 @@
-# unpeel-filetree
+# supercli-filetree
 
 A deliberately small development TUI for proving terminal-to-terminal path
-dragging in Unpeel. Its flat, borderless directory view is built entirely from
-the reusable `Explorer` component in the sibling `../unpeel-app-kit` crate.
+dragging in Supercli. Its flat, borderless directory view is built entirely from
+the reusable `Explorer` component in the sibling `../supercli-app-kit` crate.
 The interaction model follows
 [`ratatui-explorer`](https://github.com/tatounee/ratatui-explorer): the current
 folder is a single list with a `../` parent row rather than an expanded
@@ -10,8 +10,8 @@ recursive tree. Its launch directory is the project boundary: `../` appears
 only after entering a child folder, and neither parent navigation nor a
 directory symlink can escape above that root.
 
-This is a test harness, not a proposed built-in Unpeel file browser. It lives
-outside the Unpeel repository and does not add a preset or file-tree chrome to
+This is a test harness, not a proposed built-in Supercli file browser. It lives
+outside the Supercli repository and does not add a preset or file-tree chrome to
 the product.
 
 The App owns one closed semantic Tree. Ratatui interprets it for every
@@ -29,27 +29,27 @@ out beside this repository:
 
 ```sh
 mkdir -p ~/Dev && cd ~/Dev
-git clone https://github.com/unpeel-com/unpeel-app-kit.git
-git clone https://github.com/unpeel-com/unpeel-app-filetree.git
-cargo install --locked --path unpeel-app-filetree
+git clone https://github.com/supercli-com/supercli-app-kit.git
+git clone https://github.com/supercli-com/supercli-app-filetree.git
+cargo install --locked --path supercli-app-filetree
 ```
 
 Once the release artifact is published, the checksum-verified binary installer
 will be:
 
 ```sh
-curl -fsSL https://unpeel.com/install/filetree/install.sh | sh
+curl -fsSL https://supercli.com/install/filetree/install.sh | sh
 ```
 
-Unpeel detects the installed `unpeel-filetree` CLI directly from `PATH`; no
-registration command or `~/.unpeel/apps` write is needed.
+Supercli detects the installed `supercli-filetree` CLI directly from `PATH`; no
+registration command or `~/.supercli/apps` write is needed.
 
 ## Run
 
 ```sh
-unpeel-filetree ~/Dev
-unpeel-filetree --ext md ~/Notes
-unpeel-filetree --ext md,mdx .
+supercli-filetree ~/Dev
+supercli-filetree --ext md ~/Notes
+supercli-filetree --ext md,mdx .
 ```
 
 With no explicit path, App Kit's `AppContext` gives a hosted Files pane its
@@ -90,13 +90,13 @@ enter it, or a file to activate it. In the filter, click to place the native
 text cursor, drag to select text, Shift-click to extend a selection, and
 double-click to select a word. Right-click for the shared gray
 `PopupMenu`: it offers **Open in editor**, **Send to agent** when a same-group
-Unpeel agent is available, and **Copy path**. The shared editor action follows
-Unpeel's configured editor when hosted and the platform opener when standalone.
+Supercli agent is available, and **Copy path**. The shared editor action follows
+Supercli's configured editor when hosted and the platform opener when standalone.
 Sending pastes a safe absolute path reference into the agent's input without
 pressing Enter.
 
 The App enables mouse reporting in ordinary terminals as well as hosted panes.
-Inside Unpeel, the native terminal wrapper intercepts a mapped left-button
+Inside Supercli, the native terminal wrapper intercepts a mapped left-button
 drag before the TUI receives it, so native path dragging still works; an
 ordinary click is replayed to the TUI for selection. While the popup is open,
 the App publishes an empty drag map so a click cannot drag a path hidden
@@ -104,7 +104,7 @@ beneath the menu.
 
 ## Drag test
 
-1. Build and run the current Unpeel Dev app.
+1. Build and run the current Supercli Dev app.
 2. Open two panes on the same local Host.
 3. In one pane, run this binary against a small test folder.
 4. In the other pane, start Claude Code or leave a shell prompt open.
@@ -113,29 +113,29 @@ beneath the menu.
 The destination should receive a shell-quoted path as bracketed paste: relative
 to the destination Session's project when possible, `~/…` elsewhere below the
 home folder, and absolute only outside both roots. No Enter is sent. Files and
-folders use the same path-only operation; nothing is moved or copied by Unpeel.
+folders use the same path-only operation; nothing is moved or copied by Supercli.
 
 The launch path (or current working directory when no path is passed) is
 canonicalized as the Explorer's hard root. The current-folder path at the
 bottom and every visible row are drag sources.
 The shared component publishes absolute Host-local paths through `DragSurface`,
 so the same transferable item can be consumed by terminals now and by other
-Unpeel Apps later. The kit also exposes `DraggablePath`, the generic
+Supercli Apps later. The kit also exposes `DraggablePath`, the generic
 `DragSource<W>` wrapper, and the lower-level `DragSurface::register` API.
 
 Appearance comes from the kit's dark/light defaults. Set
-`UNPEEL_TUI_THEME=light` or `UNPEEL_TUI_THEME=dark` to override detection.
+`SUPERCLI_TUI_THEME=light` or `SUPERCLI_TUI_THEME=dark` to override detection.
 Selected rows span the full list width and keep the shared two-cell content
-inset. Unpeel's Session title owns the App name, so content starts immediately
+inset. Supercli's Session title owns the App name, so content starts immediately
 without a repeated in-App title. The bottom row contains only the muted,
 project-relative current-folder path (`.` at the launch root); that path is not
 repeated below the filter, and there is no shortcut help.
 
-For development inside Unpeel, build once and prepend the debug output folder
+For development inside Supercli, build once and prepend the debug output folder
 to `PATH` before launching. The Host uses the same central CLI catalog as an
 installed build; running the App never writes registration state:
 
 ```sh
 cargo build
-PATH="$PWD/target/debug:$PATH" unpeel-filetree .
+PATH="$PWD/target/debug:$PATH" supercli-filetree .
 ```

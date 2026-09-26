@@ -479,8 +479,10 @@ fn collect_stats(home: &std::path::Path) -> Result<serde_json::Value, String> {
                 let count = content.lines().filter(|l| !l.trim().is_empty()).count();
                 total_reviews += count;
                 // Verify chain (metadata only, no payload)
-                match supercli_core::action_reviews::verify_review_bytes(content.as_bytes(), "bundle")
-                {
+                match supercli_core::action_reviews::verify_review_bytes(
+                    content.as_bytes(),
+                    "bundle",
+                ) {
                     Ok(_) => chains_ok += 1,
                     Err(_) => chains_failed += 1,
                 }

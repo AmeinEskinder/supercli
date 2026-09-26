@@ -1,6 +1,6 @@
 """The workspace worker adopts a running PTY core and never takes it down.
 
-With ``UNPEEL_PTY_CORE=1`` the worker looks for ``pty-core.json``; when the
+With ``SUPERCLI_PTY_CORE=1`` the worker looks for ``pty-core.json``; when the
 record names a live process whose socket answers ``ping`` with that pid, the
 worker adopts it and publishes ``serve.json.ptyCore.state == "adopted"``.
 Killing the worker with SIGKILL and restarting it must leave the core, its
@@ -121,13 +121,13 @@ def ping(path):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
 
     # Gate off: today's behavior, nothing published.
     # Force the gate off for this phase: the matrix may run with
-    # UNPEEL_PTY_CORE=1 exported to exercise the core everywhere else, and
+    # SUPERCLI_PTY_CORE=1 exported to exercise the core everywhere else, and
     # the supervisor treats "0" exactly like an absent variable.
-    plain = case.serve(env={"UNPEEL_PTY_CORE": "0"})
+    plain = case.serve(env={"SUPERCLI_PTY_CORE": "0"})
     plain_ready = plain.ready(timeout=15.0)
     case.check(
         "without the gate the worker publishes no ptyCore",
@@ -141,7 +141,7 @@ def body(case):
     )
 
     core = case.track(FakeCore(home))
-    service = case.serve(env={"UNPEEL_PTY_CORE": "1"})
+    service = case.serve(env={"SUPERCLI_PTY_CORE": "1"})
     ready = service.ready(timeout=15.0)
     adopted = service.wait_for(
         lambda: (
@@ -186,7 +186,7 @@ def body(case):
         str((survived, reply)),
     )
 
-    restarted = case.serve(env={"UNPEEL_PTY_CORE": "1"})
+    restarted = case.serve(env={"SUPERCLI_PTY_CORE": "1"})
     restarted_ready = restarted.ready(timeout=15.0)
     readopted = restarted.wait_for(
         lambda: (

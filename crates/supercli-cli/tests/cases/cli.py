@@ -1,5 +1,5 @@
 """The headless CLI. Every verb the TUI has is also a command, so scripts
-and agents can drive Unpeel with no UI — and `wait` returns a real exit
+and agents can drive Supercli with no UI — and `wait` returns a real exit
 code so it composes into a pipeline."""
 
 import subprocess
@@ -11,7 +11,7 @@ from harness import run, run_cli, wait_running  # noqa: E402
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="cat", command="cat")
 
     started = run_cli(home, ["new", "--preset", "cat", "--project", "p"])
@@ -193,7 +193,7 @@ def body(case):
         removed.returncode == 0 and not os.path.exists(home.path("app-sessions", new_id)),
     )
 
-    # `unpeel add` registers the working directory as a project.
+    # `supercli add` registers the working directory as a project.
     scratch = home.path("a-project")
     os.makedirs(scratch, exist_ok=True)
     env_before = len(home.state()["projects"])

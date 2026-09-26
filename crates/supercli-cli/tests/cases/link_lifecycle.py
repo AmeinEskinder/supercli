@@ -1,9 +1,9 @@
 """Headless Link's release seam: key -> entitlement -> live relay lifecycle.
 
 The lower-level relay conformance case starts with a hand-written entitlement;
-this case proves a fresh `unpeel serve` Host can actually acquire and use one
+this case proves a fresh `supercli serve` Host can actually acquire and use one
 while its LAN server is already running, and that the live-serve lifecycle
-ladder (refresh, reject, race, recovery) works end to end: scripted `unpeel
+ladder (refresh, reject, race, recovery) works end to end: scripted `supercli
 link` mutations of durable on-disk state are noticed and reconciled by a
 running (or freshly restarted) serve process without any restart being
 required for the cases that test live reconciliation, and with an explicit
@@ -39,8 +39,8 @@ from link_fixtures import (  # noqa: E402
 def link_cli(home, env, args, timeout=30):
     process_env = dict(
         os.environ,
-        UNPEEL_HOME=home.root,
-        UNPEEL_TEST="1",
+        SUPERCLI_HOME=home.root,
+        SUPERCLI_TEST="1",
         **env,
     )
     return subprocess.run(
@@ -56,8 +56,8 @@ def link_cli(home, env, args, timeout=30):
 def link_cli_popen(home, env, args):
     process_env = dict(
         os.environ,
-        UNPEEL_HOME=home.root,
-        UNPEEL_TEST="1",
+        SUPERCLI_HOME=home.root,
+        SUPERCLI_TEST="1",
         **env,
     )
     return subprocess.Popen(
@@ -80,7 +80,7 @@ def wait_for(predicate, timeout=5):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s1", label="a session", project_id="p")
     token = home.pair_device()
     with open(home.path("mobile", "devices.json")) as handle:
@@ -95,9 +95,9 @@ def body(case):
     api = case.track(LicenseAPI())
     relay = case.track(FakeRelay())
     env = {
-        "UNPEEL_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
-        "UNPEEL_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
-        "UNPEEL_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
+        "SUPERCLI_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
+        "SUPERCLI_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
+        "SUPERCLI_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
     }
     key_path = home.path("link-license.json")
     cache_path = home.path("mobile", "relay-entitlement.json")
@@ -108,7 +108,7 @@ def body(case):
     write_tombstone(home)
     api.block_next_activation()
 
-    # Pair-first, serve-second is the normal `unpeel pair --serve` shape:
+    # Pair-first, serve-second is the normal `supercli pair --serve` shape:
     # the LAN server is already live when the scripted key lands.
     service = case.serve(env=env)
     ready = service.ready()
@@ -143,8 +143,8 @@ def body(case):
     enroll_thread.join(timeout=15)
     # NOTE: the interactive TUI's Settings screen used to compensate a late
     # activation success with its own `/api/deactivate` call when it saw the
-    # commit rejected by a newer tombstone generation; the scripted `unpeel
-    # link enroll` path (crates/unpeel-cli/src/link_cli.rs) does not do this
+    # commit rejected by a newer tombstone generation; the scripted `supercli
+    # link enroll` path (crates/supercli-cli/src/link_cli.rs) does not do this
     # -- on a `commit_activation` "state changed" error it only reports
     # failure and exits, per this repo's shared `license::activate` (never
     # calling `request_deactivation_for_key` on that path). This is a real

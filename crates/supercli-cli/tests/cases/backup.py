@@ -1,6 +1,6 @@
-"""`unpeel backup` / `unpeel restore` against the real binaries.
+"""`supercli backup` / `supercli restore` against the real binaries.
 
-Drives the one-shot verbs (no Host needed) on a private UNPEEL_HOME:
+Drives the one-shot verbs (no Host needed) on a private SUPERCLI_HOME:
 backup produces a verifiable archive, restore reinstalls it, and the
 refusals (existing state, tampered archive, destination inside the home)
 come back as non-zero exits.
@@ -45,7 +45,7 @@ def _tamper_data_member(archive, member_suffix, dst):
 
 
 def _empty_dir(root):
-    """A restore target with no Unpeel state at all. (Home() seeds
+    """A restore target with no Supercli state at all. (Home() seeds
     app-state.json + app-sessions/, which restore must refuse.)"""
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root)
@@ -91,7 +91,7 @@ def body(case):
     case.check(
         # sessions counts restored session dirs; chains_verified counts
         # review chains (the seed has no review log — chain coverage is in
-        # unpeel-core's backup tests).
+        # supercli-core's backup tests).
         "restore --json reports sessions",
         rreport.get("ok") is True and rreport.get("sessions") == 1,
         restored.stdout[:300],
@@ -108,7 +108,7 @@ def body(case):
     again = run_cli(dest, ["restore", "--from", archive])
     case.check(
         "restore refuses existing state without --force",
-        again.returncode != 0 and "existing Unpeel state" in again.stderr,
+        again.returncode != 0 and "existing Supercli state" in again.stderr,
         (again.stdout + again.stderr)[:300],
     )
 

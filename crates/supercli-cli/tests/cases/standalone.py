@@ -1,4 +1,4 @@
-"""No desktop app or TUI: ``unpeel serve`` is a complete persistent Host.
+"""No desktop app or TUI: ``supercli serve`` is a complete persistent Host.
 
 ``compat_standalone.py`` keeps the released TUI-as-server behavior covered
 until the client-only migration ships.
@@ -12,7 +12,7 @@ from harness import mobile_request, run  # noqa: E402
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="cat", command="cat", preset_id="cat")
     token = home.pair_device()
     phone_port = home.reserve_mobile_port()
@@ -46,7 +46,7 @@ def body(case):
             method="POST",
             body={"projectID": "p", "presetID": "cat"},
             timeout=15,
-            headers={"X-Unpeel-Request-ID": request_id},
+            headers={"X-Supercli-Request-ID": request_id},
         )
 
     first_status, first = create("standalone-create-1")
@@ -91,7 +91,7 @@ def body(case):
         method="POST",
         body={"sessionID": first_id, "action": "stop"},
         timeout=15,
-        headers={"X-Unpeel-Request-ID": "standalone-stop-1"},
+        headers={"X-Supercli-Request-ID": "standalone-stop-1"},
     )
     stopped = service.wait_for(
         lambda: home.manifests().get(first_id, {}).get("state") == "exited",
@@ -104,7 +104,7 @@ def body(case):
         method="POST",
         body={"sessionID": first_id, "action": "remove"},
         timeout=15,
-        headers={"X-Unpeel-Request-ID": "standalone-remove-1"},
+        headers={"X-Supercli-Request-ID": "standalone-remove-1"},
     )
     case.check(
         "stop and remove work through the Host contract",

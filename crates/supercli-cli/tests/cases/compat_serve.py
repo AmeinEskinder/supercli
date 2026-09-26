@@ -1,12 +1,12 @@
-"""Upgrade guard across CLI/Host versions: the SHIPPED 0.4.3 `unpeel` beside
+"""Upgrade guard across CLI/Host versions: the SHIPPED 0.4.3 `supercli` beside
 this tree's binaries, over one shared home.
 
 People update the app and the CLI independently, and a headless box may run
-a `unpeel serve` that is older or newer than the `unpeel` a script calls.
+a `supercli serve` that is older or newer than the `supercli` a script calls.
 Both directions must leave every unmodelled key in the shared files intact,
 list each other's sessions, and never refuse to start. The pinned archive is
 fetched once into a cache (sha256 pinned in this file), or taken from
-`UNPEEL_MATRIX_COMPAT_ARCHIVE=<path>` for offline/CI runs; when neither is
+`SUPERCLI_MATRIX_COMPAT_ARCHIVE=<path>` for offline/CI runs; when neither is
 available the case SKIPS with a NOTE line — never a silent pass.
 """
 
@@ -26,7 +26,7 @@ from harness import BINARY, CRATES, run, run_cli  # noqa: E402
 
 PINNED_VERSION = "0.4.3"
 PINNED_CHANNEL = "beta"
-# sha256 of unpeel-0.4.3-<target>.tar.gz as recorded by release-cli.mjs in
+# sha256 of supercli-0.4.3-<target>.tar.gz as recorded by release-cli.mjs in
 # the channel's latest.json at publish time (the versioned .sha256 sidecars
 # were introduced after 0.4.3).
 PINNED_SHA256 = {
@@ -53,7 +53,7 @@ def cache_dir():
         base = os.path.expanduser("~/Library/Caches")
     else:
         base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-    return os.path.join(base, "unpeel-matrix", PINNED_VERSION)
+    return os.path.join(base, "supercli-matrix", PINNED_VERSION)
 
 
 def sha256_of(path):
@@ -67,28 +67,28 @@ def sha256_of(path):
 def resolve_archive(note):
     """Path to a verified archive, or None with the reason noted."""
     target = archive_target()
-    override = os.environ.get("UNPEEL_MATRIX_COMPAT_ARCHIVE")
+    override = os.environ.get("SUPERCLI_MATRIX_COMPAT_ARCHIVE")
     if override:
         if not os.path.isfile(override):
-            note(f"compat_serve SKIPPED: UNPEEL_MATRIX_COMPAT_ARCHIVE={override} is not a file")
+            note(f"compat_serve SKIPPED: SUPERCLI_MATRIX_COMPAT_ARCHIVE={override} is not a file")
             return None
         return override
     if target is None or target not in PINNED_SHA256:
         note(f"compat_serve SKIPPED: no pinned {PINNED_VERSION} archive for {target}")
         return None
-    path = os.path.join(cache_dir(), f"unpeel-{PINNED_VERSION}-{target}.tar.gz")
+    path = os.path.join(cache_dir(), f"supercli-{PINNED_VERSION}-{target}.tar.gz")
     if os.path.isfile(path) and sha256_of(path) == PINNED_SHA256[target]:
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
     url = (
-        f"https://unpeel.com/releases/{PINNED_CHANNEL}/cli/"
-        f"unpeel-{PINNED_VERSION}-{target}.tar.gz"
+        f"https://supercli.com/releases/{PINNED_CHANNEL}/cli/"
+        f"supercli-{PINNED_VERSION}-{target}.tar.gz"
     )
     partial = path + ".part"
     try:
         # Cloudflare answers the default python-urllib agent with 403; name ourselves.
         request = urllib.request.Request(
-            url, headers={"User-Agent": "unpeel-matrix/compat_serve (+https://unpeel.com)"}
+            url, headers={"User-Agent": "supercli-matrix/compat_serve (+https://supercli.com)"}
         )
         with urllib.request.urlopen(request, timeout=60) as response, open(partial, "wb") as out:
             shutil.copyfileobj(response, out)
@@ -112,15 +112,15 @@ def extract(archive, into):
     os.makedirs(into, exist_ok=True)
     with tarfile.open(archive) as tar:
         for member in tar.getmembers():
-            if member.name in ("unpeel", "unpeel-host"):
+            if member.name in ("supercli", "supercli-host"):
                 tar.extract(member, into)
-    for name in ("unpeel", "unpeel-host"):
+    for name in ("supercli", "supercli-host"):
         os.chmod(os.path.join(into, name), 0o755)
-    return os.path.join(into, "unpeel")
+    return os.path.join(into, "supercli")
 
 
 class OldServe:
-    """A foreground `unpeel serve` from the pinned archive."""
+    """A foreground `supercli serve` from the pinned archive."""
 
     def __init__(self, binary, home):
         self.home = home
@@ -128,7 +128,7 @@ class OldServe:
         self.process = subprocess.Popen(
             [binary, "serve"],
             cwd=CRATES,
-            env=dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1"),
+            env=dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1"),
             stdin=subprocess.DEVNULL,
             stdout=self._log,
             stderr=subprocess.STDOUT,
@@ -176,7 +176,7 @@ def old_cli(binary, home, args, timeout=30):
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1"),
+        env=dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1"),
         cwd=CRATES,
     )
 
@@ -201,7 +201,7 @@ def body(case):
     # A home as THIS version writes it, plus keys neither version models.
     state = home.state()
     state.update(FUTURE_KEYS)
-    state["projects"] = [{"id": "p", "name": "unpeel", "path": "/tmp", "future_field": 1}]
+    state["projects"] = [{"id": "p", "name": "supercli", "path": "/tmp", "future_field": 1}]
     state["presets"] = [
         {"id": "c", "label": "claude", "command": "claude", "project_id": None,
          "enabled": True, "quick_launch": True, "from_later": {"x": 1}}

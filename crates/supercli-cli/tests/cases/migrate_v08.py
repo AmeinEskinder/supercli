@@ -1,8 +1,8 @@
-"""`unpeel migrate` on a real v0.8 home fixture, end to end.
+"""`supercli migrate` on a real v0.8 home fixture, end to end.
 
 Builds a v0.8 home with v0.8-isms (legacy bare-string grants, pre-chain
 review log, old-schema lease DB, invalid config values), runs
-`unpeel migrate --apply`, then asserts `unpeel doctor` is green and the
+`supercli migrate --apply`, then asserts `supercli doctor` is green and the
 review chain verifies.
 """
 

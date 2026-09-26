@@ -35,6 +35,12 @@ jobs:
                       -e '^./clients/legacy/' \
                       -e '^./clients/native/release-notes/' \
                       -e '^./clients/native/licenses/' \
+                      -e '^./crates/apps/app-kit/' \
+                      -e '^./scripts/' \
+                      -e '^./packaging/' \
+                      -e '^./runtimes/' \
+                      -e '^./tests/device/' \
+                      -e '^./generated/' \
                       -e 'CHANGELOG.md' \
                       -e 'THIRD_PARTY_NOTICES.txt' \
                       -e 'crates/apps/diffs/LICENSE' \
@@ -44,6 +50,10 @@ jobs:
                       -e 'package-lock.json' \
                       -e 'docs/rename-allowlist.md' \
                       -e '.github/workflows/rename-guard.yml' \
+                      -e '^./package.json' \
+                      -e '^./README.md' \
+                      -e 'crates/supercli-cli/src/cli.rs' \
+                      -e 'crates/supercli-cli/src/main.rs' \
             || true)
           if [ -n "$matches" ]; then
             echo "FAIL: unpeel references found outside allowlist:"

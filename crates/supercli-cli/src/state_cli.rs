@@ -143,7 +143,8 @@ pub(crate) fn resume_unavailable_message(session: &SessionRow) -> &'static str {
     "Resume Agent is unavailable for this live Host"
 }
 
-const PRESETS_EDIT_USAGE: &str = "usage: supercli presets edit <label|id> [--label L] [--command C]";
+const PRESETS_EDIT_USAGE: &str =
+    "usage: supercli presets edit <label|id> [--label L] [--command C]";
 
 pub fn presets_cli(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {

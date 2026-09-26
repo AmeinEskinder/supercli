@@ -1475,8 +1475,10 @@ provides = ["county.echo"]
         fn new() -> Self {
             let guard = FIXTURE_LOCK.lock().unwrap();
             let n = FIXTURE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let dir = std::env::temp_dir()
-                .join(format!("supercli-core-conn-test-{}-{n}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "supercli-core-conn-test-{}-{n}",
+                std::process::id()
+            ));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             Self::write_connector(&dir, "asky", MANIFEST_ASK, "asky.echo");

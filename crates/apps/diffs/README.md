@@ -2,8 +2,8 @@
 
 A standalone Git sidebar App with **Changes** and **History** tabs at the top.
 The terminal and native renderers use the same App Kit Page, tabs, lists, and
-patch content. The display name is Git; `unpeel-diffs`, the `diffs` install
-slug, and `unpeel.app.diffs` remain stable for existing installs and presets.
+patch content. The display name is Git; `supercli-diffs`, the `diffs` install
+slug, and `supercli.app.diffs` remain stable for existing installs and presets.
 
 **Changes** shows staged, unstaged, conflicted, and untracked files. Open a
 file to review its unified diff. Tracked changes compare the working tree to
@@ -21,7 +21,7 @@ the patch changes, so scrolling and selection do not reparse code. The old
 and new sides keep separate multiline parser state, reset between hunks.
 Unknown file types and patches exceeding 4,000 lines, 1 MiB, or a 16 KiB line
 retain plain diff colors. Syntax definitions come from
-[two-face](https://docs.rs/two-face/); `unpeel-diffs --syntax-licenses` prints
+[two-face](https://docs.rs/two-face/); `supercli-diffs --syntax-licenses` prints
 the bundled collection and grammar acknowledgements.
 
 **History** shows the current checkout's commits, newest first, with subject,
@@ -53,11 +53,11 @@ terminal password prompts are disabled. Failures appear in the title.
 From this repository:
 
 ```sh
-cargo build --release --manifest-path crates/apps/Cargo.toml -p unpeel-diffs
-crates/apps/target/release/unpeel-diffs ~/Dev/my-repository
+cargo build --release --manifest-path crates/apps/Cargo.toml -p supercli-diffs
+crates/apps/target/release/supercli-diffs ~/Dev/my-repository
 ```
 
-For local Unpeel development, `bun run apps:link diffs` builds and links the
+For local Supercli development, `bun run apps:link diffs` builds and links the
 managed App slot. Use the pane menu's **Restart App** after a rebuild; running
 processes keep their loaded binary. The App is released independently with
 the `diffs` slug; linking a development build does not publish it to R2.
@@ -91,5 +91,5 @@ that revision. If no agent is available, the reference is copied instead.
 ## Verification
 
 ```sh
-cargo test --manifest-path crates/apps/Cargo.toml -p unpeel-diffs
+cargo test --manifest-path crates/apps/Cargo.toml -p supercli-diffs
 ```

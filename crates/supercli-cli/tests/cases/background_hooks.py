@@ -73,12 +73,12 @@ while True:
         payload = {"hook_event_name": event}
         if child is not None:
             payload["agent_id"] = child
-        env = dict(os.environ, HOME=home.root, UNPEEL_HOME=home.root,
-                   UNPEEL_HOOK_TRACE_FILE=home.path("hooks", "trace.log"),
-                   UNPEEL_SESSION_ID=session_id, UNPEEL_SESSION_DIR=session_dir,
-                   UNPEEL_RUNTIME_GENERATION=str(generation if generation is not None else manifest["runtime_launch_generation"]),
-                   UNPEEL_APP_PORT=str(ready["hookPort"]) if deliver else "",
-                   UNPEEL_APP_PORT_REGISTRY_FILE=home.path("no-ports"))
+        env = dict(os.environ, HOME=home.root, SUPERCLI_HOME=home.root,
+                   SUPERCLI_HOOK_TRACE_FILE=home.path("hooks", "trace.log"),
+                   SUPERCLI_SESSION_ID=session_id, SUPERCLI_SESSION_DIR=session_dir,
+                   SUPERCLI_RUNTIME_GENERATION=str(generation if generation is not None else manifest["runtime_launch_generation"]),
+                   SUPERCLI_APP_PORT=str(ready["hookPort"]) if deliver else "",
+                   SUPERCLI_APP_PORT_REGISTRY_FILE=home.path("no-ports"))
         for entry in settings["hooks"][event]:
             for hook in entry["hooks"]:
                 subprocess.run(hook["command"], shell=True, executable="/bin/bash",

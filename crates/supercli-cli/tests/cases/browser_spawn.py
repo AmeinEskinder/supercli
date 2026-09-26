@@ -56,7 +56,7 @@ def wait_for_output(home, session_id, needle, timeout=10):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
 
     # Off suppresses the saved domain grant for a fresh blank terminal.
     set_browser_access(home, "off")
@@ -101,7 +101,7 @@ def body(case):
     set_browser_access(home, "ask")
     ask_id = new_session(
         case,
-        "sh -c 'printf \"identity=%s\\n\" \"$UNPEEL_SESSION_ID\"; exec cat'",
+        "sh -c 'printf \"identity=%s\\n\" \"$SUPERCLI_SESSION_ID\"; exec cat'",
     )
     if ask_id:
         ask_manifest = home.manifests()[ask_id]

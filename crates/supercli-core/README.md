@@ -1,22 +1,22 @@
-# unpeel-core
+# supercli-core
 
-The Unpeel session backend as a library — everything about running, watching,
+The Supercli session backend as a library — everything about running, watching,
 and controlling hosted agent sessions, with no GUI dependency. The Mac app
-(via `unpeel-native-bridge`), the `unpeel-host` binary, and the TUI are all
+(via `supercli-native-bridge`), the `supercli-host` binary, and the TUI are all
 frontends over this crate.
 
 Key modules:
 
 - `session_host.rs` — hosted PTY lifecycle: each session is a separate host
   process writing `output.bin`, serving `session.sock`, and persisting
-  `manifest.json` under `~/.unpeel/app-sessions/<id>/`; sessions survive app
+  `manifest.json` under `~/.supercli/app-sessions/<id>/`; sessions survive app
   restarts. Critical invariant: never signal a recorded pid without verifying
   `pid_started_at` against the live process (pid recycling).
 - `integrations/` — the per-provider registry (Claude, Codex, Gemini, …):
   capabilities, launch env, hook wiring.
 - `hook_assets.rs` — installs the provider hook scripts/wrappers under
-  `~/.unpeel/hooks` at spawn time.
-- `mcp_host.rs` — the single `unpeel` MCP server (sessions/browser/computer
+  `~/.supercli/hooks` at spawn time.
+- `mcp_host.rs` — the single `supercli` MCP server (sessions/browser/computer
   domains) with cooperative open reads and approval-gated inter-session writes.
   Hosted commands run as the same user, so this is not a sandbox boundary.
 - `browser_mcp.rs` — per-session isolated real browser via the bundled

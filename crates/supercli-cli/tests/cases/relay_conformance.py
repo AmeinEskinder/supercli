@@ -7,8 +7,8 @@ Worker WebCrypto implementations are pinned to).
 The Swift-oracle half — the SHIPPED phone crypto (RelayProtocol.swift)
 completing a forward-secret handshake and sealed /mobile round-trips against
 this Host through a stand-in relay — builds the shipped Swift sources from
-clients/shared/UnpeelShared and needs an Apple toolchain (CryptoKit). It is
-skipped here with a NOTE unless UNPEEL_RELAY_SWIFT_ORACLE=1 is set."""
+clients/shared/SupercliShared and needs an Apple toolchain (CryptoKit). It is
+skipped here with a NOTE unless SUPERCLI_RELAY_SWIFT_ORACLE=1 is set."""
 
 import sys, os, json, socket, base64, hashlib, struct, subprocess, time, threading, shutil
 
@@ -16,14 +16,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from harness import run, REPO  # noqa: E402
 
 TESTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SHARED = os.path.join(REPO, "clients", "shared", "UnpeelShared", "Sources", "UnpeelShared")
+SHARED = os.path.join(REPO, "clients", "shared", "SupercliShared", "Sources", "SupercliShared")
 
 
 VECTORS = os.path.join(REPO, "protocol", "relay-kat-vectors-v1.json")
 
 
 def check_vectors(case):
-    """Rust-side KAT: cargo test in unpeel-core replays the vectors; here we
+    """Rust-side KAT: cargo test in supercli-core replays the vectors; here we
     only prove the published contract file is present and well-formed so a
     drift shows up in this matrix, not only in cargo."""
     try:
@@ -37,7 +37,7 @@ def check_vectors(case):
     case.check("protocol/relay-kat-vectors-v1.json carries transcriptMAC + sealedFrame", ok,
                str(vectors)[:120])
     r = subprocess.run(["cargo", "test", "-q", "--manifest-path",
-                        os.path.join(REPO, "crates", "Cargo.toml"), "-p", "unpeel-core",
+                        os.path.join(REPO, "crates", "Cargo.toml"), "-p", "supercli-core",
                         "--lib", "relay_crypto::tests::known_answer_vectors_match_swift_and_js"],
                        capture_output=True, text=True, timeout=900)
     case.check("Rust relay crypto reproduces the Swift/JS known-answer vectors",
@@ -45,7 +45,7 @@ def check_vectors(case):
 
 
 def build_oracle(dest):
-    if os.environ.get("UNPEEL_RELAY_SWIFT_ORACLE") != "1":
+    if os.environ.get("SUPERCLI_RELAY_SWIFT_ORACLE") != "1":
         return None
     if not shutil.which("swiftc"):
         return None
@@ -64,15 +64,15 @@ def body(case):
     check_vectors(case)
     oracle = build_oracle(case.home.path("build"))
     if not oracle:
-        if os.environ.get("UNPEEL_RELAY_SWIFT_ORACLE") == "1":
+        if os.environ.get("SUPERCLI_RELAY_SWIFT_ORACLE") == "1":
             case.check("Swift oracle requested but swiftc/clients/shared unavailable", False)
         else:
             case.note("Swift-oracle handshake half skipped (needs an Apple toolchain and "
                       "clients/shared); set "
-                      "UNPEEL_RELAY_SWIFT_ORACLE=1 to require it")
+                      "SUPERCLI_RELAY_SWIFT_ORACLE=1 to require it")
         return
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="Relay cat", command="cat", preset_id="relay-cat")
     home.session("s1", label="a session", project_id="p")
     home.session("s-live", label="live relay session", command="cat",
@@ -124,7 +124,7 @@ def body(case):
         state["conn"] = c
     threading.Thread(target=accept_host, daemon=True).start()
 
-    service = case.serve(env={"UNPEEL_RELAY_URL": f"ws://127.0.0.1:{relay_port}"})
+    service = case.serve(env={"SUPERCLI_RELAY_URL": f"ws://127.0.0.1:{relay_port}"})
     service.ready()
     deadline = time.time() + 30
     while "conn" not in state and time.time() < deadline: time.sleep(0.3)

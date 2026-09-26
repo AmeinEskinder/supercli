@@ -421,8 +421,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(state["presets"].as_array().unwrap().len(), 1);
-        let mut wire =
-            vec![json!({"id":"custom-app", "command":"supercli-markdown notes.md", "enabled":true})];
+        let mut wire = vec![
+            json!({"id":"custom-app", "command":"supercli-markdown notes.md", "enabled":true}),
+        ];
         let mut create = vec![];
         project_presets(&state, &agents, &apps, &mut wire, &mut create);
         assert_eq!(

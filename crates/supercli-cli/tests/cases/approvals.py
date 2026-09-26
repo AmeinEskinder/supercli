@@ -13,7 +13,7 @@ from harness import run, mcp_post, mobile_request, tui_hook_port  # noqa: E402
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s1", label="a session", project_id="p")
     token = home.pair_device()
     phone_port = home.reserve_mobile_port()

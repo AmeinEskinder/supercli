@@ -104,11 +104,7 @@ pub fn run_from_unpeel(args: &[String]) -> i32 {
     }
 
     if json {
-        println!(
-            r#"{{"imported":{},"skipped":{}}}"#,
-            imported,
-            skipped.len()
-        );
+        println!(r#"{{"imported":{},"skipped":{}}}"#, imported, skipped.len());
     } else {
         println!();
         println!(
@@ -135,10 +131,7 @@ mod tests {
     #[test]
     fn no_source_is_noop() {
         // With a HOME that has no .unpeel, import is a no-op returning 0.
-        let tmp = std::env::temp_dir().join(format!(
-            "supercli-import-test-{}",
-            std::process::id()
-        ));
+        let tmp = std::env::temp_dir().join(format!("supercli-import-test-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         // Temporarily override HOME via env for this test is racy; instead
         // just verify the item list is non-empty and well-formed.
@@ -152,10 +145,8 @@ mod tests {
 
     #[test]
     fn copy_recursively_copies_files() {
-        let base = std::env::temp_dir().join(format!(
-            "supercli-import-copy-{}",
-            std::process::id()
-        ));
+        let base =
+            std::env::temp_dir().join(format!("supercli-import-copy-{}", std::process::id()));
         let src = base.join("src");
         let dst = base.join("dst");
         std::fs::create_dir_all(src.join("sub")).unwrap();

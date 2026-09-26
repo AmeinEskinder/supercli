@@ -1,7 +1,7 @@
-"""`unpeel migrate` grant shard: v0.9-pre (grants in app-state.json) -> v0.9 (grants.json).
+"""`supercli migrate` grant shard: v0.9-pre (grants in app-state.json) -> v0.9 (grants.json).
 
 Builds a home with grants in app-state.json (pre-S2 layout), runs
-`unpeel migrate --apply`, then asserts:
+`supercli migrate --apply`, then asserts:
 - grants.json exists and contains the grants
 - app-state.json no longer has the grant keys (non-grant keys preserved)
 - migration is idempotent (second run is a no-op)

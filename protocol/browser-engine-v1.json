@@ -1,5 +1,5 @@
 {
-  "_comment": "Pinned Unpeel Browser MCP engine (agent-browser, Apache-2.0). The Host installs the platform binary into ~/.supercli/browser/bin/agent-browser after verifying sha256 (supercli_core::browser_engine); the Mac app build reads the same darwin hashes. Bumping the engine = update every hash here from the real release assets, then run scripts/verify-browser.sh.",
+  "_comment": "Pinned Supercli Browser MCP engine (agent-browser, Apache-2.0). The Host installs the platform binary into ~/.supercli/browser/bin/agent-browser after verifying sha256 (supercli_core::browser_engine); the Mac app build reads the same darwin hashes. Bumping the engine = update every hash here from the real release assets, then run scripts/verify-browser.sh.",
   "version": "0.34.0",
   "license": "Apache-2.0",
   "notice": {

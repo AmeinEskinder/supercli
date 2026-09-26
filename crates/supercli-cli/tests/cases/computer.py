@@ -13,7 +13,7 @@ def body(case):
         "experimental_features": {"computer_use": True},
         "computer_default_access": "allow",
     })
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     token = home.pair_device()
     port = home.reserve_mobile_port()
     driver = home.path("old-driver")
@@ -21,7 +21,7 @@ def body(case):
     with open(driver, "w") as handle:
         handle.write("#!/bin/sh\ntouch " + marker + "\nexit 1\n")
     os.chmod(driver, 0o700)
-    with patch.dict(os.environ, {"UNPEEL_CUA_DRIVER_BIN": driver, "UNPEEL_COMPUTER_ENGINE_INSTALL": "1", "DISPLAY": ":97"}):
+    with patch.dict(os.environ, {"SUPERCLI_CUA_DRIVER_BIN": driver, "SUPERCLI_COMPUTER_ENGINE_INSTALL": "1", "DISPLAY": ":97"}):
         service = case.serve()
         ready = service.ready(timeout=20.0)
         case.check("Host starts with saved computer settings", bool(ready), str(ready))

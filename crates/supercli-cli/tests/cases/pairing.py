@@ -1,12 +1,12 @@
 """Pair Controllers with the persistent Host service, verified against the
 SHIPPED Swift client and crypto rather than a reimplementation.
 
-`pairclient/main.swift` is compiled against the same `UnpeelShared` sources
+`pairclient/main.swift` is compiled against the same `SupercliShared` sources
 the iPhone app uses, so this proves byte-compatibility: if the Rust pairing
 handshake ever drifts from the shipped client, this case fails instead of a
 user's phone. A tiny generated entry point also exercises the shared
 `RemotePairingClient` with a macOS Controller identity against the first-device
-`unpeel pair` path. On a machine without swiftc (Linux) the crypto half is
+`supercli pair` path. On a machine without swiftc (Linux) the crypto half is
 skipped with a NOTE — the QR half still runs. The released TUI-owned route
 remains covered by ``compat_pairing.py``."""
 
@@ -16,13 +16,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from harness import run, REPO  # noqa: E402
 
 TESTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# The shipped Swift pairing client lives in clients/shared/UnpeelShared;
-# UNPEEL_SHARED_SWIFT_DIR points at another copy of
-# its Sources/UnpeelShared directory to run the macOS Controller oracle
+# The shipped Swift pairing client lives in clients/shared/SupercliShared;
+# SUPERCLI_SHARED_SWIFT_DIR points at another copy of
+# its Sources/SupercliShared directory to run the macOS Controller oracle
 # against it; without an Apple toolchain (or those sources) the Swift half is
 # skipped with a NOTE and the QR half still runs.
-SHARED = os.environ.get("UNPEEL_SHARED_SWIFT_DIR") or os.path.join(
-    REPO, "clients", "shared", "UnpeelShared", "Sources", "UnpeelShared"
+SHARED = os.environ.get("SUPERCLI_SHARED_SWIFT_DIR") or os.path.join(
+    REPO, "clients", "shared", "SupercliShared", "Sources", "SupercliShared"
 )
 # The shipped client imports CryptoKit, which only Apple toolchains ship;
 # a Linux swiftc (GitHub runners have one) cannot build it, so the Swift
@@ -54,7 +54,7 @@ def build_mac_pairclient(destination):
 
     The entry point only supplies identity and prints the result; request
     sealing, HTTP exchange, response opening, and Host binding all remain in
-    UnpeelShared's production RemotePairingClient.
+    SupercliShared's production RemotePairingClient.
     """
     if not APPLE_SWIFT:
         return None, "Apple Swift toolchain unavailable"
@@ -111,7 +111,7 @@ struct MacPairClient {
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s1", label="a session", project_id="p")
 
     probe_bin = home.path("dns-probe-bin")
@@ -121,14 +121,14 @@ def body(case):
     with open(dns_sd, "w") as handle:
         handle.write(
             "#!/bin/sh\n"
-            "printf '%s\\n' \"$*\" > \"$UNPEEL_TEST_DNS_SD_LOG\"\n"
+            "printf '%s\\n' \"$*\" > \"$SUPERCLI_TEST_DNS_SD_LOG\"\n"
             "exec /bin/sleep 300\n"
         )
     os.chmod(dns_sd, 0o755)
     service = case.serve(
         env={
             "PATH": probe_bin + os.pathsep + os.environ.get("PATH", ""),
-            "UNPEEL_TEST_DNS_SD_LOG": probe_log,
+            "SUPERCLI_TEST_DNS_SD_LOG": probe_log,
         }
     )
     ready = service.ready(timeout=15.0)
@@ -150,7 +150,7 @@ def body(case):
         elif mac_build_error.startswith("missing shared source"):
             case.note(
                 "shipped Swift pairing client not in this repo — set "
-                "UNPEEL_SHARED_SWIFT_DIR=<checkout>/clients/shared/UnpeelShared/Sources/UnpeelShared "
+                "SUPERCLI_SHARED_SWIFT_DIR=<checkout>/clients/shared/SupercliShared/Sources/SupercliShared "
                 "to run the macOS Controller pairing oracle"
             )
         else:
@@ -166,7 +166,7 @@ def body(case):
             cols=160,
             env={
                 "PATH": probe_bin + os.pathsep + os.environ.get("PATH", ""),
-                "UNPEEL_TEST_DNS_SD_LOG": probe_log,
+                "SUPERCLI_TEST_DNS_SD_LOG": probe_log,
             },
         )
         pair_cli.read_for(4.0)
@@ -189,11 +189,11 @@ def body(case):
             dns_sd_args,
         )
         cli_match = re.search(
-            r"UNPEEL:1:[0-9.]+:\d+:[0-9A-F-]+:[A-Z2-7]{26}:\d+",
+            r"SUPERCLI:1:[0-9.]+:\d+:[0-9A-F-]+:[A-Z2-7]{26}:\d+",
             pair_cli.all_text(),
         )
         case.check(
-            "unpeel pair controls the live worker and prints its code",
+            "supercli pair controls the live worker and prints its code",
             cli_match is not None,
             pair_cli.all_text()[-240:],
         )
@@ -249,7 +249,7 @@ def body(case):
     pair_cli = case.pty(args=("pair",), rows=50, cols=160)
     pair_cli.read_for(4.0)
     match = re.search(
-        r"UNPEEL:1:[0-9.]+:\d+:[0-9A-F-]+:[A-Z2-7]{26}:\d+",
+        r"SUPERCLI:1:[0-9.]+:\d+:[0-9A-F-]+:[A-Z2-7]{26}:\d+",
         pair_cli.all_text(),
     )
     case.check(

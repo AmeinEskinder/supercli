@@ -203,3 +203,32 @@ final frame = UiDeviceFrame('device-1',
 7. P0-7 device frame (decorative container over P0-6)
 8. P1 theming, i18n, a11y, mobile shells
 9. P2 charts, rich text, animations
+
+## P0 gaps found building clients/supercli-app (2026-09-26)
+
+The supercli desktop app (clients/supercli-app) is built on gpuidart 135d300.
+Gaps hit during implementation, in priority order:
+
+### P0-8. Programmatic focus API (NEW)
+**Status:** Missing. **Blocks:** keyboard-first workflow.
+Today there is no way to move focus via code (e.g. focus the composer on
+startup, or focus the approval card when an approval arrives). The app logs
+`gap: programmatic focus not available in gpuidart` when the `composer.focus`
+action fires. Need: `host.focus(nodeId)` or a focus request in the snapshot,
+plus a `focused` event so the app knows where focus landed.
+
+### P0-1. Approval card widget (in use via primitives)
+**Status:** Using UiRow + UiText + UiButton as a stopgap.
+Missing: structured diff view, risk badge, timeout countdown, keyboard-first
+approve/deny with visible focus. The current card works but is not
+distinguishable from a generic form.
+
+### P0-2. List widget (in use via UiTable)
+**Status:** Using UiTable with a TableDataset as a stopgap.
+Missing: a lightweight UiList/UiListItem for simple vertical lists (sessions,
+approvals, files) without the table column machinery.
+
+### P0-3. Multiline composer (in use via single-line UiInput)
+**Status:** Using single-line UiInput as a stopgap.
+Missing: multiline controlled composer with Enter-to-send vs Shift+Enter for
+newline, cursor/selection state surviving rebuilds.

@@ -1,6 +1,6 @@
-"""The shared PTY core: `unpeel-host __pty_core__` hosts every Session of a
+"""The shared PTY core: `supercli-host __pty_core__` hosts every Session of a
 home in one process. Launches route to it through the ordinary
-`unpeel-host <launch-file>` spawn, the on-disk/socket contract is unchanged,
+`supercli-host <launch-file>` spawn, the on-disk/socket contract is unchanged,
 `shutdown` is refused while Sessions are hosted, and the per-process Host
 remains the fallback when the core is absent or disabled."""
 
@@ -14,7 +14,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from harness import BINARY, CRATES, run, run_cli, wait_running  # noqa: E402
 
-HOST_BIN = os.path.join(CRATES, "target", "debug", "unpeel-host")
+HOST_BIN = os.path.join(CRATES, "target", "debug", "supercli-host")
 
 
 def core_request(home, request, timeout=12.0):
@@ -51,8 +51,8 @@ def per_process_hosts(home):
 
 
 def start_core(home):
-    env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1")
-    env.pop("UNPEEL_PTY_CORE", None)
+    env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1")
+    env.pop("SUPERCLI_PTY_CORE", None)
     core = subprocess.Popen(
         [HOST_BIN, "__pty_core__"],
         env=env,
@@ -79,10 +79,10 @@ class CoreStopper:
 
 def launch_env(home, extra=None):
     """The case drives its own hand-started core, so the gate the matrix may
-    export (UNPEEL_PTY_CORE=0 for a core-off run) must not leak into these
+    export (SUPERCLI_PTY_CORE=0 for a core-off run) must not leak into these
     launches; only an explicit per-call value applies."""
-    env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1")
-    env.pop("UNPEEL_PTY_CORE", None)
+    env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1")
+    env.pop("SUPERCLI_PTY_CORE", None)
     env.update(extra or {})
     return env
 
@@ -109,7 +109,7 @@ def new_session(case, home, label, env=None):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="cat", command="cat")
 
     core = start_core(home)
@@ -193,10 +193,10 @@ def body(case):
     )
     case.check("the core is empty again", wait_core_sessions(home, 0), str(core_sessions(home)))
 
-    # Fallback 1: UNPEEL_PTY_CORE=0 forces a per-process Host even with a core up.
-    forced = new_session(case, home, "forced per-process", env={"UNPEEL_PTY_CORE": "0"})
+    # Fallback 1: SUPERCLI_PTY_CORE=0 forces a per-process Host even with a core up.
+    forced = new_session(case, home, "forced per-process", env={"SUPERCLI_PTY_CORE": "0"})
     hosts = per_process_hosts(home)
-    case.check("UNPEEL_PTY_CORE=0 spawns a per-process host", len(hosts) == 1 and core_sessions(home) == 0, str(hosts))
+    case.check("SUPERCLI_PTY_CORE=0 spawns a per-process host", len(hosts) == 1 and core_sessions(home) == 0, str(hosts))
     case.check(
         "a per-process manifest keeps today's shape",
         home.manifests()[forced]["pid"] not in (None, core.pid)

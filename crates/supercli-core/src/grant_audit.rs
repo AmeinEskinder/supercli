@@ -145,8 +145,11 @@ fn now_ms() -> u64 {
 
 /// Get the hash of the last entry, or None if the log is empty/missing.
 fn last_entry_hash() -> Result<Option<String>, String> {
+    last_entry_hash_at(&audit_path())
+}
+
+fn last_entry_hash_at(path: &std::path::Path) -> Result<Option<String>, String> {
     use std::io::{Read, Seek, SeekFrom};
-    let path = audit_path();
     let mut file = match std::fs::File::open(&path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -240,7 +243,16 @@ pub fn record_grant_created(
 pub fn record_grants_created_batch(
     items: &[(&str, &str, &str, &str)],
 ) -> Result<Vec<GrantAuditEntry>, String> {
-    let path = audit_path();
+    record_grants_created_batch_at(&crate::app_paths::supercli_home(), items)
+}
+
+/// Same as `record_grants_created_batch` but with an explicit home directory,
+/// for tests that must not mutate the process-global SUPERCLI_HOME env var.
+pub fn record_grants_created_batch_at(
+    home: &std::path::Path,
+    items: &[(&str, &str, &str, &str)],
+) -> Result<Vec<GrantAuditEntry>, String> {
+    let path = home.join(AUDIT_FILE);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -252,7 +264,7 @@ pub fn record_grants_created_batch(
     // The lock is held for the read-tail + append + fsync sequence.
     let _lock = acquire_audit_lock(&path)?;
 
-    let mut prev_hash = last_entry_hash()
+    let mut prev_hash = last_entry_hash_at(&path)
         .map_err(|e| format!("read audit log: {e}"))?
         .unwrap_or_else(|| GENESIS_PREV_HASH.to_string());
 
@@ -284,7 +296,12 @@ pub fn record_grants_created_batch(
 
 /// Verify the grant audit chain. Returns the number of entries verified.
 pub fn verify_grant_audit() -> Result<usize, String> {
-    let path = audit_path();
+    verify_grant_audit_at(&crate::app_paths::supercli_home())
+}
+
+/// Same as `verify_grant_audit` but with an explicit home directory.
+pub fn verify_grant_audit_at(home: &std::path::Path) -> Result<usize, String> {
+    let path = home.join(AUDIT_FILE);
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),

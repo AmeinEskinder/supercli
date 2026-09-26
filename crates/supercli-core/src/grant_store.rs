@@ -65,8 +65,8 @@ fn grants_path() -> PathBuf {
 }
 
 /// Acquire an exclusive lock on the grants file.
-fn lock_grants() -> Result<crate::app_state::FileLock, String> {
-    let path = grants_path();
+fn lock_grants_at(home: &std::path::Path) -> Result<crate::app_state::FileLock, String> {
+    let path = home.join("grants.json");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -99,10 +99,20 @@ fn load_grants() -> Map<String, Value> {
 pub fn edit_grants<T>(
     mutate: impl Fn(&mut Map<String, Value>) -> Result<T, String>,
 ) -> Result<T, String> {
+    edit_grants_at(&crate::app_paths::supercli_home(), mutate)
+}
+
+/// Same as `edit_grants` but with an explicit home directory,
+/// for tests that must not mutate the process-global SUPERCLI_HOME env var.
+pub fn edit_grants_at<T>(
+    home: &std::path::Path,
+    mutate: impl Fn(&mut Map<String, Value>) -> Result<T, String>,
+) -> Result<T, String> {
+    let grants_path = home.join("grants.json");
     // Retry loop for optimistic concurrency
     loop {
         // OUTSIDE lock: load, mutate, serialize
-        let original_bytes = std::fs::read(grants_path()).unwrap_or_default();
+        let original_bytes = std::fs::read(&grants_path).unwrap_or_default();
         let mut map = serde_json::from_slice::<Value>(&original_bytes)
             .ok()
             .and_then(|v| v.as_object().cloned())
@@ -112,13 +122,13 @@ pub fn edit_grants<T>(
             serde_json::to_vec_pretty(&Value::Object(map)).map_err(|e| e.to_string())?;
 
         // Acquire lock
-        let _lock = lock_grants()?;
+        let _lock = lock_grants_at(home)?;
 
         // Re-read under lock; check for conflicts
-        let current_bytes = std::fs::read(grants_path()).unwrap_or_default();
+        let current_bytes = std::fs::read(&grants_path).unwrap_or_default();
         if current_bytes == original_bytes {
             // No conflict: write the pre-serialized bytes
-            write_grants_bytes(&new_bytes)?;
+            write_grants_bytes_at(home, &new_bytes)?;
             return Ok(outcome);
         }
         // Conflict: another writer changed the file. Retry.
@@ -128,8 +138,8 @@ pub fn edit_grants<T>(
 
 /// Write pre-serialized grants bytes with crash safety.
 /// Caller must hold the grants lock.
-fn write_grants_bytes(body: &[u8]) -> Result<(), String> {
-    let path = grants_path();
+fn write_grants_bytes_at(home: &std::path::Path, body: &[u8]) -> Result<(), String> {
+    let path = home.join("grants.json");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

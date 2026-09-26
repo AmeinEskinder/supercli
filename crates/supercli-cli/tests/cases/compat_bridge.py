@@ -1,6 +1,6 @@
 """Version skew between the CLI/Host and the desktop app.
 
-Users update the two independently — a newer `unpeel` (CLI + `unpeel serve`)
+Users update the two independently — a newer `supercli` (CLI + `supercli serve`)
 will meet an older app that has never heard of the state-bus ping or of
 routes added since. Every verb must complete on the shared files and never
 block on, or be broken by, an app that 404s what it does not know."""
@@ -14,7 +14,7 @@ from harness import run, run_cli  # noqa: E402
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.session("s-one", label="first session", project_id="p",
                  created_at=1_754_400_000_000, settled=True, running=True)
     case.host("s-one")

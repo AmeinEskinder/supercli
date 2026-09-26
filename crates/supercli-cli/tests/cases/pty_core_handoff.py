@@ -1,4 +1,4 @@
-"""Restart-free core upgrades: `unpeel-host __pty_core__ --takeover` moves
+"""Restart-free core upgrades: `supercli-host __pty_core__ --takeover` moves
 every Session (PTY, control socket, attached stream clients) from the
 running core to a new one over SCM_RIGHTS. Terminals keep their screens
 byte for byte, the journal stays continuous, an attached client keeps
@@ -25,7 +25,7 @@ from harness import (  # noqa: E402
     wait_running,
 )
 
-HOST_BIN = os.path.join(CRATES, "target", "debug", "unpeel-host")
+HOST_BIN = os.path.join(CRATES, "target", "debug", "supercli-host")
 
 
 def pid_is_zombie(pid):
@@ -59,8 +59,8 @@ def core_record(home):
 
 
 def start_core(home, binary=HOST_BIN, extra_args=()):
-    env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1")
-    env.pop("UNPEEL_PTY_CORE", None)
+    env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1")
+    env.pop("SUPERCLI_PTY_CORE", None)
     core = subprocess.Popen(
         [binary, "__pty_core__", *extra_args],
         env=env,
@@ -173,7 +173,7 @@ def wait_for(predicate, timeout=15.0):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="cat", command="cat")
     home.preset(label="sh", command="sh")
 
@@ -305,8 +305,8 @@ def body(case):
     case.check("the core releases it", wait_for(lambda: core_request(home, {"op": "ping"}).get("sessions") == 4))
 
     # Serve supervisor: adopt a core built from a different binary and take
-    # it over automatically (UNPEEL_PTY_CORE=1). The "different build" is a
-    # copy of unpeel-host with an older mtime.
+    # it over automatically (SUPERCLI_PTY_CORE=1). The "different build" is a
+    # copy of supercli-host with an older mtime.
     for session_id in (ids[0], ids[1], ids[2], ids[4]):
         run_cli(home, ["rm", session_id], timeout=45)
     case.check("all sessions removed before the supervisor test", wait_for(lambda: core_request(home, {"op": "ping"}).get("sessions") == 0))
@@ -316,14 +316,14 @@ def body(case):
     except subprocess.TimeoutExpired:
         pass
 
-    stale_bin = home.path("stale-unpeel-host")
+    stale_bin = home.path("stale-supercli-host")
     shutil.copy2(HOST_BIN, stale_bin)
     os.utime(stale_bin, (1_600_000_000, 1_600_000_000))
     stale_core = start_core(home, binary=stale_bin)
     stopper.cores.append(stale_core)
     stale_record = core_record(home)
     case.check("a core from the stale binary is up", stale_core.poll() is None and stale_record["pid"] == stale_core.pid)
-    stale_session = new_session(case, home, "session under the stale core", env={"UNPEEL_HOST_CMD": stale_bin})
+    stale_session = new_session(case, home, "session under the stale core", env={"SUPERCLI_HOST_CMD": stale_bin})
     case.check(
         "that Session lives in the stale core",
         home.manifests().get(stale_session, {}).get("host_pid") == stale_core.pid,
@@ -334,7 +334,7 @@ def body(case):
     time.sleep(1.0)
     stale_screen = screen(home, stale_session)
 
-    serve = case.serve(env={"UNPEEL_PTY_CORE": "1", "UNPEEL_PTY_CORE_TAKEOVER": "1"})
+    serve = case.serve(env={"SUPERCLI_PTY_CORE": "1", "SUPERCLI_PTY_CORE_TAKEOVER": "1"})
     serve.ready()
 
     def serve_json():
@@ -389,7 +389,7 @@ def body(case):
         except FileNotFoundError:
             return "(no trace)"
 
-        # Default policy since 0.5.2 (no UNPEEL_PTY_CORE_TAKEOVER): the supervisor
+        # Default policy since 0.5.2 (no SUPERCLI_PTY_CORE_TAKEOVER): the supervisor
     # never takes an older-build core over in place. It keeps serving its
     # Sessions, new Sessions run one process each, and once it is empty it is
     # asked to exit so a current-build core starts.
@@ -400,7 +400,7 @@ def body(case):
     case.check("a second stale-build core is up", drain_core.poll() is None and core_record(home)["pid"] == drain_core.pid)
     # Spawn routing refuses a core built from another binary, so place this
     # Session in the stale core by launching as that binary's own build.
-    drain_session = new_session(case, home, "session under the draining core", env={"UNPEEL_HOST_CMD": stale_bin})
+    drain_session = new_session(case, home, "session under the draining core", env={"SUPERCLI_HOST_CMD": stale_bin})
     case.check(
         "that Session lives in the stale core",
         home.manifests().get(drain_session, {}).get("host_pid") == drain_core.pid,
@@ -409,7 +409,7 @@ def body(case):
     run_cli(home, ["send", drain_session, "drain-core-text", "--enter"])
     case.check("the draining core's session echoes", wait_for(lambda: screen(home, drain_session).count("drain-core-text") >= 2))
 
-    serve = case.serve(env={"UNPEEL_PTY_CORE": "1"})
+    serve = case.serve(env={"SUPERCLI_PTY_CORE": "1"})
     serve.ready()
     case.check(
         "serve adopts the stale-build core without taking it over",

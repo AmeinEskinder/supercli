@@ -1,4 +1,4 @@
-"""`unpeel init` on a truly fresh HOME, end to end.
+"""`supercli init` on a truly fresh HOME, end to end.
 
 Fresh HOME -> `init` (creates the home with 0700, seeds builtin presets,
 writes a default valid config, starts the Host, issues a pairing code,
@@ -70,7 +70,7 @@ def body(case):
     fresh = _Fresh(home.root + "-fresh")
     shutil.rmtree(fresh.root, ignore_errors=True)
 
-    # 1. `unpeel init --json` on a truly fresh HOME.
+    # 1. `supercli init --json` on a truly fresh HOME.
     inited = run_cli(fresh, ["init", "--json"], timeout=90)
     case.check("init exits 0", inited.returncode == 0, inited.stderr[:500])
     try:

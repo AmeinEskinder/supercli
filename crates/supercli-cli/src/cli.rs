@@ -83,6 +83,7 @@ supercli — run and steer CLI agent sessions
   supercli workspaces [list | add <name> | remove <name>]
   supercli schedule add|list|pause|resume|remove|run-once|daemon
                                   scheduled autonomous sessions (opt-in)
+  supercli ideas add|list|done      capture and track ideas
   supercli migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
   supercli self-update --check [--manifest PATH] [--json]
@@ -593,7 +594,8 @@ fn pair_through_running_host(
     advertised_port: Option<u16>,
 ) -> Result<(), String> {
     let home = supercli_core::app_paths::supercli_home();
-    let code = supercli_serve::local_gateway::begin_pairing(&home, advertised_host, advertised_port)?;
+    let code =
+        supercli_serve::local_gateway::begin_pairing(&home, advertised_host, advertised_port)?;
     for line in supercli_serve::pairing::qr_lines(&code) {
         println!("{line}");
     }
@@ -816,7 +818,9 @@ Linux needs `loginctl enable-linger`).";
 fn serve_unit_scope() -> Result<supercli_serve::service_install::ServiceScope, String> {
     Ok(match crate::workspaces::current_scope()? {
         None => supercli_serve::service_install::ServiceScope::Machine,
-        Some((slug, home)) => supercli_serve::service_install::ServiceScope::Workspace { slug, home },
+        Some((slug, home)) => {
+            supercli_serve::service_install::ServiceScope::Workspace { slug, home }
+        }
     })
 }
 
@@ -1029,13 +1033,14 @@ pub fn run(args: &[String]) -> i32 {
         },
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
+        "ideas" => Ok(crate::ideas_cli::run(&args[1..])),
         "migrate" => {
-            if args[1..].iter().any(|a| a == "--from-supercli") {
+            if args[1..].iter().any(|a| a == "--from-unpeel") {
                 Ok(crate::import_unpeel_cli::run_from_unpeel(&args[1..]))
             } else {
                 Ok(crate::migrate_cli::run(&args[1..]))
             }
-        },
+        }
         "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
         "self-update" => Ok(crate::self_update_cli::run(&args[1..])),
         "init" => Ok(crate::init_cli::run(
@@ -1075,7 +1080,9 @@ pub fn run(args: &[String]) -> i32 {
         // every other browser action drives this session's isolated browser
         // through the same dispatcher as the MCP `browser` tool.
         "browser" => match args.get(1).map(String::as_str) {
-            None | Some("install" | "--help" | "-h") => Ok(crate::browser_cli::run(&args[1..])),
+            None | Some("install" | "takeover" | "--help" | "-h") => {
+                Ok(crate::browser_cli::run(&args[1..]))
+            }
             Some(_) => Ok(crate::mcp_cli::browser(&args[1..])),
         },
         // Lane A (2026-09-03): the one Computer Use engine verb, same shape.

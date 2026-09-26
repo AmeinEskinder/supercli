@@ -20,7 +20,7 @@ pub use crate::relay_wire::{
     MAX_PLAINTEXT_BYTES, MAX_SEALED_BYTES,
 };
 
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const MAX_DEVICE_ID_BYTES: usize = 128;
 /// Older Workers admitted the Host's five-byte envelope allowance on client
 /// sockets before wrapping the payload. Accept that small excess during a
@@ -191,7 +191,7 @@ pub fn transcript_mac(
     let mac_key = derive_key(
         e2e_key,
         &[],
-        &format!("unpeel-relay-v{VERSION}:handshake-mac"),
+        &format!("supercli-relay-v{VERSION}:handshake-mac"),
     );
     let mut transcript = Vec::new();
     transcript.extend_from_slice(&VERSION.to_be_bytes());
@@ -244,8 +244,8 @@ impl CryptoSession {
         let mut salt = Vec::with_capacity(32);
         salt.extend_from_slice(client_salt);
         salt.extend_from_slice(host_salt);
-        let c2h = derive_key(&ikm, &salt, &format!("unpeel-relay-v{VERSION}:c2h"));
-        let h2c = derive_key(&ikm, &salt, &format!("unpeel-relay-v{VERSION}:h2c"));
+        let c2h = derive_key(&ikm, &salt, &format!("supercli-relay-v{VERSION}:c2h"));
+        let h2c = derive_key(&ikm, &salt, &format!("supercli-relay-v{VERSION}:h2c"));
         let key = |bytes: &[u8]| -> Result<aead::LessSafeKey, String> {
             aead::UnboundKey::new(&aead::AES_256_GCM, bytes)
                 .map(aead::LessSafeKey::new)
@@ -584,7 +584,7 @@ mod tests {
             let close = rest[open..].find('"').unwrap();
             &rest[open..open + close]
         }
-        let json = include_str!("../../../protocol/relay-kat-vectors-v1.json");
+        let json = include_str!("../../../protocol/relay-kat-vectors-v2.json");
         let e2e_key = range(32, |i| i);
         let shared_secret = range(32, |i| 0x40 + i);
         let client_salt = range(16, |i| 0x10 + i);

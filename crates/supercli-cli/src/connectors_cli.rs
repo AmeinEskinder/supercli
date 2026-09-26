@@ -1287,7 +1287,9 @@ fn sync_cmd(registry: Option<&str>, json: bool) -> i32 {
                 why.push("transport missing".to_string());
             }
             if !token_ok {
-                why.push(format!("not connected (`supercli connector connect {name}`)"));
+                why.push(format!(
+                    "not connected (`supercli connector connect {name}`)"
+                ));
             }
             failed.push((name.clone(), why.join(", ")));
         }

@@ -1,7 +1,7 @@
-"""Shared scaffolding for the CLI + `unpeel serve` end-to-end tests.
+"""Shared scaffolding for the CLI + `supercli serve` end-to-end tests.
 
-Every case runs the real `unpeel` binary inside a real PTY against private
-`HOME`, `UNPEEL_HOME`, and provider config roots. Isolating only Unpeel state
+Every case runs the real `supercli` binary inside a real PTY against private
+`HOME`, `SUPERCLI_HOME`, and provider config roots. Isolating only Supercli state
 is insufficient: launching a provider also installs hooks in its settings.
 Those settings must never belong to the person running the suite.
 
@@ -44,7 +44,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 REPO = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 CRATES = os.path.join(REPO, "crates")
-BINARY = os.environ.get("UNPEEL_TUI_BINARY", os.path.join(CRATES, "target", "debug", "unpeel"))
+BINARY = os.environ.get("SUPERCLI_TUI_BINARY", os.path.join(CRATES, "target", "debug", "supercli"))
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 UNREAD_DOT = "●"
@@ -208,7 +208,7 @@ def squeeze(text: str) -> str:
 # ─────────────────────────── fixture home ───────────────────────────
 
 
-# Leftover-process hygiene: a case must not leave `unpeel-host __session_host__`
+# Leftover-process hygiene: a case must not leave `supercli-host __session_host__`
 # or `__mcp__` sidecars running against its home. A leaked host keeps writing
 # to an unlinked output.bin (filling the disk) and re-runs the login-shell
 # PATH probe every tick (the load-average blowup). We detect them by open home
@@ -242,14 +242,14 @@ def _process_references_home(pid, home_real):
             return True
     except Exception:
         pass
-    # …or its UNPEEL_HOME env points at the home (covers __mcp__ sidecars,
+    # …or its SUPERCLI_HOME env points at the home (covers __mcp__ sidecars,
     # which carry no home in argv)…
     try:
         env = subprocess.run(
             ["ps", "eww", "-p", str(pid), "-o", "command="],
             capture_output=True, text=True, check=False,
         ).stdout
-        if f"UNPEEL_HOME={home_real}" in env or f"UNPEEL_HOME={home_real}/" in env:
+        if f"SUPERCLI_HOME={home_real}" in env or f"SUPERCLI_HOME={home_real}/" in env:
             return True
     except Exception:
         pass
@@ -295,7 +295,7 @@ _HOMES = []
 
 
 class Home:
-    """A private `~/.unpeel` built from scratch."""
+    """A private `~/.supercli` built from scratch."""
 
     def __init__(self, root):
         self.root = root
@@ -334,7 +334,7 @@ class Home:
         with open(self.path("app-state.json")) as handle:
             return json.load(handle)
 
-    def project(self, project_id="p", name="unpeel", path="/tmp"):
+    def project(self, project_id="p", name="supercli", path="/tmp"):
         state = self.state()
         state.setdefault("projects", []).append(
             {"id": project_id, "name": name, "path": path}
@@ -607,7 +607,7 @@ class Home:
 
 
 class MockApp:
-    """Stands in for a running Unpeel desktop: owns a hook-server port in
+    """Stands in for a running Supercli desktop: owns a hook-server port in
     `app-ports` and answers `/mcp/*`. Cases assert on `calls`."""
 
     def __init__(self, home, sidebar=None, fail_routes=(), auth_token=None):
@@ -627,7 +627,7 @@ class MockApp:
                 except ValueError:
                     body = {}
                 outer.calls.append(
-                    (self.path, self.headers.get("x-unpeel-auth"), body)
+                    (self.path, self.headers.get("x-supercli-auth"), body)
                 )
                 if self.path in outer.fail_routes:
                     # What an older app does with a route it has never heard
@@ -711,7 +711,7 @@ class MockApp:
 
 class FakeHost:
     """A stand-in session host: answers the control socket the way a real
-    `unpeel-host` does, and records everything written to it.
+    `supercli-host` does, and records everything written to it.
 
     Lets cases assert on what a client *sends* a session (forwarded mouse
     reports, resize geometry, typed input) without launching a real agent.
@@ -845,9 +845,9 @@ class FakeHost:
 
 
 class Serve:
-    """A foreground, scoped `unpeel serve` process for process-level tests.
+    """A foreground, scoped `supercli serve` process for process-level tests.
 
-    The process gets the case's isolated `UNPEEL_HOME`, so it is one
+    The process gets the case's isolated `SUPERCLI_HOME`, so it is one
     workspace worker rather than the real machine supervisor.  Keeping this
     separate from `Pty` is deliberate: serve conformance must prove there is
     no terminal UI in the Host process tree.
@@ -859,8 +859,8 @@ class Serve:
         self._log = open(home.path("serve-test.log"), "w")
         process_env = dict(
             os.environ,
-            UNPEEL_HOME=home.root,
-            UNPEEL_TEST="1",
+            SUPERCLI_HOME=home.root,
+            SUPERCLI_TEST="1",
         )
         process_env.update(env or {})
         self.process = subprocess.Popen(
@@ -961,12 +961,12 @@ class Pty:
         self.pid, self.fd = pty.fork()
         if self.pid == 0:  # child
             os.environ["TERM"] = "xterm-256color"
-            os.environ["UNPEEL_HOME"] = home.root
-            os.environ["UNPEEL_TEST"] = "1"
+            os.environ["SUPERCLI_HOME"] = home.root
+            os.environ["SUPERCLI_TEST"] = "1"
             for key, value in (env or {}).items():
                 os.environ[key] = value
             os.chdir(CRATES)
-            os.execv(BINARY, ["unpeel", *args])
+            os.execv(BINARY, ["supercli", *args])
         self._set_size(cols)
 
     def _set_size(self, cols):
@@ -1201,7 +1201,7 @@ def mcp_post(port, route, body, token=None, timeout=25):
         headers={"Content-Type": "application/json"},
     )
     if token:
-        request.add_header("x-unpeel-auth", token)
+        request.add_header("x-supercli-auth", token)
     try:
         response = urllib.request.urlopen(request, timeout=timeout)
         return response.status, json.loads(response.read() or b"{}")
@@ -1325,7 +1325,7 @@ def mobile_port(home, timeout=25):
 
 
 def wait_running(home, session_id, timeout=25):
-    """Block until a session's manifest says running. `unpeel new` returns
+    """Block until a session's manifest says running. `supercli new` returns
     as soon as the id is minted; the host comes up a moment later."""
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -1338,19 +1338,19 @@ def wait_running(home, session_id, timeout=25):
 
 
 class McpClient:
-    """A `unpeel-host __mcp__` child for one caller Session: newline-delimited
+    """A `supercli-host __mcp__` child for one caller Session: newline-delimited
     JSON-RPC 2.0 on stdio, exactly what an agent CLI speaks to the unified
-    Unpeel MCP server. Caller identity is ``UNPEEL_SESSION_ID``; the child
-    inherits the harness environment (so ``UNPEEL_CUA_DRIVER_BIN``,
+    Supercli MCP server. Caller identity is ``SUPERCLI_SESSION_ID``; the child
+    inherits the harness environment (so ``SUPERCLI_CUA_DRIVER_BIN``,
     ``DISPLAY``, and friends reach the engine calls it makes)."""
 
     def __init__(self, home, session_id, host_binary=None):
-        host = host_binary or os.path.join(os.path.dirname(BINARY), "unpeel-host")
+        host = host_binary or os.path.join(os.path.dirname(BINARY), "supercli-host")
         env = {
             **os.environ,
-            "UNPEEL_HOME": home.root,
-            "UNPEEL_TEST": "1",
-            "UNPEEL_SESSION_ID": session_id,
+            "SUPERCLI_HOME": home.root,
+            "SUPERCLI_TEST": "1",
+            "SUPERCLI_SESSION_ID": session_id,
         }
         self.proc = subprocess.Popen(
             [host, "__mcp__"],
@@ -1409,8 +1409,8 @@ class McpClient:
 
 
 def run_cli(home, args, timeout=30, expect_ok=None, env=None):
-    """Run `unpeel <args>` against the fixture home."""
-    env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1", **(env or {}))
+    """Run `supercli <args>` against the fixture home."""
+    env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1", **(env or {}))
     result = subprocess.run(
         [BINARY, *args],
         capture_output=True,
@@ -1435,7 +1435,7 @@ class Case:
         self.checks = []
         self._case_started = time.monotonic()
         self.notes = []
-        root = os.environ.get("UNPEEL_TUI_TEST_HOME") or f"/tmp/ut-{os.getpid()}"
+        root = os.environ.get("SUPERCLI_TUI_TEST_HOME") or f"/tmp/ut-{os.getpid()}"
         # A hosted session binds `<home>/app-sessions/<uuid>/session.sock`,
         # which adds ~55 bytes to the home path; sockaddr_un caps the total
         # near 104. Over that, bind() fails and the host dies with nothing on
@@ -1459,7 +1459,7 @@ class Case:
         os.environ.setdefault("CARGO_HOME", os.path.join(original_home, ".cargo"))
         os.environ.update({
             "HOME": root,
-            "UNPEEL_HOME": root,
+            "SUPERCLI_HOME": root,
             "XDG_CONFIG_HOME": self.home.path(".config"),
             "XDG_DATA_HOME": self.home.path(".local", "share"),
             "XDG_STATE_HOME": self.home.path(".local", "state"),
@@ -1475,9 +1475,9 @@ class Case:
             "CLINE_SESSION_DATA_DIR": self.home.path(".cline", "data", "sessions"),
         })
         for key in (
-            "UNPEEL_SESSION_ID", "UNPEEL_SESSION_DIR", "UNPEEL_APP_PORT",
-            "UNPEEL_APP_PORT_REGISTRY_FILE", "UNPEEL_RUNTIME_GENERATION",
-            "UNPEEL_HOOK_TRACE_FILE",
+            "SUPERCLI_SESSION_ID", "SUPERCLI_SESSION_DIR", "SUPERCLI_APP_PORT",
+            "SUPERCLI_APP_PORT_REGISTRY_FILE", "SUPERCLI_RUNTIME_GENERATION",
+            "SUPERCLI_HOOK_TRACE_FILE",
         ):
             os.environ.pop(key, None)
         self._closables = []

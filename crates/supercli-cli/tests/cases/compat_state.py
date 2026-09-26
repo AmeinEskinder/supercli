@@ -1,7 +1,7 @@
-"""Upgrade safety for people already running Unpeel.
+"""Upgrade safety for people already running Supercli.
 
 The shared files are a contract across app versions AND across frontends. A
-user who installs a newer `unpeel` beside an older desktop app (or updates
+user who installs a newer `supercli` beside an older desktop app (or updates
 the app while sessions from the previous version are on disk) must lose
 nothing. Each check here corresponds to a way that could go wrong.
 """
@@ -18,7 +18,7 @@ def body(case):
     # ── a state file as a shipped desktop writes it, including keys the
     #    Rust side has never modelled ──
     desktop_state = {
-        "projects": [{"id": "p", "name": "unpeel", "path": "/tmp"}],
+        "projects": [{"id": "p", "name": "supercli", "path": "/tmp"}],
         "active_project_id": "p",
         "presets": [
             {"id": "c", "label": "claude", "command": "claude", "project_id": None,
@@ -104,7 +104,7 @@ def body(case):
     published = service.wait_for(lambda: "legacy session" in bootstrap(), timeout=10)
     case.check(
         "the Host publishes legacy and future sessions under their project",
-        published and "future session" in bootstrap() and "unpeel" in bootstrap(),
+        published and "future session" in bootstrap() and "supercli" in bootstrap(),
         bootstrap()[:300],
     )
 
@@ -144,12 +144,12 @@ def body(case):
 
     # ── a field whose SHAPE we don't recognise must not cost the document ──
     # `pinned_sessions` has already changed shape once in this product's
-    # life. If a future app version changes another field, an older `unpeel`
+    # life. If a future app version changes another field, an older `supercli`
     # must still find the user's projects rather than falling back to
     # `cwd:` buckets and looking like their setup vanished.
     future = dict(desktop_state)
     future["pinned_sessions"] = "a shape from the future"
-    future["projects"] = [{"id": "p", "name": "unpeel", "path": "/tmp"}]
+    future["projects"] = [{"id": "p", "name": "supercli", "path": "/tmp"}]
     with open(home.path("app-state.json"), "w") as handle:
         json.dump(future, handle, indent=2)
     survivor = run_cli(home, ["projects", "list"])
@@ -157,7 +157,7 @@ def body(case):
     case.check(
         "an unreadable field costs only that field",
         survivor.returncode == 0
-        and "unpeel" in survivor.stdout
+        and "supercli" in survivor.stdout
         and listed.returncode == 0
         and "future session" in listed.stdout,
         survivor.stdout[:200] + survivor.stderr[:200] + listed.stderr[:200],

@@ -1,7 +1,7 @@
-"""`unpeel send` from inside a hosted Session takes the MCP write policy.
+"""`supercli send` from inside a hosted Session takes the MCP write policy.
 
-Outside Unpeel the operator writes directly (cli.py proves that). Inside a
-Session — an agent's subprocess, identified by UNPEEL_SESSION_ID — the same
+Outside Supercli the operator writes directly (cli.py proves that). Inside a
+Session — an agent's subprocess, identified by SUPERCLI_SESSION_ID — the same
 verb is the MCP `send_text` action: the first write to another Session
 blocks on the user's approval, an approved pair is remembered, and a denial
 writes nothing.
@@ -19,7 +19,7 @@ from harness import BINARY, CRATES, mobile_request, run, run_cli, wait_running  
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="cat", command="cat")
     token = home.pair_device()
     phone_port = home.reserve_mobile_port()
@@ -41,7 +41,7 @@ def body(case):
     caller, target = ids
 
     def send_from_caller(text):
-        env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1", UNPEEL_SESSION_ID=caller)
+        env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1", SUPERCLI_SESSION_ID=caller)
         return subprocess.run(
             [BINARY, "send", target, text, "--enter"],
             capture_output=True, text=True, timeout=60, env=env, cwd=CRATES,
@@ -101,7 +101,7 @@ def body(case):
     case.check("a denied send writes nothing", "denied-write" not in screen(target), screen(target)[-200:])
 
     # 4. A Session can never write into itself through this path.
-    env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1", UNPEEL_SESSION_ID=caller)
+    env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1", SUPERCLI_SESSION_ID=caller)
     own = subprocess.run([BINARY, "send", caller, "self", "--enter"], capture_output=True, text=True, timeout=30, env=env, cwd=CRATES)
     case.check("a Session cannot send into itself", own.returncode != 0, own.stderr[:200])
 

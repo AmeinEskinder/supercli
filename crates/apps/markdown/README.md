@@ -1,4 +1,4 @@
-# unpeel-markdown
+# supercli-markdown
 
 A beautiful terminal markdown editor built with [Ratatui](https://ratatui.rs).
 Live block styling, a headings picker, slash commands on empty lines
@@ -22,9 +22,9 @@ choose **Toggle auto-save** from the `\\` command palette. The preference
 persists across launches, and `Ctrl+S` always saves manually.
 
 ```
-unpeel-markdown notes/hello.md    # edit one file
-unpeel-markdown notes/            # vault mode: scoped Markdown Explorer
-unpeel-markdown                   # remembered notes folder: open or create
+supercli-markdown notes/hello.md    # edit one file
+supercli-markdown notes/            # vault mode: scoped Markdown Explorer
+supercli-markdown                   # remembered notes folder: open or create
 ```
 
 The first bare launch asks you to choose a notes folder. In a hosted App,
@@ -42,13 +42,13 @@ row to place the cursor there, then press Down or Tab to return to the list.
 Rows keep the two-cell inset, full-width adaptive gray selection, double-click
 activation, path dragging, and proportional scrollbar. No current directory
 or bundled demo is opened implicitly. The
-choice uses the same persisted start-state shape as Unpeel Design under
-`~/.config/unpeel-apps/unpeel.app.markdown/start.json` (or `$XDG_CONFIG_HOME`
-/ `$UNPEEL_APP_CONFIG_HOME`). A command-line path always bypasses the launcher.
+choice uses the same persisted start-state shape as Supercli Design under
+`~/.config/supercli-apps/supercli.app.markdown/start.json` (or `$XDG_CONFIG_HOME`
+/ `$SUPERCLI_APP_CONFIG_HOME`). A command-line path always bypasses the launcher.
 
-Standalone first: it is a complete editor in any terminal with no Unpeel
-present. When [Unpeel](https://unpeel.com) is installed, Unpeel recognizes
-the `unpeel-markdown` CLI directly from `PATH`: the session row takes the
+Standalone first: it is a complete editor in any terminal with no Supercli
+present. When [Supercli](https://supercli.com) is installed, Supercli recognizes
+the `supercli-markdown` CLI directly from `PATH`: the session row takes the
 App's name and live project/workspace accent, and the sidebar shows which note
 you're editing. No App registry write is required.
 
@@ -84,7 +84,7 @@ status, action footer, and task edits are all represented in the shared componen
 the Kitchen Sink screen audit reports no terminal-only Markdown surface.
 
 Status integration remains the documented plain-file plus local HTTP contract,
-implemented once by `unpeel-app-kit`'s `AppReporter`. The optional semantic UI
+implemented once by `supercli-app-kit`'s `AppReporter`. The optional semantic UI
 uses App Kit's local, scoped UI bridge and stays inert when no endpoint is
 injected. Reusable UI also comes from App Kit: live dark/light/accent colors,
 gray selection, keyboard mode, scrollbars, native drop destinations,
@@ -93,18 +93,18 @@ gray selection, keyboard mode, scrollbars, native drop destinations,
 ## Install
 
 ```sh
-curl -fsSL https://unpeel.com/install/markdown/install.sh | sh
+curl -fsSL https://supercli.com/install/markdown/install.sh | sh
 ```
 
-The checksum-verified installer places the CLI on `PATH`; Unpeel discovers it
-without running the App or mutating `~/.unpeel`.
+The checksum-verified installer places the CLI on `PATH`; Supercli discovers it
+without running the App or mutating `~/.supercli`.
 
-With Unpeel 0.6+, install the official build on the active workspace Host and
+With Supercli 0.6+, install the official build on the active workspace Host and
 open a document through its typed resource dispatcher:
 
 ```sh
-unpeel apps install unpeel.app.markdown
-unpeel open README.md
+supercli apps install supercli.app.markdown
+supercli open README.md
 ```
 
 The install command asks for confirmation in a terminal. Noninteractive
@@ -113,19 +113,19 @@ user-owned automation must pass `--yes` explicitly.
 The same commands target the selected scoped/remote Host, so the binary and
 file stay together on that workspace. A Controller can offer the same install
 then-open flow when Markdown is missing. Agents can discover and suggest this
-App through Unpeel MCP, but that MCP surface never installs or creates a
+App through Supercli MCP, but that MCP surface never installs or creates a
 Session: those remain explicit user actions. Like all same-user terminal
 policy, this is cooperative rather than an OS sandbox around arbitrary CLI
 commands.
 
 ## Release
 
-The public `unpeel` server repository owns the shared App publisher and the
+The public `supercli` server repository owns the shared App publisher and the
 official registry entry. From clean sibling checkouts on a Mac:
 
 ```sh
-cd ../unpeel
-cargo test --manifest-path ../unpeel-app-markdown/Cargo.toml
+cd ../supercli
+cargo test --manifest-path ../supercli-app-markdown/Cargo.toml
 bun run release:app -- --app markdown --channel beta --dry-run
 bun run release:app -- --app markdown --channel beta
 ```
@@ -134,8 +134,8 @@ The publisher builds an ad-hoc-signed macOS universal binary and accepts
 Linux x86_64/aarch64 archives through its documented `--linux-*` flags. It
 uploads immutable versioned archives plus the mutable `-latest` archive and
 mandatory SHA-256 sidecar under `<channel>/markdown/`. Each tarball contains
-one root member named `unpeel-markdown`, which is the exact contract used by
-the standalone installer (and, from Unpeel 0.6, the Host-side App installer).
+one root member named `supercli-markdown`, which is the exact contract used by
+the standalone installer (and, from Supercli 0.6, the Host-side App installer).
 
 Publishing is intentionally separate from source tagging. Test the beta
 installer and Host install before promoting the same version to stable.

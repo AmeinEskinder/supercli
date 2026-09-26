@@ -1,4 +1,4 @@
-"""`unpeel doctor --bundle` redaction test.
+"""`supercli doctor --bundle` redaction test.
 
 Plants known secrets (tokens, keys, pairing secrets) in app-state.json and
 JSON logs, builds the bundle, extracts it, and proves none of the secrets

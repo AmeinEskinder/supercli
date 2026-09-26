@@ -1,10 +1,10 @@
-"""Scripted headless Link enrollment: `unpeel link enroll <key>`.
+"""Scripted headless Link enrollment: `supercli link enroll <key>`.
 
 `link_lifecycle.py` proves the live-serve Link lifecycle ladder (refresh,
-reject, race, and recovery, against a running or restarted `unpeel serve`);
+reject, race, and recovery, against a running or restarted `supercli serve`);
 this case proves the scripted provisioning spelling shares the same durable
 state: key + entitlement files, the locked suppression record, rejection and
-deactivation semantics, and that a live `unpeel serve` picks a fresh
+deactivation semantics, and that a live `supercli serve` picks a fresh
 enrollment up without a restart.
 """
 
@@ -30,8 +30,8 @@ from link_fixtures import (  # noqa: E402
 def link_cli(home, env, args, timeout=30):
     process_env = dict(
         os.environ,
-        UNPEEL_HOME=home.root,
-        UNPEEL_TEST="1",
+        SUPERCLI_HOME=home.root,
+        SUPERCLI_TEST="1",
         **env,
     )
     return subprocess.run(
@@ -52,9 +52,9 @@ def body(case):
     api = case.track(LicenseAPI())
     relay = case.track(FakeRelay())
     env = {
-        "UNPEEL_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
-        "UNPEEL_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
-        "UNPEEL_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
+        "SUPERCLI_LICENSE_PUBLIC_KEY": PUBLIC_KEY,
+        "SUPERCLI_LICENSE_API_BASE_URL": f"http://127.0.0.1:{api.port}",
+        "SUPERCLI_RELAY_URL": f"ws://127.0.0.1:{relay.port}",
     }
     key_path = home.path("link-license.json")
     cache_path = home.path("mobile", "relay-entitlement.json")
@@ -205,7 +205,7 @@ def body(case):
     garbage = link_cli(home, env, ["enroll", "CLRTY-not-a-key"])
     case.check(
         "a malformed key is rejected offline with exit 1",
-        garbage.returncode == 1 and "valid Unpeel license key" in garbage.stderr,
+        garbage.returncode == 1 and "valid Supercli license key" in garbage.stderr,
         garbage.stderr[:200],
     )
 

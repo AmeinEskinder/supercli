@@ -1,4 +1,4 @@
-"""Serve a paired phone with no desktop app in the Host tree: `unpeel serve`
+"""Serve a paired phone with no desktop app in the Host tree: `supercli serve`
 is the complete phone-facing Host."""
 
 import sys, os, base64, hashlib, json, time, urllib.parse
@@ -22,7 +22,7 @@ def mobile_binary_request(port, path, token, data, content_type, timeout=10):
 
 def body(case):
     home = case.home
-    home.project("proj-1", "unpeel", "/tmp")
+    home.project("proj-1", "supercli", "/tmp")
     home.project("proj-empty", "Empty project", "/tmp")
     home.preset(label="Mobile cat", command="cat", preset_id="mobile-cat")
     state = home.state()
@@ -187,7 +187,7 @@ def body(case):
     # without launching another PTY, and initial text is delivered only after
     # the detached Host's control socket is ready.
     create_before = set(home.manifests())
-    create_headers = {"X-Unpeel-Request-ID": "mobile-create-once"}
+    create_headers = {"X-Supercli-Request-ID": "mobile-create-once"}
     create_body = {
         "projectID": "proj-1",
         "presetID": "mobile-cat",
@@ -635,7 +635,7 @@ def body(case):
         str(status),
     )
 
-    # These go through unpeel-core::controller_api, not the old TUI route
+    # These go through supercli-core::controller_api, not the old TUI route
     # copies. Raw terminal bytes are preserved exactly and ordered; resize
     # uses the shipped phone limits and leaves the phone owning the grid.
     raw_input = "\x1b[A\rhé\x01"
@@ -658,7 +658,7 @@ def body(case):
     )
 
     replay_start = len(live_host.writes)
-    replay_headers = {"X-Unpeel-Request-ID": "mobile-replay-1"}
+    replay_headers = {"X-Supercli-Request-ID": "mobile-replay-1"}
     replay_body = {"sessionID": "fixture-live", "data": "only once"}
     replay_status, _ = mobile_request(
         port, "/mobile/write", token, method="POST", body=replay_body,
@@ -713,7 +713,7 @@ def body(case):
         and bool(screenshot_arrived)
         and len(screenshot_writes) == 3
         and screenshot_writes[0].startswith("\x1b[200~")
-        and "Unpeel Browser tool" in screenshot_writes[0]
+        and "Supercli Browser tool" in screenshot_writes[0]
         and screenshot_writes[0].endswith("\x1b[201~")
         and screenshot_writes[1:] == ["\r", "\r"],
         repr(screenshot_writes),
@@ -972,7 +972,7 @@ def body(case):
              live_action_resume_status)),
     )
 
-    agent_resume_headers = {"X-Unpeel-Request-ID": "mobile-agent-resume-once"}
+    agent_resume_headers = {"X-Supercli-Request-ID": "mobile-agent-resume-once"}
     agent_resume_status, agent_resume_receipt = mobile_request(
         port, "/mobile/session-action", token, method="POST", timeout=15,
         body={"sessionID": "fixture-live", "action": "resume_agent"},
@@ -1000,7 +1000,7 @@ def body(case):
     stop_status, stop_receipt = mobile_request(
         port, "/mobile/session-action", token, method="POST", timeout=15,
         body={"sessionID": created_id, "action": "stop"},
-        headers={"X-Unpeel-Request-ID": "mobile-stop-once"},
+        headers={"X-Supercli-Request-ID": "mobile-stop-once"},
     )
     created_stopped = driver.wait_for(
         lambda: home.manifests().get(created_id, {}).get("state") == "exited",
@@ -1040,7 +1040,7 @@ def body(case):
     # the resume evidence the replacement-restart gate requires.
     home.seed_resume_data(created_id)
     before_restart = set(home.manifests())
-    restart_headers = {"X-Unpeel-Request-ID": "mobile-restart-once"}
+    restart_headers = {"X-Supercli-Request-ID": "mobile-restart-once"}
     restart_status, restart_receipt = mobile_request(
         port, "/mobile/restart-session", token, method="POST", timeout=20,
         body={"sessionID": created_id}, headers=restart_headers,
@@ -1108,7 +1108,7 @@ def body(case):
              write_approvals, restarted_order)),
     )
 
-    remove_headers = {"X-Unpeel-Request-ID": "mobile-remove-once"}
+    remove_headers = {"X-Supercli-Request-ID": "mobile-remove-once"}
     remove_status, remove_receipt = mobile_request(
         port, "/mobile/session-action", token, method="POST", timeout=20,
         body={"sessionID": replacement_id, "action": "remove"},

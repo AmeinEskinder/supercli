@@ -273,7 +273,9 @@ pub fn report(args: &[String]) -> i32 {
         }
     }
     if summary.is_empty() && !arguments.contains_key("summary") {
-        eprintln!("usage: supercli report <summary> [--status update|done|blocked] [--details TEXT]");
+        eprintln!(
+            "usage: supercli report <summary> [--status update|done|blocked] [--details TEXT]"
+        );
         return 1;
     }
     if !summary.is_empty() {

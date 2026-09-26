@@ -18,7 +18,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from harness import BINARY, CRATES, run  # noqa: E402
 
-HOST_BIN = os.path.join(os.path.dirname(BINARY), "unpeel-host")
+HOST_BIN = os.path.join(os.path.dirname(BINARY), "supercli-host")
 CTRL_C = "\u0003"
 
 
@@ -44,7 +44,7 @@ def new_sleep_session(home, env):
         capture_output=True,
         text=True,
         timeout=45,
-        env=dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1", **env),
+        env=dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1", **env),
         cwd=CRATES,
     )
     for token in started.stdout.split():
@@ -97,13 +97,13 @@ def check_phase(case, home, label, env):
 
 def body(case):
     home = case.home
-    home.project("p", "unpeel", "/tmp")
+    home.project("p", "supercli", "/tmp")
     home.preset(label="sleep", command="sleep 120", preset_id="sleep")
 
-    check_phase(case, home, "per-process host", {"UNPEEL_PTY_CORE": "0"})
+    check_phase(case, home, "per-process host", {"SUPERCLI_PTY_CORE": "0"})
 
-    core_env = dict(os.environ, UNPEEL_HOME=home.root, UNPEEL_TEST="1")
-    core_env.pop("UNPEEL_PTY_CORE", None)
+    core_env = dict(os.environ, SUPERCLI_HOME=home.root, SUPERCLI_TEST="1")
+    core_env.pop("SUPERCLI_PTY_CORE", None)
     core = subprocess.Popen(
         [HOST_BIN, "__pty_core__"],
         env=core_env,
@@ -116,7 +116,7 @@ def body(case):
         time.sleep(0.05)
     case.check("a PTY core is up", os.path.exists(home.path("pty-core.sock")))
     try:
-        check_phase(case, home, "PTY core", {"UNPEEL_PTY_CORE": "1"})
+        check_phase(case, home, "PTY core", {"SUPERCLI_PTY_CORE": "1"})
     finally:
         time.sleep(1.0)
         try:

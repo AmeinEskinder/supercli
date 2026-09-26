@@ -37,13 +37,13 @@ bump the vendored archive, diff `include/ghostty/vt/*.h` in the ghostty
 checkout against the declarations there — the `layout_matches_type_json`
 test cross-checks struct sizes against `ghostty_type_json()` at runtime.
 
-## Unpeel source patches (`patches/`)
+## Supercli source patches (`patches/`)
 
 `build.sh` applies every `patches/*.patch` to the checkout before `zig build`
 and reverts them on exit (even on failure), so the checkout the app's
 GhosttyKit build uses is never left modified. Today there is one:
 
-- `0001-unpeel-small-pages.patch` — `page_preheat` 4 → 0 and `std_capacity`
+- `0001-supercli-small-pages.patch` — `page_preheat` 4 → 0 and `std_capacity`
   215×215 → 215×56 cells (a 128 KiB standard page instead of 512 KiB). Why:
   `PageList.minMaxSize` forces at least two standard pages, so upstream's
   page size silently raised every `max_scrollback` under 1 MiB to 1 MiB
@@ -52,7 +52,7 @@ GhosttyKit build uses is never left modified. Today there is one:
   floor). Rationale, numbers, and the measurement recipe:
   the private "pty-core" design record "Round 3, Lane 3". The patched constants do not
   change any C API type, so `layout_matches_type_json` still applies.
-- `0002-unpeel-pack-page-metadata.patch` — `Page.layout` puts the metadata
+- `0002-supercli-pack-page-metadata.patch` — `Page.layout` puts the metadata
   regions (style set, grapheme/string allocators and maps, hyperlink set and
   map) FIRST and the cell array LAST; `availableBitsForGrid` uses the
   equivalent front-of-page formula. Why: page memory is zeroed mmap, so only
@@ -76,5 +76,5 @@ tree's checkout somewhere short-lived and point at it). `SLICES=macos`
 rebuilds only the universal macOS archive; the default rebuilds all three.
 All three slices were last rebuilt together on 2026-09-03 from ghostty
 `2da015cd6ac06cedc89e09756e895d2c1715205d` with
-`0001-unpeel-small-pages.patch` applied (`build.sh`, default `SLICES`, zig
+`0001-supercli-small-pages.patch` applied (`build.sh`, default `SLICES`, zig
 0.15.2 cross-building the Linux slices from macOS).

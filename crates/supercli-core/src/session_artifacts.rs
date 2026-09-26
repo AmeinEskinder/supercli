@@ -2235,7 +2235,10 @@ mod tests {
     fn temp_root(label: &str) -> PathBuf {
         std::fs::canonicalize(std::env::temp_dir())
             .unwrap_or_else(|_| std::env::temp_dir())
-            .join(format!("supercli-artifacts-{label}-{}", uuid::Uuid::new_v4()))
+            .join(format!(
+                "supercli-artifacts-{label}-{}",
+                uuid::Uuid::new_v4()
+            ))
     }
 
     #[cfg(unix)]

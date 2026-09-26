@@ -160,6 +160,11 @@ pub enum Actor {
     Scheduled { trigger_id: String },
     /// An allow-policy tool that needed no prompt.
     PolicyAllow,
+    /// A doc-event hook run (supercli-events). `name` is the handler name
+    /// from hooks.toml. Display form is `hook:<name>`; parse is its exact
+    /// inverse, which the hash-chain verifier relies on (it re-serializes
+    /// the parsed actor when re-hashing).
+    Hook { name: String },
 }
 
 impl fmt::Display for Actor {
@@ -168,6 +173,7 @@ impl fmt::Display for Actor {
             Actor::Human { device_id } => write!(f, "human:{device_id}"),
             Actor::Scheduled { trigger_id } => write!(f, "scheduled:{trigger_id}"),
             Actor::PolicyAllow => write!(f, "policy:allow"),
+            Actor::Hook { name } => write!(f, "hook:{name}"),
         }
     }
 }
@@ -188,6 +194,10 @@ impl Actor {
         } else if let Some(id) = s.strip_prefix("scheduled:") {
             Actor::Scheduled {
                 trigger_id: id.to_string(),
+            }
+        } else if let Some(name) = s.strip_prefix("hook:") {
+            Actor::Hook {
+                name: name.to_string(),
             }
         } else if s == "policy:allow" {
             Actor::PolicyAllow
@@ -1045,8 +1055,10 @@ mod tests {
     use super::*;
 
     fn test_dir(name: &str) -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("supercli-core-reviews-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-core-reviews-{name}-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

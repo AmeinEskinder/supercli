@@ -4921,7 +4921,10 @@ mod tests {
                     "opener": "app:supercli.app.markdown",
                 }),
             ),
-            (APPS_INSTALL_PATH, json!({ "appID": "supercli.app.markdown" })),
+            (
+                APPS_INSTALL_PATH,
+                json!({ "appID": "supercli.app.markdown" }),
+            ),
             (
                 APPS_OPEN_PATH,
                 json!({

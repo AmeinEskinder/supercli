@@ -28,7 +28,7 @@ def body(case):
 import json, os, subprocess, tty
 tty.setraw(0)
 def hook(event):
-    with open(os.path.join(os.environ["HOME"], ".grok/hooks/unpeel.json")) as handle:
+    with open(os.path.join(os.environ["HOME"], ".grok/hooks/supercli.json")) as handle:
         registrations = json.load(handle)["hooks"].get(event, [])
     for entry in registrations:
         for command in entry["hooks"]:
@@ -62,7 +62,7 @@ while True:
     case.check("isolated Host starts", bool(ready), service.log())
     if not ready:
         return
-    # The fake reads ~/.grok/hooks/unpeel.json, written only by the explicitly
+    # The fake reads ~/.grok/hooks/supercli.json, written only by the explicitly
     # installed Grok integration.
     installed = run_cli(home, ["integrations", "install", "grok"], env=environment)
     case.check("the Grok integration installs into the private HOME", installed.returncode == 0, installed.stderr)
@@ -85,16 +85,16 @@ while True:
         return activity().get("raw_status") == "busy"
 
     def report(event, deliver=True, payload=None, matcher=None):
-        settings = read_json(home.path(".grok", "hooks", "unpeel.json"))
+        settings = read_json(home.path(".grok", "hooks", "supercli.json"))
         registrations = settings["hooks"][event]
         registration = next((entry for entry in registrations if matcher in entry.get("matcher", "")), None) if matcher else registrations[0]
         command = registration["hooks"][0]["command"]
-        env = dict(os.environ, HOME=home.root, UNPEEL_HOME=home.root,
-                   UNPEEL_HOOK_TRACE_FILE=home.path("hooks", "trace.log"),
-                   UNPEEL_SESSION_ID=session_id, UNPEEL_SESSION_DIR=session_dir,
-                   UNPEEL_RUNTIME_GENERATION=str(home.manifests()[session_id]["runtime_launch_generation"]),
-                   UNPEEL_APP_PORT=str(ready["hookPort"]) if deliver else "",
-                   UNPEEL_APP_PORT_REGISTRY_FILE=home.path("no-ports"))
+        env = dict(os.environ, HOME=home.root, SUPERCLI_HOME=home.root,
+                   SUPERCLI_HOOK_TRACE_FILE=home.path("hooks", "trace.log"),
+                   SUPERCLI_SESSION_ID=session_id, SUPERCLI_SESSION_DIR=session_dir,
+                   SUPERCLI_RUNTIME_GENERATION=str(home.manifests()[session_id]["runtime_launch_generation"]),
+                   SUPERCLI_APP_PORT=str(ready["hookPort"]) if deliver else "",
+                   SUPERCLI_APP_PORT_REGISTRY_FILE=home.path("no-ports"))
         subprocess.run(command, shell=True, executable="/bin/bash", input=json.dumps(payload or {}), text=True,
                        env=env, capture_output=True, check=True, timeout=5)
 

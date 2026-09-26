@@ -24,6 +24,7 @@
 
 use serde_json::{Map, Value};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::{Condvar, Mutex};
 
 /// A pending grant write.
@@ -48,14 +49,19 @@ struct GrantQueue {
     /// Handle to the writer thread. If the writer dies, `submit` fails fast
     /// instead of hanging forever. The handle is set once at init.
     writer_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// Explicit home directory for this queue's writer. Captured at
+    /// construction so the writer does not race on the process-global
+    /// SUPERCLI_HOME env var (see concurrent_grouped_writes test).
+    home: PathBuf,
 }
 
 impl GrantQueue {
-    fn new() -> Self {
+    fn new(home: PathBuf) -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
             condvar: Condvar::new(),
             writer_handle: Mutex::new(None),
+            home,
         }
     }
 
@@ -140,7 +146,7 @@ static GRANT_QUEUE: std::sync::OnceLock<GrantQueue> = std::sync::OnceLock::new()
 
 fn grant_queue() -> &'static GrantQueue {
     GRANT_QUEUE.get_or_init(|| {
-        let q = GrantQueue::new();
+        let q = GrantQueue::new(crate::app_paths::supercli_home());
         // Spawn the writer thread and store the handle for liveness checks.
         // If the writer dies, submit() fails fast instead of hanging.
         let handle = std::thread::spawn(|| {
@@ -160,8 +166,13 @@ fn grant_queue() -> &'static GrantQueue {
 /// submitters): each batch commit is panic-contained, and a failed batch
 /// acks all its callers with an error before the loop continues.
 fn writer_loop() {
+    writer_loop_for(grant_queue())
+}
+
+/// Writer loop for an explicit queue (used by tests with isolated homes).
+/// The queue's `home` is used for all writes, never the process-global env.
+fn writer_loop_for(queue: &GrantQueue) {
     loop {
-        let queue = grant_queue();
         // Drain first: if a submitter notified while we were committing the
         // previous batch, the queue is already non-empty and we must not
         // wait (a condvar notify sent before wait is lost).
@@ -173,7 +184,9 @@ fn writer_loop() {
 
         // Panic-contain the batch commit so one bad batch cannot take down
         // the writer and hang all future submitters.
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| commit_batch(batch)));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            commit_batch_at(batch, &queue.home)
+        }));
         match result {
             Ok(r) => {
                 let _ = r;
@@ -195,7 +208,8 @@ fn writer_loop() {
 /// 2. Apply all grant mutations to the map.
 /// 3. Write grants.json once (temp + fsync + rename + fsync dir).
 /// 4. Ack all callers.
-fn commit_batch(batch: Vec<PendingGrant>) -> Result<(), String> {
+/// Same as `commit_batch` but with an explicit home directory.
+fn commit_batch_at(batch: Vec<PendingGrant>, home: &std::path::Path) -> Result<(), String> {
     if batch.is_empty() {
         return Ok(());
     }
@@ -213,7 +227,7 @@ fn commit_batch(batch: Vec<PendingGrant>) -> Result<(), String> {
             )
         })
         .collect();
-    if let Err(e) = crate::grant_audit::record_grants_created_batch(&items) {
+    if let Err(e) = crate::grant_audit::record_grants_created_batch_at(home, &items) {
         // Ack all with error.
         for p in batch {
             let _ = p.ack.send(Err(format!("audit failed: {e}")));
@@ -228,7 +242,7 @@ fn commit_batch(batch: Vec<PendingGrant>) -> Result<(), String> {
         .map(|p| (p.kind.clone(), p.caller.clone(), p.target.clone()))
         .collect();
 
-    let edit_result = crate::grant_store::edit_grants(|root| {
+    let edit_result = crate::grant_store::edit_grants_at(home, |root| {
         for (kind, caller, target) in &mutations {
             apply_grant_mutation(root, kind, caller, target.as_deref());
         }
@@ -464,21 +478,57 @@ mod tests {
         // chain. This test fails if the chain can be forked (duplicate
         // prev_hash values).
         //
-        // Setup: use a temp SUPERCLI_HOME.
-        let dir = std::env::temp_dir().join(format!("grant-fork-test-{}", std::process::id()));
+        // Isolation: uses an explicit per-test home directory passed to a
+        // dedicated GrantQueue, NOT the process-global SUPERCLI_HOME env var.
+        // (The old version used set_var without the TEST_SUPERCLI_HOME_LOCK,
+        // racing with other tests that mutate the env var.)
+        use std::sync::Arc;
+        let dir = std::env::temp_dir().join(format!(
+            "grant-fork-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("SUPERCLI_HOME", &dir);
+
+        // Create a dedicated queue with explicit home (not the global static).
+        let queue = Arc::new(GrantQueue::new(dir.clone()));
+        // Spawn the writer thread for this queue.
+        let writer_queue = Arc::clone(&queue);
+        let writer_handle = std::thread::spawn(move || {
+            writer_loop_for(&writer_queue);
+        });
+        {
+            let mut guard = queue.writer_handle.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = Some(writer_handle);
+        }
 
         // Spawn 8 threads, each doing 50 grouped writes concurrently.
         let mut handles = vec![];
         for t in 0..8 {
+            let q = Arc::clone(&queue);
             handles.push(std::thread::spawn(move || {
                 for i in 0..50 {
                     let caller = format!("test-caller-{t}-{i}");
                     let target = format!("test-target-{t}-{i}");
-                    persist_grant_grouped("write", &caller, Some(&target), Some("test-device"))
-                        .expect("grouped write must succeed");
+                    let grant_key = format!(
+                        "write:{}:{}",
+                        crate::grant_store::escape_component(&caller),
+                        crate::grant_store::escape_component(&target)
+                    );
+                    q.submit(
+                        "human:test-device".to_string(),
+                        "write".to_string(),
+                        "write".to_string(),
+                        grant_key,
+                        "write".to_string(),
+                        caller,
+                        Some(target),
+                    )
+                    .expect("grouped write must succeed");
                 }
             }));
         }
@@ -511,10 +561,9 @@ mod tests {
         }
         assert_eq!(count, 400, "expected 400 audit entries");
 
-        // Also verify the chain cryptographically.
-        crate::grant_audit::verify_grant_audit().expect("chain must verify");
+        // Also verify the chain cryptographically (explicit home, not env).
+        crate::grant_audit::verify_grant_audit_at(&dir).expect("chain must verify");
 
-        std::env::remove_var("SUPERCLI_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
