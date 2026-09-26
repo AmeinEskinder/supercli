@@ -83,6 +83,8 @@ domain_matches=$(grep -rli 'supercli\.com' . \
   --exclude-dir=node_modules \
   --exclude-dir=__pycache__ \
   --exclude-dir=.dart_tool \
+  --exclude='rename-guard.yml' \
+  --exclude='fresh-clone-verify.sh' \
   | grep -v -e '^./clients/legacy/' \
   || true)
 if [ -n "$domain_matches" ]; then
