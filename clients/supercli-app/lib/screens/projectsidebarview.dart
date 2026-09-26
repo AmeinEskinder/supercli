@@ -14,20 +14,22 @@ import 'package:gpuidart/gpuidart.dart';
 
 import 'sidebarview.dart';
 
-/// Loading skeleton for the sidebar: shimmer placeholder rows shown while
-/// the host streams the session list.
+/// Loading placeholder for sidebar content that is not knowable yet: the
+/// workspace-swipe peek panel of a never-reached host (no pooled snapshot
+/// exists before first contact) and the remote-scope connecting/reconnecting
+/// state.
+///
+/// Port of `SidebarSkeleton.swift` (`SidebarLoadingPlaceholder`): a
+/// deliberately BLANK sidebar with one small, muted, centered spinner.
+/// Skeleton placeholder rows were tried and removed upstream (2026-08-18):
+/// fake rows promised structure that first contact often contradicted.
 final class SidebarSkeleton {
-  const SidebarSkeleton({this.rows = 6});
-
-  final int rows;
+  const SidebarSkeleton();
 
   UiNode build() {
     return UiColumn('sidebar-skeleton', [
-      for (var i = 0; i < rows; i++)
-        UiRow('skeleton-row-$i', [
-          UiText('skeleton-bar-$i', '▓▓▓▓▓▓▓▓▓▓▓▓',
-              style: const UiStyle(fontSize: 13)),
-        ], style: const UiStyle(padding: [3, 8, 3, 8])),
+      UiText('skeleton-spinner', '◌',
+          style: const UiStyle(fontSize: 13)),
     ]);
   }
 }
