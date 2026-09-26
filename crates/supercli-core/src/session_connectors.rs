@@ -253,13 +253,14 @@ pub type OutcomeListener = Box<dyn Fn(&str, &crate::action_reviews::AttemptOutco
 ///
 /// Mirrors `supercli_events::HookDecision` without depending on that crate
 /// (which depends on `supercli_core` — the dependency would be circular).
-/// `Escalate` means Allow → Ask: meaningful only when the tool's policy was
-/// `Allow`; after the approval gate has passed, an escalated `Allow` call
-/// fails closed rather than running unapproved.
+/// `Escalate` means Allow → Ask (docs/events.md §4.2): the call is routed
+/// into the normal approval flow with the attached reason, and runs only
+/// if the user approves. Meaningful only when the tool's policy was
+/// `Allow`; on `Ask`/`Deny` it is a no-op (cannot loosen).
 #[derive(Debug, Clone)]
 pub enum BeforeExecuteDecision {
     Allow,
-    Escalate,
+    Escalate(String),
     Reject(String),
 }
 
@@ -315,8 +316,9 @@ pub struct SessionConnectors {
     /// Optional synchronous `ToolCall.before_execute` hook. Invoked after
     /// the write-ahead review is fsynced and before any tool bytes are
     /// sent. A `Reject` records `NeverRan { reason: "hook_rejected" }` and
-    /// the tool does not run; an `Escalate` on an `Allow`-policy call fails
-    /// closed (the approval gate has already passed). Installed by the
+    /// the tool does not run; an `Escalate` on an `Allow`-policy call
+    /// re-enters the normal approval flow with the hook's reason attached
+    /// (the tool runs only if the user approves). Installed by the
     /// Host/CLI via [`Self::set_before_execute_hook`]; `None` is the fast
     /// path (no hooks configured).
     before_execute_hook: Option<BeforeExecuteHook>,
@@ -726,7 +728,7 @@ impl SessionConnectors {
                         err,
                     ));
                 }
-                match request_tool_approval(&self.session_id, &connector, name, None, None) {
+                match request_tool_approval(&self.session_id, &connector, name, None, None, None) {
                     Ok(outcome) => outcome.actor,
                     Err(rejection) => {
                         // A declined prompt is a denial decision by the
@@ -806,6 +808,7 @@ impl SessionConnectors {
             name,
             Some(replaces_attempt),
             Some(&hash),
+            None,
         ) {
             Ok(outcome) => outcome.actor,
             Err(rejection) => {
@@ -897,10 +900,13 @@ impl SessionConnectors {
         // Doc event: ToolCall.before_execute (synchronous, tighten-only).
         // Fires after the write-ahead review is fsynced and before any
         // tool bytes are sent (docs/events.md §3.3). A rejection records
-        // NeverRan (the tool provably never ran) and fails closed; an
-        // escalation on an Allow-policy call also fails closed because the
-        // approval gate has already passed and no approval was obtained.
-        if let Some(hook) = &self.before_execute_hook {
+        // NeverRan (the tool provably never ran) and fails closed. An
+        // escalation means Allow -> Ask (docs/events.md §4.2): the call
+        // re-enters the normal approval flow with the hook's reason
+        // attached, and runs only if the user approves. (The decision is
+        // computed first so no borrow of `self` is held while the
+        // approval prompt — a `&mut self` path — runs.)
+        let hook_decision = self.before_execute_hook.as_ref().map(|hook| {
             let ctx = BeforeExecuteContext {
                 tool: name.to_string(),
                 arguments: arguments.clone(),
@@ -908,22 +914,97 @@ impl SessionConnectors {
                 session_dir: self.session_dir.clone(),
                 actor: actor.to_string(),
             };
-            match hook(&ctx) {
+            hook(&ctx)
+        });
+        // When a hook escalates an Allow-policy call and the user
+        // approves, the human becomes the effective authorizer for the
+        // rest of this attempt.
+        let mut escalated_actor: Option<String> = None;
+        if let Some(decision) = hook_decision {
+            match decision {
                 BeforeExecuteDecision::Allow => {}
-                BeforeExecuteDecision::Escalate => {
+                BeforeExecuteDecision::Escalate(hook_reason) => {
                     if policy == ApprovalPolicy::Allow {
-                        let reason =
-                            "hook escalated Allow->Ask after the approval gate; refusing to run unapproved";
-                        self.record_outcome(
-                            &review_id,
-                            crate::action_reviews::AttemptOutcome::NeverRan {
-                                reason: reason.to_string(),
-                            },
-                            actor,
-                        );
-                        return Err(ToolCallFailure::failed(format!(
-                            "tool {name:?} blocked by before_execute hook: {reason}"
-                        )));
+                        if self.autonomous {
+                            // No human present to answer the escalated
+                            // prompt: fail closed, consistent with the Ask
+                            // path in `call_tool_detailed`.
+                            let reason = format!(
+                                "hook escalated Allow->Ask ({hook_reason}) but no human can answer in autonomous mode"
+                            );
+                            self.record_outcome(
+                                &review_id,
+                                crate::action_reviews::AttemptOutcome::NeverRan {
+                                    reason: reason.clone(),
+                                },
+                                actor,
+                            );
+                            return Err(ToolCallFailure::denied(
+                                crate::scheduled::DenyReason::NoHumanPresent,
+                                format!(
+                                    "tool {name:?} escalated to approval by before_execute hook: {reason}"
+                                ),
+                            ));
+                        }
+                        match request_tool_approval(
+                            &self.session_id,
+                            connector,
+                            name,
+                            None,
+                            None,
+                            Some(&hook_reason),
+                        ) {
+                            Ok(outcome) => {
+                                escalated_actor = Some(outcome.actor);
+                            }
+                            Err(rejection) => {
+                                let decider = rejection.actor.unwrap_or_else(|| {
+                                    "human:unanswered-prompt".to_string()
+                                });
+                                let completion = if rejection.declined {
+                                    format!("declined by {decider}")
+                                } else {
+                                    "did not complete".to_string()
+                                };
+                                let reason = format!(
+                                    "hook escalated Allow->Ask ({hook_reason}); approval {completion}"
+                                );
+                                // The write-ahead review already exists, so
+                                // close it out terminally: the tool provably
+                                // never ran.
+                                self.record_outcome(
+                                    &review_id,
+                                    crate::action_reviews::AttemptOutcome::NeverRan {
+                                        reason,
+                                    },
+                                    &decider,
+                                );
+                                self.audit_attempt(&AttemptAudit {
+                                    connector,
+                                    tool: name,
+                                    policy,
+                                    approved: Some(false),
+                                    arguments,
+                                    attempt_id,
+                                    args_hash,
+                                    review_id: Some(&review_id),
+                                    request_sent_at: None,
+                                    outcome: "denied",
+                                    retryable: false,
+                                    replaces_attempt,
+                                    error: Some(&rejection.message),
+                                });
+                                if rejection.declined {
+                                    return Err(ToolCallFailure::denied(
+                                        crate::scheduled::DenyReason::AskDeclined,
+                                        rejection.message,
+                                    ));
+                                }
+                                // No decision was made: surface the prompt
+                                // failure distinctly rather than as a denial.
+                                return Err(ToolCallFailure::failed(rejection.message));
+                            }
+                        }
                     }
                     // Policy was already Ask (human approved) or Deny:
                     // escalate is a no-op, cannot loosen.
@@ -942,6 +1023,7 @@ impl SessionConnectors {
                 }
             }
         }
+        let actor: &str = escalated_actor.as_deref().unwrap_or(actor);
         let args: HashMap<String, Value> = arguments
             .as_object()
             .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -1299,6 +1381,7 @@ fn request_tool_approval(
     tool: &str,
     replaces_attempt: Option<&str>,
     args_hash: Option<&str>,
+    hook_reason: Option<&str>,
 ) -> Result<ApprovalOutcome, ApprovalRejection> {
     let response = match crate::mcp_host::app_request_with_timeout(
         APPROVE_ROUTE,
@@ -1308,6 +1391,7 @@ fn request_tool_approval(
             "tool": tool,
             "replaces_attempt": replaces_attempt,
             "args_hash": args_hash,
+            "hook_reason": hook_reason,
         }),
         Duration::from_secs(130),
     ) {
@@ -2708,10 +2792,77 @@ provides = ["oauthy.echo"]
         std::env::remove_var("SUPERCLI_COUNT_FILE");
     }
 
+    /// One-shot loopback stub for the approval bridge
+    /// (`/mcp/approve-connector`). Answers the next approval POST with
+    /// `body`, then closes. Returns the port to advertise via
+    /// `SUPERCLI_APP_PORT`.
+    fn approval_stub(body: &'static str) -> u16 {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+        let port = listener.local_addr().expect("local addr").port();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            // Drain the request headers so the client sees a clean reply.
+            let mut request = [0u8; 8192];
+            let mut seen = 0;
+            while seen < request.len() {
+                let n = stream.read(&mut request[seen..]).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                seen += n;
+                if request[..seen].windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        });
+        port
+    }
+
+    /// Point the approval bridge and the supercli home at the fixture, so
+    /// the escalated prompt hits [`approval_stub`] and no real frontend.
+    /// Env vars are removed by the caller at the end of the test; the
+    /// fixture lock serializes all of this.
+    fn use_approval_stub(fx: &Fixture, port: u16) {
+        std::env::set_var("SUPERCLI_APP_PORT", port.to_string());
+        std::env::set_var("SUPERCLI_HOME", &fx.dir);
+    }
+
+    fn clear_approval_stub() {
+        std::env::remove_var("SUPERCLI_APP_PORT");
+        std::env::remove_var("SUPERCLI_HOME");
+    }
+
+    /// Read the actor recorded on the attempt_outcome entries.
+    fn review_outcome_actors(session_dir: &std::path::Path) -> Vec<String> {
+        let log = std::fs::read_to_string(session_dir.join(crate::action_reviews::REVIEWS_FILE))
+            .expect("review log readable");
+        log.lines()
+            .filter_map(|line| {
+                let v: serde_json::Value = serde_json::from_str(line).ok()?;
+                if v.get("type").and_then(|t| t.as_str()) != Some("attempt_outcome") {
+                    return None;
+                }
+                v.get("actor").and_then(|a| a.as_str()).map(|s| s.to_string())
+            })
+            .collect()
+    }
+
     #[test]
-    fn before_execute_escalate_on_allow_fails_closed() {
+    fn before_execute_escalate_on_allow_routes_to_approval_and_runs_once_on_approve() {
         let fx = Fixture::new();
-        let count_file = fx.dir.join("hook-escalate-count.txt");
+        // The user approves the escalated prompt.
+        let port = approval_stub(r#"{"approved": true, "answered_by": "test-device"}"#);
+        use_approval_stub(&fx, port);
+        let count_file = fx.dir.join("hook-escalate-approve-count.txt");
         std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
         Fixture::write_connector_with_stub(
             &fx.dir,
@@ -2721,29 +2872,86 @@ provides = ["oauthy.echo"]
             STUB_COUNTING,
         );
         fx.attach("county", HashMap::new());
-        let mut set = SessionConnectors::resolve("session-hook-escalate", &fx.session_dir);
+        let mut set = SessionConnectors::resolve("session-hook-escalate-approve", &fx.session_dir);
         set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
-            BeforeExecuteDecision::Escalate
+            BeforeExecuteDecision::Escalate("test wants a human to look".to_string())
         }));
-        // Policy is Allow, so the approval gate already passed with no
-        // human approval: escalate must fail closed, not run unapproved.
+        // Escalate means Allow -> Ask: the approval card appears, the user
+        // approves, and the tool runs exactly once.
+        let out = set
+            .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
+            .expect("approved escalated call must run");
+        assert!(out.contains("echo:"), "{out}");
+        let calls = std::fs::read_to_string(&count_file)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        assert_eq!(calls, 1, "approved escalated tool must run exactly once");
+        let outcomes = review_outcomes(&fx.session_dir);
+        assert!(
+            outcomes.iter().any(|o| o == "executed"),
+            "approved escalation records executed: {outcomes:?}"
+        );
+        let actors = review_outcome_actors(&fx.session_dir);
+        assert!(
+            actors.iter().any(|a| a == "human:test-device"),
+            "the human approver is the effective authorizer: {actors:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(inflight.is_empty(), "no in-flight reviews remain: {inflight:?}");
+        std::env::remove_var("SUPERCLI_COUNT_FILE");
+        clear_approval_stub();
+    }
+
+    #[test]
+    fn before_execute_escalate_on_allow_denied_by_user_does_not_run() {
+        let fx = Fixture::new();
+        // The user declines the escalated prompt.
+        let port = approval_stub(r#"{"approved": false, "answered_by": "test-device"}"#);
+        use_approval_stub(&fx, port);
+        let count_file = fx.dir.join("hook-escalate-deny-count.txt");
+        std::env::set_var("SUPERCLI_COUNT_FILE", &count_file);
+        Fixture::write_connector_with_stub(
+            &fx.dir,
+            "county",
+            MANIFEST_COUNT_ALLOW,
+            "county.echo",
+            STUB_COUNTING,
+        );
+        fx.attach("county", HashMap::new());
+        let mut set = SessionConnectors::resolve("session-hook-escalate-deny", &fx.session_dir);
+        set.set_before_execute_hook(Box::new(|_ctx: &BeforeExecuteContext| {
+            BeforeExecuteDecision::Escalate("test wants a human to look".to_string())
+        }));
         let err = set
             .call_tool_detailed("county.echo", &json!({"msg": "hi"}))
-            .expect_err("escalated allow-policy call must fail closed");
+            .expect_err("declined escalated call must not run");
         assert!(
-            err.message.contains("before_execute hook"),
-            "error names the hook: {}",
+            err.message.contains("declined"),
+            "error reports the decline: {}",
             err.message
         );
         let calls = std::fs::read_to_string(&count_file)
             .map(|s| s.lines().count())
             .unwrap_or(0);
-        assert_eq!(calls, 0, "escalated tool must never execute");
+        assert_eq!(calls, 0, "declined escalated tool must never execute");
         let outcomes = review_outcomes(&fx.session_dir);
         assert!(
             outcomes.iter().any(|o| o == "never_ran"),
-            "escalation records never_ran: {outcomes:?}"
+            "declined escalation records never_ran: {outcomes:?}"
+        );
+        let actors = review_outcome_actors(&fx.session_dir);
+        assert!(
+            actors.iter().any(|a| a == "human:test-device"),
+            "the decliner is recorded: {actors:?}"
+        );
+        let inflight =
+            crate::action_reviews::inflight_reviews(&fx.session_dir).expect("inflight scan works");
+        assert!(
+            inflight.is_empty(),
+            "declined call must not look in-flight: {inflight:?}"
         );
         std::env::remove_var("SUPERCLI_COUNT_FILE");
+        clear_approval_stub();
     }
 }

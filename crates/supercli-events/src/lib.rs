@@ -480,7 +480,21 @@ pub mod emit {
                     None => BeforeExecuteDecision::Allow,
                     Some(o) => match o.decision {
                         crate::HookDecision::Allow => BeforeExecuteDecision::Allow,
-                        crate::HookDecision::Escalate => BeforeExecuteDecision::Escalate,
+                        crate::HookDecision::Escalate => {
+                            let reason = o
+                                .runs
+                                .iter()
+                                .find(|r| r.decision == crate::HookDecision::Escalate)
+                                .map(|r| {
+                                    if r.message.is_empty() {
+                                        format!("hook {} escalated", r.name)
+                                    } else {
+                                        r.message.clone()
+                                    }
+                                })
+                                .unwrap_or_else(|| "hook escalated".to_string());
+                            BeforeExecuteDecision::Escalate(reason)
+                        }
                         crate::HookDecision::Reject => BeforeExecuteDecision::Reject(
                             o.reject_reason
                                 .unwrap_or_else(|| "hook rejected".to_string()),
