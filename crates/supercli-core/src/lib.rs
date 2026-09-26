@@ -55,6 +55,8 @@ pub mod direct_path_client;
 #[cfg(feature = "native-host")]
 pub mod direct_path_punch;
 #[cfg(feature = "native-host")]
+pub mod durable_runs;
+#[cfg(feature = "native-host")]
 pub mod first_run;
 #[cfg(feature = "native-host")]
 mod ghostty_vt;
