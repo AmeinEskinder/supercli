@@ -1973,8 +1973,8 @@ fn handle_with_effects(
     if needs_git_approval {
         // Session id for the approval request: prefer the body's session_id,
         // fall back to a controller identifier.
-        let approval_session = body_session_id(&controller_request.body)
-            .unwrap_or_else(|| "controller".to_string());
+        let approval_session =
+            body_session_id(&controller_request.body).unwrap_or_else(|| "controller".to_string());
         if let Err((status, body)) = crate::git_approval::check_git_approval(
             &controller_request,
             &approval_session,
@@ -1982,7 +1982,8 @@ fn handle_with_effects(
         ) {
             return (
                 status,
-                serde_json::to_string(&body).unwrap_or_else(|_| r#"{"error":"approval failed"}"#.to_string()),
+                serde_json::to_string(&body)
+                    .unwrap_or_else(|_| r#"{"error":"approval failed"}"#.to_string()),
             );
         }
     }

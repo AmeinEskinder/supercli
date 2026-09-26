@@ -124,7 +124,10 @@ fn git_with_timeout(
     for (k, v) in extra_env {
         child.env(k, v);
     }
-    let mut child = child.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let mut child = child
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
     let deadline = std::time::Instant::now() + timeout;
     loop {
@@ -202,7 +205,12 @@ fn git_ok_read(repo: &Path, args: &[&str], what: &str) -> Result<String, Failure
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn git_ok_remote(repo: &Path, args: &[&str], what: &str, timeout: Duration) -> Result<String, Failure> {
+fn git_ok_remote(
+    repo: &Path,
+    args: &[&str],
+    what: &str,
+    timeout: Duration,
+) -> Result<String, Failure> {
     let output = git_remote(repo, args, timeout).map_err(|e| {
         if e.kind() == io::ErrorKind::TimedOut {
             fail(504, format!("{what}: {e}"))
@@ -234,10 +242,7 @@ fn git_ok_remote(repo: &Path, args: &[&str], what: &str, timeout: Duration) -> R
 /// The toplevel check (Fix 3) closes the dotfiles-repo escape: without it, a
 /// path like `<root>/sub` where the enclosing repo's toplevel is `$HOME`
 /// would let every git op run against the home directory repo.
-fn resolve_repo(
-    scope: &ResourceScope,
-    request: &ControllerRequest,
-) -> Result<PathBuf, Failure> {
+fn resolve_repo(scope: &ResourceScope, request: &ControllerRequest) -> Result<PathBuf, Failure> {
     let raw = request
         .body
         .get("path")
@@ -282,9 +287,12 @@ fn resolve_write_path(
     // below enforces it). Only the components *relative to the root* are
     // subject to the dotfile rule — the root itself may legitimately live
     // under a dotted parent (e.g. a tempdir like `/tmp/.tmpXXX/repo`).
-    let root = scope
-        .project_root_for(display)
-        .ok_or_else(|| fail(403, "writes are only allowed inside registered project roots"))?;
+    let root = scope.project_root_for(display).ok_or_else(|| {
+        fail(
+            403,
+            "writes are only allowed inside registered project roots",
+        )
+    })?;
     let relative = display.strip_prefix(&root).map_err(|_| {
         fail(
             403,
@@ -315,18 +323,26 @@ fn resolve_write_path(
 
 fn git_status(scope: &ResourceScope, request: &ControllerRequest) -> Result<Value, Failure> {
     let root = resolve_repo(scope, request)?;
-    let branch = git_ok_read(&root, &["symbolic-ref", "--quiet", "--short", "HEAD"], "git branch")
-        .ok()
-        .and_then(|b| {
-            let b = b.trim().to_owned();
-            if b.is_empty() { None } else { Some(b) }
-        })
-        .or_else(|| {
-            git_ok_read(&root, &["rev-parse", "--short", "HEAD"], "git rev-parse")
-                .ok()
-                .map(|s| s.trim().to_owned())
-                .filter(|s| !s.is_empty())
-        });
+    let branch = git_ok_read(
+        &root,
+        &["symbolic-ref", "--quiet", "--short", "HEAD"],
+        "git branch",
+    )
+    .ok()
+    .and_then(|b| {
+        let b = b.trim().to_owned();
+        if b.is_empty() {
+            None
+        } else {
+            Some(b)
+        }
+    })
+    .or_else(|| {
+        git_ok_read(&root, &["rev-parse", "--short", "HEAD"], "git rev-parse")
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+    });
     let (ahead, behind) = upstream_counts(&root);
     let porcelain = git_ok_read(&root, &["status", "--porcelain=v1", "-uall"], "git status")?;
     let mut files = Vec::new();
@@ -365,7 +381,13 @@ fn upstream_counts(root: &Path) -> (u64, u64) {
     }
     let counts = match git_read(
         root,
-        &["rev-list", "--left-right", "--count", "HEAD...@{upstream}", "--"],
+        &[
+            "rev-list",
+            "--left-right",
+            "--count",
+            "HEAD...@{upstream}",
+            "--",
+        ],
     ) {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).trim().to_owned()
@@ -428,12 +450,9 @@ fn git_history(scope: &ResourceScope, request: &ControllerRequest) -> Result<Val
             continue;
         }
         let mut fields = record.split('\0');
-        let (Some(sha), Some(author), Some(date), Some(message)) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-        ) else {
+        let (Some(sha), Some(author), Some(date), Some(message)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
             continue;
         };
         commits.push(json!({
@@ -454,7 +473,9 @@ fn body_files(request: &ControllerRequest) -> Result<Vec<String>, Failure> {
         .ok_or_else(|| fail(400, "files array required"))?;
     let mut out = Vec::with_capacity(files.len());
     for file in files {
-        let path = file.as_str().ok_or_else(|| fail(400, "files must be strings"))?;
+        let path = file
+            .as_str()
+            .ok_or_else(|| fail(400, "files must be strings"))?;
         if path.is_empty() || path.contains('\0') || path.starts_with('/') || path.contains("..") {
             return Err(fail(400, format!("invalid file path: {path}")));
         }
@@ -615,10 +636,7 @@ fn usage_stats() -> Value {
     let home = dirs::home_dir();
     let mut providers = Vec::new();
     if let Some(home) = &home {
-        for (name, dir) in [
-            ("claude", ".claude/projects"),
-            ("codex", ".codex/sessions"),
-        ] {
+        for (name, dir) in [("claude", ".claude/projects"), ("codex", ".codex/sessions")] {
             let path = home.join(dir);
             let sessions_on_disk = std::fs::read_dir(&path)
                 .map(|entries| entries.count())
@@ -761,7 +779,6 @@ mod tests {
         let resp = route_with_scope(scope, &req).expect("route owned");
         (resp.status, resp.body)
     }
-
 
     #[test]
     fn git_status_reports_branch_and_clean_tree() {
@@ -958,10 +975,7 @@ mod tests {
                 }),
             );
             assert_eq!(status, 403, "target {target:?}: {body}");
-            assert!(
-                !target.exists(),
-                "sensitive target was written: {target:?}"
-            );
+            assert!(!target.exists(), "sensitive target was written: {target:?}");
         }
     }
 
@@ -1041,7 +1055,4 @@ mod tests {
         // Clean up the planted config so other tests are unaffected.
         sh(&f.repo, &["config", "--unset", "core.fsmonitor"]);
     }
-
-
-
 }
