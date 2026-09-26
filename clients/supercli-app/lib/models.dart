@@ -37,36 +37,57 @@ final class SessionSummary {
 }
 
 /// A pending approval request from the Host.
+///
+/// Wire format is the real Host dialect (supercli-serve/src/approvals.rs
+/// `list_json`, surfaced via `GET /mobile/bootstrap` as `pendingApprovals`):
+/// `{id, kind, title, body, callerSessionID, requestedAtUnixMs,
+/// targetSessionID?}`.
 final class PendingApproval {
   const PendingApproval({
     required this.id,
     required this.tool,
     required this.summary,
     required this.detail,
+    this.callerSessionId = '',
+    this.requestedAtUnixMs = 0,
     this.generation = 0,
   });
 
   final String id;
+
+  /// The approval kind (e.g. "tool"); shown as the tool name.
   final String tool;
+
+  /// The approval title; shown as the summary line.
   final String summary;
+
+  /// The approval body; shown as the detail text.
   final String detail;
+
+  final String callerSessionId;
+  final int requestedAtUnixMs;
   final int generation;
 
   factory PendingApproval.fromJson(Map<String, dynamic> json) {
     return PendingApproval(
       id: json['id'] as String,
-      tool: (json['tool'] as String?) ?? 'unknown',
-      summary: (json['summary'] as String?) ?? '',
-      detail: (json['detail'] as String?) ?? '',
+      tool: (json['kind'] as String?) ?? (json['tool'] as String?) ?? 'unknown',
+      summary: (json['title'] as String?) ?? (json['summary'] as String?) ?? '',
+      detail: (json['body'] as String?) ?? (json['detail'] as String?) ?? '',
+      callerSessionId: (json['callerSessionID'] as String?) ?? '',
+      requestedAtUnixMs:
+          (json['requestedAtUnixMs'] as num?)?.toInt() ?? 0,
       generation: (json['generation'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, Object> toJson() => {
         'id': id,
-        'tool': tool,
-        'summary': summary,
-        'detail': detail,
+        'kind': tool,
+        'title': summary,
+        'body': detail,
+        'callerSessionID': callerSessionId,
+        'requestedAtUnixMs': requestedAtUnixMs,
         'generation': generation,
       };
 }

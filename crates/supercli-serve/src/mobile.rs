@@ -5470,4 +5470,185 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         }
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    /// End-to-end: the real Dart desktop app (`clients/supercli-app`,
+    /// `--headless`) approves a real approval against the real Host HTTP
+    /// stack (`handle_connection` + `ApprovalHub`).
+    ///
+    /// The agent side is a thread calling `ApprovalHub::request` exactly as
+    /// `session_host` does when a tool needs approval; the server side is
+    /// the production connection handler over TLS with a paired-device
+    /// Bearer <redacted> Skips gracefully when the Dart SDK is absent.
+    #[test]
+    fn dart_headless_approves_real_approval_e2e() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dart = std::env::var("DART_BIN").unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_default();
+            format!("{home}/workspace/dart-sdk/dart-sdk/bin/dart")
+        });
+        if !std::path::Path::new(&dart).exists() {
+            eprintln!("SKIP dart_headless_approves_real_approval_e2e: no dart at {dart}");
+            return;
+        }
+        let app_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../clients/supercli-app");
+        if !app_dir.join("bin/main.dart").exists() {
+            eprintln!("SKIP dart_headless_approves_real_approval_e2e: no supercli-app");
+            return;
+        }
+
+        // Serialize with other tests that mutate SUPERCLI_HOME.
+        let _guard = crate::approvals::APP_STATE_LOCK.lock().unwrap();
+        let prev = std::env::var_os("SUPERCLI_HOME");
+        let dir = scratch_dir("dart-approval-e2e");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("SUPERCLI_HOME", &dir);
+
+        // Pair a device: the production Bearer <redacted> reads
+        // $SUPERCLI_HOME/mobile/devices.json and matches sha256(token).
+        let device = "e2e-dart-device-001";
+        let token = "e2e-dart-token-001";
+        let mobile = dir.join("mobile");
+        std::fs::create_dir_all(&mobile).unwrap();
+        std::fs::write(
+            mobile.join("devices.json"),
+            serde_json::json!({
+                "devices": [{
+                    "id": device,
+                    "name": "E2E Dart Device",
+                    "tokenHash": sha256_hex(token),
+                    "principalID": "owner-principal",
+                }]
+            })
+            .to_string(),
+        )
+        .expect("devices.json");
+
+        // Real ApprovalHub shared by the server and the simulated agent.
+        let approvals = Arc::new(crate::approvals::ApprovalHub::default());
+        let (tls, _fingerprint) = test_tls_material();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().expect("port").port();
+        listener.set_nonblocking(true).expect("nonblocking");
+
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        // Agent side: the real blocking approval request, exactly as
+        // session_host invokes it when a tool needs approval.
+        let hub = Arc::clone(&approvals);
+        let agent = std::thread::spawn(move || {
+            hub.request(
+                "tool",
+                "E2E approval from the dart client".to_string(),
+                "The headless dart app must approve this.".to_string(),
+                "session-e2e-dart-001".to_string(),
+                None,
+                std::time::Duration::from_secs(45),
+            )
+        });
+
+        // Server side: the production connection handler.
+        let server_approvals = Arc::clone(&approvals);
+        let server_shutdown = Arc::clone(&shutdown);
+        let server_tls = Arc::clone(&tls);
+        // NOTE: the snapshot's `bootstrap` must be a JSON object, not
+        // `Value::Null` (the `Default`): `bootstrap_body` only merges
+        // `pendingApprovals` when the snapshot is an object, matching the
+        // production Host which always publishes a real snapshot object.
+        let server_snapshot = Arc::new(std::sync::Mutex::new(
+            crate::sessions::MobileSnapshot {
+                bootstrap: serde_json::json!({}),
+                archived_sessions_by_project: std::collections::HashMap::new(),
+                create_presets: Vec::new(),
+            },
+        ));
+        let server = std::thread::spawn(move || {
+            while !server_shutdown.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        let _ = stream.set_nonblocking(false);
+                        handle_connection(
+                            stream,
+                            Arc::clone(&server_tls),
+                            Arc::clone(&server_snapshot),
+                            std::sync::mpsc::channel().0,
+                            None,
+                            Arc::new(std::sync::Mutex::new(
+                                std::collections::HashMap::new(),
+                            )),
+                            Arc::clone(&server_approvals),
+                            Arc::new(crate::pairing::PairingWindow::default()),
+                            Arc::new(
+                                crate::platform_adapter::PlatformAdapterHub::default(),
+                            ),
+                            None,
+                            "http://127.0.0.1:0/mobile".into(),
+                            Arc::clone(&server_shutdown),
+                            Arc::new(AtomicBool::new(false)),
+                        );
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        // Let the agent thread queue the approval.
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        assert!(
+            approvals.front().is_some(),
+            "agent thread must have queued the approval"
+        );
+
+        // Run the real Dart app headless against the real Host.
+        let child = std::process::Command::new(&dart)
+            .arg("run")
+            .arg("bin/main.dart")
+            .arg("--headless")
+            .arg("--host=127.0.0.1")
+            .arg(format!("--port={port}"))
+            .arg(format!("--token={token}"))
+            .arg("--tls")
+            .arg("--insecure")
+            .current_dir(&app_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn dart");
+
+        // Wait for the agent side to unblock (approves or 45s timeout).
+        let (approved, answered_by) = agent.join().expect("agent thread");
+        let output = child.wait_with_output().expect("dart output");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        shutdown.store(true, Ordering::Relaxed);
+        server.join().expect("server thread");
+
+        // Cleanup.
+        if let Some(p) = prev {
+            std::env::set_var("SUPERCLI_HOME", p);
+        } else {
+            std::env::remove_var("SUPERCLI_HOME");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert!(
+            approved,
+            "the agent's approval request must be approved; dart stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            stdout.contains("answered approval"),
+            "dart must report answering the approval; stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            answered_by.as_deref() == Some("paired-device"),
+            "answer must be attributed to the paired device; got {answered_by:?}"
+        );
+    }
 }
