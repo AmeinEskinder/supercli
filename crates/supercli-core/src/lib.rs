@@ -35,6 +35,8 @@ pub mod browser_engine;
 #[cfg(feature = "native-host")]
 pub mod browser_mcp;
 #[cfg(feature = "native-host")]
+pub mod browser_takeover;
+#[cfg(feature = "native-host")]
 pub mod config;
 #[cfg(feature = "native-host")]
 pub mod controller_api;
@@ -92,6 +94,8 @@ pub mod mcp_gate;
 #[cfg(feature = "native-host")]
 pub mod mcp_host;
 #[cfg(feature = "native-host")]
+pub mod memory;
+#[cfg(feature = "native-host")]
 pub mod menu_prompt;
 #[cfg(feature = "native-host")]
 mod pane_context;
@@ -104,6 +108,8 @@ pub mod plugins;
 /// exercised by `scripts/ci/check-portable-core.sh`).
 #[cfg(all(test, feature = "controller-core"))]
 mod portable_gating_tests;
+#[cfg(feature = "native-host")]
+pub mod profile;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
