@@ -1,4 +1,4 @@
 /// Port of `Licensesettingspanel.swift`. Re-exported.
 library;
 
-export 'settingspanels.dart' show LicenseSettingsPanel;
+export 'licensesettings.dart' show LicenseSettingsPanel, LicenseSeat;

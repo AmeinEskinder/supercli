@@ -6,8 +6,8 @@
   Usable verbatim when `supercli` is installed at /usr/local/bin/supercli
   (the install.sh default):
 
-    cp com.supercli.serve.plist ~/Library/LaunchAgents/
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.supercli.serve.plist
+    cp li.superc.serve.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/li.superc.serve.plist
 
   `supercli serve install` writes this same file with the resolved binary
   path (it rewrites the /usr/local/bin/supercli line, and for a scoped
@@ -24,7 +24,7 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.supercli.serve</string>
+	<string>li.superc.serve</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/local/bin/supercli</string>

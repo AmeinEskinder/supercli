@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const LAUNCHD_TEMPLATE: &str = include_str!("../../../packaging/service/com.supercli.serve.plist");
+const LAUNCHD_TEMPLATE: &str = include_str!("../../../packaging/service/li.superc.serve.plist");
 const SYSTEMD_TEMPLATE: &str = include_str!("../../../packaging/service/supercli-serve.service");
 /// `--graphical`: the same service bound to `graphical-session.target` so it
 /// runs inside the desktop session (Computer Use needs the display and the
@@ -27,7 +27,7 @@ const SYSTEMD_GRAPHICAL_TEMPLATE: &str =
 const GRAPHICAL_MARKER: &str = "PartOf=graphical-session.target";
 /// The path the verbatim templates ship with; rendering rewrites it.
 const TEMPLATE_BINARY: &str = "/usr/local/bin/supercli";
-const LAUNCHD_LABEL: &str = "com.supercli.serve";
+const LAUNCHD_LABEL: &str = "li.superc.serve";
 const SYSTEMD_UNIT: &str = "supercli-serve";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -430,7 +430,7 @@ mod tests {
             Path::new("/opt/supercli/bin/supercli"),
             false,
         );
-        assert!(unit.contains("<string>com.supercli.serve</string>"));
+        assert!(unit.contains("<string>li.superc.serve</string>"));
         assert!(unit.contains("<string>/opt/supercli/bin/supercli</string>"));
         assert!(unit.contains("<string>serve</string>"));
         assert!(!unit.contains(&format!("<string>{TEMPLATE_BINARY}</string>")));
@@ -445,7 +445,7 @@ mod tests {
             Path::new("/opt/supercli/bin/supercli"),
             false,
         );
-        assert!(unit.contains("<string>com.supercli.serve.teama</string>"));
+        assert!(unit.contains("<string>li.superc.serve.teama</string>"));
         assert!(unit.contains("<string>--workspace</string>"));
         assert!(unit.contains("<string>teama</string>"));
         assert!(unit.contains("<string>serve</string>"));
@@ -523,6 +523,6 @@ mod tests {
             "supercli-serve.service"
         );
         assert_eq!(workspace().systemd_unit(), "supercli-serve-teama.service");
-        assert_eq!(workspace().launchd_label(), "com.supercli.serve.teama");
+        assert_eq!(workspace().launchd_label(), "li.superc.serve.teama");
     }
 }

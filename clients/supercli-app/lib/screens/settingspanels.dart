@@ -1,156 +1,526 @@
-/// Settings panels: Agent Access, License, Plugins, Presets, Workspaces, Worktrees.
+/// Settings model and panels: General, Appearance, Sessions, Features,
+/// Transcripts, Notifications, Advanced.
 ///
-/// Port of `AgentAccessSettingsPanel.swift`, `LicenseSettingsPanel.swift`,
-/// `PluginSettingsPanel.swift`, `PresetsSettingsPanel.swift`,
-/// `WorkspacesSettingsPanel.swift`, `WorktreesSettingsPanel.swift`,
-/// `PluginListDrag.swift`, and `LocalSiteMenu.swift`.
+/// The settings model mirrors the Host's `settings.workspace.set` allowlist
+/// (see `crates/supercli-core/src/controller_host.rs`
+/// `workspace_settings_response`, served at `POST /mobile/workspace-settings`
+/// and read back via `GET /mobile/workspace-settings`):
+///   experimentalSettings.sessionsMcp   true | false
+///   experimentalSettings.browserMcp    true | false
+///   browserDefaultAccess               on | ask | off
+///   mcpNonchildWriteAccess             ask | allow | deny
+///   mcpWorktreeAccess                  true | false
+///   mcpAutoAddBrowserScreenshots       true | false
+///   autoStopArchiveMinutes             0 | 30 | 60 | 120 | 240 | 480 | 1440
+///   sidebarStoppedLimit                0 | 3 | 5 | 10 | 15 | 25
+///   appearanceSettings.theme           system | light | dark
+///
+/// Desktop-only preferences (appearance, notifications, advanced) live in the
+/// local app state and are not sent to the Host.
+///
+/// Toggle/select/slider widgets do not exist in gpuidart upstream (see
+/// docs/gpuidart-gaps-settings.md); toggles render as UiButton with an
+/// on/off label and selects as a row of option buttons.
+/// Port of the SettingsView.swift tab panels.
 library;
 
 import 'package:gpuidart/gpuidart.dart';
 
-/// Agent access settings: which agents can access what.
-final class AgentAccessSettingsPanel {
-  const AgentAccessSettingsPanel({this.rules = const []});
+/// Which settings scope is being edited.
+enum SettingsScope {
+  thisMac('This Mac'),
+  workspace('Workspace'),
+  remoteHost('Remote Host');
 
-  final List<String> rules;
+  const SettingsScope(this.label);
+  final String label;
+}
 
-  UiNode build() {
-    return UiColumn('agent-access', [
-      const UiText('agent-access-title', 'Agent Access'),
-      UiTable('agent-access-table', dataset: 'agent-access'),
-      UiRow('agent-access-actions', [
-        const UiButton('agent-access-add', 'Add Rule'),
-        const UiButton('agent-access-remove', 'Remove'),
-      ]),
-    ]);
-  }
+/// Theme mode.
+enum ThemeMode {
+  system('System'),
+  light('Light'),
+  dark('Dark');
 
-  TableDataset dataset() => TableDataset(
-        'agent-access',
-        columns: const ['Rule'],
-        rows: rules.map((r) => [r]).toList(),
+  const ThemeMode(this.label);
+  final String label;
+
+  static ThemeMode fromWire(String s) => ThemeMode.values.firstWhere(
+        (m) => m.name == s,
+        orElse: () => ThemeMode.system,
       );
 }
 
-/// License settings: key entry and status.
-final class LicenseSettingsPanel {
-  const LicenseSettingsPanel({
-    this.licenseKey = '',
-    this.status = '',
+/// Session write policy (mcp_nonchild_write_access).
+enum WritePolicy {
+  ask('Ask'),
+  allow('Allow'),
+  deny('Deny');
+
+  const WritePolicy(this.label);
+  final String label;
+
+  static WritePolicy fromWire(String s) => WritePolicy.values.firstWhere(
+        (m) => m.name == s,
+        orElse: () => WritePolicy.ask,
+      );
+}
+
+/// Browser default access (browser_default_access).
+enum BrowserDefaultAccess {
+  on('On'),
+  ask('Ask'),
+  off('Off');
+
+  const BrowserDefaultAccess(this.label);
+  final String label;
+
+  static BrowserDefaultAccess fromWire(String s) =>
+      BrowserDefaultAccess.values.firstWhere(
+        (m) => m.name == s,
+        orElse: () => BrowserDefaultAccess.ask,
+      );
+}
+
+/// The editable settings model.
+///
+/// Host-managed keys serialize to the `settings.workspace.set` wire format.
+/// Desktop-only keys are kept locally.
+final class AppSettings {
+  AppSettings({
+    this.scope = SettingsScope.thisMac,
+    this.theme = ThemeMode.system,
+    this.accentColor = 0,
+    this.terminalFont = 'SF Mono',
+    this.terminalFontSize = 13.0,
+    this.lineHeight = 1.2,
+    this.writePolicy = WritePolicy.ask,
+    this.worktreeAccess = false,
+    this.autoGallery = true,
+    this.autoStopArchiveMinutes = 60,
+    this.sidebarStoppedLimit = 10,
+    this.browserDefaultAccess = BrowserDefaultAccess.ask,
+    this.browserMcp = false,
+    this.sessionsMcp = true,
+    this.autoAddBrowserScreenshots = false,
+    this.remoteWorkspaces = true,
+    this.gitWorktrees = true,
+    this.notifyOnCompletion = true,
+    this.notifyFlags = true,
+    this.transcriptContentEnabled = true,
+    this.showAgentWorktrees = false,
+    this.sessionsFolder = '',
+    this.traceLog = false,
   });
 
-  final String licenseKey;
-  final String status;
+  SettingsScope scope;
+  ThemeMode theme;
+  int accentColor; // 0-7
+  String terminalFont;
+  double terminalFontSize;
+  double lineHeight;
+  WritePolicy writePolicy;
+  bool worktreeAccess;
+  bool autoGallery;
+  int autoStopArchiveMinutes;
+  int sidebarStoppedLimit;
+  BrowserDefaultAccess browserDefaultAccess;
+  bool browserMcp;
+  bool sessionsMcp;
+  bool autoAddBrowserScreenshots;
+  bool remoteWorkspaces;
+  bool gitWorktrees;
+  bool notifyOnCompletion;
+  bool notifyFlags;
+  bool transcriptContentEnabled;
+  bool showAgentWorktrees;
+  String sessionsFolder;
+  bool traceLog;
 
-  UiNode build() {
-    return UiColumn('license-settings', [
-      const UiText('license-title', 'License'),
-      UiText('license-status', status),
-      const UiInput('license-key', placeholder: 'License key…'),
-      const UiButton('license-activate', 'Activate'),
-    ]);
+  /// Host wire format for `POST /mobile/workspace-settings`
+  /// (`settings.workspace.set`): camelCase keys matching the Host's
+  /// `workspace_settings_response` whitelist in
+  /// `crates/supercli-core/src/controller_host.rs`. The GET route returns
+  /// the same shape, so this round-trips.
+  Map<String, Object> toHostJson() => {
+        'experimentalSettings': {
+          'sessionsMcp': sessionsMcp,
+          'browserMcp': browserMcp,
+        },
+        'browserDefaultAccess': browserDefaultAccess.name,
+        'mcpNonchildWriteAccess': writePolicy.name,
+        'mcpWorktreeAccess': worktreeAccess,
+        'mcpAutoAddBrowserScreenshots': autoAddBrowserScreenshots,
+        'autoStopArchiveMinutes': autoStopArchiveMinutes,
+        'sidebarStoppedLimit': sidebarStoppedLimit,
+        'appearanceSettings': {
+          'theme': theme.name,
+        },
+      };
+
+  /// Parse the `GET /mobile/workspace-settings` response body (same
+  /// camelCase wire format as [toHostJson]). Missing keys fall back to
+  /// the model defaults.
+  factory AppSettings.fromHostJson(Map<String, dynamic> json) {
+    T get<T>(String key, T fallback) {
+      final v = json[key];
+      return v is T ? v : fallback;
+    }
+
+    Map<String, dynamic> nested(String key) {
+      final v = json[key];
+      return v is Map<String, dynamic>
+          ? v
+          : v is Map
+              ? Map<String, dynamic>.from(v as Map)
+              : <String, dynamic>{};
+    }
+
+    final experimental = nested('experimentalSettings');
+    final appearance = nested('appearanceSettings');
+
+    T nget<T>(Map<String, dynamic> m, String key, T fallback) {
+      final v = m[key];
+      return v is T ? v : fallback;
+    }
+
+    return AppSettings(
+      sessionsMcp: nget<bool>(experimental, 'sessionsMcp', true),
+      browserMcp: nget<bool>(experimental, 'browserMcp', false),
+      browserDefaultAccess: BrowserDefaultAccess.fromWire(
+          get<String>('browserDefaultAccess', 'ask')),
+      writePolicy: WritePolicy.fromWire(
+          get<String>('mcpNonchildWriteAccess', 'ask')),
+      worktreeAccess: get<bool>('mcpWorktreeAccess', false),
+      autoAddBrowserScreenshots:
+          get<bool>('mcpAutoAddBrowserScreenshots', false),
+      autoStopArchiveMinutes: get<int>('autoStopArchiveMinutes', 60),
+      sidebarStoppedLimit: get<int>('sidebarStoppedLimit', 10),
+      theme: ThemeMode.fromWire(
+          nget<String>(appearance, 'theme', get<String>('theme', 'system'))),
+    );
   }
+
+  /// One `settings.workspace.set` call payload for a single key.
+  Map<String, Object> setCall(String key, Object value) => {
+        'key': key,
+        'value': value,
+      };
 }
 
-/// Plugin settings panel.
-final class PluginSettingsPanel {
-  const PluginSettingsPanel({this.plugins = const []});
+/// A toggle row: label + on/off button.
+/// GAP: gpuidart has no UiToggle; the button label carries the state.
+final class SettingsToggle {
+  const SettingsToggle({
+    required this.id,
+    required this.label,
+    required this.value,
+  });
 
-  final List<String> plugins;
+  final String id;
+  final String label;
+  final bool value;
 
-  UiNode build() {
-    return UiColumn('plugin-settings', [
-      const UiText('plugin-title', 'Plugins'),
-      UiTable('plugin-table', dataset: 'plugin-settings'),
-      const UiButton('plugin-install', 'Install Plugin…'),
-    ]);
-  }
+  Map<String, Object> toJson() => {
+        'kind': 'settings-toggle',
+        'id': id,
+        'label': label,
+        'value': value,
+      };
 
-  TableDataset dataset() => TableDataset(
-        'plugin-settings',
-        columns: const ['Plugin', 'Enabled'],
-        rows: plugins.map((p) => [p, 'Yes']).toList(),
-      );
+  /// Render through the RLE fallback: a row with label + state button.
+  UiNode fallback() => UiRow('$id-row', [
+        UiText('$id-label', label),
+        UiButton('$id-toggle', value ? 'On' : 'Off'),
+      ]);
 }
 
-/// Plugin list drag helper.
-/// GAP: No drag-and-drop in gpuidart (P0-13).
-final class PluginListDrag {
-  const PluginListDrag();
+/// A select row: label + one button per option, the active one marked.
+/// GAP: gpuidart has no UiSelect/UiDropdown.
+final class SettingsSelect {
+  const SettingsSelect({
+    required this.id,
+    required this.label,
+    required this.options,
+    required this.selected,
+  });
 
-  UiNode build() {
-    return const UiText(
-        'plugin-drag', '(plugin drag — needs gpuidart drag-and-drop, P0-13)');
-  }
+  final String id;
+  final String label;
+  final List<String> options;
+  final String selected;
+
+  Map<String, Object> toJson() => {
+        'kind': 'settings-select',
+        'id': id,
+        'label': label,
+        'options': options,
+        'selected': selected,
+      };
+
+  /// Render through the RLE fallback.
+  UiNode fallback() => UiColumn('$id-col', [
+        UiText('$id-label', label),
+        UiRow('$id-options', [
+          for (final o in options)
+            UiButton('$id-opt-$o', o == selected ? '● $o' : o),
+        ]),
+      ]);
 }
 
-/// Presets settings panel.
-final class PresetsSettingsPanel {
-  const PresetsSettingsPanel({this.presets = const []});
+/// General settings panel: scope picker + appearance.
+final class GeneralSettingsPanel {
+  GeneralSettingsPanel({required this.settings});
 
-  final List<String> presets;
+  final AppSettings settings;
 
   UiNode build() {
-    return UiColumn('presets-settings', [
-      const UiText('presets-title', 'Presets'),
-      UiTable('presets-table', dataset: 'presets-settings'),
-      UiRow('presets-actions', [
-        const UiButton('presets-new', 'New Preset'),
-        const UiButton('presets-delete', 'Delete'),
+    return UiColumn('general-settings', [
+      const UiText('general-title', 'General'),
+      SettingsSelect(
+        id: 'settings-scope',
+        label: 'Settings scope',
+        options: SettingsScope.values.map((s) => s.label).toList(),
+        selected: settings.scope.label,
+      ).fallback(),
+      if (settings.scope != SettingsScope.thisMac)
+        UiRow('scope-inherit-row', [
+          const UiText('scope-inherit-label',
+              'Inherits from This Mac unless overridden.'),
+          const UiButton('scope-reset', 'Reset to inherited'),
+        ]),
+      const UiText('appearance-title', 'Appearance'),
+      SettingsSelect(
+        id: 'theme',
+        label: 'Theme',
+        options: ThemeMode.values.map((m) => m.label).toList(),
+        selected: settings.theme.label,
+      ).fallback(),
+      SettingsSelect(
+        id: 'accent',
+        label: 'Accent color',
+        options: const [
+          'Blue',
+          'Purple',
+          'Pink',
+          'Red',
+          'Orange',
+          'Yellow',
+          'Green',
+          'Graphite'
+        ],
+        selected: const [
+          'Blue',
+          'Purple',
+          'Pink',
+          'Red',
+          'Orange',
+          'Yellow',
+          'Green',
+          'Graphite'
+        ][settings.accentColor.clamp(0, 7)],
+      ).fallback(),
+      SettingsSelect(
+        id: 'terminal-font',
+        label: 'Terminal font',
+        options: const ['SF Mono', 'Menlo', 'JetBrains Mono', 'Fira Code'],
+        selected: settings.terminalFont,
+      ).fallback(),
+      UiRow('terminal-size-row', [
+        UiText('terminal-size-label',
+            'Terminal font size: ${settings.terminalFontSize.toStringAsFixed(1)}'),
+        const UiButton('terminal-size-dec', '−'),
+        const UiButton('terminal-size-inc', '+'),
       ]),
     ]);
   }
-
-  TableDataset dataset() => TableDataset(
-        'presets-settings',
-        columns: const ['Preset'],
-        rows: presets.map((p) => [p]).toList(),
-      );
 }
 
-/// Workspaces settings panel.
-final class WorkspacesSettingsPanel {
-  const WorkspacesSettingsPanel({this.workspaces = const []});
+/// Sessions settings panel.
+final class SessionsSettingsPanel {
+  SessionsSettingsPanel({required this.settings});
 
-  final List<String> workspaces;
+  final AppSettings settings;
 
   UiNode build() {
-    return UiColumn('workspaces-settings', [
-      const UiText('workspaces-title', 'Workspaces'),
-      UiTable('workspaces-table', dataset: 'workspaces-settings'),
-      UiRow('workspaces-actions', [
-        const UiButton('workspaces-add', 'Add Workspace'),
-        const UiButton('workspaces-remove', 'Remove'),
+    return UiColumn('sessions-settings', [
+      const UiText('sessions-settings-title', 'Sessions'),
+      SettingsSelect(
+        id: 'write-policy',
+        label: 'Write policy (non-child paths)',
+        options: WritePolicy.values.map((w) => w.label).toList(),
+        selected: settings.writePolicy.label,
+      ).fallback(),
+      SettingsToggle(
+        id: 'worktree-access',
+        label: 'Allow worktree access',
+        value: settings.worktreeAccess,
+      ).fallback(),
+      SettingsToggle(
+        id: 'auto-gallery',
+        label: 'Auto-add to gallery',
+        value: settings.autoGallery,
+      ).fallback(),
+      SettingsToggle(
+        id: 'sessions-mcp',
+        label: 'Sessions MCP (experimental)',
+        value: settings.sessionsMcp,
+      ).fallback(),
+      SettingsSelect(
+        id: 'auto-stop',
+        label: 'Auto-archive stopped sessions after',
+        options: const [
+          'Never',
+          '30 min',
+          '1 hour',
+          '2 hours',
+          '4 hours',
+          '8 hours',
+          '24 hours'
+        ],
+        selected: _minutesLabel(settings.autoStopArchiveMinutes),
+      ).fallback(),
+      SettingsSelect(
+        id: 'sidebar-limit',
+        label: 'Stopped sessions in sidebar',
+        options: const ['None', '3', '5', '10', '15', '25'],
+        selected: settings.sidebarStoppedLimit == 0
+            ? 'None'
+            : settings.sidebarStoppedLimit.toString(),
+      ).fallback(),
+    ]);
+  }
+
+  String _minutesLabel(int m) {
+    if (m == 0) return 'Never';
+    if (m < 60) return '$m min';
+    return '${m ~/ 60} hour${m == 60 ? '' : 's'}';
+  }
+}
+
+/// Features settings panel: experimental gates.
+final class FeaturesSettingsPanel {
+  FeaturesSettingsPanel({required this.settings});
+
+  final AppSettings settings;
+
+  UiNode build() {
+    return UiColumn('features-settings', [
+      const UiText('features-title', 'Features'),
+      SettingsToggle(
+        id: 'feat-remote-ws',
+        label: 'Remote workspaces',
+        value: settings.remoteWorkspaces,
+      ).fallback(),
+      SettingsToggle(
+        id: 'feat-git-worktrees',
+        label: 'Git worktrees',
+        value: settings.gitWorktrees,
+      ).fallback(),
+      SettingsToggle(
+        id: 'feat-browser-mcp',
+        label: 'Browser MCP (experimental)',
+        value: settings.browserMcp,
+      ).fallback(),
+      SettingsToggle(
+        id: 'feat-auto-screenshots',
+        label: 'Auto-add browser screenshots',
+        value: settings.autoAddBrowserScreenshots,
+      ).fallback(),
+    ]);
+  }
+}
+
+/// Transcripts settings panel.
+final class TranscriptsSettingsPanel {
+  TranscriptsSettingsPanel({required this.settings});
+
+  final AppSettings settings;
+
+  UiNode build() {
+    return UiColumn('transcripts-settings', [
+      const UiText('transcripts-title', 'Transcripts'),
+      const UiText('transcripts-info',
+          'Control what session content is stored in transcripts.'),
+      SettingsToggle(
+        id: 'transcript-content',
+        label: 'Store message content',
+        value: settings.transcriptContentEnabled,
+      ).fallback(),
+    ]);
+  }
+}
+
+/// Notifications settings panel.
+final class NotificationsSettingsPanel {
+  NotificationsSettingsPanel({required this.settings});
+
+  final AppSettings settings;
+
+  UiNode build() {
+    return UiColumn('notifications-settings', [
+      const UiText('notifications-title', 'Notifications'),
+      SettingsToggle(
+        id: 'notify-completion',
+        label: 'Notify on session completion',
+        value: settings.notifyOnCompletion,
+      ).fallback(),
+      SettingsToggle(
+        id: 'notify-flags',
+        label: 'Flag select menus',
+        value: settings.notifyFlags,
+      ).fallback(),
+      UiRow('notify-test-row', [
+        const UiButton('notify-test-mac', 'Test on this Mac'),
+        const UiButton('notify-test-phone', 'Test on phone'),
       ]),
+      const UiButton('notify-diagnostics', 'Delivery diagnostics'),
     ]);
   }
-
-  TableDataset dataset() => TableDataset(
-        'workspaces-settings',
-        columns: const ['Workspace'],
-        rows: workspaces.map((w) => [w]).toList(),
-      );
 }
 
-/// Worktrees settings panel.
-final class WorktreesSettingsPanel {
-  const WorktreesSettingsPanel({this.worktrees = const []});
+/// Advanced settings panel.
+final class AdvancedSettingsPanel {
+  AdvancedSettingsPanel({required this.settings});
 
-  final List<String> worktrees;
+  final AppSettings settings;
 
   UiNode build() {
-    return UiColumn('worktrees-settings', [
-      const UiText('worktrees-title', 'Worktrees'),
-      UiTable('worktrees-table', dataset: 'worktrees-settings'),
-      const UiButton('worktrees-prune', 'Prune'),
+    return UiColumn('advanced-settings', [
+      const UiText('advanced-title', 'Advanced'),
+      SettingsToggle(
+        id: 'adv-show-worktrees',
+        label: 'Show agent worktrees',
+        value: settings.showAgentWorktrees,
+      ).fallback(),
+      UiRow('sessions-folder-row', [
+        UiText('sessions-folder-label',
+            'Sessions folder: ${settings.sessionsFolder.isEmpty ? '(default)' : settings.sessionsFolder}'),
+        const UiButton('sessions-folder-choose', 'Choose…'),
+      ]),
+      SettingsToggle(
+        id: 'adv-trace-log',
+        label: 'Trace log',
+        value: settings.traceLog,
+      ).fallback(),
+      const UiButton('adv-running-hosts', 'Running hosts…'),
+      const UiText('adv-memory', 'Memory usage: see Activity Monitor'),
     ]);
   }
+}
 
-  TableDataset dataset() => TableDataset(
-        'worktrees-settings',
-        columns: const ['Worktree'],
-        rows: worktrees.map((w) => [w]).toList(),
-      );
+/// Developer settings panel.
+final class DeveloperSettingsPanel {
+  const DeveloperSettingsPanel();
+
+  UiNode build() {
+    return UiColumn('developer-settings', [
+      const UiText('developer-title', 'Developer'),
+      const UiButton('dev-reload', 'Reload UI'),
+      const UiButton('dev-inspect', 'Inspect element'),
+      const UiButton('dev-logs', 'Open logs'),
+    ]);
+  }
 }
 
 /// Local site menu: per-site navigation menu.
@@ -164,5 +534,16 @@ final class LocalSiteMenu {
       const UiText('site-menu-title', 'Local Sites'),
       for (final s in sites) UiButton('site-$s', s),
     ]);
+  }
+}
+
+/// Plugin list drag helper.
+/// GAP: No drag-and-drop in gpuidart (P0-13).
+final class PluginListDrag {
+  const PluginListDrag();
+
+  UiNode build() {
+    return const UiText(
+        'plugin-drag', '(plugin drag — needs gpuidart drag-and-drop, P0-13)');
   }
 }

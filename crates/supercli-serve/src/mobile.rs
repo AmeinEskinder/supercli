@@ -1962,6 +1962,30 @@ fn handle_with_effects(
     )
     .then(|| headless_controller_effects(hook_port));
     let controller_effects = controller_effects_override.or(owned_controller_effects.as_ref());
+    // Mutating git/file routes require human approval via the ApprovalHub.
+    // (See git_approval.rs; follows the devices.rs HubGate pattern.)
+    // The check runs BEFORE the core route handler; only an explicit Allow
+    // lets the operation proceed. Denials fail closed (403).
+    let needs_git_approval = crate::git_approval::is_mutating_git_route(
+        &controller_request.method,
+        &controller_request.path,
+    );
+    if needs_git_approval {
+        // Session id for the approval request: prefer the body's session_id,
+        // fall back to a controller identifier.
+        let approval_session = body_session_id(&controller_request.body)
+            .unwrap_or_else(|| "controller".to_string());
+        if let Err((status, body)) = crate::git_approval::check_git_approval(
+            &controller_request,
+            &approval_session,
+            approvals,
+        ) {
+            return (
+                status,
+                serde_json::to_string(&body).unwrap_or_else(|_| r#"{"error":"approval failed"}"#.to_string()),
+            );
+        }
+    }
     if let Some(response) = supercli_core::controller_api::route_with_effects(
         &controller_request,
         route_context.as_ref(),
@@ -1982,6 +2006,11 @@ fn handle_with_effects(
             if let Some(session_id) = body_session_id(&controller_request.body) {
                 let _ = mark_read.send(session_id);
             }
+        }
+        // Mutating git/file routes: emit after_* exactly once on success.
+        // (The before_* and approval happened in check_git_approval above.)
+        if needs_git_approval && response.status == 200 {
+            crate::git_approval::emit_after(&controller_request);
         }
         // `max_dim` is optional native ImageIO enrichment. The shared core
         // has already validated the Controller principal, Session, artifact
@@ -2256,6 +2285,12 @@ fn handle_with_effects(
         ("POST", "/mobile/workspace-settings") => {
             let (status, body) =
                 supercli_core::controller_host::workspace_settings_response(&body_json(request));
+            (status, body.to_string())
+        }
+        // Capability `settings.workspace.get`: read the workspace settings
+        // in the same wire format the POST accepts (round-trip safe).
+        ("GET", "/mobile/workspace-settings") => {
+            let (status, body) = supercli_core::controller_host::workspace_settings_get();
             (status, body.to_string())
         }
         ("GET", "/mobile/plugin-updates") => {

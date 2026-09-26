@@ -1,5 +1,5 @@
 //! Read-only view of the native app's UserDefaults overlay
-//! (`com.supercli.native`): native projects + project order, pins, per-project
+//! (`li.superc.native`): native projects + project order, pins, per-project
 //! manual session order, title renames, and the archived set. This is what
 //! lets the disk-fallback sidebar match the desktop when the running app
 //! build has no `/mcp/sidebar` route (or no app runs at all). Never written.
@@ -100,7 +100,7 @@ pub fn load() -> Option<NativeOverlay> {
             return None;
         }
         let output = Command::new("defaults")
-            .args(["export", "com.supercli.native", "-"])
+            .args(["export", "li.superc.native", "-"])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -163,7 +163,7 @@ pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Resu
         if std::env::var_os("SUPERCLI_HOME").is_some_and(|v| !v.is_empty()) {
             return Err("folder colors are not supported by this Host".into());
         }
-        const DOMAIN: &str = "com.supercli.native";
+        const DOMAIN: &str = "li.superc.native";
         const KEY: &str = "supercli.native.projectFolderColors";
         let run = |args: &[&str]| {
             Command::new("defaults")
@@ -202,7 +202,7 @@ pub fn write_project_folder_color(project_id: &str, color: Option<&str>) -> Resu
     }
 }
 
-/// Parse an exported `com.supercli.native` defaults plist. Split from `load()`
+/// Parse an exported `li.superc.native` defaults plist. Split from `load()`
 /// so the dialect (blob JSON key spellings, pin tombstones) is testable
 /// without a real defaults domain.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

@@ -381,15 +381,15 @@ lease or enumerate sibling workspaces.
 
 The native `HostServiceManager` starts bundled `supercli-host __serve__`
 **through launchd**, never as its own child (`HostServiceAgent`): it writes
-`~/Library/LaunchAgents/com.supercli.native.serve.plist` (dev builds:
-`com.supercli.native.dev.serve.plist`, so a dev bundle never re-points the
+`~/Library/LaunchAgents/li.superc.native.serve.plist` (dev builds:
+`li.superc.native.dev.serve.plist`, so a dev bundle never re-points the
 real unit), bootstraps it into `gui/<uid>`, and kickstarts it whenever the
 Local connection cannot be made. It never retains or terminates the service;
 the service survives app/window exit. The lease makes simultaneous launches
 harmless, which is also why the app's unit has no `KeepAlive`: a losing
 second service exits at once, and launchd would otherwise respawn it every
 `ThrottleInterval`. The unit label is distinct from `supercli serve install`'s
-`com.supercli.serve`, so the two never rewrite each other's file.
+`li.superc.serve`, so the two never rewrite each other's file.
 
 Why launchd (2026-09-06): every process carries its parent's coalition from
 fork, and `setsid` does not leave it. Force Quit terminates the app's whole
@@ -614,7 +614,7 @@ page; never delete a workspace merely to clear a stale process.
 `/usr/local/bin/supercli`. Always per-user, never a root daemon: the service
 owns `~/.supercli`, the user Keychain, and the per-user machine lease, so a
 headless Mac needs auto-login and a headless Linux user needs
-`loginctl enable-linger`. Machine scope installs `com.supercli.serve` /
+`loginctl enable-linger`. Machine scope installs `li.superc.serve` /
 `supercli-serve.service`; a registered workspace home installs a scoped
 `--workspace NAME serve` unit. Uninstall stops the managed service and
 removes only the unit file — never workspace data, and Session hosts keep

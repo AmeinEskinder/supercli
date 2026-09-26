@@ -48,7 +48,7 @@ environment variables — nothing is committed:
 | --- | --- |
 | `SUPERCLI_APPLE_ID` | Apple ID for the Developer account |
 | `SUPERCLI_TEAM_ID` | 10-char Developer Team ID |
-| `SUPERCLI_APP_IDENTIFIER` | Bundle ID, e.g. `com.supercli.controller` |
+| `SUPERCLI_APP_IDENTIFIER` | Bundle ID, e.g. `li.superc.controller` |
 | `APP_STORE_CONNECT_API_KEY_ID` | App Store Connect API key ID |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | Issuer ID |
 | `APP_STORE_CONNECT_API_KEY_BASE64` | Base64 of the .p8 key |

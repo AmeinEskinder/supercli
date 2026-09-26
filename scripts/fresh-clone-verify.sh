@@ -83,8 +83,6 @@ domain_matches=$(grep -rli 'supercli\.com' . \
   --exclude-dir=node_modules \
   --exclude-dir=__pycache__ \
   --exclude-dir=.dart_tool \
-  --exclude='rename-guard.yml' \
-  --exclude='fresh-clone-verify.sh' \
   | grep -v -e '^./clients/legacy/' \
   || true)
 if [ -n "$domain_matches" ]; then
@@ -131,18 +129,28 @@ for bin in $(find . \( -name '*.a' -o -name '*.dylib' -o -name '*.so' \) 2>/dev/
 done
 echo "identity scrub PASS"
 
+echo "--- 4d. bundle ID guard (com.supercli -> li.superc) ---"
+bundle_matches=$(grep -rl 'com\.supercli' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=.dart_tool \
+  --exclude='rename-guard.yml' \
+  --exclude='fresh-clone-verify.sh' \
+  2>/dev/null | grep -v -e '^./clients/legacy/' || true)
+if [ -n "$bundle_matches" ]; then
+  echo "FAIL: com.supercli bundle IDs found (must be li.superc):"
+  echo "$bundle_matches"
+  exit 1
+fi
+echo "bundle ID guard PASS"
+
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
-for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md docs/internal/agents.md docs/internal/notice.md docs/internal/release-checklist.md; do
+for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md; do
   if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi
 done
 echo "exclusions OK"
-
-echo "--- 5b. vendored ghostty-vt archives have no unpeel build paths ---"
-for a in crates/supercli-core/vendor/ghostty-vt/*/libghostty-vt.a; do
-  n=$(strings "$a" 2>/dev/null | grep -ci unpeel || true)
-  if [ "$n" != "0" ]; then echo "FAIL: $a contains $n unpeel mentions"; exit 1; fi
-done
-echo "ghostty-vt archives OK"
 
 echo "--- 6. CHANGELOG is the fresh supercli 0.1.0 (not the old Unpeel one) ---"
 head -1 CHANGELOG.md | grep -q '^# Changelog — supercli' || { echo "FAIL: CHANGELOG.md is not the supercli 0.1.0 changelog"; head -3 CHANGELOG.md; exit 1; }

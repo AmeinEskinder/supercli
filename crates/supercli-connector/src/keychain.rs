@@ -7,7 +7,7 @@ use std::sync::{Arc, OnceLock};
 use supercli_client::{CredentialError, CredentialStore, KeyringStore, MemoryStore};
 
 /// Keychain service for Host-side connector tokens.
-pub const CONNECTOR_KEYCHAIN_SERVICE: &str = "com.supercli.host";
+pub const CONNECTOR_KEYCHAIN_SERVICE: &str = "li.superc.host";
 
 /// Env var forcing the in-memory connector token store. Used by tests and
 /// headless setups that must not touch the OS keychain.

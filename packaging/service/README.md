@@ -22,10 +22,10 @@ single-workspace unit — the container/explicit-unit shape. `uninstall` stops
 the service and deletes the unit file; it never touches `~/.supercli` data, and
 running Session PTYs survive a service stop by design.
 
-## macOS — per-user LaunchAgent (`com.supercli.serve.plist`)
+## macOS — per-user LaunchAgent (`li.superc.serve.plist`)
 
-Written to `~/Library/LaunchAgents/com.supercli.serve.plist` (scoped:
-`com.supercli.serve.<workspace>.plist`).
+Written to `~/Library/LaunchAgents/li.superc.serve.plist` (scoped:
+`li.superc.serve.<workspace>.plist`).
 
 This must stay a **per-user LaunchAgent**, never a root LaunchDaemon: the
 service owns `~/.supercli`, the user Keychain, and the per-user machine lease.
@@ -36,8 +36,8 @@ exists after a reboot with no one at the keyboard.
 Manual verbatim use:
 
 ```sh
-cp com.supercli.serve.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.supercli.serve.plist
+cp li.superc.serve.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/li.superc.serve.plist
 ```
 
 ## Linux — systemd user unit (`supercli-serve.service`)

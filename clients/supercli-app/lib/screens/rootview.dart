@@ -44,6 +44,6 @@ final class RootView {
   }
 
   List<UiAction> actions() => const [
-        UiAction(name: 'sidebar.toggle', keys: 'cmd+b'),
+        UiAction(name: 'sidebar.toggle', keys: 'ctrl+b'),
       ];
 }

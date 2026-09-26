@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>supercli web renderer sample</title>
+<style>
+:root { color-scheme: light dark; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
+.sc-column { display: flex; flex-direction: column; gap: 8px; }
+.sc-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-text { line-height: 1.4; }
+.sc-button { padding: 6px 12px; border: 1px solid #888; border-radius: 6px; background: #f0f0f0; cursor: pointer; }
+.sc-input { padding: 6px 10px; border: 1px solid #888; border-radius: 6px; min-width: 200px; }
+.sc-table { border-collapse: collapse; }
+.sc-table td, .sc-table th { border: 1px solid #888; padding: 4px 10px; }
+.sc-unknown { padding: 8px; border: 1px dashed #c00; border-radius: 6px; color: #c00; }
+</style>
+</head>
+<body>
+<main aria-label="supercli web renderer sample">
+<div role="group" class="sc-column" data-node-id="sample-page"><span class="sc-text" data-node-id="sample-title" style="font-size:20.0px;font-weight:700;">Sessions</span><input type="text" class="sc-input" data-node-id="sample-filter" placeholder="Filter sessions…" aria-label="Filter sessions…"><table class="sc-table" data-node-id="sample-list" data-dataset="sessions" aria-label="Data table: sessions"><caption>Dataset: sessions (resolved by host)</caption><tbody><tr><td aria-live="polite">Loading…</td></tr></tbody></table><div role="group" class="sc-row" data-node-id="sample-footer"><button type="button" class="sc-button" data-node-id="sample-new">New session</button><button type="button" class="sc-button" data-node-id="sample-archive">Archive</button></div><div role="group" class="sc-column" data-node-id="help-links"><span class="sc-text" data-node-id="help-links-title">Help &amp; downloads</span><div role="group" class="sc-row" data-node-id="help-link-row-docs"><button type="button" class="sc-button" data-node-id="help-link-docs">Documentation</button><span class="sc-text" data-node-id="help-link-desc-docs">Guides, CLI reference and troubleshooting.</span></div><div role="group" class="sc-row" data-node-id="help-link-row-download-mac"><button type="button" class="sc-button" data-node-id="help-link-download-mac">Download for macOS</button><span class="sc-text" data-node-id="help-link-desc-download-mac">The supercli desktop app for macOS.</span></div><div role="group" class="sc-row" data-node-id="help-link-row-download-ios"><button type="button" class="sc-button" data-node-id="help-link-download-ios">Download for iOS</button><span class="sc-text" data-node-id="help-link-desc-download-ios">The supercli companion app for iOS.</span></div><div role="group" class="sc-row" data-node-id="help-link-row-install-cli"><button type="button" class="sc-button" data-node-id="help-link-install-cli">Install the CLI</button><span class="sc-text" data-node-id="help-link-desc-install-cli">One-line installer for the supercli CLI.</span></div></div></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>supercli web renderer — events + hydration</title>
+<style>
+:root { color-scheme: light dark; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
+.sc-column { display: flex; flex-direction: column; gap: 8px; }
+.sc-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-text { line-height: 1.4; }
+.sc-heading { margin: 0.5em 0; }
+.sc-button { padding: 6px 12px; border: 1px solid #888; border-radius: 6px; background: #f0f0f0; cursor: pointer; }
+.sc-button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.sc-input { padding: 6px 10px; border: 1px solid #888; border-radius: 6px; min-width: 200px; }
+.sc-table { border-collapse: collapse; }
+.sc-table td, .sc-table th { border: 1px solid #888; padding: 4px 10px; }
+.sc-table tr[data-row] { cursor: pointer; }
+.sc-table tr[data-row]:hover { background: #f5f5f5; }
+.sc-list { margin: 0; padding-left: 1.5em; }
+.sc-unknown { padding: 8px; border: 1px dashed #c00; border-radius: 6px; color: #c00; }
+</style>
+</head>
+<body>
+<main aria-label="supercli web renderer — events + hydration">
+<div role="group" class="sc-column" data-node-id="page"><h1 class="sc-heading" data-node-id="h">Sessions</h1><input type="text" class="sc-input" data-node-id="q" placeholder="Filter sessions…" aria-label="Filter sessions…"><table class="sc-table" data-node-id="list" data-dataset="sessions" aria-label="Data table: sessions"><caption>Dataset: sessions (resolved by host)</caption><tbody><tr><th scope="col">Title</th><th scope="col">Updated</th></tr><tr data-row="0"><td>alpha</td><td>1m ago</td></tr><tr data-row="1"><td>beta</td><td>2h ago</td></tr></tbody></table><ul class="sc-list" data-node-id="notes"><li class="sc-listitem" data-node-id="n1">Note one</li><li class="sc-listitem" data-node-id="n2" aria-selected="true">Note two</li></ul><div role="group" class="sc-row" data-node-id="footer"><button type="button" class="sc-button" data-node-id="b1" data-action="session.new">New session</button><button type="button" class="sc-button" data-node-id="b2" disabled aria-disabled="true">Archive</button></div><a class="sc-link" data-node-id="docs" href="https://superc.li/docs" rel="noopener noreferrer">Docs</a></div>
+</main>
+<script>(function(){
+"use strict";
+var ENDPOINT="/web/event", DEBOUNCE=300, timers={};
+function post(ev){
+  try{
+    fetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(ev),keepalive:true}).catch(function(){});
+  }catch(e){}
+}
+document.addEventListener("click",function(e){
+  var t=e.target instanceof Element?e.target:null;
+  if(!t)return;
+  var row=t.closest("tr[data-row]");
+  var table=row?row.closest("table[data-node-id]"):null;
+  if(row&&table){
+    post({type:"table_selection",id:table.getAttribute("data-node-id"),
+      value:row.getAttribute("data-row")});
+    return;
+  }
+  var n=t.closest("[data-node-id]");
+  if(!n)return;
+  if(n.disabled)return;
+  post({type:"click",id:n.getAttribute("data-node-id"),
+    value:n.getAttribute("data-action")});
+},true);
+document.addEventListener("input",function(e){
+  var t=e.target;
+  if(!(t instanceof HTMLInputElement))return;
+  var id=t.getAttribute("data-node-id");
+  if(!id)return;
+  if(timers[id])clearTimeout(timers[id]);
+  timers[id]=setTimeout(function(){
+    delete timers[id];
+    post({type:"input",id:id,value:t.value});
+  },DEBOUNCE);
+},true);
+})();
+</script>
+</body>
+</html>
+

@@ -101,7 +101,7 @@ def body(case):
 
     # ── launchd (macOS) flavor ────────────────────────────────────────────
     plist = os.path.join(
-        home.root, "Library", "LaunchAgents", "com.supercli.serve.plist"
+        home.root, "Library", "LaunchAgents", "li.superc.serve.plist"
     )
     installed = cli(["serve", "install"], "launchd")
     with open(plist) as handle:
@@ -303,7 +303,7 @@ def body(case):
 
     launchd_scoped = cli(["serve", "install"], "launchd", supercli_home=workspace_home)
     scoped_plist = os.path.join(
-        home.root, "Library", "LaunchAgents", "com.supercli.serve.teama.plist"
+        home.root, "Library", "LaunchAgents", "li.superc.serve.teama.plist"
     )
     scoped_plist_body = ""
     if os.path.exists(scoped_plist):
@@ -312,7 +312,7 @@ def body(case):
     case.check(
         "a scoped LaunchAgent carries the workspace label and arguments",
         launchd_scoped.returncode == 0
-        and "<string>com.supercli.serve.teama</string>" in scoped_plist_body
+        and "<string>li.superc.serve.teama</string>" in scoped_plist_body
         and "<string>--workspace</string>" in scoped_plist_body
         and "<string>teama</string>" in scoped_plist_body,
         scoped_plist_body[:400],

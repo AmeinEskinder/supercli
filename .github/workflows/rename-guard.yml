@@ -73,8 +73,6 @@ jobs:
             --exclude-dir=node_modules \
             --exclude-dir=__pycache__ \
             --exclude-dir=.dart_tool \
-            --exclude='rename-guard.yml' \
-            --exclude='fresh-clone-verify.sh' \
             | grep -v -e '^./clients/legacy/' \
             || true)
           if [ -n "$matches" ]; then
@@ -129,3 +127,24 @@ jobs:
             if [ "$n" != "0" ]; then echo "FAIL: $bin contains $n identity mentions"; exit 1; fi
           done
           echo "PASS: 0 contributor-identity references."
+
+      - name: Check for com.supercli bundle IDs (must be li.superc)
+        run: |
+          set -euo pipefail
+          echo "Scanning for 'com.supercli' reverse-DNS bundle IDs (must be li.superc)..."
+          matches=$(grep -rl 'com\.supercli' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=.dart_tool \
+            --exclude='rename-guard.yml' \
+            --exclude='fresh-clone-verify.sh' \
+            | grep -v -e '^./clients/legacy/' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "FAIL: com.supercli bundle IDs found (must be li.superc):"
+            echo "$matches"
+            exit 1
+          fi
+          echo "PASS: 0 com.supercli bundle IDs outside clients/legacy."

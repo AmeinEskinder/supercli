@@ -1426,6 +1426,25 @@ pub fn workspace_settings_response(body: &Value) -> (u16, Value) {
     (200, json!({ "ok": true }))
 }
 
+/// Shared Host semantics for `GET /mobile/workspace-settings`
+/// (`settings.workspace.get`): reads the workspace's app-state and returns
+/// the settings in the same camelCase wire format that
+/// `workspace_settings_response` (POST) accepts, so a client can round-trip:
+/// GET → edit → POST. Uses the shared `wire_workspace_settings` projection
+/// (with the same defaults each consumer applies).
+pub fn workspace_settings_get() -> (u16, Value) {
+    let state = match crate::app_state::load() {
+        Ok(state) => state,
+        Err(e) => {
+            return (
+                500,
+                json!({ "error": format!("failed to load workspace settings: {e}") }),
+            )
+        }
+    };
+    (200, wire_workspace_settings(&state))
+}
+
 /// One preset mutation, resolved by `preset_patch_response` and applied
 /// against the shared `app-state.json` presets array.
 enum PresetApply {

@@ -1,9 +1,7 @@
 /// Barrel export for all ported macOS screens.
 library;
 
-export 'agentaccesssettingspanel.dart';
 export 'archivedsessionsview.dart';
-export 'browseraccesssections.dart';
 export 'chrome.dart';
 export 'clickablepath.dart';
 export 'commandpaletteview.dart';

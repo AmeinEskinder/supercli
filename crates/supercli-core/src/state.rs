@@ -739,7 +739,7 @@ pub struct AppState {
     /// Set by the native app's one-time fold of its UserDefaults preset
     /// overlay into this file. Once true, `presets` — array order included —
     /// is the single preset truth for every UI, and the legacy overlay
-    /// presets (`com.supercli.native` defaults) are stale copies that must be
+    /// presets (`li.superc.native` defaults) are stale copies that must be
     /// ignored.
     #[serde(default)]
     pub native_preset_overlay_migrated: bool,

@@ -23,6 +23,7 @@ pub mod control;
 pub mod devices;
 pub mod direct_path;
 pub mod driver;
+pub mod git_approval;
 pub mod hook_listener;
 pub mod hook_observer;
 pub mod local_gateway;

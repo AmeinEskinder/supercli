@@ -44,6 +44,7 @@ pub enum DocType {
     Connector,
     Device,
     FileWrite,
+    GitOp,
     /// Reserved for the idea-surface entity (ships later).
     Idea,
 }
@@ -63,6 +64,7 @@ impl DocType {
             "Connector" => Some(DocType::Connector),
             "Device" => Some(DocType::Device),
             "FileWrite" => Some(DocType::FileWrite),
+            "GitOp" => Some(DocType::GitOp),
             "Idea" => Some(DocType::Idea),
             _ => None,
         }
@@ -81,6 +83,7 @@ impl DocType {
             DocType::Connector => "Connector",
             DocType::Device => "Device",
             DocType::FileWrite => "FileWrite",
+            DocType::GitOp => "GitOp",
             DocType::Idea => "Idea",
         }
     }

@@ -10,7 +10,7 @@ It signs with a **stable** identity (auto-detected local "Apple Development"
 cert, or `CODESIGN_IDENTITY` override) on purpose — **never ad-hoc**. Ad-hoc
 signatures (`build-app.sh`'s `-` fallback) have a designated requirement equal
 to the binary's cdhash, which changes on every rebuild. The macOS Keychain ACL
-for the license item (`com.supercli.license`, see `LicenseKeychain.swift`) only
+for the license item (`li.superc.license`, see `LicenseKeychain.swift`) only
 trusts one cdhash, so an ad-hoc rebuild looks like a new app and re-triggers the
 "Supercli wants to access key …" password prompt every launch — and "Always
 Allow" can't stick because it pins the old cdhash. A stable cert anchors the
@@ -61,7 +61,7 @@ cannot steal the launch). The installed `/Applications/Supercli.app` is never
 quit. They are visually distinct: **"Supercli Dev"** in the
 menu bar with a **burnt-orange** icon background (release is dark) — quit one
 by name with `osascript -e 'quit app "Supercli Dev"'`. Both apps still share the
-bundle id `com.supercli.native`, so `open` re-focuses an already-running
+bundle id `li.superc.native`, so `open` re-focuses an already-running
 installed instance instead of launching the dev build.
 
 **In dev, always run "Supercli Dev" — and check that it says so.** Release
@@ -124,7 +124,7 @@ xcodebuild -project SupercliIOS.xcodeproj -scheme SupercliIOSApp \
   -destination 'id=<SIM_UDID>' -configuration Debug \
   -derivedDataPath /tmp/supercli-ios-dd build
 xcrun simctl install <SIM_UDID> /tmp/supercli-ios-dd/Build/Products/Debug-iphonesimulator/Supercli.app
-xcrun simctl launch <SIM_UDID> com.supercli.ios.remote
+xcrun simctl launch <SIM_UDID> li.superc.ios.remote
 ```
 
 Physical device (needs the code-signing flags — `project.yml` sets
@@ -138,7 +138,7 @@ xcodebuild -project SupercliIOS.xcodeproj -scheme SupercliIOSApp \
 xcrun devicectl device install app --device <DEVICE_UDID> \
   /tmp/supercli-ios-device/Build/Products/Debug-iphoneos/Supercli.app
 xcrun devicectl device process launch --terminate-existing \
-  --device <DEVICE_UDID> com.supercli.ios.remote
+  --device <DEVICE_UDID> li.superc.ios.remote
 ```
 
 Signing gotchas (paid-team era):

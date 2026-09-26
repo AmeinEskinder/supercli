@@ -8,7 +8,7 @@
 //! Credential Manager, Linux Secret Service via the `keyring` crate).
 //!
 //! Secrets are stored as one JSON blob per Host under the service
-//! `com.supercli.controller`, account `host:{host_id}`. The non-secret
+//! `li.superc.controller`, account `host:{host_id}`. The non-secret
 //! [`PairedHostRecord`] list and the Controller's device identity also live
 //! in the keychain (accounts `paired-hosts`, `device-identity`) — one
 //! storage seam, no home-dir convention, and it works inside the
@@ -23,7 +23,7 @@ use crate::pairing::PairedHostRecord;
 use crate::relay::RelayCredentials;
 
 /// Keychain service under which all Controller secrets are stored.
-pub const KEYCHAIN_SERVICE: &str = "com.supercli.controller";
+pub const KEYCHAIN_SERVICE: &str = "li.superc.controller";
 
 #[derive(Debug, Error)]
 pub enum CredentialError {
