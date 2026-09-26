@@ -4,7 +4,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 
 **Status values:**  (feature works, tested),  (works but incomplete),  (not implemented),  (exceeds unpeel).
 
-**Done criteria for [DESKTOP]:** rendered screenshot + test exercising the behaviour.
+**Done criteria for [DESKTOP]:** mounted in the running app (`bin/main.dart` + `lib/app.dart`), fed by real Host data (not fixtures/stubs), and proven with a real gpuidart window screenshot against a live `supercli serve` (like the earlier approve-before/after proof). Component-only work (widget + unit tests + JSON-dump render) is `partial (component)`, not `done`.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 |-----|-------|------|---------|---------|----------|
 | [APPS] | 17 | 3 | 13 | 1 | 0 |
 | [CLI] | 40 | 40 (inherited) | 0 | 0 | 0 |
-| [DESKTOP] | 70 | 1 | 27 | 42 | 0 |
+| [DESKTOP] | 70 | 0 | 32 | 38 | 0 |
 | [DIST] | 3 | 2 | 1 | 0 | 0 |
 | [HOST] | 78 | 78 (inherited) | 0 | 0 | 0 |
 | [IOS] | 25 | 0 | 0 | 25 | 0 |
@@ -175,7 +175,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 148 | [WEB] | Hosted installer endpoints (`unpeel.com/install.sh`, per-App `install/<app>/install.sh`) with channel selection (alpha/beta/stable) | done | `scripts/install.sh`, `scripts/install-app.sh` | — |
 | 149 | [WEB] | Help/docs/download links (unpeel.com/docs, /download/mac, /ios) referenced from the apps | missing | — | — |
 | 150 | [DESKTOP] | App shell: resizable vibrancy sidebar, custom titlebar, ⌘B toggle | partial | clients/supercli-app/lib/screens/rootview.dart, chrome.dart (scaffold bbd8b70) | screens_test.dart (RootView layout) |
-| 151 | [DESKTOP] | Project/session tree with pins, groups, worktree folders, attention dot and busy spinners | done | clients/supercli-app/lib/screens/sidebarview.dart, projectsidebarview.dart (track-b-parity-sidebar) | test/sidebar_test.dart (31 tests: rows, filter, pinned-first, worktree dedup) + proof-screenshots/parity-sidebar.png |
+| 151 | [DESKTOP] | Project/session tree with pins, groups, worktree folders, attention dot and busy spinners | partial (component) | clients/supercli-app/lib/screens/sidebarview.dart, projectsidebarview.dart (track-b-parity-sidebar) | test/sidebar_test.dart (31 tests: rows, filter, pinned-first, worktree dedup) + proof-screenshots/parity-sidebar.png |
 | 152 | [DESKTOP] | Detached drag of sessions/projects (reorder, move to group, drop-to-split) | partial | clients/supercli-app/lib/screens/projectsidebarview.dart `SidebarSessionDrag` (track-b-parity-sidebar); live drag needs gpuidart DnD, see docs/gpuidart-gaps-sidebar.md G-1 | test/sidebar_test.dart (drag validation: self-drop, same-group no-op, split target) |
 | 153 | [DESKTOP] | Session context menu (rename, copy ID, copy transcript, notify when done, clear attention, resume, restart app, reveal, pin, stop and archive, remove) | partial | clients/supercli-app/lib/screens/sidebarview.dart `SessionContextMenu` (track-b-parity-sidebar); all 11 items render as buttons, click-id decoding; popup anchoring needs framework menu, see docs/gpuidart-gaps-sidebar.md G-2 | test/sidebar_test.dart (item list, unique actions, id decoding) + proof-screenshots/parity-sidebar.png |
 | 154 | [DESKTOP] | Project context menu (new worktree, new group, rename, stop all, sort, folder color, archived, open in editor, move to workspace) | partial | clients/supercli-app/lib/screens/sidebarview.dart `ProjectContextMenu` (track-b-parity-sidebar); all 9 items render as buttons; popup anchoring needs framework menu, see docs/gpuidart-gaps-sidebar.md G-2 | test/sidebar_test.dart (item list) + proof-screenshots/parity-sidebar.png |
@@ -192,11 +192,11 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 165 | [DESKTOP] | ⌃Tab MRU session switcher | partial | `clients/supercli-app/lib/screens/commandpaletteview.dart` (MruSwitcher, MruSwitcherView) | `test/command_palette_test.dart` (33 tests) |
 | 166 | [DESKTOP] | ⌘1–9 session switching and ⌃1–9 project switching with held-key hints | missing | - | - |
 | 167 | [DESKTOP] | Recent activity page (⇧⌘R) and titlebar activity bell dropdown | partial | clients/supercli-app/lib/screens/recentactivityview.dart, globalactivitymenu.dart (bbd8b70) | - |
-| 168 | [DESKTOP] | Toast notifications (for example, device connected) | done | clients/supercli-app/lib/screens/toastcenter.dart (queue-driven, auto-dismiss TTL, click-to-focus; RLE fallback) + lib/notifications.dart (NotificationQueue: FIFO, bounded eviction, TTL prune) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: queue FIFO/evict/TTL/dismiss, toast render/dismiss/focus); screenshot docs/internal/proofs/proof-screenshots/parity-approvals.png |
+| 168 | [DESKTOP] | Toast notifications (for example, device connected) | partial (component) | clients/supercli-app/lib/screens/toastcenter.dart (queue-driven, auto-dismiss TTL, click-to-focus; RLE fallback) + lib/notifications.dart (NotificationQueue: FIFO, bounded eviction, TTL prune) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: queue FIFO/evict/TTL/dismiss, toast render/dismiss/focus); screenshot docs/internal/proofs/proof-screenshots/parity-approvals.png |
 | 169 | [DESKTOP] | libghostty Metal terminal surfaces, retained per session | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (54 lines, bbd8b70) | - |
 | 170 | [DESKTOP] | Remote-host panes rendered via in-memory Ghostty surfaces (same UI as local) | missing | - | - |
-| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | done | clients/supercli-app/lib/pane_layout.dart (PaneLayout split H/V, 8-pane limit, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
-| 172 | [DESKTOP] | Zoom pane (⇧⌘↩), Equalize splits, spatial focus (⌥⌘ arrows) | done | clients/supercli-app/lib/pane_layout.dart (zoom/unzoom/toggle, equalize, focusDirection, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
+| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | partial (component) | clients/supercli-app/lib/pane_layout.dart (PaneLayout split H/V, 8-pane limit, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
+| 172 | [DESKTOP] | Zoom pane (⇧⌘↩), Equalize splits, spatial focus (⌥⌘ arrows) | partial (component) | clients/supercli-app/lib/pane_layout.dart (zoom/unzoom/toggle, equalize, focusDirection, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
 | 173 | [DESKTOP] | Detach Pane / Exit Multi-Pane View | partial | clients/supercli-app/lib/screens/terminalpanewindow.dart (TerminalPaneWindow exists; needs gpuidart multi-window P0-14) | - |
 | 174 | [DESKTOP] | Pane header menu with Agents/Plugins launch sections | missing | - | - |
 | 175 | [DESKTOP] | Transient launcher pane for new sessions in a group | partial | clients/supercli-app/lib/screens/sessionlauncherview.dart (35 lines, bbd8b70) | - |
@@ -210,7 +210,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 183 | [DESKTOP] | Restart recommendation banner | missing | - | - |
 | 184 | [DESKTOP] | Agent TUI background color matching for chrome | missing | - | - |
 | 185 | [DESKTOP] | Viewer presence avatars and "Fit to desktop" control | partial | clients/supercli-app/lib/screens/vieweravatarsview.dart (20 lines, bbd8b70) | - |
-| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | done | clients/supercli-app/lib/screens/mcpapprovalpanel.dart (McpApprovalPanel: attention dot, tool/summary/detail, N-more-waiting, Allow Ctrl+Enter / Don't Allow Ctrl+Shift+Enter / Edit Ctrl+E; ApprovalsPanel list with selection; RLE fallback) + lib/app.dart (de51bb2 inline card) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: approve/deny/edit decision flow, key bindings, list empty/count/selection) + test/app_test.dart; screenshots docs/internal/proofs/proof-screenshots/approve-{before,after}.png, deny-{before,after}.png, parity-approvals.png |
+| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | partial (component) | clients/supercli-app/lib/screens/mcpapprovalpanel.dart (McpApprovalPanel: attention dot, tool/summary/detail, N-more-waiting, Allow Ctrl+Enter / Don't Allow Ctrl+Shift+Enter / Edit Ctrl+E; ApprovalsPanel list with selection; RLE fallback) + lib/app.dart (de51bb2 inline card) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: approve/deny/edit decision flow, key bindings, list empty/count/selection) + test/app_test.dart; screenshots docs/internal/proofs/proof-screenshots/approve-{before,after}.png, deny-{before,after}.png, parity-approvals.png |
 | 187 | [DESKTOP] | Session gallery panel (screenshots, downloads, uploads) | partial | clients/supercli-app/lib/screens/sessiongallerypanel.dart (50 lines, bbd8b70) | - |
 | 188 | [DESKTOP] | Gallery arrow + crop markup and "Add to prompt" | missing | clients/supercli-app/lib/screens/sessiongallerymarkup.dart (6-line re-export, bbd8b70) | - |
 | 189 | [DESKTOP] | Take Screenshot (⇧⌘S) into the session and attach it to the prompt | partial | clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (21 lines, bbd8b70) | - |
