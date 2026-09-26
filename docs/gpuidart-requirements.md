@@ -213,13 +213,115 @@ final frame = UiDeviceFrame('device-1',
 The supercli desktop app (clients/supercli-app) is built on gpuidart 135d300.
 Gaps hit during implementation, in priority order:
 
-### P0-8. Programmatic focus API (NEW)
+### P0-8. Terminal pane widget (NEW — for Amein)
+**Status:** Missing. **Blocks:** the entire desktop terminal surface (checklist [DESKTOP] 169-184).
+The desktop app needs a native terminal pane that renders ghostty-vt screen
+state. This is the single most important widget for supercli desktop parity.
+
+**Requirements:**
+- Monospace glyph grid rendering from ghostty-vt screen state
+- 256-color and truecolor (24-bit) attributes
+- Cursor styles (block, underline, bar; blinking/steady)
+- Text selection with mouse + keyboard, plus copy to clipboard
+- Scrollback buffer (configurable lines, mouse wheel + scrollbar)
+- IME/keyboard input (all key events, dead keys, compose sequences)
+- Bracketed paste support
+- Mouse reporting (SGR 1006 mode: click, drag, scroll, motion)
+- Ligature-free fast path (no shaping latency on the hot path)
+- 60 fps damage-only redraw (only dirty cells re-rendered)
+
+**Proposed API sketch:**
+
+```dart
+// A terminal pane driven by ghostty-vt screen state from the Rust host.
+class UiTerminal extends UiNode {
+  UiTerminal({
+    // Grid dimensions (columns x rows). Resizing the widget should
+    // notify the host so the PTY is resized (SIGWINCH).
+    required int cols,
+    required int rows,
+
+    // Font configuration. Must be monospace; the widget measures the
+    // cell size from the font and lays out cols x rows cells.
+    required String fontFamily,
+    required double fontSize,
+    double lineHeight = 1.2,
+
+    // Color scheme: 16 ANSI colors + foreground/background/cursor/selection.
+    // Truecolor cells override these per-cell.
+    required TerminalTheme theme,
+
+    // Scrollback buffer size in lines (0 = no scrollback).
+    int scrollbackLines = 10000,
+
+    // Callbacks into the app (which forwards to the Rust host):
+    // - onInput(bytes): raw bytes to write to the PTY (keyboard, bracketed paste)
+    // - onResize(cols, rows): widget resized, PTY must follow
+    // - onCopy(text): user copied selection (for clipboard integration)
+    void Function(List<int> bytes)? onInput,
+    void Function(int cols, int rows)? onResize,
+    void Function(String text)? onCopy,
+  });
+
+  // Push a screen-state update from ghostty-vt.
+  // The update carries only damaged cells (damage-only redraw for 60fps).
+  void updateCells(TerminalDamage damage);
+
+  // Set the cursor position and style.
+  void setCursor(int col, int row, CursorStyle style, bool visible);
+
+  // Scrollback navigation (for scrollbar / Shift+PageUp).
+  void scrollTo(int lineOffset);
+}
+
+// One damaged region: rectangular range of cells that changed.
+class TerminalDamage {
+  // List of (row, col, cell) triples for cells that changed.
+  final List<TerminalCell> cells;
+  // Optional scroll region: lines [top, bottom) moved by `delta` rows
+  // (positive = content moved down). Lets the renderer blit instead of
+  // re-drawing every cell on scroll.
+  final TerminalScroll? scroll;
+}
+
+class TerminalCell {
+  final int row, col;
+  // The grapheme cluster to render (usually 1 char; wide chars occupy
+  // 2 columns — the second column is a placeholder).
+  final String text;
+  final int fgColor; // 0xRRGGBB, or ANSI 0-255 index with flag
+  final int bgColor;
+  final bool bold, italic, underline, strikethrough, inverse, dim;
+  final int underlineColor; // for colored underlines (e.g. diagnostics)
+}
+
+class TerminalTheme {
+  final int foreground, background, cursor, selection;
+  final List<int> ansi16; // 16 ANSI colors as 0xRRGGBB
+}
+
+enum CursorStyle { block, underline, bar }
+```
+
+**Data flow:**
+1. Rust host owns the ghostty-vt parser per session.
+2. On PTY output, host diffs the grid, builds a `TerminalDamage` with only changed cells.
+3. Damage is pushed to the Dart UI thread (via the existing event-push pattern, P0-5).
+4. Widget re-renders only damaged cells at 60fps (vsync-batched).
+5. Keyboard/mouse input goes Dart → `onInput` → host writes to PTY.
+
+**Non-goals for v1:** ligatures (explicitly ligature-free fast path), image protocols
+(Sixel/iTerm2 — log as separate P1), smooth pixel-level scrolling (cell snapping is fine).
+
+### P0-16. Programmatic focus API (was P0-8, renumbered 2026-09-26)
 **Status:** Missing. **Blocks:** keyboard-first workflow.
 Today there is no way to move focus via code (e.g. focus the composer on
 startup, or focus the approval card when an approval arrives). The app logs
 `gap: programmatic focus not available in gpuidart` when the `composer.focus`
 action fires. Need: `host.focus(nodeId)` or a focus request in the snapshot,
 plus a `focused` event so the app knows where focus landed.
+**Note:** Renumbered from P0-8 to P0-16 on 2026-09-26; P0-8 is now the terminal
+pane widget per Amein.
 
 ### P0-1. Approval card widget (in use via primitives)
 **Status:** Using UiRow + UiText + UiButton as a stopgap.
