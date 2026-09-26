@@ -1,0 +1,64 @@
+# Compile-verify the Apple-target objc2 bindings in supercli-native-bridge.
+#
+# The platform/ modules (notifications, push, speech, menu_bar, file_picker,
+# updater, app_lifecycle) use objc2 against AppKit/UIKit/UserNotifications.
+# They are cfg-gated and only compile on Apple targets, so Linux CI can never
+# verify them. This job runs on macOS and type-checks, tests, lints and
+# format-checks the crate for aarch64-apple-darwin (+ x86_64 check).
+name: macos-objc2
+
+on:
+  push:
+    branches:
+      - 'track-b*'
+      - 'supercli*'
+    paths:
+      - 'crates/supercli-native-bridge/**'
+      - '.github/workflows/macos-objc2.yml'
+  pull_request:
+    paths:
+      - 'crates/supercli-native-bridge/**'
+      - '.github/workflows/macos-objc2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-objc2-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: '1.88.0'
+
+jobs:
+  objc2-apple:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + Apple targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+
+      - name: Check Apple-target objc2 bindings (aarch64)
+        run: cargo check -p supercli-native-bridge --target aarch64-apple-darwin
+
+      - name: Check Apple-target objc2 bindings (x86_64)
+        run: cargo check -p supercli-native-bridge --target x86_64-apple-darwin
+
+      - name: Unit tests (platform-gated)
+        run: cargo test -p supercli-native-bridge --lib
+
+      - name: Clippy (Apple target, warnings denied)
+        run: cargo clippy -p supercli-native-bridge --target aarch64-apple-darwin -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --check -p supercli-native-bridge
