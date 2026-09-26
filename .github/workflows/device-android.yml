@@ -2,15 +2,29 @@
 #
 # Runs on every push to track-b-device (and manual dispatch). Boots a real
 # emulator with KVM (no window, no audio), then drives it through
-# crates/supercli-device/src/scrcpy_native.rs:
-#   - connects (jar deploy + SHA-256, port forward, server start)
+# crates/supercli-device/src/scrcpy_native.rs at two resolutions:
+#   - full device resolution (1080x2400, max_size unset)
+#   - max_size=720
+# Each run:
+#   - connects (jar deploy + SHA-256, port forward, server start,
+#     v2.x forward-tunnel handshake)
 #   - fps measured over 60 s WHILE ANIMATING (Settings + fling-scroll loop:
 #     scrcpy only emits frames on screen change, so static-screen fps is
-#     meaningless)
+#     meaningless). The emulator's OWN render rate (dumpsys gfxinfo) is
+#     recorded alongside, so we know whether the renderer or the
+#     (software) encoder is the bottleneck.
 #   - tap-to-frame p50/p95: native control channel vs `adb shell input`
 #     (20 trials each, swipe-up/HOME alternating; no-frame-in-1s = miss)
 #   - two-pointer pinch
-# Uploads: screenshot.png, test-10s.mkv, metrics.json.
+#
+# CI is a CORRECTNESS gate, not a performance gate: the runner has no GPU
+# (SwiftShader + software encode on 2-4 vCPUs), so 60 fps is not achievable
+# there. Gates: handshake works, >= 100 packets, pinch ok, HOME ok,
+# misses <= 10%, control p50 < adb p50. fps and latency are recorded as
+# NUMBERS in metrics.json, not gates.
+#
+# Uploads: screenshot.png, test-10s.mkv, metrics.json (both resolutions),
+# per-run logs and metrics.
 #
 # Device profile: pixel_7 (1080x2400) so the numbers mean something; the
 # default tiny skin (320x640) is not representative. max_size is unset.
@@ -79,14 +93,17 @@ jobs:
         with:
           name: android-test-results
           path: |
-            e2e.log
+            e2e-full.log
+            e2e-720.log
             e2e-logcat.txt
             e2e-logcat-scrcpy.txt
             e2e-server-ps.txt
             screenshot.png
             test-10s.mkv
             metrics.json
+            metrics-full.json
+            metrics-720.json
             smoke-server.log
-          # e2e.log / logcat exist even when the test fails; the media
-          # files only exist on success.
+          # Logs exist even when the test fails; the media files and
+          # per-run metrics only exist when their run completes.
           if-no-files-found: warn

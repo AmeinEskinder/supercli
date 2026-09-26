@@ -76,19 +76,65 @@ sleep 2
 cp "$RUNNER_TEMP/smoke-server.log" "$GITHUB_WORKSPACE/smoke-server.log" || true
 echo "=== stage: shell_smoke_test_done ==="
 
-# Real proof: connect through scrcpy_native, read >=600 H.264 packets,
-# measure fps / tap latency / pinch.
+# Real proof: connect through scrcpy_native at full device resolution
+# (1080x2400, max_size unset) and at max_size=720, measure fps /
+# tap latency / pinch for each. Both runs share the same correctness
+# gates (>= 100 packets, pinch ok, HOME ok, misses <= 10%,
+# control p50 < adb p50); fps is recorded, not gated.
 cd "$GITHUB_WORKSPACE/crates"
-echo "=== stage: cargo_test_start ==="
+echo "=== stage: cargo_test_fullres_start ==="
 set +e
 SUPERCLI_ANDROID_E2E=1 \
 ANDROID_SERIAL="$SERIAL" \
-METRICS_OUT="$GITHUB_WORKSPACE/metrics.json" \
+METRICS_OUT="$GITHUB_WORKSPACE/metrics-full.json" \
 cargo test -p supercli-device --features device \
-  --test android_e2e -- --nocapture > "$GITHUB_WORKSPACE/e2e.log" 2>&1
-TEST_STATUS=$?
+  --test android_e2e -- --nocapture > "$GITHUB_WORKSPACE/e2e-full.log" 2>&1
+FULL_STATUS=$?
 set -e
-echo "=== stage: cargo_test_done exit=$TEST_STATUS (full output in e2e.log) ==="
+echo "=== stage: cargo_test_fullres_done exit=$FULL_STATUS ==="
+
+echo "=== stage: cargo_test_720_start ==="
+set +e
+SUPERCLI_ANDROID_E2E=1 \
+ANDROID_SERIAL="$SERIAL" \
+SCRCPY_MAX_SIZE=720 \
+METRICS_OUT="$GITHUB_WORKSPACE/metrics-720.json" \
+cargo test -p supercli-device --features device \
+  --test android_e2e -- --nocapture > "$GITHUB_WORKSPACE/e2e-720.log" 2>&1
+TEST_720_STATUS=$?
+set -e
+echo "=== stage: cargo_test_720_done exit=$TEST_720_STATUS ==="
+
+# Merge both runs' metrics into one metrics.json for the artifact.
+# The combined file reports both resolutions side by side.
+if [ -f "$GITHUB_WORKSPACE/metrics-full.json" ] && [ -f "$GITHUB_WORKSPACE/metrics-720.json" ]; then
+  {
+    echo "{"
+    echo "  \"full_resolution\": "
+    sed 's/^/    /' "$GITHUB_WORKSPACE/metrics-full.json" | sed 's/^    {/    {/' 
+    echo "  ,"
+    echo "  \"max_size_720\": "
+    sed 's/^/    /' "$GITHUB_WORKSPACE/metrics-720.json"
+    echo "}"
+  } > "$GITHUB_WORKSPACE/metrics.json"
+  echo "=== merged metrics.json ==="
+  cat "$GITHUB_WORKSPACE/metrics.json"
+elif [ -f "$GITHUB_WORKSPACE/metrics-full.json" ]; then
+  cp "$GITHUB_WORKSPACE/metrics-full.json" "$GITHUB_WORKSPACE/metrics.json"
+  echo "=== only full-res metrics available ==="
+else
+  echo "=== no metrics.json (neither test completed) ==="
+fi
+
+# Overall status: both runs must pass.
+if [ "$FULL_STATUS" -ne 0 ]; then
+  TEST_STATUS=$FULL_STATUS
+elif [ "$TEST_720_STATUS" -ne 0 ]; then
+  TEST_STATUS=$TEST_720_STATUS
+else
+  TEST_STATUS=0
+fi
+echo "=== stage: cargo_test_done full=$FULL_STATUS 720=$TEST_720_STATUS overall=$TEST_STATUS ==="
 
 # --- Publish key diagnostics to the GitHub Step Summary -------------------
 # The step summary is visible on the public Actions run page WITHOUT
@@ -97,20 +143,34 @@ echo "=== stage: cargo_test_done exit=$TEST_STATUS (full output in e2e.log) ==="
 {
   echo "## Android E2E Diagnostics"
   echo ""
-  echo "**Test exit code:** $TEST_STATUS"
+  echo "**Full-res test exit code:** $FULL_STATUS"
+  echo "**max_size=720 test exit code:** $TEST_720_STATUS"
   echo ""
-  echo "### Last 50 lines of e2e.log"
+  echo "### Last 30 lines of e2e-full.log"
   echo '```'
-  tail -50 "$GITHUB_WORKSPACE/e2e.log" 2>/dev/null || echo "(no e2e.log)"
+  tail -30 "$GITHUB_WORKSPACE/e2e-full.log" 2>/dev/null || echo "(no e2e-full.log)"
+  echo '```'
+  echo ""
+  echo "### Last 30 lines of e2e-720.log"
+  echo '```'
+  tail -30 "$GITHUB_WORKSPACE/e2e-720.log" 2>/dev/null || echo "(no e2e-720.log)"
   echo '```'
   echo ""
   echo "### scrcpy errors from logcat"
   echo '```'
   grep -i "scrcpy\|E/" "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null | tail -20 || echo "(no matches)"
   echo '```'
+  echo ""
+  echo "### metrics.json (both resolutions)"
+  echo '```json'
+  cat "$GITHUB_WORKSPACE/metrics.json" 2>/dev/null || echo "(no metrics.json)"
+  echo '```'
 } >> "$GITHUB_STEP_SUMMARY" || true
 echo "=== stage: summary_written ==="
-tail -60 "$GITHUB_WORKSPACE/e2e.log" || true
+echo "--- e2e-full.log tail ---"
+tail -30 "$GITHUB_WORKSPACE/e2e-full.log" || true
+echo "--- e2e-720.log tail ---"
+tail -30 "$GITHUB_WORKSPACE/e2e-720.log" || true
 
 # Diagnostics are collected even when the test fails (upload step runs
 # `if: always()`), so the next failure explains itself.
@@ -120,16 +180,18 @@ adb -s "$SERIAL" logcat -d 2>/dev/null | grep -i scrcpy > "$GITHUB_WORKSPACE/e2e
 adb -s "$SERIAL" shell ps -A 2>/dev/null | grep -i -E "scrcpy|app_process" \
   > "$GITHUB_WORKSPACE/e2e-server-ps.txt" 2>/dev/null || true
 
-# On failure, surface the tail of e2e.log as workflow annotations. These
+# On failure, surface the tail of both logs as workflow annotations. These
 # are visible on the public run page AND via the unauthenticated check-runs
 # API, so a failure can be diagnosed without artifact-download auth.
 if [ "$TEST_STATUS" -ne 0 ]; then
-  echo "::error::android e2e cargo test exited $TEST_STATUS"
-  grep -E "panicked|FAILED|failures:|e2e: (FATAL|stage=)" "$GITHUB_WORKSPACE/e2e.log" 2>/dev/null \
-    | tail -15 | while IFS= read -r line; do
-      # Annotations must be single-line; truncate pathological lines.
-      echo "::error::${line:0:400}"
-    done
+  echo "::error::android e2e failed (full=$FULL_STATUS 720=$TEST_720_STATUS)"
+  for log in "$GITHUB_WORKSPACE/e2e-full.log" "$GITHUB_WORKSPACE/e2e-720.log"; do
+    grep -E "panicked|FAILED|failures:|e2e: (FATAL|stage=)" "$log" 2>/dev/null \
+      | tail -8 | while IFS= read -r line; do
+        # Annotations must be single-line; truncate pathological lines.
+        echo "::error::[$(basename "$log")] ${line:0:400}"
+      done
+  done
 fi
 
 # Screenshot artifact (best effort on failure).

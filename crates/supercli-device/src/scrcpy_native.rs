@@ -793,10 +793,19 @@ fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
     // c2.android.avc.encoder for emulators, but if that specific encoder
     // is absent the server hangs during MediaCodec init (45s timeout).
     // Let scrcpy pick the default encoder.
+    //
+    // SCRCPY_MAX_SIZE (env): when set, appends `max_size=N` to cap the
+    // video resolution (e.g. 720 for a second CI run at lower res). Unset
+    // means full device resolution.
+    let max_size_arg = std::env::var("SCRCPY_MAX_SIZE")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| format!(" max_size={}", v.trim()))
+        .unwrap_or_default();
     let server_cmd = format!(
         "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
          tunnel_forward=true audio=false control=true cleanup=false \
-         video_codec=h264 max_fps=60",
+         video_codec=h264 max_fps=60{max_size_arg}",
         SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");
