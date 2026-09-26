@@ -19,6 +19,9 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import 'terminal/terminal_pane.dart';
+import 'terminal/terminal_state.dart';
+
 /// Maximum leaf panes per window (upstream limit).
 const int maxPanes = 8;
 
@@ -26,6 +29,7 @@ const int maxPanes = 8;
 enum SplitDirection {
   /// Side-by-side (left | right).
   horizontal,
+
   /// Stacked (top / bottom).
   vertical,
 }
@@ -71,11 +75,26 @@ final class PaneLeaf extends PaneNode {
     required this.paneId,
     required this.title,
     this.statusText = '',
+    this.terminalState,
   });
 
   final String paneId;
   final String title;
   final String statusText;
+
+  /// Live terminal grid for this pane, fed from the session's output
+  /// journal (see `lib/session_output.dart`). When non-null the pane body
+  /// renders the P0-8 [TerminalPane] RLE fallback grid instead of the
+  /// `[$title]` placeholder. Ephemeral view state: excluded from ==.
+  final TerminalState? terminalState;
+
+  /// Copy with a live terminal state attached (or detached when null).
+  PaneLeaf withTerminalState(TerminalState? state) => PaneLeaf(
+    paneId: paneId,
+    title: title,
+    statusText: statusText,
+    terminalState: state,
+  );
 
   @override
   int get leafCount => 1;
@@ -109,11 +128,27 @@ final class PaneLeaf extends PaneNode {
         UiButton('pane-split-v-$paneId', '◧'),
         UiButton('pane-close-$paneId', '×'),
       ]),
-      UiText(
-        'pane-body-$paneId',
-        statusText.isEmpty ? '[$title]' : statusText,
-      ),
+      _buildBody(),
     ]);
+  }
+
+  /// The pane body: the live P0-8 terminal grid when a session output
+  /// stream is attached, else the legacy placeholder text.
+  UiNode _buildBody() {
+    final state = terminalState;
+    if (state != null) {
+      // Attached pane: real terminal output through the P0-8 widget's
+      // RLE fallback grid (UiTerminal native node still pending).
+      return TerminalPane(
+        paneId: paneId,
+        title: title,
+        state: state,
+      ).buildFallback();
+    }
+    return UiText(
+      'pane-body-$paneId',
+      statusText.isEmpty ? '[$title]' : statusText,
+    );
   }
 
   @override
@@ -152,13 +187,12 @@ final class PaneSplit extends PaneNode {
     PaneNode? first,
     PaneNode? second,
     double? ratio,
-  }) =>
-      PaneSplit(
-        direction: direction ?? this.direction,
-        first: first ?? this.first,
-        second: second ?? this.second,
-        ratio: ratio ?? this.ratio,
-      );
+  }) => PaneSplit(
+    direction: direction ?? this.direction,
+    first: first ?? this.first,
+    second: second ?? this.second,
+    ratio: ratio ?? this.ratio,
+  );
 
   @override
   int get leafCount => first.leafCount + second.leafCount;
@@ -201,12 +235,11 @@ final class PaneSplit extends PaneNode {
 
   /// Reset all divider ratios in this subtree to 0.5.
   PaneSplit equalized() => PaneSplit(
-        direction: direction,
-        first: first is PaneSplit ? (first as PaneSplit).equalized() : first,
-        second:
-            second is PaneSplit ? (second as PaneSplit).equalized() : second,
-        ratio: 0.5,
-      );
+    direction: direction,
+    first: first is PaneSplit ? (first as PaneSplit).equalized() : first,
+    second: second is PaneSplit ? (second as PaneSplit).equalized() : second,
+    ratio: 0.5,
+  );
 
   @override
   UiNode build({
@@ -215,10 +248,16 @@ final class PaneSplit extends PaneNode {
     required int depth,
   }) {
     final dividerId = 'pane-divider-d$depth-${direction.name}';
-    final firstNode =
-        first.build(focusedId: focusedId, zoomedId: zoomedId, depth: depth + 1);
-    final secondNode = second
-        .build(focusedId: focusedId, zoomedId: zoomedId, depth: depth + 1);
+    final firstNode = first.build(
+      focusedId: focusedId,
+      zoomedId: zoomedId,
+      depth: depth + 1,
+    );
+    final secondNode = second.build(
+      focusedId: focusedId,
+      zoomedId: zoomedId,
+      depth: depth + 1,
+    );
     // Dividers render as button strips (no native divider in gpuidart, P0-9).
     final divider = direction == SplitDirection.horizontal
         ? UiButton(dividerId, '│')
@@ -244,11 +283,7 @@ final class PaneSplit extends PaneNode {
 /// All mutations return a new [PaneLayout] (immutable model); the caller
 /// pushes the new layout into the app state.
 final class PaneLayout {
-  const PaneLayout({
-    required this.root,
-    this.focusedId,
-    this.zoomedId,
-  });
+  const PaneLayout({required this.root, this.focusedId, this.zoomedId});
 
   /// Single-pane initial layout.
   factory PaneLayout.single({required String paneId, required String title}) =>
@@ -268,12 +303,11 @@ final class PaneLayout {
     PaneNode? root,
     String? Function()? focusedId,
     String? Function()? zoomedId,
-  }) =>
-      PaneLayout(
-        root: root ?? this.root,
-        focusedId: focusedId != null ? focusedId() : this.focusedId,
-        zoomedId: zoomedId != null ? zoomedId() : this.zoomedId,
-      );
+  }) => PaneLayout(
+    root: root ?? this.root,
+    focusedId: focusedId != null ? focusedId() : this.focusedId,
+    zoomedId: zoomedId != null ? zoomedId() : this.zoomedId,
+  );
 
   /// Split [paneId] (or the focused pane) in [direction], adding a new pane
   /// with [newPaneId]/[newTitle]. Returns null at the 8-pane limit.
@@ -346,8 +380,9 @@ final class PaneLayout {
             node.second.findLeaf(paneId) != null) {
           // Only adjust the *innermost* split containing the pane: recurse
           // first so deeper splits win.
-          final newFirst =
-              node.first.findLeaf(paneId) != null ? update(node.first) : node.first;
+          final newFirst = node.first.findLeaf(paneId) != null
+              ? update(node.first)
+              : node.first;
           final newSecond = node.second.findLeaf(paneId) != null
               ? update(node.second)
               : node.second;
@@ -415,11 +450,11 @@ final class PaneLayout {
         case PaneLeaf(paneId: final id):
           boxes[id] = (l, t, r, b);
         case PaneSplit(
-            direction: final dir,
-            first: final f,
-            second: final s,
-            ratio: final ratio
-          ):
+          direction: final dir,
+          first: final f,
+          second: final s,
+          ratio: final ratio,
+        ):
           if (dir == SplitDirection.horizontal) {
             final mid = l + (r - l) * ratio;
             walk(f, l, t, mid, b);
@@ -497,59 +532,72 @@ final class PaneLayout {
 
   /// Key bindings for pane management, scoped to the terminal area node.
   List<UiAction> actions() => const [
-        UiAction(
-            name: 'pane.splitRight',
-            keys: 'ctrl+d',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.splitDown',
-            keys: 'shift+ctrl+d',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.zoom',
-            keys: 'shift+ctrl+enter',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.equalize',
-            keys: 'ctrl+shift+e',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.close',
-            keys: 'ctrl+w',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.detach',
-            keys: 'ctrl+shift+o',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusLeft',
-            keys: 'alt+ctrl+left',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusRight',
-            keys: 'alt+ctrl+right',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusUp',
-            keys: 'alt+ctrl+up',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusDown',
-            keys: 'alt+ctrl+down',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusNext',
-            keys: 'ctrl+tab',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'pane.focusPrev',
-            keys: 'ctrl+shift+tab',
-            context: UiActionContext.node('pane-layout')),
-        UiAction(
-            name: 'find.show',
-            keys: 'ctrl+f',
-            context: UiActionContext.node('pane-layout')),
-      ];
+    UiAction(
+      name: 'pane.splitRight',
+      keys: 'ctrl+d',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.splitDown',
+      keys: 'shift+ctrl+d',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.zoom',
+      keys: 'shift+ctrl+enter',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.equalize',
+      keys: 'ctrl+shift+e',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.close',
+      keys: 'ctrl+w',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.detach',
+      keys: 'ctrl+shift+o',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusLeft',
+      keys: 'alt+ctrl+left',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusRight',
+      keys: 'alt+ctrl+right',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusUp',
+      keys: 'alt+ctrl+up',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusDown',
+      keys: 'alt+ctrl+down',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusNext',
+      keys: 'ctrl+tab',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'pane.focusPrev',
+      keys: 'ctrl+shift+tab',
+      context: UiActionContext.node('pane-layout'),
+    ),
+    UiAction(
+      name: 'find.show',
+      keys: 'ctrl+f',
+      context: UiActionContext.node('pane-layout'),
+    ),
+  ];
 
   Map<String, Object> toJson() {
     final map = <String, Object>{'root': root.toJson()};

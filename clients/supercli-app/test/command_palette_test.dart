@@ -9,31 +9,49 @@ import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/keybindings.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/platform_keys.dart';
 import 'package:supercli_app/screens/commandpaletteview.dart';
 import 'package:supercli_app/widgets/list_navigation.dart';
 import 'package:test/test.dart';
 
 List<PaletteCommand> sampleCommands() => const [
-      PaletteCommand(id: 'new-session', title: 'New Session', shortcut: 'meta+n'),
-      PaletteCommand(id: 'open-settings', title: 'Open Settings', shortcut: 'meta+,'),
-      PaletteCommand(
-          id: 'sess-web', title: 'web — npm run dev', kind: PaletteCommandKind.session),
-      PaletteCommand(
-          id: 'sess-api', title: 'api — cargo watch', kind: PaletteCommandKind.session),
-      PaletteCommand(
-          id: 'preset-rust', title: 'Rust preset', kind: PaletteCommandKind.preset),
-    ];
-
+  PaletteCommand(id: 'new-session', title: 'New Session', shortcut: 'meta+n'),
+  PaletteCommand(
+    id: 'open-settings',
+    title: 'Open Settings',
+    shortcut: 'meta+,',
+  ),
+  PaletteCommand(
+    id: 'sess-web',
+    title: 'web — npm run dev',
+    kind: PaletteCommandKind.session,
+  ),
+  PaletteCommand(
+    id: 'sess-api',
+    title: 'api — cargo watch',
+    kind: PaletteCommandKind.session,
+  ),
+  PaletteCommand(
+    id: 'preset-rust',
+    title: 'Rust preset',
+    kind: PaletteCommandKind.preset,
+  ),
+];
 
 /// Mounted-app behavior: the palette is built from the live action registry
 /// + live sessions (no fixtures), and the MRU switcher tracks real sessions.
 List<SessionSummary> _testSessions() => [
-      SessionSummary(
-          id: 's1', title: 'web — npm run dev', updatedAt: DateTime(2026, 9, 26)),
-      SessionSummary(
-          id: 's2', title: 'api — cargo watch', updatedAt: DateTime(2026, 9, 26)),
-    ];
-
+  SessionSummary(
+    id: 's1',
+    title: 'web — npm run dev',
+    updatedAt: DateTime(2026, 9, 26),
+  ),
+  SessionSummary(
+    id: 's2',
+    title: 'api — cargo watch',
+    updatedAt: DateTime(2026, 9, 26),
+  ),
+];
 
 void main() {
   group('FuzzyMatch', () {
@@ -72,16 +90,23 @@ void main() {
   group('CommandPaletteState', () {
     test('empty filter shows all commands in order', () {
       final s = CommandPaletteState(commands: sampleCommands());
-      expect(s.visible.map((c) => c.id),
-          ['new-session', 'open-settings', 'sess-web', 'sess-api', 'preset-rust']);
+      expect(s.visible.map((c) => c.id), [
+        'new-session',
+        'open-settings',
+        'sess-web',
+        'sess-api',
+        'preset-rust',
+      ]);
     });
 
     test('filter narrows to fuzzy matches, best first', () {
-      final s = CommandPaletteState(commands: const [
-        PaletteCommand(id: 'scattered', title: 'New Session'),
-        PaletteCommand(id: 'prefix', title: 'Sessions Panel'),
-        PaletteCommand(id: 'unrelated', title: 'Quit App'),
-      ]);
+      final s = CommandPaletteState(
+        commands: const [
+          PaletteCommand(id: 'scattered', title: 'New Session'),
+          PaletteCommand(id: 'prefix', title: 'Sessions Panel'),
+          PaletteCommand(id: 'unrelated', title: 'Quit App'),
+        ],
+      );
       s.setFilter('ses');
       final ids = s.visible.map((c) => c.id).toList();
       expect(ids, contains('prefix'));
@@ -151,8 +176,10 @@ void main() {
     });
 
     test('build highlights the selected row', () {
-      final view =
-          CommandPaletteView(commands: sampleCommands(), selectedIndex: 1);
+      final view = CommandPaletteView(
+        commands: sampleCommands(),
+        selectedIndex: 1,
+      );
       final results = (view.build() as UiColumn).children[1] as UiColumn;
       final selected = results.children[1] as UiRow;
       final unselected = results.children[0] as UiRow;
@@ -166,8 +193,10 @@ void main() {
     });
 
     test('build respects the filter', () {
-      final view =
-          CommandPaletteView(commands: sampleCommands(), filter: 'api');
+      final view = CommandPaletteView(
+        commands: sampleCommands(),
+        filter: 'api',
+      );
       final results = (view.build() as UiColumn).children[1] as UiColumn;
       expect(results.children.length, 1);
     });
@@ -197,11 +226,13 @@ void main() {
   });
 
   group('MruSwitcher', () {
-    MruSwitcher make() => MruSwitcher(entries: const [
-          MruEntry(id: 'a', title: 'web'),
-          MruEntry(id: 'b', title: 'api'),
-          MruEntry(id: 'c', title: 'db'),
-        ]);
+    MruSwitcher make() => MruSwitcher(
+      entries: const [
+        MruEntry(id: 'a', title: 'web'),
+        MruEntry(id: 'b', title: 'api'),
+        MruEntry(id: 'c', title: 'db'),
+      ],
+    );
 
     test('starts at the most recent entry', () {
       expect(make().current?.id, 'a');
@@ -247,10 +278,12 @@ void main() {
 
   group('MruSwitcherView', () {
     test('build renders entries and highlights the current one', () {
-      final switcher = MruSwitcher(entries: const [
-        MruEntry(id: 'a', title: 'web'),
-        MruEntry(id: 'b', title: 'api'),
-      ]);
+      final switcher = MruSwitcher(
+        entries: const [
+          MruEntry(id: 'a', title: 'web'),
+          MruEntry(id: 'b', title: 'api'),
+        ],
+      );
       switcher.next(); // current = b
       final root = MruSwitcherView(switcher: switcher).build() as UiColumn;
       expect(root.id, 'mru-switcher');
@@ -266,8 +299,7 @@ void main() {
     });
 
     test('actions declare ctrl+tab chords', () {
-      final actions =
-          MruSwitcherView(switcher: MruSwitcher()).actions();
+      final actions = MruSwitcherView(switcher: MruSwitcher()).actions();
       final byName = {for (final a in actions) a.name: a};
       expect(byName['switcher.next']!.keys, 'ctrl+tab');
       expect(byName['switcher.previous']!.keys, 'ctrl+shift+tab');
@@ -333,7 +365,10 @@ void main() {
       expect(ids, contains('action:composer.focus'));
       // Shortcuts match the registered UiAction chords.
       final byId = {for (final c in commands) c.id: c};
-      expect(byId['action:sidebar.toggle']!.shortcut, 'cmd+b');
+      expect(
+        byId['action:sidebar.toggle']!.shortcut,
+        '$currentPrimaryModifier+b',
+      );
       expect(byId['action:pane.splitRight']!.shortcut, 'cmd+d');
     });
 
@@ -345,27 +380,30 @@ void main() {
           .where((c) => c.kind == PaletteCommandKind.session)
           .toList();
       expect(sessionCmds.map((c) => c.id), ['session:s1', 'session:s2']);
-      expect(sessionCmds.map((c) => c.title),
-          ['web — npm run dev', 'api — cargo watch']);
+      expect(sessionCmds.map((c) => c.title), [
+        'web — npm run dev',
+        'api — cargo watch',
+      ]);
     });
 
-    test('openPalette builds state from live commands; closePalette clears',
-        () {
-      final app = SupercliApp();
-      app.sessions = _testSessions();
-      expect(app.paletteOpen, isFalse);
-      app.openPalette();
-      expect(app.paletteOpen, isTrue);
-      expect(app.paletteState!.commands.length,
-          app.paletteCommands().length);
-      // Filter narrows to the matching live session.
-      app.paletteState!.setFilter('cargo');
-      final visible = app.paletteState!.visible;
-      expect(visible.map((c) => c.id), ['session:s2']);
-      app.closePalette();
-      expect(app.paletteOpen, isFalse);
-      expect(app.paletteState, isNull);
-    });
+    test(
+      'openPalette builds state from live commands; closePalette clears',
+      () {
+        final app = SupercliApp();
+        app.sessions = _testSessions();
+        expect(app.paletteOpen, isFalse);
+        app.openPalette();
+        expect(app.paletteOpen, isTrue);
+        expect(app.paletteState!.commands.length, app.paletteCommands().length);
+        // Filter narrows to the matching live session.
+        app.paletteState!.setFilter('cargo');
+        final visible = app.paletteState!.visible;
+        expect(visible.map((c) => c.id), ['session:s2']);
+        app.closePalette();
+        expect(app.paletteOpen, isFalse);
+        expect(app.paletteState, isNull);
+      },
+    );
 
     test('palette confirm returns the highlighted live command', () {
       final app = SupercliApp();
@@ -396,11 +434,15 @@ void main() {
       // s1 is renamed on the Host.
       app.sessions = [
         SessionSummary(
-            id: 's1',
-            title: 'web — npm run dev (renamed)',
-            updatedAt: DateTime(2026, 9, 26)),
+          id: 's1',
+          title: 'web — npm run dev (renamed)',
+          updatedAt: DateTime(2026, 9, 26),
+        ),
         SessionSummary(
-            id: 's2', title: 'api — cargo watch', updatedAt: DateTime(2026, 9, 26)),
+          id: 's2',
+          title: 'api — cargo watch',
+          updatedAt: DateTime(2026, 9, 26),
+        ),
       ];
       app.syncMru();
       // Order preserved (s2 still most recent), title updated.
@@ -418,11 +460,15 @@ void main() {
       // s2 disappears from the Host; s3 appears.
       app.sessions = [
         SessionSummary(
-            id: 's1',
-            title: 'web — npm run dev',
-            updatedAt: DateTime(2026, 9, 26)),
+          id: 's1',
+          title: 'web — npm run dev',
+          updatedAt: DateTime(2026, 9, 26),
+        ),
         SessionSummary(
-            id: 's3', title: 'db — psql', updatedAt: DateTime(2026, 9, 26)),
+          id: 's3',
+          title: 'db — psql',
+          updatedAt: DateTime(2026, 9, 26),
+        ),
       ];
       app.syncMru();
       final ids = app.mruSwitcher.entries.map((e) => e.id).toList();
@@ -505,7 +551,9 @@ void main() {
 
     test('view build clamps an out-of-range selectedIndex', () {
       final view = CommandPaletteView(
-          commands: sampleCommands(), selectedIndex: 99);
+        commands: sampleCommands(),
+        selectedIndex: 99,
+      );
       final results = (view.build() as UiColumn).children[1] as UiColumn;
       String bg(UiNode row) {
         final json = (row as UiRow).toJson();
@@ -520,51 +568,61 @@ void main() {
 
   group('MruSwitcher.update', () {
     test('refreshes the title in place, keeping MRU position', () {
-      final m = MruSwitcher(entries: const [
-        MruEntry(id: 'a', title: 'web'),
-        MruEntry(id: 'b', title: 'api'),
-      ]);
+      final m = MruSwitcher(
+        entries: const [
+          MruEntry(id: 'a', title: 'web'),
+          MruEntry(id: 'b', title: 'api'),
+        ],
+      );
       m.update(const MruEntry(id: 'b', title: 'api (renamed)'));
       expect(m.entries.map((e) => e.id), ['a', 'b']);
       expect(m.entries.last.title, 'api (renamed)');
     });
 
     test('unknown id is a no-op', () {
-      final m = MruSwitcher(entries: const [MruEntry(id: 'a', title: 'web')]);
+      final m = MruSwitcher(
+        entries: const [MruEntry(id: 'a', title: 'web')],
+      );
       m.update(const MruEntry(id: 'zzz', title: 'nope'));
       expect(m.entries.map((e) => e.id), ['a']);
     });
   });
 
   group('switcher.confirm', () {
-    test('AppKeybindings declares enter confirm scoped to the switcher node',
-        () {
-      const kb = AppKeybindings();
-      final actions = kb.switcherActions('mru-switcher');
-      final byName = {for (final a in actions) a.name: a};
-      expect(byName['switcher.confirm']!.keys, 'enter');
-      final json = byName['switcher.confirm']!.toJson();
-      expect(json['context'], 'mru-switcher');
-    });
+    test(
+      'AppKeybindings declares enter confirm scoped to the switcher node',
+      () {
+        const kb = AppKeybindings();
+        final actions = kb.switcherActions('mru-switcher');
+        final byName = {for (final a in actions) a.name: a};
+        expect(byName['switcher.confirm']!.keys, 'enter');
+        final json = byName['switcher.confirm']!.toJson();
+        expect(json['context'], 'mru-switcher');
+      },
+    );
 
     test('MruSwitcherView.actions includes the enter confirm', () {
-      final actions =
-          MruSwitcherView(switcher: MruSwitcher()).actions();
+      final actions = MruSwitcherView(switcher: MruSwitcher()).actions();
       final byName = {for (final a in actions) a.name: a};
       expect(byName['switcher.confirm']!.keys, 'enter');
     });
   });
 
   group('paletteCommands shortcut honesty', () {
-    test('pane.focusNext/focusPrev claim no shortcut (ctrl+tab is the switcher)',
-        () {
-      final app = SupercliApp();
-      final byId = {for (final c in app.paletteCommands()) c.id: c};
-      expect(byId['action:pane.focusNext']!.shortcut, isEmpty);
-      expect(byId['action:pane.focusPrev']!.shortcut, isEmpty);
-      // Other actions still advertise their real chords.
-      expect(byId['action:sidebar.toggle']!.shortcut, 'cmd+b');
-    });
+    test(
+      'pane.focusNext/focusPrev claim no shortcut (ctrl+tab is the switcher)',
+      () {
+        final app = SupercliApp();
+        final byId = {for (final c in app.paletteCommands()) c.id: c};
+        expect(byId['action:pane.focusNext']!.shortcut, isEmpty);
+        expect(byId['action:pane.focusPrev']!.shortcut, isEmpty);
+        // Other actions still advertise their real chords.
+        expect(
+          byId['action:sidebar.toggle']!.shortcut,
+          '$currentPrimaryModifier+b',
+        );
+      },
+    );
   });
 
   group('SupercliApp.executePaletteCommand', () {
@@ -573,9 +631,10 @@ void main() {
       app.sessions = _testSessions();
       app.syncMru(); // MRU: s1, s2
       final cmd = PaletteCommand(
-          id: 'session:s2',
-          title: 'api — cargo watch',
-          kind: PaletteCommandKind.session);
+        id: 'session:s2',
+        title: 'api — cargo watch',
+        kind: PaletteCommandKind.session,
+      );
       final actionName = app.executePaletteCommand(cmd);
       expect(actionName, isNull);
       expect(app.selectedSession, 1);
@@ -589,9 +648,10 @@ void main() {
       app.syncMru();
       final before = app.mruSwitcher.entries.map((e) => e.id).toList();
       final cmd = PaletteCommand(
-          id: 'session:gone',
-          title: 'gone',
-          kind: PaletteCommandKind.session);
+        id: 'session:gone',
+        title: 'gone',
+        kind: PaletteCommandKind.session,
+      );
       expect(app.executePaletteCommand(cmd), isNull);
       expect(app.selectedSession, 0);
       expect(app.mruSwitcher.entries.map((e) => e.id).toList(), before);
@@ -600,7 +660,9 @@ void main() {
     test('action command returns the action name for dispatch', () {
       final app = SupercliApp();
       final cmd = const PaletteCommand(
-          id: 'action:sidebar.toggle', title: 'Toggle sidebar');
+        id: 'action:sidebar.toggle',
+        title: 'Toggle sidebar',
+      );
       expect(app.executePaletteCommand(cmd), 'sidebar.toggle');
       // State untouched until the dispatcher runs it.
       expect(app.sidebarCollapsed, isFalse);
