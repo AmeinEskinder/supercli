@@ -1,5 +1,5 @@
 //! Minimal blocking HTTP(S) GET for small manifests — the CLI update check
-//! fetching `cli/latest.json` from supercli.com. Same TLS stack as the relay
+//! fetching `cli/latest.json` from superc.li. Same TLS stack as the relay
 //! uplink (rustls + webpki roots), `http://` allowed for tests and local
 //! dev servers. Not a general client: no redirects, no keep-alive, response
 //! capped at 2 MB.

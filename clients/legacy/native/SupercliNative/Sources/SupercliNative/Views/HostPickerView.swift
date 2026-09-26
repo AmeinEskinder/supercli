@@ -421,14 +421,14 @@ struct AddWorkspaceSheet: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.mutedForeground)
             HStack {
-                Text("curl -fsSL https://supercli.com/install.sh | sh")
+                Text("curl -fsSL https://superc.li/install.sh | sh")
                     .font(.system(size: 10, design: .monospaced))
                     .textSelection(.enabled)
                 Spacer()
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(
-                        "curl -fsSL https://supercli.com/install.sh | sh",
+                        "curl -fsSL https://superc.li/install.sh | sh",
                         forType: .string
                     )
                 }

@@ -35,7 +35,7 @@ const INTERACTIVE_PREAMBLE_BYTES: usize = 64 * 1024;
 const INTERACTIVE_START_TIMEOUT: Duration = Duration::from_secs(20);
 const SSH_INSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 const SSH_INSTALL_OUTPUT_BYTES: usize = 64 * 1024;
-const SSH_INSTALL_COMMAND: &str = "install_path=\"${TMPDIR:-/tmp}/supercli-install-$$.sh\"; curl -fsSL https://supercli.com/install.sh -o \"$install_path\" && sh \"$install_path\"; install_status=$?; rm -f \"$install_path\"; exit \"$install_status\"";
+const SSH_INSTALL_COMMAND: &str = "install_path=\"${TMPDIR:-/tmp}/supercli-install-$$.sh\"; curl -fsSL https://superc.li/install.sh -o \"$install_path\" && sh \"$install_path\"; install_status=$?; rm -f \"$install_path\"; exit \"$install_status\"";
 
 /// How system SSH starts the Host gateway. Ordinary SSH servers should use
 /// `Command`; `InteractiveShell` exists for managed shells (for example

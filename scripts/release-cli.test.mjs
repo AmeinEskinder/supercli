@@ -141,13 +141,13 @@ test('revisioned artifact URLs are unique while normal keys stay unchanged', () 
   )
   assert.equal(
     cliVersionedArtifactUrl(
-      'https://supercli.com/',
+      'https://superc.li/',
       'beta',
       '0.2.0',
       'linux-x86_64',
       'abcdef012345'
     ),
-    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-x86_64.tar.gz'
+    'https://superc.li/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-x86_64.tar.gz'
   )
 })
 
@@ -159,7 +159,7 @@ test('immutable object checks catch an artifact omitted from latest.json', async
 
   const found = await findPublishedCliArtifacts({
     fetchImpl,
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'alpha',
     version: '0.2.0',
     targets: ['linux-x86_64', 'linux-aarch64'],
@@ -168,7 +168,7 @@ test('immutable object checks catch an artifact omitted from latest.json', async
 
   assert.deepEqual(found, [{
     target: 'linux-x86_64',
-    url: 'https://supercli.com/releases/alpha/cli/supercli-0.2.0-linux-x86_64.tar.gz'
+    url: 'https://superc.li/releases/alpha/cli/supercli-0.2.0-linux-x86_64.tar.gz'
   }])
 })
 
@@ -176,7 +176,7 @@ test('unexpected object-check responses fail closed', async () => {
   await assert.rejects(
     findPublishedCliArtifacts({
       fetchImpl: async () => response(503),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       version: '0.2.0',
       targets: ['macos-universal'],
@@ -196,7 +196,7 @@ test('revision preflight checks both immutable archive and sidecar', async () =>
       requested.push(cleanUrl.toString())
       return response(new URL(url).pathname.endsWith('.sha256') ? 200 : 404)
     },
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'beta',
     version: '0.2.0',
     artifactRevision: 'abcdef012345',
@@ -205,13 +205,13 @@ test('revision preflight checks both immutable archive and sidecar', async () =>
   })
 
   assert.deepEqual(requested, [
-    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz',
-    'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
+    'https://superc.li/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz',
+    'https://superc.li/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
   ])
   assert.deepEqual(found, [{
     target: 'linux-aarch64',
     kind: 'sidecar',
-    url: 'https://supercli.com/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
+    url: 'https://superc.li/releases/beta/cli/supercli-0.2.0-abcdef012345-linux-aarch64.tar.gz.sha256'
   }])
 })
 
@@ -221,7 +221,7 @@ test('a missing channel manifest is a clean first publish', async () => {
       assert.equal(options.method, 'GET')
       return response(404)
     },
-    baseUrl: 'https://supercli.com/',
+    baseUrl: 'https://superc.li/',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -233,7 +233,7 @@ test('a malformed channel manifest fails closed instead of erasing targets', asy
   await assert.rejects(
     readPublishedCliLatest({
       fetchImpl: async () => response(200, { channel: 'beta', version: '0.2.0' }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -254,7 +254,7 @@ test('published target metadata is validated before it can be preserved', async 
       version: '0.2.0',
       targets: { 'macos-universal': validTarget }
     }),
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -267,7 +267,7 @@ test('published target metadata is validated before it can be preserved', async 
         version: '0.2.0',
         targets: { 'linux-x86_64': { ...validTarget, sha256: 'not-a-digest' } }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -286,7 +286,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
       latest_key: `beta/cli/supercli-latest-${currentTarget}.tar.gz`,
       sidecar_key: `${key}.sha256`,
       sidecar_path: `/releases/${key}.sha256`,
-      sidecar_url: `https://supercli.com/releases/${key}.sha256`,
+      sidecar_url: `https://superc.li/releases/${key}.sha256`,
       bytes: 123,
       sha256: 'a'.repeat(64)
     }
@@ -299,7 +299,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
   }
   const latest = await readPublishedCliLatest({
     fetchImpl: async () => response(200, body),
-    baseUrl: 'https://supercli.com',
+    baseUrl: 'https://superc.li',
     channel: 'beta',
     timeoutMs: 0
   })
@@ -317,7 +317,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
           }
         }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -332,7 +332,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
           [target]: { ...validTargets[target], sidecar_key: 'wrong' }
         }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -344,7 +344,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
         ...body,
         artifact_revision: 'ABCDEF012345'
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),
@@ -356,7 +356,7 @@ test('revisioned manifests bind every target and sidecar to the top-level revisi
         ...body,
         targets: { [target]: validTargets[target] }
       }),
-      baseUrl: 'https://supercli.com',
+      baseUrl: 'https://superc.li',
       channel: 'beta',
       timeoutMs: 0
     }),

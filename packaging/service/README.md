@@ -3,7 +3,7 @@
 Start `supercli serve` (the UI-free SuperCLI Host service) on boot, per user.
 These files are the templates `supercli serve install` renders; they are also
 usable verbatim in a container or golden image when `supercli` is installed at
-`/usr/local/bin/supercli` (what `curl -fsSL https://supercli.com/install.sh | sh`
+`/usr/local/bin/supercli` (what `curl -fsSL https://superc.li/install.sh | sh`
 does).
 
 The easy path on the Host machine itself:

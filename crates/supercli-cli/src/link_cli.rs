@@ -277,7 +277,7 @@ fn deactivate() -> i32 {
     if let Some(key) = key {
         if let Err(error) = license::request_deactivation_for_key(&key) {
             eprintln!("seat release did not reach the service: {error}");
-            eprintln!("this machine is already disabled locally; free the seat later from supercli.com/account");
+            eprintln!("this machine is already disabled locally; free the seat later from superc.li/account");
             return 2;
         }
         println!("seat released");
