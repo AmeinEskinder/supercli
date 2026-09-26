@@ -525,6 +525,10 @@ pub struct ScheduledRunner<C: RunClock = SystemClock> {
     guard: RunGuard,
     clock: C,
     runs_db: Option<RunsDb>,
+    /// Fail closed by default: if true and `runs_db` is None, `run_trigger`
+    /// refuses to fire (audits a Failed record) instead of running
+    /// unjournaled. Explicit opt-out via [`Self::allow_unjournaled`].
+    durable_required: bool,
 }
 
 impl<C: RunClock> ScheduledRunner<C> {
@@ -533,6 +537,7 @@ impl<C: RunClock> ScheduledRunner<C> {
             guard: RunGuard::new(),
             clock,
             runs_db: None,
+            durable_required: true,
         }
     }
 
@@ -549,6 +554,20 @@ impl<C: RunClock> ScheduledRunner<C> {
     /// Set the durable-runs database on an existing runner.
     pub fn set_durable_runs(&mut self, db: RunsDb) {
         self.runs_db = Some(db);
+    }
+
+    /// Explicit opt-out of fail-closed durable runs: the runner will fire
+    /// triggers without journaling. This is the only way to run unjournaled;
+    /// the default is to refuse. The caller must have an explicit reason
+    /// (e.g., `--no-durable` flag) to use this.
+    pub fn allow_unjournaled(mut self) -> Self {
+        self.durable_required = false;
+        self
+    }
+
+    /// Set the unjournaled opt-out on an existing runner.
+    pub fn set_allow_unjournaled(&mut self) {
+        self.durable_required = false;
     }
 
     /// Fire one trigger for `spec` against `session_dir`, driving
@@ -589,6 +608,28 @@ impl<C: RunClock> ScheduledRunner<C> {
                     steps: 0,
                     denied_tools: vec![],
                     error: Some("schedule is paused".to_string()),
+                },
+            );
+        }
+        // Fail closed: without a durable-runs database, a crash mid-run
+        // would lose the journal and risk double-execution on resume.
+        // Refuse to fire unless the operator explicitly opted out of
+        // journaling (allow_unjournaled).
+        if self.durable_required && self.runs_db.is_none() {
+            return self.audit(
+                session_dir,
+                RunRecord {
+                    schedule_id: spec.id.clone(),
+                    session_id: spec.session_id.clone(),
+                    triggered_at_ms,
+                    outcome: RunOutcome::Failed,
+                    steps: 0,
+                    denied_tools: vec![],
+                    error: Some(
+                        "durable runs unavailable: refusing to fire without journal \
+                         (explicit opt-out required: allow_unjournaled / --no-durable)"
+                            .to_string(),
+                    ),
                 },
             );
         }
@@ -874,9 +915,7 @@ impl<C: RunClock> ScheduledRunner<C> {
                         if let Some(db) = self.runs_db.as_ref() {
                             let _ = db.complete_step(
                                 &intent,
-                                &crate::action_reviews::AttemptOutcome::Executed {
-                                    success: true,
-                                },
+                                &crate::action_reviews::AttemptOutcome::Executed { success: true },
                                 Some(&text),
                             );
                         }
@@ -1105,6 +1144,13 @@ impl<C: RunClock> Scheduler<C> {
     /// are journaled, and crashes are resumed instead of restarted.
     pub fn with_durable_runs(mut self, db: RunsDb) -> Self {
         self.runner.set_durable_runs(db);
+        self
+    }
+
+    /// Explicit opt-out of fail-closed durable runs: the scheduler will
+    /// fire triggers without journaling. Requires explicit operator intent.
+    pub fn allow_unjournaled(mut self) -> Self {
+        self.runner.set_allow_unjournaled();
         self
     }
 
@@ -1794,7 +1840,7 @@ mod tests {
     #[test]
     fn runner_completes_task_in_autonomous_mode() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("complete");
         let mut executor = FakeExecutor::new(&clock)
             .behavior(FakeBehavior::Ok("a".to_string()))
@@ -1824,7 +1870,7 @@ mod tests {
     #[test]
     fn runner_denies_ask_tool_and_fails_closed() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("deny");
         let mut executor = FakeExecutor::new(&clock)
             .behavior(FakeBehavior::Ok("ok".to_string()))
@@ -1850,7 +1896,7 @@ mod tests {
     #[test]
     fn runner_enforces_output_cap() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("output");
         let mut spec = two_call_spec();
         spec.policy.max_output_bytes = 10;
@@ -1874,7 +1920,7 @@ mod tests {
     #[test]
     fn runner_enforces_duration_cap() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("duration");
         let mut spec = two_call_spec();
         spec.policy.max_duration_secs = 1;
@@ -1894,7 +1940,7 @@ mod tests {
     #[test]
     fn runner_retries_failures_with_backoff_then_gives_up() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("retries");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1919,7 +1965,7 @@ mod tests {
     #[test]
     fn runner_retry_success_counts_final_attempt() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("retry-ok");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1945,7 +1991,7 @@ mod tests {
         // not be retried even when max_retries > 0: a retry could
         // double-apply a write. The attempt is terminal after one try.
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("uncertain");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1976,7 +2022,7 @@ mod tests {
     #[test]
     fn runner_skips_overlapping_trigger() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("overlap");
         // Simulate a still-running trigger by holding its guard token.
         let token = runner.guard.try_begin("nightly-triage").unwrap();
@@ -1996,7 +2042,7 @@ mod tests {
     #[test]
     fn runner_audits_invalid_and_paused_specs() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("invalid");
 
         let mut bad = two_call_spec();
@@ -2078,7 +2124,8 @@ mod tests {
     fn scheduler_fires_due_triggers_and_notifies_on_persistent_failure() {
         let (home, sessions, clock) = daemon_fixture("daemon");
         save_schedules(&home, &[schedule_with_calls("hourly", "sess-1")]).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock));
+        // Test: scheduler tick logic, not journal — explicit opt-out.
+        let mut scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled();
 
         let queue: Rc<RefCell<VecDeque<FakeBehavior>>> = Rc::new(RefCell::new(VecDeque::new()));
         queue
@@ -2150,8 +2197,12 @@ mod tests {
         // Two workers share one lease database: models two daemons.
         let leases_a = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
         let leases_b = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut sched_a = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases_a);
-        let mut sched_b = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases_b);
+        let mut sched_a = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases_a);
+        let mut sched_b = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases_b);
 
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
@@ -2208,7 +2259,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2276,7 +2329,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2342,7 +2397,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2424,7 +2481,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2487,7 +2546,7 @@ mod tests {
         let mut paused = schedule_with_calls("paused", "sess-1");
         paused.enabled = false;
         save_schedules(&home, &[paused]).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock));
+        let mut scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled(); // test: scheduler logic, not journal
         let clock2 = Rc::clone(&clock);
         let mut make_executor = move |_: &str, _: &Path| {
             Box::new(FakeExecutor::new(&clock2)) as Box<dyn ScheduledToolExecutor>
@@ -2522,8 +2581,8 @@ mod tests {
     #[test]
     fn scheduler_next_wake_is_clamped() {
         let (_home, _sessions, clock) = daemon_fixture("daemon-wake");
-        let scheduler = Scheduler::new(Rc::clone(&clock));
-        // Nothing armed: wake in 60s to pick up registry edits.
+        let scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled(); // test: scheduler logic, not journal
+                                                                               // Nothing armed: wake in 60s to pick up registry edits.
         assert_eq!(scheduler.next_wake_in(), Duration::from_secs(60));
         let _ = std::fs::remove_dir_all(&_home);
     }
@@ -2653,6 +2712,79 @@ mod tests {
             vec!["t2".to_string()],
             "t1 must not be re-executed after resume"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_trigger_refuses_without_journal_by_default() {
+        // Fail closed: a runner without a RunsDb refuses to fire.
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let spec = valid_spec();
+        let dir = std::env::temp_dir().join(format!(
+            "sched-failclosed-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(
+            record.outcome,
+            RunOutcome::Failed,
+            "must refuse without journal"
+        );
+        assert!(
+            record
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("durable runs unavailable"),
+            "error must explain the refusal: {:?}",
+            record.error
+        );
+        // Nothing executed.
+        assert_eq!(record.steps, 0);
+        assert!(executor.calls.is_empty(), "no tool must run");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_trigger_fires_unjournaled_with_explicit_opt_out() {
+        // Explicit opt-out: allow_unjournaled fires without a journal.
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled();
+        let mut spec = valid_spec();
+        spec.task = ScheduledTask::ToolCalls(vec![ScheduledToolCall {
+            tool: "t1".to_string(),
+            arguments: serde_json::json!({}),
+        }]);
+        let dir = std::env::temp_dir().join(format!(
+            "sched-optout-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(record.outcome, RunOutcome::Completed);
+        assert_eq!(executor.calls, vec!["t1".to_string()]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
