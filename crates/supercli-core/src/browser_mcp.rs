@@ -234,6 +234,7 @@ pub(crate) fn run_tool(name: &str, arguments: &Value) -> Result<String, String> 
         "browser_scroll" => tool_scroll(arguments),
         "browser_console" => tool_console(arguments),
         "browser_close" => tool_close(arguments),
+        "browser_takeover" => crate::browser_takeover::takeover_tool(arguments),
         _ => Err(format!("Unknown tool: {name}")),
     }
 }
@@ -2337,6 +2338,25 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
                 "additionalProperties": false,
             },
         }),
+        json!({
+            "name": "browser_takeover",
+            "description": "Attach to a running browser tab over CDP (Chrome DevTools Protocol) \
+        and stream screenshots. The agent-drives/human-watches loop: the agent sees the tab via \
+        screenshots while the human watches the real browser. Pass list=true to list tabs, or \
+        target_id + frames + interval_ms to capture. Talks to any CDP endpoint (default \
+        ws://127.0.0.1:9222); pass endpoint for a custom webSocketDebuggerUrl.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list": { "type": "boolean", "description": "List CDP targets (tabs) instead of capturing" },
+                    "target_id": { "type": "string", "description": "CDP targetId to attach to (from list)" },
+                    "frames": { "type": "integer", "description": "Screenshots to capture (default 25)" },
+                    "interval_ms": { "type": "integer", "description": "Ms between frames (default 200 = 5fps)" },
+                    "endpoint": { "type": "string", "description": "CDP ws:// URL (default ws://127.0.0.1:9222)" },
+                },
+                "additionalProperties": false,
+            },
+        }),
     ]
 }
 
@@ -2475,7 +2495,7 @@ mod tests {
     #[test]
     fn tool_definitions_have_valid_schemas() {
         let tools = tool_definitions();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 14);
         for tool in &tools {
             assert!(tool.get("name").and_then(Value::as_str).is_some());
             assert!(tool.get("description").and_then(Value::as_str).is_some());
