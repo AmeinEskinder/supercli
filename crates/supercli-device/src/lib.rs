@@ -109,6 +109,11 @@ pub enum DeviceError {
     Parse(String),
     /// Underlying I/O error.
     Io(io::Error),
+    /// Denied by the approval gate: no human allowed the dangerous operation.
+    Denied {
+        /// What was denied, e.g. "install /tmp/app.apk".
+        op: String,
+    },
 }
 
 impl fmt::Display for DeviceError {
@@ -133,6 +138,7 @@ impl fmt::Display for DeviceError {
             DeviceError::Unsupported(msg) => f.write_str(msg),
             DeviceError::Parse(msg) => write!(f, "could not parse tool output: {msg}"),
             DeviceError::Io(e) => write!(f, "I/O error: {e}"),
+            DeviceError::Denied { op } => write!(f, "denied by approval gate: {op}"),
         }
     }
 }
@@ -449,6 +455,8 @@ pub mod adb;
 pub mod baguette;
 #[cfg(feature = "device")]
 pub mod baguette_native;
+#[cfg(feature = "device")]
+pub mod danger;
 #[cfg(feature = "device")]
 #[cfg(test)]
 mod fake;
