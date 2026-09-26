@@ -80,3 +80,11 @@ required-features = ["native-host"]
 [[example]]
 name = "durable_chaos_helper"
 required-features = ["native-host"]
+
+[[example]]
+name = "sched-demo"
+required-features = ["native-host"]
+
+[[example]]
+name = "scheduled_kill_helper"
+required-features = ["native-host"]
