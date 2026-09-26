@@ -13,16 +13,44 @@
 //! Leases reuse [`crate::schedule_leases`]: each run id is claimed as a
 //! schedule id under tenant `"default"`. No new lease protocol.
 //!
+//! ## Write-ahead step protocol
+//!
+//! The hard crash case is *between* the side effect and the journal write:
+//! a crash after the tool ran but before the outcome was journaled, or
+//! after the intent but before the tool ran. A single post-hoc outcome
+//! row cannot distinguish these, so steps use two journal rows:
+//!
+//! 1. **Fence first.** The worker verifies its lease fence is current
+//!    *before* creating an intent. A worker refused by the fence never
+//!    creates an intent at all — it simply stops.
+//! 2. [`RunsDb::begin_step`] — appends an intent row (`outcome='started'`)
+//!    and **fsyncs the database before returning**. The intent is durable
+//!    before the side effect executes.
+//! 3. Execute the side effect.
+//! 4. [`RunsDb::complete_step`] — appends the outcome row (`attempt+1`).
+//!
+//! If the worker dies between 2 and 4, resume finds the orphaned intent
+//! via [`RunsDb::find_orphaned_intents`] and classifies it with
+//! [`classify_orphan`]. A worker that loses its fence *after* the intent
+//! but *before* the call journals `never_ran` explicitly through
+//! `complete_step` (or dies — which the orphan rule below covers as the
+//! conservative superset).
+//!
 //! Safety invariants (non-negotiable):
 //!
 //! 1. Never re-execute a completed side effect. Completed = latest journal
-//!    row has a non-NULL outcome. Replay the recorded output, don't re-call.
+//!    row has a decided outcome (anything but `'started'`). Replay the
+//!    recorded output, don't re-call.
 //! 2. `ambiguous` steps are never replayed: the run goes to NEEDS_REVIEW
-//!    and waits for a human (same rule as Phase 5 attempt outcomes).
+//!    and waits for a human (same rule as Phase 5 attempt outcomes). An
+//!    orphaned tool/subagent intent is `ambiguous` for the same reason:
+//!    the side effect may have executed after the intent fsync.
 //! 3. Fence before every side effect: a worker that lost its lease must
 //!    journal `never_ran` and stop, never emit tool calls.
 //! 4. State transitions are conditional single-row UPDATEs; a lost race
 //!    returns 0 rows and the worker treats it as "someone else owns it".
+//! 5. `begin_step` fails closed: if the intent cannot be fsync'd, the step
+//!    must not execute.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -43,10 +71,16 @@ pub const RUN_LEASE_TENANT: &str = "default";
 /// Outcome strings stored in `run_steps.outcome`. They mirror
 /// [`AttemptOutcome`]'s classifier: `executed_ok`/`executed_failed` for
 /// [`AttemptOutcome::Executed`], `ambiguous`, `never_ran`.
+///
+/// `started` is the write-ahead intent marker (see [`RunsDb::begin_step`]):
+/// it is not a decided outcome. A `started` row that is still the latest
+/// row for its `step_no` is an *orphaned intent* — the worker died after
+/// the intent fsync and before journaling any outcome.
 pub const OUTCOME_EXECUTED_OK: &str = "executed_ok";
 pub const OUTCOME_EXECUTED_FAILED: &str = "executed_failed";
 pub const OUTCOME_AMBIGUOUS: &str = "ambiguous";
 pub const OUTCOME_NEVER_RAN: &str = "never_ran";
+pub const OUTCOME_STARTED: &str = "started";
 
 /// Map an [`AttemptOutcome`] to its stored outcome string.
 pub fn outcome_str(outcome: &AttemptOutcome) -> &'static str {
@@ -55,6 +89,43 @@ pub fn outcome_str(outcome: &AttemptOutcome) -> &'static str {
         AttemptOutcome::Executed { success: false } => OUTCOME_EXECUTED_FAILED,
         AttemptOutcome::Ambiguous { .. } => OUTCOME_AMBIGUOUS,
         AttemptOutcome::NeverRan { .. } => OUTCOME_NEVER_RAN,
+    }
+}
+
+/// Classify an orphaned intent (a `started` row with no outcome row) using
+/// the [`AttemptOutcome`] vocabulary.
+///
+/// Soundness argument: the write-ahead protocol requires workers to fence
+/// *before* [`RunsDb::begin_step`], so a worker refused by the fence never
+/// creates an intent, and a worker that loses its fence *after* the intent
+/// but *before* the call journals `never_ran` explicitly via
+/// [`RunsDb::complete_step`] (it never leaves an orphan on that path).
+/// Therefore an orphan that survives to resume time means the worker died
+/// after the intent was durable and before any outcome was journaled — the
+/// side effect may or may not have executed, and no retroactive fence check
+/// can distinguish "died before the call" from "died after the call".
+/// For side-effecting kinds the only sound classification is
+/// [`AttemptOutcome::Ambiguous`]: the run goes to NEEDS_REVIEW and the step
+/// is never replayed.
+///
+/// The one exception is [`StepKind::Model`]: an LLM call has no external
+/// side effect — re-running it spends tokens but cannot duplicate a
+/// mutation — so its orphans are [`AttemptOutcome::NeverRan`] and safe to
+/// re-run. (Callers whose tools are idempotent on `input_hash` may still
+/// only re-run an ambiguous step after human review; the store never
+/// replays one on its own.)
+pub fn classify_orphan(intent: &StepIntent) -> AttemptOutcome {
+    match intent.kind {
+        StepKind::Model => AttemptOutcome::NeverRan {
+            reason: "orphaned model intent: model calls have no external \
+                     side effect; safe to re-run"
+                .to_string(),
+        },
+        StepKind::Tool | StepKind::Subagent => AttemptOutcome::Ambiguous {
+            reason: "orphaned intent with no outcome row: the side effect \
+                     may have executed after the intent fsync; never replay"
+                .to_string(),
+        },
     }
 }
 
@@ -212,10 +283,27 @@ pub struct Step {
 }
 
 impl Step {
-    /// True when the journal proves this step finished (any outcome).
+    /// True when the journal proves this step finished with a decided
+    /// outcome. A write-ahead intent (`outcome = 'started'`) is NOT
+    /// complete: the side effect may or may not have run, and the step
+    /// must go through [`classify_orphan`], not the replay path.
     pub fn is_complete(&self) -> bool {
-        self.outcome.is_some()
+        matches!(self.outcome.as_deref(), Some(s) if s != OUTCOME_STARTED)
     }
+}
+
+/// A write-ahead intent returned by [`RunsDb::begin_step`]: proof that the
+/// worker durably recorded "I am about to execute this step" (fsync'd)
+/// before the side effect ran. The matching outcome arrives later via
+/// [`RunsDb::complete_step`] as a new row with `attempt + 1`; until then
+/// the intent is *orphaned* and [`classify_orphan`] decides its fate.
+#[derive(Debug, Clone)]
+pub struct StepIntent {
+    pub run_id: String,
+    pub step_no: u64,
+    pub attempt: u64,
+    pub kind: StepKind,
+    pub input_hash: String,
 }
 
 /// One UI replay event.
@@ -428,6 +516,161 @@ impl RunsDb {
         Ok(())
     }
 
+    /// Force the database (including WAL frames) to stable storage.
+    ///
+    /// `PRAGMA wal_checkpoint(TRUNCATE)` checkpoints every WAL frame back
+    /// into the main database file, fsyncs it, and truncates the WAL.
+    /// After this returns, neither `kill -9` nor a power loss can lose the
+    /// rows written before it. Fails closed: a blocked checkpoint is an
+    /// error, and [`RunsDb::begin_step`] treats that as "the intent is not
+    /// trusted — the step must not execute".
+    fn fsync_db(&self) -> Result<(), RunsError> {
+        let (busy, _log_frames, _checkpointed): (i64, i64, i64) =
+            self.conn
+                .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?;
+        if busy != 0 {
+            return Err(RunsError::Sql(
+                "wal_checkpoint(TRUNCATE) blocked by another connection; intent not durable"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Write-ahead intent: journal "I am about to execute step `step_no`"
+    /// and fsync the database *before* returning, so the intent is durable
+    /// before the side effect executes.
+    ///
+    /// Caller contract (the lease discipline that makes orphan
+    /// classification sound — see [`classify_orphan`]):
+    /// 1. Hold the run lease ([`RunsDb::claim_run`]) across the whole
+    ///    begin → execute → complete sequence.
+    /// 2. Verify the lease fence is current *before* calling `begin_step`.
+    ///    A worker refused by the fence must never create an intent.
+    /// 3. Execute the side effect, then [`RunsDb::complete_step`].
+    ///
+    /// The intent row carries `outcome = 'started'` and `output = NULL`;
+    /// the later outcome row uses `attempt + 1`, so the intent stays in
+    /// history. Intents do not consume budgets (budgets count decided
+    /// outcomes only).
+    ///
+    /// Fails closed: if the fsync fails, returns `Err` and the step must
+    /// not execute.
+    pub fn begin_step(
+        &self,
+        run_id: &str,
+        step_no: u64,
+        kind: StepKind,
+        input_hash: &str,
+    ) -> Result<StepIntent, RunsError> {
+        let attempt: i64 = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(MAX(attempt), -1) + 1 FROM run_steps
+                 WHERE run_id = ?1 AND step_no = ?2",
+                rusqlite::params![run_id, step_no as i64],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        self.conn.execute(
+            &format!(
+                "INSERT INTO run_steps
+                 (run_id, step_no, attempt, kind, input_hash, output, outcome, ts_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5, NULL, '{OUTCOME_STARTED}', {DB_NOW_MS})"
+            ),
+            rusqlite::params![run_id, step_no as i64, attempt, kind.as_str(), input_hash],
+        )?;
+        // Durability BEFORE the side effect: a crash after this point
+        // leaves a classifiable orphan instead of silence.
+        self.fsync_db()?;
+        self.conn.execute(
+            &format!("UPDATE runs SET updated_at_ms = {DB_NOW_MS} WHERE id = ?1"),
+            rusqlite::params![run_id],
+        )?;
+        Ok(StepIntent {
+            run_id: run_id.to_string(),
+            step_no,
+            attempt: attempt.max(0) as u64,
+            kind,
+            input_hash: input_hash.to_string(),
+        })
+    }
+
+    /// Journal the outcome of a step previously begun with
+    /// [`RunsDb::begin_step`]. Appends a new row with
+    /// `attempt = intent.attempt + 1` (never an UPDATE), so the intent row
+    /// stays in history and the latest-row-wins rule picks the outcome.
+    /// Budget enforcement runs before the append, same as
+    /// [`RunsDb::append_step`]. The outcome row is fsync'd as well, so a
+    /// crash right after `complete_step` returns cannot resurrect the
+    /// intent as an orphan.
+    pub fn complete_step(
+        &self,
+        intent: &StepIntent,
+        outcome: &AttemptOutcome,
+        output: Option<&str>,
+    ) -> Result<(), RunsError> {
+        let outcome_s = outcome_str(outcome);
+        self.check_budgets(&intent.run_id, intent.kind, outcome_s)?;
+        let attempt = intent.attempt as i64 + 1;
+        self.conn.execute(
+            &format!(
+                "INSERT INTO run_steps
+                 (run_id, step_no, attempt, kind, input_hash, output, outcome, ts_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, {DB_NOW_MS})"
+            ),
+            rusqlite::params![
+                intent.run_id,
+                intent.step_no as i64,
+                attempt,
+                intent.kind.as_str(),
+                intent.input_hash,
+                output,
+                outcome_s
+            ],
+        )?;
+        self.fsync_db()?;
+        self.conn.execute(
+            &format!("UPDATE runs SET updated_at_ms = {DB_NOW_MS} WHERE id = ?1"),
+            rusqlite::params![intent.run_id],
+        )?;
+        Ok(())
+    }
+
+    /// Intents (`outcome = 'started'`) that are still the latest row for
+    /// their `step_no`: the worker died after the intent fsync but before
+    /// journaling any outcome. Ordered by `step_no`. Empty means every
+    /// begun step reached a decided outcome.
+    pub fn find_orphaned_intents(&self, run_id: &str) -> Result<Vec<StepIntent>, RunsError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT s.run_id, s.step_no, s.attempt, s.kind, s.input_hash
+             FROM run_steps s
+             JOIN (SELECT step_no, MAX(attempt) AS a FROM run_steps
+                   WHERE run_id = ?1 GROUP BY step_no) latest
+               ON s.step_no = latest.step_no AND s.attempt = latest.a
+             WHERE s.run_id = ?1 AND s.outcome = 'started'
+             ORDER BY s.step_no",
+        )?;
+        let intents = stmt
+            .query_map(rusqlite::params![run_id], |row| {
+                Ok(StepIntent {
+                    run_id: row.get(0)?,
+                    step_no: row.get::<_, i64>(1).unwrap_or(0).max(0) as u64,
+                    attempt: row.get::<_, i64>(2).unwrap_or(0).max(0) as u64,
+                    kind: row
+                        .get::<_, String>(3)
+                        .ok()
+                        .and_then(|s| StepKind::parse(&s))
+                        .unwrap_or(StepKind::Tool),
+                    input_hash: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(intents)
+    }
+
     /// Record the action-review id for a step's latest row (links the
     /// journal to the hash-chained audit log).
     pub fn link_review(
@@ -512,8 +755,9 @@ impl RunsDb {
     }
 
     fn step_progress(&self, run_id: &str) -> Result<(u64, u64), RunsError> {
-        // done = distinct step_no with a non-NULL outcome on the latest
-        // attempt; total = max(step_no)+1 over all rows.
+        // done = distinct step_no with a decided outcome on the latest
+        // attempt; a write-ahead intent ('started') is not done. total =
+        // max(step_no)+1 over all rows.
         let done: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM (
                  SELECT step_no, MAX(attempt) AS a FROM run_steps
@@ -521,7 +765,7 @@ impl RunsDb {
              ) latest
              JOIN run_steps s ON s.run_id = ?1
                AND s.step_no = latest.step_no AND s.attempt = latest.a
-             WHERE s.outcome IS NOT NULL",
+             WHERE s.outcome IS NOT NULL AND s.outcome != 'started'",
             rusqlite::params![run_id],
             |row| row.get(0),
         )?;
@@ -846,6 +1090,8 @@ impl RunsDb {
             }
         }
         if let Some(max) = budgets.max_steps {
+            // Decided outcomes only: a write-ahead intent ('started') is
+            // not a completed step and does not consume the budget.
             let used: i64 = self.conn.query_row(
                 "SELECT COUNT(*) FROM (
                    SELECT step_no, MAX(attempt) AS a FROM run_steps
@@ -853,7 +1099,7 @@ impl RunsDb {
                  ) latest
                  JOIN run_steps s ON s.run_id = ?1
                    AND s.step_no = latest.step_no AND s.attempt = latest.a
-                 WHERE s.outcome IS NOT NULL",
+                 WHERE s.outcome IS NOT NULL AND s.outcome != 'started'",
                 rusqlite::params![run_id],
                 |row| row.get(0),
             )?;
@@ -887,6 +1133,11 @@ impl RunsDb {
     /// - No row / NULL outcome / `never_ran` → safe to execute.
     /// - `ambiguous` → NEVER replayed: the run is moved to NEEDS_REVIEW
     ///   and the step is reported via `needs_review_step_no`.
+    /// - `started` (orphaned write-ahead intent) → classified by
+    ///   [`classify_orphan`]: model steps are `NeverRan` and safe to
+    ///   re-run; tool/subagent steps are `Ambiguous` (the side effect may
+    ///   have executed after the intent fsync), so the run is moved to
+    ///   NEEDS_REVIEW and the step is never replayed.
     /// - `executed_ok` / `executed_failed` → complete; output is replayed.
     ///
     /// The caller is expected to hold the run lease (see [`RunsDb::claim_run`]).
@@ -912,8 +1163,34 @@ impl RunsDb {
                     needs_review_step_no = Some(expected);
                     break;
                 }
-                // None (started, never finished), never_ran (provably did
-                // nothing), or an unknown string: safe to (re-)execute.
+                // Write-ahead orphan: the intent was fsync'd but no outcome
+                // was ever journaled. Classify it — never assume.
+                Some("started") => {
+                    let intent = StepIntent {
+                        run_id: step.run_id.clone(),
+                        step_no: step.step_no,
+                        attempt: step.attempt,
+                        kind: step.kind,
+                        input_hash: step.input_hash.clone(),
+                    };
+                    match classify_orphan(&intent) {
+                        AttemptOutcome::NeverRan { .. } => {
+                            first_incomplete_step_no = Some(expected);
+                        }
+                        AttemptOutcome::Ambiguous { .. } => {
+                            needs_review_step_no = Some(expected);
+                        }
+                        // Unreachable: classify_orphan only returns
+                        // NeverRan or Ambiguous. Fail closed (park the
+                        // run) rather than replaying on a surprise.
+                        AttemptOutcome::Executed { .. } => {
+                            needs_review_step_no = Some(expected);
+                        }
+                    }
+                    break;
+                }
+                // None (legacy started-but-unfinished), never_ran (provably
+                // did nothing), or an unknown string: safe to (re-)execute.
                 _ => {
                     first_incomplete_step_no = Some(expected);
                     break;
@@ -1437,6 +1714,200 @@ mod tests {
                 .transition(&parent_id, RunState::Queued, RunState::Done)
                 .unwrap());
         }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Write-ahead: the intent is fsync'd before the side effect, so a
+    /// crash (drop the DB handle, reopen) still finds the orphaned intent.
+    #[test]
+    fn write_ahead_intent_survives_crash() {
+        let home = test_home("intentcrash");
+        let id = {
+            let db = RunsDb::open(&home).unwrap();
+            let id = db.create_run(None, "{}", "{}").unwrap();
+            let intent = db
+                .begin_step(&id, 0, StepKind::Tool, &step_hash("w", 0))
+                .unwrap();
+            assert_eq!(intent.step_no, 0);
+            assert_eq!(intent.attempt, 0);
+            assert_eq!(intent.kind, StepKind::Tool);
+            // kill -9: drop the handle without completing the step.
+            drop(db);
+            id
+        };
+        // Reopen: the fsync'd intent must be there.
+        let db = RunsDb::open(&home).unwrap();
+        let orphans = db.find_orphaned_intents(&id).unwrap();
+        assert_eq!(orphans.len(), 1);
+        assert_eq!(orphans[0].step_no, 0);
+        assert_eq!(orphans[0].kind, StepKind::Tool);
+        assert_eq!(orphans[0].input_hash, step_hash("w", 0));
+        // An intent is not a completed step.
+        let run = db.get_run(&id).unwrap();
+        assert_eq!(run.steps_done, 0);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Orphaned model intent: model calls have no external side effect, so
+    /// the orphan classifies as NeverRan and the step is safe to re-run.
+    #[test]
+    fn orphan_classified_never_ran_for_model_steps() {
+        let home = test_home("orphanmodel");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::Model, &step_hash("m", 0))
+            .unwrap();
+        assert!(matches!(
+            classify_orphan(&intent),
+            AttemptOutcome::NeverRan { .. }
+        ));
+        // Resume treats it as safe to (re-)run: first incomplete, and the
+        // run is NOT parked in NEEDS_REVIEW.
+        let plan = db.resume_run(&id).unwrap();
+        assert!(plan.completed.is_empty());
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        assert_eq!(plan.needs_review_step_no, None);
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::Queued);
+        // Re-beginning the step bumps the attempt; the old orphan is
+        // superseded, not duplicated.
+        let intent2 = db
+            .begin_step(&id, 0, StepKind::Model, &step_hash("m", 0))
+            .unwrap();
+        assert_eq!(intent2.attempt, 1);
+        db.complete_step(&intent2, &ok_outcome(), Some("{}"))
+            .unwrap();
+        assert!(db.find_orphaned_intents(&id).unwrap().is_empty());
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.completed.len(), 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Orphaned tool intent: the side effect may have executed after the
+    /// intent fsync, so the orphan classifies as Ambiguous — the run goes
+    /// to NEEDS_REVIEW and the step is never replayed.
+    #[test]
+    fn orphan_classified_ambiguous_for_tool_steps() {
+        let home = test_home("orphantool");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        db.transition(&id, RunState::Queued, RunState::ExecutingTools)
+            .unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::Tool, &step_hash("t", 0))
+            .unwrap();
+        assert!(matches!(
+            classify_orphan(&intent),
+            AttemptOutcome::Ambiguous { .. }
+        ));
+        // Simulate the crash: drop and reopen, then resume.
+        drop(db);
+        let db = RunsDb::open(&home).unwrap();
+        let plan = db.resume_run(&id).unwrap();
+        assert!(plan.completed.is_empty());
+        assert_eq!(plan.needs_review_step_no, Some(0));
+        assert_eq!(plan.first_incomplete_step_no, None);
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::NeedsReview);
+        // The orphan is still listed — nothing was silently dropped or
+        // replayed.
+        assert_eq!(db.find_orphaned_intents(&id).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Orphaned subagent intent: same rule as tools — Ambiguous, never
+    /// replayed, run parks in NEEDS_REVIEW.
+    #[test]
+    fn orphan_classified_ambiguous_for_subagent_steps() {
+        let home = test_home("orphansub");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::Subagent, &step_hash("s", 0))
+            .unwrap();
+        assert!(matches!(
+            classify_orphan(&intent),
+            AttemptOutcome::Ambiguous { .. }
+        ));
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.needs_review_step_no, Some(0));
+        assert_eq!(db.get_run(&id).unwrap().state, RunState::NeedsReview);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The live-worker path for "fence failed before the call": the worker
+    /// journals `never_ran` explicitly through `complete_step`, so no
+    /// orphan is left behind and the step is safe to run on resume.
+    #[test]
+    fn fenced_out_worker_journals_never_ran_no_orphan() {
+        let home = test_home("fencedout");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::Tool, &step_hash("f", 0))
+            .unwrap();
+        // Fence check after the intent: stale -> refuse the call, journal
+        // never_ran explicitly.
+        db.complete_step(
+            &intent,
+            &AttemptOutcome::NeverRan {
+                reason: "fence lost after intent, before send".into(),
+            },
+            None,
+        )
+        .unwrap();
+        assert!(db.find_orphaned_intents(&id).unwrap().is_empty());
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.first_incomplete_step_no, Some(0));
+        assert_eq!(plan.needs_review_step_no, None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Normal flow: begin -> execute -> complete. The outcome row (attempt
+    /// + 1) supersedes the intent; no orphans remain; resume replays the
+    /// completed step.
+    #[test]
+    fn complete_step_after_intent() {
+        let home = test_home("complete");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", "{}").unwrap();
+        let intent = db
+            .begin_step(&id, 0, StepKind::Tool, &step_hash("c", 0))
+            .unwrap();
+        // The intent alone is not a completed step.
+        assert_eq!(db.get_run(&id).unwrap().steps_done, 0);
+        db.complete_step(&intent, &ok_outcome(), Some(r#"{"ok":true}"#))
+            .unwrap();
+        assert!(db.find_orphaned_intents(&id).unwrap().is_empty());
+        let plan = db.resume_run(&id).unwrap();
+        assert_eq!(plan.completed.len(), 1);
+        assert_eq!(plan.completed[0].outcome.as_deref(), Some("executed_ok"));
+        assert_eq!(plan.completed[0].attempt, 1);
+        assert_eq!(plan.first_incomplete_step_no, Some(1));
+        assert_eq!(db.get_run(&id).unwrap().steps_done, 1);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Intents do not consume the step budget; only decided outcomes do.
+    #[test]
+    fn intents_do_not_consume_budget() {
+        let home = test_home("intentbudget");
+        let db = RunsDb::open(&home).unwrap();
+        let id = db.create_run(None, "{}", r#"{"max_steps":1}"#).unwrap();
+        // An open intent must not trip max_steps=1 ...
+        let intent = db
+            .begin_step(&id, 0, StepKind::Tool, &step_hash("ib", 0))
+            .unwrap();
+        // ... and completing the first step is still allowed ...
+        db.complete_step(&intent, &ok_outcome(), Some("{}"))
+            .unwrap();
+        // ... but a second begun+completed step exceeds the budget.
+        let intent2 = db
+            .begin_step(&id, 1, StepKind::Tool, &step_hash("ib", 1))
+            .unwrap();
+        let err = db
+            .complete_step(&intent2, &ok_outcome(), Some("{}"))
+            .unwrap_err();
+        assert!(matches!(err, RunsError::BudgetExceeded { .. }));
         let _ = std::fs::remove_dir_all(&home);
     }
 }
