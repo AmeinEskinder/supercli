@@ -146,6 +146,42 @@ impl Profile {
             None
         }
     }
+
+    /// Advisory auto-allow suggestion for a consistently-approved tool.
+    ///
+    /// ADVISORY ONLY. The returned [`AutoAllowSuggestion`] is pure data: it
+    /// has no authority to grant anything. Turning a suggestion into a grant
+    /// requires an explicit user action that goes through the audited grant
+    /// path (`grant_writer::persist_grant_grouped`), which records the
+    /// actor, scope, and tool in the hash-chained grant audit log.
+    ///
+    /// The `&self` receiver is load-bearing: this function cannot mutate the
+    /// profile, takes no home path, and performs no I/O, so it is
+    /// structurally incapable of touching the grants store.
+    pub fn suggest_auto_allow(&self, tool: &str) -> Option<AutoAllowSuggestion> {
+        let (approvals, denials) = self.tool_outcomes.get(tool)?;
+        if *approvals >= 3 && *denials == 0 {
+            Some(AutoAllowSuggestion {
+                tool: tool.to_string(),
+                approvals: *approvals,
+                hint: format!(
+                    "you usually approve `{tool}` — suggest auto-allow? (requires your explicit confirmation; nothing is granted automatically)"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+/// An advisory auto-allow suggestion. Pure data — creating an actual grant
+/// from one requires an explicit user action through the audited grant
+/// path. See [`Profile::suggest_auto_allow`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutoAllowSuggestion {
+    pub tool: String,
+    pub approvals: u64,
+    pub hint: String,
 }
 
 /// `<home>/profile.json`.
@@ -403,5 +439,83 @@ mod tests {
         let text = fs::read_to_string(profile_path(&dir)).unwrap();
         let _: serde_json::Value = serde_json::from_str(&text).unwrap();
         let _ = fs::remove_dir_all(&*dir);
+    }
+
+    #[test]
+    fn suggest_auto_allow_never_grants_by_itself() {
+        // Per Amein's review: a "suggest auto-allow" must NEVER grant
+        // anything by itself. Only an explicit user action through the
+        // audited grant path creates a grant.
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-profile-suggest-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+
+        // Operator approved `cargo fmt` 3 times: it becomes a suggestion
+        // candidate.
+        let mut p = Profile::default();
+        p.record_approval("cargo fmt", true);
+        p.record_approval("cargo fmt", true);
+        p.record_approval("cargo fmt", true);
+        assert!(save_profile(&dir, &p));
+
+        // 1. The suggestion exists (advisory data).
+        let suggestion = p.suggest_auto_allow("cargo fmt");
+        assert!(suggestion.is_some());
+        let suggestion = suggestion.unwrap();
+        assert_eq!(suggestion.tool, "cargo fmt");
+        assert_eq!(suggestion.approvals, 3);
+        // A tool without the track record gets no suggestion.
+        assert!(p.suggest_auto_allow("rm -rf").is_none());
+
+        // 2. The suggestion created NOTHING: no grants file, no audit log.
+        // (suggest_auto_allow takes &self and performs no I/O, so this is
+        // structural, but assert it against the store anyway.)
+        assert!(
+            !dir.join("grants.json").exists(),
+            "suggestion must not create grants.json"
+        );
+        assert!(
+            !dir.join("grant-audit.jsonl").exists(),
+            "suggestion must not write the grant audit log"
+        );
+
+        // 3. Explicit user action: the normal audited grant path (the same
+        // two steps the production group-commit writer performs:
+        // write-ahead audit entry, then the grants.json mutation).
+        let grant_key = "write:cargo fmt:/tmp/x";
+        let entries = crate::grant_audit::record_grants_created_batch_at(
+            &dir,
+            &[("human:test-device", "write", "write", grant_key)],
+        )
+        .expect("audit write must succeed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].actor, "human:test-device");
+        crate::grant_store::edit_grants_at(&dir, |root| {
+            crate::grant_writer::apply_grant_mutation(root, "write", "cargo fmt", Some("/tmp/x"));
+            Ok::<(), String>(())
+        })
+        .expect("grants.json write must succeed");
+
+        // 4. Now the grant exists AND the audit log records who created it.
+        let grants_text = fs::read_to_string(dir.join("grants.json")).unwrap();
+        let grants: serde_json::Value = serde_json::from_str(&grants_text).unwrap();
+        let targets = grants["mcp_write_approvals"]["cargo fmt"]
+            .as_array()
+            .expect("grant must be recorded");
+        assert!(targets.iter().any(|v| v.as_str() == Some("/tmp/x")));
+
+        let audit_text = fs::read_to_string(dir.join("grant-audit.jsonl")).unwrap();
+        let lines: Vec<&str> = audit_text.lines().collect();
+        assert_eq!(lines.len(), 1, "exactly one audited grant creation");
+        let entry: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(entry["actor"], "human:test-device");
+        assert_eq!(entry["grant_key"], grant_key);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
