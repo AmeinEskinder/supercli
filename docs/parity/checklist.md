@@ -195,12 +195,12 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 168 | [DESKTOP] | Toast notifications (for example, device connected) | partial | clients/supercli-app/lib/screens/toastcenter.dart (25 lines, bbd8b70) | - |
 | 169 | [DESKTOP] | libghostty Metal terminal surfaces, retained per session | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (54 lines, bbd8b70) | - |
 | 170 | [DESKTOP] | Remote-host panes rendered via in-memory Ghostty surfaces (same UI as local) | missing | - | - |
-| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (Split H/V buttons, bbd8b70) | - |
-| 172 | [DESKTOP] | Zoom pane (⇧⌘↩), Equalize splits, spatial focus (⌥⌘ arrows) | missing | - | - |
-| 173 | [DESKTOP] | Detach Pane / Exit Multi-Pane View | missing | - | - |
+| 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | done | clients/supercli-app/lib/pane_layout.dart (PaneLayout split H/V, 8-pane limit, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
+| 172 | [DESKTOP] | Zoom pane (⇧⌘↩), Equalize splits, spatial focus (⌥⌘ arrows) | done | clients/supercli-app/lib/pane_layout.dart (zoom/unzoom/toggle, equalize, focusDirection, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
+| 173 | [DESKTOP] | Detach Pane / Exit Multi-Pane View | partial | clients/supercli-app/lib/screens/terminalpanewindow.dart (TerminalPaneWindow exists; needs gpuidart multi-window P0-14) | - |
 | 174 | [DESKTOP] | Pane header menu with Agents/Plugins launch sections | missing | - | - |
 | 175 | [DESKTOP] | Transient launcher pane for new sessions in a group | partial | clients/supercli-app/lib/screens/sessionlauncherview.dart (35 lines, bbd8b70) | - |
-| 176 | [DESKTOP] | Persisted pane layouts per scope (pane-layouts.json) | missing | - | - |
+| 176 | [DESKTOP] | Persisted pane layouts per scope (pane-layouts.json) | partial | clients/supercli-app/lib/pane_layout.dart (toJson ready; host persistence hook not yet wired) | - |
 | 177 | [DESKTOP] | Find bar (⌘F, ⌘G, ⇧⌘G) | partial | clients/supercli-app/lib/screens/terminalfindbar.dart (35 lines, bbd8b70) | - |
 | 178 | [DESKTOP] | Font size increase/decrease/reset (⌘+ ⌘- ⌘0) | missing | - | - |
 | 179 | [DESKTOP] | URL/OSC 8 links and OSC 7 cwd tracking | partial | clients/supercli-app/lib/screens/clickablepath.dart (23 lines, bbd8b70) | - |
