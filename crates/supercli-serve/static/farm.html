@@ -17,6 +17,9 @@
   .tile header { padding: 8px 12px; font-size: 13px; display: flex; justify-content: space-between; border-bottom: 1px solid #21262d; }
   .tile .fps { color: #8b949e; font-size: 12px; }
   .tile canvas { width: 100%; display: block; aspect-ratio: 9 / 19; object-fit: contain; background: #010409; }
+  .tile .meta { color: #8b949e; font-size: 12px; padding: 4px 12px; border-bottom: 1px solid #21262d; }
+  .tile .controls { padding: 6px 12px; display: flex; gap: 8px; border-top: 1px solid #21262d; }
+  .tile .controls button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
   .tile .err { padding: 24px; color: #f85149; font-size: 13px; text-align: center; }
   #empty { padding: 60px; text-align: center; color: #8b949e; }
 </style>
@@ -52,8 +55,12 @@
       if (!streams.has(d.id)) {
         const tile = document.createElement("div");
         tile.className = "tile";
-        tile.innerHTML = '<header><span class="name"></span><span class="fps"></span></header><canvas></canvas>';
-        tile.querySelector(".name").textContent = (d.name || d.id) + " · " + d.platform;
+        tile.innerHTML = '<header><span class="name"></span><span class="fps"></span></header>' +
+          '<div class="meta"></div><canvas></canvas>' +
+          '<div class="controls"><button data-key="home">Home</button></div>';
+        tile.querySelector(".name").textContent = d.name || d.id;
+        tile.querySelector(".meta").textContent =
+          (d.platform || "?") + " · " + (d.state || "?") + " · " + (d.connection_type || "?");
         const canvas = tile.querySelector("canvas");
         const fpsEl = tile.querySelector(".fps");
         tile.addEventListener("click", () => {
@@ -76,6 +83,10 @@
         });
         s.onFps = (fps) => { fpsEl.textContent = fps + " fps"; };
         s.start();
+        tile.querySelector("[data-key]").addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          s.sendKey("home");
+        });
         streams.set(d.id, { stream: s, tile: tile });
       }
     });

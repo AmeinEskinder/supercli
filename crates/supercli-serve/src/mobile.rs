@@ -3073,6 +3073,10 @@ fn start_impl(
     platform_adapters: Arc<PlatformAdapterHub>,
     presence: Option<Arc<crate::presence::PresenceHub>>,
 ) -> Option<MobileServer> {
+    // Install the real device backends (adb/simctl/baguette + optional demo
+    // devices) before any device route can be served. Idempotent; tests that
+    // need a different provider call devices::set_provider afterwards.
+    crate::devices::install_default_provider();
     let dir = mobile_dir();
     let persisted = read_port(&dir.join("server-port"));
     let headless_persisted = read_port(&dir.join("headless-server-port"));

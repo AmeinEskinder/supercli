@@ -26,15 +26,19 @@
 //! GET  /api/devices/logs/<id>        — WebSocket, text frames (one log line each)
 //! ```
 //!
-//! The device backend is behind [`DeviceProvider`]. supercli-device is not yet
-//! a workspace member, so the default provider is [`UnwiredProvider`] (every
-//! call fails honestly with "device backend not wired"). When supercli-device
-//! lands, integration is one call: [`set_provider`]. The routes, the WebSocket
-//! handshake/framing, and the wire format are all real and tested here.
+//! The device backend is behind [`DeviceProvider`]. The production provider is
+//! [`DeviceBackendProvider`], an adapter over the real `supercli-device`
+//! backends (adb on every host, simctl/baguette on macOS, plus three scripted
+//! demo devices when `SUPERCLI_FARM_DEMO` is set). It is installed by
+//! [`install_default_provider`], called once at mobile-server startup. The
+//! routes, the WebSocket handshake/framing, and the wire format are all real
+//! and tested here.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, Once, RwLock};
+use std::time::Duration;
+use supercli_device::DeviceBackend;
 
 // ---------------------------------------------------------------------------
 // Unified wire format (§9.3)
@@ -237,6 +241,9 @@ pub struct DeviceInfo {
     pub state: String,
     #[serde(default)]
     pub name: String,
+    /// How the device is attached: `adb`, `simctl`, `baguette`, `demo`.
+    #[serde(default)]
+    pub connection_type: String,
 }
 
 /// Touch action in DEVICE-POINT coordinates (not normalized 0-1).
@@ -326,6 +333,346 @@ fn provider() -> Arc<dyn DeviceProvider> {
         .ok()
         .and_then(|guard| guard.clone())
         .unwrap_or_else(|| Arc::new(UnwiredProvider))
+}
+
+// ---------------------------------------------------------------------------
+// Real backend provider: adapter over supercli-device
+// ---------------------------------------------------------------------------
+
+/// Per-device gesture state: down/move/up resolves to a tap or a swipe.
+struct Gesture {
+    down_x: f64,
+    down_y: f64,
+    last_x: f64,
+    last_y: f64,
+}
+
+struct DemoStreamState {
+    sent_description: bool,
+}
+
+/// One registered backend plus its connection-type label.
+struct BackendEntry {
+    /// Connection-type label surfaced in the API/UI: `adb`, `simctl`,
+    /// `baguette`, or `demo`.
+    name: &'static str,
+    backend: Arc<dyn DeviceBackend>,
+}
+
+/// [`DeviceProvider`] adapter over the real `supercli-device` backends.
+///
+/// Touch arrives in device points end-to-end and is converted to pixels here:
+/// `pixels = round(points * dpi / 160)`. Density comes from the backend
+/// (`wm density` on Android); when the backend cannot report one, 160 is used
+/// (1:1, documented on the wire description).
+///
+/// Backends that are unavailable (e.g. `adb` not on PATH) contribute zero
+/// devices instead of failing the whole list. Live H.264 streaming for real
+/// hardware is not wired here yet — `next_stream_chunk` returns `None` for
+/// non-demo devices; the three scripted demo devices get a synthetic
+/// description + ~2 fps JPEG-seed stream.
+pub struct DeviceBackendProvider {
+    backends: Vec<BackendEntry>,
+    demo: Option<Arc<supercli_device::demo::DemoBackend>>,
+    routing: RwLock<HashMap<String, usize>>,
+    gestures: Mutex<HashMap<String, Gesture>>,
+    demo_streams: Mutex<HashMap<String, DemoStreamState>>,
+    demo_logs: Mutex<HashMap<String, u32>>,
+}
+
+impl DeviceBackendProvider {
+    fn new(backends: Vec<BackendEntry>, demo: Option<Arc<supercli_device::demo::DemoBackend>>) -> Self {
+        DeviceBackendProvider {
+            backends,
+            demo,
+            routing: RwLock::new(HashMap::new()),
+            gestures: Mutex::new(HashMap::new()),
+            demo_streams: Mutex::new(HashMap::new()),
+            demo_logs: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Re-enumerate every backend: rebuild the id->backend routing table and
+    /// return the mapped device list (deterministic order by id).
+    fn refresh(&self) -> Result<Vec<DeviceInfo>, String> {
+        let mut routing = HashMap::new();
+        let mut out = Vec::new();
+        for (idx, entry) in self.backends.iter().enumerate() {
+            // An unavailable backend (adb missing, baguette on Linux, ...)
+            // contributes zero devices instead of failing the list.
+            let devices = match entry.backend.list() {
+                Ok(devices) => devices,
+                Err(_) => Vec::new(),
+            };
+            for d in devices {
+                routing.insert(d.id.as_str().to_string(), idx);
+                out.push(DeviceInfo {
+                    id: d.id.as_str().to_string(),
+                    platform: d.platform.to_string(),
+                    state: d.state.to_string(),
+                    name: d.name.clone(),
+                    connection_type: entry.name.to_string(),
+                });
+            }
+        }
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        *self.routing.write().map_err(|e| e.to_string())? = routing;
+        Ok(out)
+    }
+
+    fn resolve(&self, id: &str) -> Result<usize, String> {
+        if let Some(&idx) = self
+            .routing
+            .read()
+            .map_err(|e| e.to_string())?
+            .get(id)
+        {
+            return Ok(idx);
+        }
+        self.refresh()?;
+        self.routing
+            .read()
+            .map_err(|e| e.to_string())?
+            .get(id)
+            .copied()
+            .ok_or_else(|| format!("unknown device '{id}'"))
+    }
+
+    fn density_dpi(&self, idx: usize, id: &supercli_device::DeviceId) -> u32 {
+        self.backends[idx].backend.density_dpi(id).unwrap_or(160)
+    }
+}
+
+/// Device points -> pixels: `round(points * dpi / 160)`.
+fn points_to_pixels(points: f64, dpi: u32) -> u32 {
+    ((points * dpi as f64 / 160.0).round().max(0.0)) as u32
+}
+
+impl DeviceProvider for DeviceBackendProvider {
+    fn list_devices(&self) -> Result<Vec<DeviceInfo>, String> {
+        self.refresh()
+    }
+
+    fn touch(&self, id: &str, input: &TouchInput) -> Result<(), String> {
+        let idx = self.resolve(id)?;
+        let device_id = supercli_device::DeviceId::new(id);
+        let dpi = self.density_dpi(idx, &device_id);
+        let to_px = |pt: f64| points_to_pixels(pt, dpi);
+        let backend = &self.backends[idx].backend;
+        match input.action {
+            TouchAction::Down => {
+                self.gestures
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .insert(
+                        id.to_string(),
+                        Gesture {
+                            down_x: input.x,
+                            down_y: input.y,
+                            last_x: input.x,
+                            last_y: input.y,
+                        },
+                    );
+                Ok(())
+            }
+            TouchAction::Move => {
+                if let Some(g) = self
+                    .gestures
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .get_mut(id)
+                {
+                    g.last_x = input.x;
+                    g.last_y = input.y;
+                }
+                Ok(())
+            }
+            TouchAction::Up => {
+                let gesture = self
+                    .gestures
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .remove(id);
+                match gesture {
+                    // Up without a Down: plain tap at the release point.
+                    None => backend
+                        .tap(&device_id, to_px(input.x), to_px(input.y))
+                        .map_err(|e| e.to_string()),
+                    Some(g) => {
+                        let dist =
+                            ((g.last_x - g.down_x).powi(2) + (g.last_y - g.down_y).powi(2)).sqrt();
+                        if dist < 8.0 {
+                            // Stationary press: tap at the release point.
+                            backend
+                                .tap(&device_id, to_px(input.x), to_px(input.y))
+                                .map_err(|e| e.to_string())
+                        } else {
+                            // Drag: swipe from press to last move, 300 ms.
+                            backend
+                                .swipe(
+                                    &device_id,
+                                    to_px(g.down_x),
+                                    to_px(g.down_y),
+                                    to_px(g.last_x),
+                                    to_px(g.last_y),
+                                    300,
+                                )
+                                .map_err(|e| e.to_string())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn key(&self, id: &str, keycode: &str) -> Result<(), String> {
+        let idx = self.resolve(id)?;
+        let device_id = supercli_device::DeviceId::new(id);
+        self.backends[idx]
+            .backend
+            .key(&device_id, keycode)
+            .map_err(|e| e.to_string())
+    }
+
+    fn type_text(&self, id: &str, text: &str) -> Result<(), String> {
+        let idx = self.resolve(id)?;
+        let device_id = supercli_device::DeviceId::new(id);
+        self.backends[idx]
+            .backend
+            .type_text(&device_id, text)
+            .map_err(|e| e.to_string())
+    }
+
+    fn a11y(&self, id: &str) -> Result<serde_json::Value, String> {
+        let idx = self.resolve(id)?;
+        let device_id = supercli_device::DeviceId::new(id);
+        let raw = self.backends[idx]
+            .backend
+            .describe_ui(&device_id)
+            .map_err(|e| e.to_string())?;
+        match serde_json::from_str::<serde_json::Value>(&raw) {
+            Ok(v) => Ok(v),
+            Err(_) => Ok(serde_json::json!({ "raw": raw })),
+        }
+    }
+
+    fn next_stream_chunk(&self, id: &str) -> Option<Vec<u8>> {
+        let demo = self.demo.as_ref()?;
+        if !demo.is_demo_device(id) {
+            // Live H.264 for real hardware is not wired here yet
+            // (scrcpy session integration is tracked separately).
+            // INVARIANT when it is wired: create exactly one
+            // `supercli_device::ScrcpyNative` session per device id via its
+            // public constructor, and never share or cache a socket name.
+            // The constructor generates a per-session scid internally
+            // (`generate_scid`, 8 hex chars) and forwards
+            // `localabstract:scrcpy_<scid>`, so concurrent /farm tiles can
+            // never collide on one abstract socket.
+            return None;
+        }
+        let device_id = supercli_device::DeviceId::new(id);
+        let needs_description = {
+            let mut streams = self.demo_streams.lock().ok()?;
+            let state = streams
+                .entry(id.to_string())
+                .or_insert(DemoStreamState {
+                    sent_description: false,
+                });
+            if state.sent_description {
+                false
+            } else {
+                state.sent_description = true;
+                true
+            }
+        };
+        if needs_description {
+            let geo = demo.geometry(&device_id)?;
+            let desc = serde_json::json!({
+                "width": geo.pixels.0,
+                "height": geo.pixels.1,
+                "width_points": geo.points.0,
+                "height_points": geo.points.1,
+                "density_dpi": geo.dpi,
+                "codec": "jpeg",
+                "fps": 2,
+            });
+            return Some(encode_wire_frame(
+                WIRE_DESCRIPTION,
+                desc.to_string().as_bytes(),
+            ));
+        }
+        // Scripted ~2 fps preview: JPEG seed each call.
+        std::thread::sleep(Duration::from_millis(500));
+        let jpeg = demo.screenshot(&device_id).ok()?;
+        Some(encode_wire_frame(WIRE_JPEG_SEED, &jpeg))
+    }
+
+    fn next_log_line(&self, id: &str) -> Option<String> {
+        let demo = self.demo.as_ref()?;
+        if !demo.is_demo_device(id) {
+            return None;
+        }
+        let mut counts = self.demo_logs.lock().ok()?;
+        let n = counts.entry(id.to_string()).or_insert(0);
+        *n += 1;
+        match *n {
+            1 => {
+                std::thread::sleep(Duration::from_millis(150));
+                Some(format!("demo: {id} attached (scripted)"))
+            }
+            2 => {
+                std::thread::sleep(Duration::from_millis(150));
+                let geo = demo.geometry(&supercli_device::DeviceId::new(id))?;
+                Some(format!(
+                    "demo: {id} screen {}x{}pt @{}dpi",
+                    geo.points.0, geo.points.1, geo.dpi
+                ))
+            }
+            _ => None,
+        }
+    }
+}
+
+static INSTALL_ONCE: Once = Once::new();
+
+/// Install the production provider: the real `supercli-device` backends.
+///
+/// adb is always registered (it reports zero devices when the tool is
+/// missing); simctl/baguette join on macOS. When `SUPERCLI_FARM_DEMO` is set,
+/// three scripted demo devices are registered as well — their names carry a
+/// "Demo" prefix so they can never be mistaken for hardware.
+///
+/// Idempotent: only the first call installs. Tests keep working because
+/// [`set_provider`] overwrites unconditionally.
+pub fn install_default_provider() {
+    INSTALL_ONCE.call_once(|| {
+        let mut backends: Vec<BackendEntry> = Vec::new();
+        backends.push(BackendEntry {
+            name: "adb",
+            backend: Arc::new(supercli_device::adb::AdbBackend::new()),
+        });
+        if cfg!(target_os = "macos") {
+            backends.push(BackendEntry {
+                name: "simctl",
+                backend: Arc::new(supercli_device::simctl::SimctlBackend::new()),
+            });
+            backends.push(BackendEntry {
+                name: "baguette",
+                backend: Arc::new(supercli_device::baguette::BaguetteBackend::new()),
+            });
+        }
+        let demo = if std::env::var("SUPERCLI_FARM_DEMO").is_ok() {
+            let demo = Arc::new(supercli_device::demo::DemoBackend::new());
+            backends.push(BackendEntry {
+                name: "demo",
+                backend: demo.clone(),
+            });
+            Some(demo)
+        } else {
+            None
+        };
+        set_provider(Arc::new(DeviceBackendProvider::new(backends, demo)));
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,5 +1463,144 @@ mod tests {
         let (frame_type, meta, _) = decode_wire_frame(&payload).expect("wire frame");
         assert_eq!(frame_type, WIRE_DESCRIPTION);
         assert!(String::from_utf8_lossy(&meta).contains("\"width\":1080"));
+    }
+
+    /// Build a provider over the scripted demo backend only.
+    fn demo_only_provider() -> (
+        DeviceBackendProvider,
+        Arc<supercli_device::demo::DemoBackend>,
+    ) {
+        let demo = Arc::new(supercli_device::demo::DemoBackend::new());
+        let backends = vec![BackendEntry {
+            name: "demo",
+            backend: demo.clone() as Arc<dyn supercli_device::DeviceBackend>,
+        }];
+        (
+            DeviceBackendProvider::new(backends, Some(demo.clone())),
+            demo,
+        )
+    }
+
+    fn touch_input(x: f64, y: f64, action: TouchAction) -> TouchInput {
+        TouchInput { x, y, action }
+    }
+
+    #[test]
+    fn backend_provider_lists_three_demo_devices() {
+        let (p, _) = demo_only_provider();
+        let devices = p.list_devices().expect("list");
+        assert_eq!(devices.len(), 3);
+        let ids: Vec<&str> = devices.iter().map(|d| d.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["demo-pixel7-1", "demo-pixel7-2", "demo-pixel8-pro"]
+        );
+        for d in &devices {
+            assert_eq!(d.platform, "android");
+            assert_eq!(d.state, "running");
+            assert_eq!(d.connection_type, "demo");
+            assert!(d.name.starts_with("Demo "), "demo device flagged: {}", d.name);
+        }
+    }
+
+    #[test]
+    fn points_to_pixels_conversion() {
+        // 1080px @420dpi <-> 411pt: round-trip through the wire units.
+        assert_eq!(points_to_pixels(411.0, 420), 1080);
+        assert_eq!(points_to_pixels(914.0, 420), 2400);
+        assert_eq!(points_to_pixels(0.0, 420), 0);
+        assert_eq!(points_to_pixels(336.0, 480), 1008);
+    }
+
+    #[test]
+    fn backend_provider_touch_tap_converts_device_points() {
+        let (p, demo) = demo_only_provider();
+        // Tap at device points (205.5, 457): 205.5*420/160 = 539.4 -> 539,
+        // 457*420/160 = 1199.625 -> 1200.
+        p.touch("demo-pixel7-1", &touch_input(205.5, 457.0, TouchAction::Down))
+            .unwrap();
+        p.touch("demo-pixel7-1", &touch_input(205.5, 457.0, TouchAction::Up))
+            .unwrap();
+        let taps: Vec<_> = demo
+            .calls()
+            .into_iter()
+            .filter(|c| c.method == "tap")
+            .collect();
+        assert_eq!(taps.len(), 1);
+        assert_eq!(taps[0].args, vec!["demo-pixel7-1", "539", "1200"]);
+    }
+
+    #[test]
+    fn backend_provider_touch_drag_becomes_swipe() {
+        let (p, demo) = demo_only_provider();
+        // Drag in device points: (100,200) -> (300,400) at 420dpi.
+        p.touch("demo-pixel7-2", &touch_input(100.0, 200.0, TouchAction::Down))
+            .unwrap();
+        p.touch("demo-pixel7-2", &touch_input(300.0, 400.0, TouchAction::Move))
+            .unwrap();
+        p.touch("demo-pixel7-2", &touch_input(300.0, 400.0, TouchAction::Up))
+            .unwrap();
+        let swipes: Vec<_> = demo
+            .calls()
+            .into_iter()
+            .filter(|c| c.method == "swipe")
+            .collect();
+        assert_eq!(swipes.len(), 1);
+        // 100*420/160=262.5->263, 200*420/160=525, 300*420/160=787.5->788,
+        // 400*420/160=1050, 300 ms.
+        assert_eq!(
+            swipes[0].args,
+            vec!["demo-pixel7-2", "263", "525", "788", "1050", "300"]
+        );
+    }
+
+    #[test]
+    fn backend_provider_key_and_text_reach_backend() {
+        let (p, demo) = demo_only_provider();
+        p.key("demo-pixel8-pro", "home").unwrap();
+        p.type_text("demo-pixel8-pro", "hello").unwrap();
+        let calls = demo.calls();
+        assert!(calls
+            .iter()
+            .any(|c| c.method == "key" && c.args == vec!["demo-pixel8-pro", "home"]));
+        assert!(calls
+            .iter()
+            .any(|c| c.method == "type_text" && c.args == vec!["demo-pixel8-pro", "hello"]));
+        assert!(p.key("demo-pixel8-pro", "bogus").is_err());
+    }
+
+    #[test]
+    fn backend_provider_stream_description_carries_points() {
+        let (p, _) = demo_only_provider();
+        let chunk = p.next_stream_chunk("demo-pixel7-1").expect("chunk");
+        let (frame_type, payload, _) = decode_wire_frame(&chunk).expect("wire frame");
+        assert_eq!(frame_type, WIRE_DESCRIPTION);
+        let meta: serde_json::Value = serde_json::from_slice(&payload).expect("json");
+        assert_eq!(meta["width"], 1080);
+        assert_eq!(meta["height"], 2400);
+        assert_eq!(meta["width_points"], 411);
+        assert_eq!(meta["height_points"], 914);
+        assert_eq!(meta["density_dpi"], 420);
+    }
+
+    #[test]
+    fn backend_provider_unknown_device_errors_honestly() {
+        let (p, _) = demo_only_provider();
+        assert!(p
+            .touch("nope", &touch_input(1.0, 1.0, TouchAction::Up))
+            .is_err());
+        assert!(p.key("nope", "home").is_err());
+        assert!(p.next_stream_chunk("nope").is_none());
+    }
+
+    #[test]
+    fn install_default_provider_is_idempotent() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
+        install_default_provider();
+        install_default_provider();
+        // The installed provider answers list_devices (possibly empty when no
+        // hardware is attached); the point is it no longer fails as unwired.
+        let devices = provider().list_devices().expect("list");
+        assert!(devices.iter().all(|d| !d.id.is_empty()));
     }
 }

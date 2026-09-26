@@ -386,7 +386,7 @@ pub fn spawn_stream(tool: &str, args: &[&str]) -> Result<DeviceStream, DeviceErr
 ///
 /// `id` semantics: adb serial, baguette session id, or simctl UDID; for
 /// [`DeviceBackend::boot`] it is the AVD name (Android) or UDID (iOS).
-pub trait DeviceBackend {
+pub trait DeviceBackend: Send + Sync {
     /// All devices the backend knows about (running + stopped + available).
     fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError>;
     /// Boot the device (AVD name on Android, UDID on iOS). Waits for the
@@ -423,6 +423,24 @@ pub trait DeviceBackend {
     /// `uiautomator dump` XML on Android. Returned as a raw string; parsing
     /// is the caller's job. Agents act on elements, not pixels.
     fn describe_ui(&self, id: &DeviceId) -> Result<String, DeviceError>;
+
+    /// Screen density in dpi (Android: `wm density`; iOS: derived from the
+    /// device model). Used to convert device points to pixels:
+    /// `pixels = points * dpi / 160`. The default impl reports
+    /// [`DeviceError::Unsupported`]; callers fall back to 160 (1:1).
+    fn density_dpi(&self, _id: &DeviceId) -> Result<u32, DeviceError> {
+        Err(DeviceError::Unsupported(
+            "density_dpi not implemented for this backend".to_string(),
+        ))
+    }
+
+    /// Press a hardware/software key: `home`, `back`, `power`, `lock`.
+    /// The default impl reports [`DeviceError::Unsupported`].
+    fn key(&self, _id: &DeviceId, _keycode: &str) -> Result<(), DeviceError> {
+        Err(DeviceError::Unsupported(
+            "key injection not implemented for this backend".to_string(),
+        ))
+    }
 }
 
 #[cfg(feature = "device")]
@@ -431,6 +449,7 @@ pub mod adb;
 pub mod baguette;
 #[cfg(feature = "device")]
 pub mod baguette_native;
+#[cfg(feature = "device")]
 #[cfg(test)]
 mod fake;
 #[cfg(feature = "device")]
@@ -443,6 +462,7 @@ pub mod scrcpy_native;
 pub mod simctl;
 
 // Always compiled: pure std wire format + setup planners (no tools).
+pub mod demo;
 pub mod setup;
 pub mod wire_format;
 

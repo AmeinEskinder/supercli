@@ -105,7 +105,7 @@
       el.className = "device-item" + (d.id === currentId ? " active" : "");
       el.innerHTML = '<div class="id"></div><div class="meta"></div>';
       el.querySelector(".id").textContent = d.name || d.id;
-      el.querySelector(".meta").textContent = d.platform + " · " + d.state + " · " + d.id;
+      el.querySelector(".meta").textContent = d.platform + " · " + d.state + " · " + (d.connection_type || "?") + " · " + d.id;
       el.addEventListener("click", () => selectDevice(d.id));
       list.appendChild(el);
     });
@@ -165,7 +165,7 @@
       el.className = "device-item" + (d.id === currentId ? " active" : "");
       el.innerHTML = '<div class="id"></div><div class="meta"></div>';
       el.querySelector(".id").textContent = d.name || d.id;
-      el.querySelector(".meta").textContent = d.platform + " · " + d.state + " · " + d.id;
+      el.querySelector(".meta").textContent = d.platform + " · " + d.state + " · " + (d.connection_type || "?") + " · " + d.id;
       el.addEventListener("click", () => selectDevice(d.id));
       list.appendChild(el);
     });
