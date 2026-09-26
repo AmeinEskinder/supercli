@@ -28,9 +28,7 @@ fn main() {
     devices::install_default_provider();
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
-    listener
-        .set_nonblocking(false)
-        .expect("blocking listener");
+    listener.set_nonblocking(false).expect("blocking listener");
     let port = listener.local_addr().expect("local addr").port();
     println!("farm_demo listening on 127.0.0.1:{port}");
     println!("  devices: http://127.0.0.1:{port}/devices");
@@ -59,13 +57,16 @@ fn handle(mut stream: std::net::TcpStream) {
     let (method, path, headers, body) = match parse_request(&buf[..n]) {
         Some(r) => r,
         None => {
-            let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            let _ = stream.write_all(
+                b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            );
             return;
         }
     };
     // Only device routes are served here.
     if !devices::is_device_route(&path) {
-        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        let _ = stream
+            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
         return;
     }
     // WebSocket upgrade: run the same connection handler as the real server.
@@ -80,14 +81,7 @@ fn handle(mut stream: std::net::TcpStream) {
             headers_map.insert(k.to_lowercase(), v.clone());
         }
         let mut replay = ReplayStream::new(stream, buf[..n].to_vec());
-        devices::handle_device_connection(
-            &mut replay,
-            &method,
-            &path,
-            &headers_map,
-            &body,
-            false,
-        );
+        devices::handle_device_connection(&mut replay, &method, &path, &headers_map, &body, false);
         return;
     }
     let (status, resp_body, content_type) = devices::handle_device_http(&method, &path, &body);
@@ -107,9 +101,7 @@ fn handle(mut stream: std::net::TcpStream) {
 }
 
 /// Split an HTTP request head into method, path, headers, body.
-fn parse_request(
-    raw: &[u8],
-) -> Option<(String, String, Vec<(String, String)>, Vec<u8>)> {
+fn parse_request(raw: &[u8]) -> Option<(String, String, Vec<(String, String)>, Vec<u8>)> {
     let head_end = raw.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
     let head = std::str::from_utf8(&raw[..head_end]).ok()?;
     let mut lines = head.lines();

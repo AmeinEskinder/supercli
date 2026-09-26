@@ -348,9 +348,8 @@ impl DeviceBackend for AdbBackend {
     fn density_dpi(&self, id: &DeviceId) -> Result<u32, DeviceError> {
         // `adb shell wm density` prints e.g. "Physical density: 420".
         let out = Self::adb(Some(id), &["shell", "wm", "density"])?;
-        parse_wm_density(&out.stdout_lossy()).ok_or_else(|| {
-            DeviceError::Parse("could not parse `wm density` output".to_string())
-        })
+        parse_wm_density(&out.stdout_lossy())
+            .ok_or_else(|| DeviceError::Parse("could not parse `wm density` output".to_string()))
     }
 
     fn key(&self, id: &DeviceId, keycode: &str) -> Result<(), DeviceError> {

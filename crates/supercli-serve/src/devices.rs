@@ -381,7 +381,10 @@ pub struct DeviceBackendProvider {
 }
 
 impl DeviceBackendProvider {
-    fn new(backends: Vec<BackendEntry>, demo: Option<Arc<supercli_device::demo::DemoBackend>>) -> Self {
+    fn new(
+        backends: Vec<BackendEntry>,
+        demo: Option<Arc<supercli_device::demo::DemoBackend>>,
+    ) -> Self {
         DeviceBackendProvider {
             backends,
             demo,
@@ -421,12 +424,7 @@ impl DeviceBackendProvider {
     }
 
     fn resolve(&self, id: &str) -> Result<usize, String> {
-        if let Some(&idx) = self
-            .routing
-            .read()
-            .map_err(|e| e.to_string())?
-            .get(id)
-        {
+        if let Some(&idx) = self.routing.read().map_err(|e| e.to_string())?.get(id) {
             return Ok(idx);
         }
         self.refresh()?;
@@ -461,38 +459,26 @@ impl DeviceProvider for DeviceBackendProvider {
         let backend = &self.backends[idx].backend;
         match input.action {
             TouchAction::Down => {
-                self.gestures
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .insert(
-                        id.to_string(),
-                        Gesture {
-                            down_x: input.x,
-                            down_y: input.y,
-                            last_x: input.x,
-                            last_y: input.y,
-                        },
-                    );
+                self.gestures.lock().map_err(|e| e.to_string())?.insert(
+                    id.to_string(),
+                    Gesture {
+                        down_x: input.x,
+                        down_y: input.y,
+                        last_x: input.x,
+                        last_y: input.y,
+                    },
+                );
                 Ok(())
             }
             TouchAction::Move => {
-                if let Some(g) = self
-                    .gestures
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .get_mut(id)
-                {
+                if let Some(g) = self.gestures.lock().map_err(|e| e.to_string())?.get_mut(id) {
                     g.last_x = input.x;
                     g.last_y = input.y;
                 }
                 Ok(())
             }
             TouchAction::Up => {
-                let gesture = self
-                    .gestures
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .remove(id);
+                let gesture = self.gestures.lock().map_err(|e| e.to_string())?.remove(id);
                 match gesture {
                     // Up without a Down: plain tap at the release point.
                     None => backend
@@ -573,11 +559,9 @@ impl DeviceProvider for DeviceBackendProvider {
         let device_id = supercli_device::DeviceId::new(id);
         let needs_description = {
             let mut streams = self.demo_streams.lock().ok()?;
-            let state = streams
-                .entry(id.to_string())
-                .or_insert(DemoStreamState {
-                    sent_description: false,
-                });
+            let state = streams.entry(id.to_string()).or_insert(DemoStreamState {
+                sent_description: false,
+            });
             if state.sent_description {
                 false
             } else {
@@ -1500,7 +1484,11 @@ mod tests {
             assert_eq!(d.platform, "android");
             assert_eq!(d.state, "running");
             assert_eq!(d.connection_type, "demo");
-            assert!(d.name.starts_with("Demo "), "demo device flagged: {}", d.name);
+            assert!(
+                d.name.starts_with("Demo "),
+                "demo device flagged: {}",
+                d.name
+            );
         }
     }
 
@@ -1521,8 +1509,11 @@ mod tests {
         let (p, demo) = demo_only_provider();
         // Tap at device points (205.5, 457): 205.5*420/160 = 539.4 -> 539,
         // 457*420/160 = 1199.625 -> 1200.
-        p.touch("demo-pixel7-1", &touch_input(205.5, 457.0, TouchAction::Down))
-            .unwrap();
+        p.touch(
+            "demo-pixel7-1",
+            &touch_input(205.5, 457.0, TouchAction::Down),
+        )
+        .unwrap();
         p.touch("demo-pixel7-1", &touch_input(205.5, 457.0, TouchAction::Up))
             .unwrap();
         let taps: Vec<_> = demo
@@ -1538,10 +1529,16 @@ mod tests {
     fn backend_provider_touch_drag_becomes_swipe() {
         let (p, demo) = demo_only_provider();
         // Drag in device points: (100,200) -> (300,400) at 420dpi.
-        p.touch("demo-pixel7-2", &touch_input(100.0, 200.0, TouchAction::Down))
-            .unwrap();
-        p.touch("demo-pixel7-2", &touch_input(300.0, 400.0, TouchAction::Move))
-            .unwrap();
+        p.touch(
+            "demo-pixel7-2",
+            &touch_input(100.0, 200.0, TouchAction::Down),
+        )
+        .unwrap();
+        p.touch(
+            "demo-pixel7-2",
+            &touch_input(300.0, 400.0, TouchAction::Move),
+        )
+        .unwrap();
         p.touch("demo-pixel7-2", &touch_input(300.0, 400.0, TouchAction::Up))
             .unwrap();
         let swipes: Vec<_> = demo

@@ -98,12 +98,7 @@ impl DemoBackend {
             .devices
             .iter()
             .find(|d| d.info.id == *id)
-            .map(|d| {
-                (
-                    d.pixels.0 * 160 / d.dpi,
-                    d.pixels.1 * 160 / d.dpi,
-                )
-            })
+            .map(|d| (d.pixels.0 * 160 / d.dpi, d.pixels.1 * 160 / d.dpi))
     }
 
     fn record(&self, method: &'static str, args: Vec<String>) {
@@ -121,9 +116,7 @@ impl DemoBackend {
             .iter()
             .find(|d| d.info.id == *id)
             .map(|d| (d.pixels.0, d.pixels.1, d.dpi, d.screen_jpeg))
-            .ok_or_else(|| {
-                DeviceError::Unsupported(format!("demo: unknown device '{id}'"))
-            })
+            .ok_or_else(|| DeviceError::Unsupported(format!("demo: unknown device '{id}'")))
     }
 }
 
@@ -273,13 +266,15 @@ impl DemoBackend {
     /// Geometry (pixels, points, dpi) for a demo device id.
     pub fn geometry(&self, id: &DeviceId) -> Option<DemoGeometry> {
         let inner = self.inner.lock().unwrap();
-        inner.devices.iter().find(|d| d.info.id == *id).map(|d| {
-            DemoGeometry {
+        inner
+            .devices
+            .iter()
+            .find(|d| d.info.id == *id)
+            .map(|d| DemoGeometry {
                 pixels: d.pixels,
                 points: (d.pixels.0 * 160 / d.dpi, d.pixels.1 * 160 / d.dpi),
                 dpi: d.dpi,
-            }
-        })
+            })
     }
 
     /// Is this one of the scripted demo device ids?
@@ -317,7 +312,10 @@ mod tests {
         let devices = b.list().expect("list");
         assert_eq!(devices.len(), 3);
         let ids: Vec<&str> = devices.iter().map(|d| d.id.as_str()).collect();
-        assert_eq!(ids, vec!["demo-pixel7-1", "demo-pixel7-2", "demo-pixel8-pro"]);
+        assert_eq!(
+            ids,
+            vec!["demo-pixel7-1", "demo-pixel7-2", "demo-pixel8-pro"]
+        );
         for d in &devices {
             assert_eq!(d.platform, Platform::Android);
             assert_eq!(d.state, DeviceState::Running);
@@ -329,10 +327,7 @@ mod tests {
     fn demo_points_derive_from_pixels_and_dpi() {
         let b = DemoBackend::new();
         // 1080px @420dpi -> 411pt; 2400px @420dpi -> 914pt
-        assert_eq!(
-            b.points(&DeviceId::new("demo-pixel7-1")),
-            Some((411, 914))
-        );
+        assert_eq!(b.points(&DeviceId::new("demo-pixel7-1")), Some((411, 914)));
         // 1008px @480dpi -> 336pt; 2244px @480dpi -> 748pt
         assert_eq!(
             b.points(&DeviceId::new("demo-pixel8-pro")),
