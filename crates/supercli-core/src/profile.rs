@@ -124,6 +124,28 @@ impl Profile {
     pub fn pref(&self, key: &str) -> Option<&Preference> {
         self.prefs.get(key)
     }
+
+    /// Human-readable hint for an approval prompt, based on the operator's
+    /// history with this tool. Returns None when there's no strong signal.
+    ///
+    /// This is how profile preferences affect approval behavior: the Host
+    /// surfaces the hint alongside the prompt (e.g. "you usually deny
+    /// `rm -rf` — extra care"), but the profile never auto-allows or
+    /// auto-denies.
+    pub fn approval_hint(&self, tool: &str) -> Option<String> {
+        let (approvals, denials) = self.tool_outcomes.get(tool)?;
+        if *approvals >= 3 && *denials == 0 {
+            Some(format!(
+                "you have approved `{tool}` {approvals} times with no denials"
+            ))
+        } else if *denials >= 2 && *approvals == 0 {
+            Some(format!(
+                "you have denied `{tool}` {denials} times with no approvals — extra care"
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 /// `<home>/profile.json`.
@@ -315,6 +337,26 @@ mod tests {
         let loaded = load_profile(&dir);
         assert_eq!(loaded, p);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn approval_hint_reflects_history() {
+        let mut p = Profile::default();
+        assert_eq!(p.approval_hint("cargo fmt"), None);
+
+        p.record_approval("cargo fmt", true);
+        p.record_approval("cargo fmt", true);
+        assert_eq!(p.approval_hint("cargo fmt"), None); // only 2
+
+        p.record_approval("cargo fmt", true);
+        let hint = p.approval_hint("cargo fmt").unwrap();
+        assert!(hint.contains("cargo fmt") && hint.contains("3 times"));
+
+        p.record_approval("rm -rf", false);
+        assert_eq!(p.approval_hint("rm -rf"), None); // only 1 denial
+        p.record_approval("rm -rf", false);
+        let hint = p.approval_hint("rm -rf").unwrap();
+        assert!(hint.contains("extra care"));
     }
 
     #[test]

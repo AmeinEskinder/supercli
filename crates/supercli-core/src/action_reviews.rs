@@ -467,6 +467,19 @@ pub fn record_review(
     // Durable before we return: the review must survive a crash here.
     file.sync_all()
         .map_err(|e| ReviewError::WriteFailed(format!("fsync {}: {e}", path.display())))?;
+    // The review is durable. If a human made this decision, feed it to the
+    // operator profile (approval/denial counters). Best-effort: a profile
+    // write must never break the review path.
+    //
+    // Note: `actor` was moved into `entry` above; re-derive the human check
+    // from the entry's actor.
+    if matches!(entry.actor, Actor::Human { .. }) {
+        let approved = matches!(decision, ReviewDecision::Approved);
+        let home = crate::app_paths::supercli_home();
+        crate::profile::update_profile(&home, |p| {
+            p.record_approval(tool, approved);
+        });
+    }
     Ok(entry)
 }
 
@@ -1773,5 +1786,93 @@ mod tests {
         assert_eq!(verify_review_chain(&session_dir).expect("chain"), 1);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn record_review_feeds_human_decisions_to_profile() {
+        // Serialize SUPERCLI_HOME mutation (see app_paths docs).
+        let _guard = crate::app_paths::TEST_SUPERCLI_HOME_LOCK
+            .lock()
+            .unwrap();
+        let home = test_dir("profile-home");
+        let session_dir = home.join("session-1");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        // Restore the env var on drop, even if the test panics.
+        struct RestoreEnv;
+        impl Drop for RestoreEnv {
+            fn drop(&mut self) {
+                std::env::remove_var("SUPERCLI_HOME");
+            }
+        }
+        let _restore = RestoreEnv;
+        std::env::set_var("SUPERCLI_HOME", &home);
+
+        // Human approval → profile counter increments.
+        record_review(
+            &session_dir,
+            Actor::Human {
+                device_id: "phone-1".into(),
+            },
+            "c1",
+            "cargo fmt",
+            "aa",
+            ReviewDecision::Approved,
+            None,
+        )
+        .expect("review");
+        let profile = crate::profile::load_profile(&home);
+        assert_eq!(
+            profile.tool_outcomes.get("cargo fmt"),
+            Some(&(1, 0)),
+            "human approval increments the profile counter"
+        );
+
+        // Human denial → denial counter increments.
+        record_review(
+            &session_dir,
+            Actor::Human {
+                device_id: "phone-1".into(),
+            },
+            "c1",
+            "rm -rf",
+            "bb",
+            ReviewDecision::Denied,
+            None,
+        )
+        .expect("review");
+        let profile = crate::profile::load_profile(&home);
+        assert_eq!(profile.tool_outcomes.get("rm -rf"), Some(&(0, 1)));
+
+        // Non-human actors do NOT touch the operator profile.
+        record_review(
+            &session_dir,
+            Actor::Scheduled {
+                trigger_id: "nightly".into(),
+            },
+            "c1",
+            "cargo fmt",
+            "cc",
+            ReviewDecision::Approved,
+            None,
+        )
+        .expect("review");
+        record_review(
+            &session_dir,
+            Actor::PolicyAllow,
+            "c1",
+            "cargo fmt",
+            "dd",
+            ReviewDecision::Approved,
+            None,
+        )
+        .expect("review");
+        let profile = crate::profile::load_profile(&home);
+        assert_eq!(
+            profile.tool_outcomes.get("cargo fmt"),
+            Some(&(1, 0)),
+            "scheduled/policy actors must not pollute the human profile"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
     }
 }
