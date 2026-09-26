@@ -98,6 +98,22 @@ final class HostClient {
     await _post('/mobile/sessions/$sessionId/messages', {'text': text});
   }
 
+  /// POST `/mobile/browser/takeover` — browser takeover over CDP.
+  ///
+  /// Pass `{'list': true}` to list tabs, or `{'target_id': id, 'frames': n,
+  /// 'interval_ms': ms}` to capture screenshots. Returns the Host's JSON
+  /// summary (targets list, or frame count/byte size/png_magic_ok).
+  Future<Map<String, dynamic>> browserTakeover(Map<String, Object> args) async {
+    final response = await _post('/mobile/browser/takeover', args);
+    if (response.statusCode != 200) {
+      throw HostException(
+        'browser takeover failed: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<http.Response> _get(String path) async {
     final url = baseUrl.replace(path: '${baseUrl.path}$path');
     final response = await _http.get(url).timeout(const Duration(seconds: 10));

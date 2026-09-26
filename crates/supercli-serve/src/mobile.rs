@@ -1494,6 +1494,21 @@ fn principal_device_id(principal: &ControllerPrincipal) -> String {
 /// - `pending_reviews`: in-flight (no outcome) reviews across all sessions
 /// - `ambiguous_count`: Ambiguous outcomes across all sessions
 /// - `lease_holders`: current lease holders from the lease DB
+/// POST /mobile/browser/takeover — attach to a browser tab over CDP and
+/// stream screenshots. Body is the takeover_tool JSON input:
+/// `{"list": true}` or `{"target_id": "...", "frames": N, "interval_ms": M,
+/// "endpoint": "ws://…"}`. Returns the takeover_tool JSON output.
+///
+/// The CDP endpoint is loopback-only (ws://); the Host dials it from the
+/// machine the browser runs on, so this works when the gpuidart app and the
+/// browser are on the same host as the Host.
+fn handle_browser_takeover(body: &serde_json::Value) -> (u16, String) {
+    match supercli_core::browser_takeover::takeover_tool(body) {
+        Ok(json) => (200, json),
+        Err(e) => (502, error_body(&format!("browser takeover failed: {e}"))),
+    }
+}
+
 fn handle_metrics() -> (u16, String) {
     let (sessions, ring_buffer_depth) = event_bus().metrics();
 
@@ -2005,6 +2020,7 @@ fn handle_with_effects(
         ("GET", "/mobile/output") => handle_output(request),
         ("GET", "/mobile/events") => handle_events(request),
         ("GET", "/mobile/metrics") => handle_metrics(),
+        ("POST", "/mobile/browser/takeover") => handle_browser_takeover(&body_json(request)),
         ("POST", "/mobile/turn-cancel") => {
             // R5: per-device rate limit on cancels.
             let device_id = principal_device_id(principal);
