@@ -52,27 +52,9 @@ echo "$SMOKE_JAR" | sha256sum
 adb -s "$SERIAL" push "$SMOKE_JAR" /data/local/tmp/scrcpy-server.jar
 adb -s "$SERIAL" shell ls -lh /data/local/tmp/scrcpy-server.jar
 
-# Try MINIMAL command first (no optional args) - if this works, our args are wrong
-echo "=== smoke: trying MINIMAL server command ==="
-adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7" > "$RUNNER_TEMP/smoke-minimal.log" 2>&1 &
-MINIMAL_PID=$!
-sleep 8
-if kill -0 $MINIMAL_PID 2>/dev/null; then
-  echo "smoke MINIMAL: server still alive (GOOD)"
-  MINIMAL_OK=1
-else
-  echo "smoke MINIMAL: server DIED (BAD)"
-  MINIMAL_OK=0
-fi
-echo "=== minimal server log ==="
-cat "$RUNNER_TEMP/smoke-minimal.log" || true
-kill $MINIMAL_PID 2>/dev/null || true
-adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
-sleep 2
-cp "$RUNNER_TEMP/smoke-minimal.log" "$GITHUB_WORKSPACE/smoke-minimal.log" || true
-
-# Try FULL command (Amein's proven args, no forced encoder)
-echo "=== smoke: trying FULL server command ==="
+# Smoke test with Amein's proven server args. If this succeeds but the
+# Rust test fails, the problem is in the Rust handshake (not the server).
+echo "=== smoke: trying server command ==="
 adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
 SMOKE_PID=$!
 sleep 8
@@ -80,9 +62,9 @@ sleep 8
 adb -s "$SERIAL" shell ps -A | grep -i scrcpy || echo "smoke: no scrcpy process found in ps"
 # Check if the adb shell session is still alive
 if kill -0 $SMOKE_PID 2>/dev/null; then
-  echo "smoke FULL: server adb session still alive (GOOD - server running)"
+  echo "smoke: server adb session still alive (GOOD - server running)"
 else
-  echo "smoke FULL: server adb session DIED (BAD - server crashed)"
+  echo "smoke: server adb session DIED (BAD - server crashed)"
 fi
 echo "=== smoke server log ==="
 cat "$RUNNER_TEMP/smoke-server.log" || true
@@ -92,7 +74,7 @@ adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
 sleep 2
 # Copy smoke log to workspace for artifact upload
 cp "$RUNNER_TEMP/smoke-server.log" "$GITHUB_WORKSPACE/smoke-server.log" || true
-echo "=== stage: shell_smoke_test_done (minimal_ok=$MINIMAL_OK) ==="
+echo "=== stage: shell_smoke_test_done ==="
 
 # Real proof: connect through scrcpy_native, read >=600 H.264 packets,
 # measure fps / tap latency / pinch.
@@ -116,9 +98,6 @@ echo "=== stage: cargo_test_done exit=$TEST_STATUS (full output in e2e.log) ==="
   echo "## Android E2E Diagnostics"
   echo ""
   echo "**Test exit code:** $TEST_STATUS"
-  echo ""
-  echo "### Smoke test results"
-  echo "- Minimal command alive: ${MINIMAL_OK:-unknown}"
   echo ""
   echo "### Last 50 lines of e2e.log"
   echo '```'
