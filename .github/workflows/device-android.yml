@@ -1,0 +1,92 @@
+# Headless Android emulator proof for the native scrcpy client.
+#
+# Runs on every push to track-b-device (and manual dispatch). Boots a real
+# emulator with KVM (no window, no audio), then drives it through
+# crates/supercli-device/src/scrcpy_native.rs:
+#   - connects (jar deploy + SHA-256, port forward, server start)
+#   - reads >= 600 real H.264 packets, measures fps over 60 s
+#   - tap-to-frame p50/p95: native control channel vs `adb shell input`
+#   - two-pointer pinch
+# Uploads: screenshot.png, test-10s.mkv, metrics.json.
+#
+# Choice of runner action: ReactiveCircus/android-emulator-runner@v2 is the
+# de-facto standard (used by google/iosched etc.); it handles SDK install,
+# AVD creation, KVM accel detection and boot-wait reliably. A hand-rolled
+# sdkmanager flow would duplicate all of that.
+
+name: device-android
+
+on:
+  push:
+    branches: [track-b-device]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.88.0"
+
+jobs:
+  android-headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm || echo "NO /dev/kvm (emulator will fall back to software accel)"
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+
+      - name: Headless emulator + native scrcpy e2e
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back webcam0
+          script: |
+            set -eux
+            export PATH="$HOME/.cargo/bin:$PATH"
+            adb wait-for-device
+            adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
+            adb shell getprop sys.boot_completed
+            ls -la /dev/kvm || true
+
+            # Real proof: connect through scrcpy_native, read >=600 H.264
+            # packets, measure fps / tap latency / pinch.
+            cd "$GITHUB_WORKSPACE/crates"
+            SUPERCLI_ANDROID_E2E=1 \
+            ANDROID_SERIAL=emulator-5554 \
+            METRICS_OUT="$GITHUB_WORKSPACE/metrics.json" \
+            cargo test -p supercli-device --features device \
+              --test android_e2e -- --nocapture
+
+            # Screenshot artifact.
+            adb -s emulator-5554 exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png"
+
+            # 10 s screen recording, remuxed to mkv.
+            adb -s emulator-5554 shell screenrecord --time-limit 10 /sdcard/test.mp4
+            adb -s emulator-5554 pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4"
+            sudo apt-get install -y ffmpeg
+            ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv"
+
+            echo "=== metrics.json ==="
+            cat "$GITHUB_WORKSPACE/metrics.json"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: |
+            screenshot.png
+            test-10s.mkv
+            metrics.json
