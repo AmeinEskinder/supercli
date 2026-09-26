@@ -13,6 +13,11 @@
 # de-facto standard (used by google/iosched etc.); it handles SDK install,
 # AVD creation, KVM accel detection and boot-wait reliably. A hand-rolled
 # sdkmanager flow would duplicate all of that.
+#
+# GOTCHA (run #1, exit 127): the action executes each LINE of its `script:`
+# input as a separate `sh -c '<line>'` (see parseScript in the action source).
+# Backslash continuations, `export`, and `cd` do not survive across lines, so
+# the e2e logic lives in android-e2e.sh, invoked here via a single line.
 
 name: device-android
 
@@ -36,7 +41,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -la /dev/kvm || echo "NO /dev/kvm (emulator will fall back to software accel)"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.88.0
@@ -52,38 +57,13 @@ jobs:
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back webcam0
-          script: |
-            set -eux
-            export PATH="$HOME/.cargo/bin:$PATH"
-            adb wait-for-device
-            adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
-            adb shell getprop sys.boot_completed
-            ls -la /dev/kvm || true
-
-            # Real proof: connect through scrcpy_native, read >=600 H.264
-            # packets, measure fps / tap latency / pinch.
-            cd "$GITHUB_WORKSPACE/crates"
-            SUPERCLI_ANDROID_E2E=1 \
-            ANDROID_SERIAL=emulator-5554 \
-            METRICS_OUT="$GITHUB_WORKSPACE/metrics.json" \
-            cargo test -p supercli-device --features device \
-              --test android_e2e -- --nocapture
-
-            # Screenshot artifact.
-            adb -s emulator-5554 exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png"
-
-            # 10 s screen recording, remuxed to mkv.
-            adb -s emulator-5554 shell screenrecord --time-limit 10 /sdcard/test.mp4
-            adb -s emulator-5554 pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4"
-            sudo apt-get install -y ffmpeg
-            ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv"
-
-            echo "=== metrics.json ==="
-            cat "$GITHUB_WORKSPACE/metrics.json"
+          # Single line: the action runs each script: line as its own sh -c,
+          # so the multi-line e2e logic lives in android-e2e.sh.
+          script: bash "$GITHUB_WORKSPACE/.github/workflows/android-e2e.sh"
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-test-results
           path: |
