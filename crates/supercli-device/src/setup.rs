@@ -333,6 +333,7 @@ mod tests {
     use std::cell::RefCell;
 
     /// Mock tool runner: records every invocation, returns canned success.
+    #[allow(clippy::type_complexity)]
     struct MockRunner {
         calls: RefCell<Vec<(String, Vec<String>, Option<Vec<u8>>)>>,
     }

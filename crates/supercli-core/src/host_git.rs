@@ -951,7 +951,6 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// Process-global hook tests must not run in parallel.
-
     /// Fix 5.1: writes to shell startup files, gitconfig, and LaunchAgents
     /// are rejected even though they are inside the scope's home directory.
     #[test]

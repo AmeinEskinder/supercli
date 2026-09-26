@@ -1494,10 +1494,11 @@ fn principal_device_id(principal: &ControllerPrincipal) -> String {
 /// - `pending_reviews`: in-flight (no outcome) reviews across all sessions
 /// - `ambiguous_count`: Ambiguous outcomes across all sessions
 /// - `lease_holders`: current lease holders from the lease DB
+///
 /// POST /mobile/browser/takeover — attach to a browser tab over CDP and
 /// stream screenshots. Body is the takeover_tool JSON input:
-/// `{"list": true}` or `{"target_id": "...", "frames": N, "interval_ms": M,
-/// "endpoint": "ws://…"}`. Returns the takeover_tool JSON output.
+///   `{"list": true}` or `{"target_id": "...", "frames": N, "interval_ms": M,
+///   "endpoint": "ws://…"}`. Returns the takeover_tool JSON output.
 ///
 /// Live human takeover adds session actions (`"action": ...`):
 /// `begin` (attach, returns a session token), `pause` (agent stops driving,

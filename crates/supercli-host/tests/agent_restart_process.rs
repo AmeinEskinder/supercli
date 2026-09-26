@@ -302,7 +302,7 @@ fn initial_launch_runs_the_command_untouched_and_resumes_from_hook_captured_iden
             && ready["provider_session_id"].is_null()
             && ready.get("managed_storage_path").is_none()
     });
-    let ready = manifest(&home, session_id);
+    let _ready = manifest(&home, session_id);
     let marker_path = home
         .join("app-sessions")
         .join(session_id)

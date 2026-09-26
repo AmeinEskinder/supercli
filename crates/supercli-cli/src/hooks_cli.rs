@@ -86,10 +86,8 @@ fn list(args: &[String]) -> Result<i32, String> {
             "No hooks registered. Add handlers to ~/.supercli/hooks.toml or .supercli/hooks.toml."
         );
     } else {
-        println!(
-            "{:<24} {:<12} {:<16} {:<8} {}",
-            "NAME", "ENTITY", "EVENT", "PRIO", "TARGET"
-        );
+        let (h1, h2, h3, h4, h5) = ("NAME", "ENTITY", "EVENT", "PRIO", "TARGET");
+        println!("{:<24} {:<12} {:<16} {:<8} {}", h1, h2, h3, h4, h5);
         for r in &rows {
             if r.disabled {
                 println!(
@@ -227,9 +225,17 @@ fn trace(args: &[String]) -> Result<i32, String> {
         } else {
             println!("Recent hook runs ({}):", audit_rows.len());
         }
+        let (a1, a2, a3, a4, a5, a6) = (
+            "AGE",
+            "HANDLER",
+            "ENTITY",
+            "EVENT",
+            "DECISION",
+            "AUDIT HASH",
+        );
         println!(
             "{:<10} {:<18} {:<14} {:<10} {:<12} {}",
-            "AGE", "HANDLER", "ENTITY", "EVENT", "DECISION", "AUDIT HASH"
+            a1, a2, a3, a4, a5, a6
         );
         for r in &audit_rows {
             // Decision marker: ✓ allow/escalate (Approved), ✗ reject (Denied).

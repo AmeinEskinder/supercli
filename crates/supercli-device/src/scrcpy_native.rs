@@ -1804,7 +1804,7 @@ mod tests {
             order_tx.send("video").unwrap();
             // ...then control, BEFORE writing anything (the real server's
             // ordering with tunnel_forward=true).
-            let (mut control, _) = listener.accept().unwrap();
+            let (control, _) = listener.accept().unwrap();
             order_tx.send("control").unwrap();
 
             // Now write to video: 1 dummy byte, 64-byte device name,

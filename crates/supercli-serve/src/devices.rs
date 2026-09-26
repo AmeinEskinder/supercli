@@ -482,10 +482,7 @@ impl DeviceBackendProvider {
         for (idx, entry) in self.backends.iter().enumerate() {
             // An unavailable backend (adb missing, baguette on Linux, ...)
             // contributes zero devices instead of failing the list.
-            let devices = match entry.backend.list() {
-                Ok(devices) => devices,
-                Err(_) => Vec::new(),
-            };
+            let devices = entry.backend.list().unwrap_or_default();
             for d in devices {
                 routing.insert(d.id.as_str().to_string(), idx);
                 out.push(DeviceInfo {
@@ -1337,6 +1334,7 @@ mod tests {
     }
 
     /// In-memory read/write stream for handshake tests.
+    #[allow(dead_code)]
     struct MemStream {
         read_buf: Vec<u8>,
         written: Vec<u8>,
@@ -1352,7 +1350,7 @@ mod tests {
     }
 
     impl Read for MemStream {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
             // EOF immediately: try_read treats WouldBlock as "no data".
             Err(std::io::Error::new(
                 std::io::ErrorKind::WouldBlock,

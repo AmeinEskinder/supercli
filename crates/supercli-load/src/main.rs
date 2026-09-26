@@ -263,6 +263,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_load(
     client: &Client,
     hook_base: &str,
@@ -302,7 +303,7 @@ async fn run_load(
     let mut req_id: u64 = id_offset;
     let mut offered: u64 = 0;
     let inter_arrival = if rate > 0 {
-        Duration::from_micros(1_000_000 / rate)
+        Duration::from_micros(1_000_000u64.checked_div(rate).unwrap_or(0))
     } else {
         Duration::from_micros(0)
     };
@@ -540,8 +541,6 @@ async fn do_approve_cycle(
     );
     let send_answer = || {
         let client = client.clone();
-        let phone_base = phone_base.clone();
-        let mobile_token = mobile_token.clone();
         let pid = pid.clone();
         let answer_nonce = answer_nonce.clone();
         async move {
@@ -557,7 +556,7 @@ async fn do_approve_cycle(
                 .await
         }
     };
-    let mut answer_resp = match send_answer().await {
+    let answer_resp = match send_answer().await {
         Ok(resp) => resp,
         Err(e) => {
             // Transport error on first attempt: outcome unknown. Retry once

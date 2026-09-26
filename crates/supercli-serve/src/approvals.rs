@@ -110,10 +110,12 @@ impl ResolvedStore {
         self.map.insert(id, (approved, nonce, now));
     }
 
+    #[allow(dead_code)]
     fn len(&self) -> usize {
         self.map.len()
     }
 
+    #[allow(dead_code)]
     fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
