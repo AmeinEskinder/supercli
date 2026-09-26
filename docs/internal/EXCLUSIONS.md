@@ -7,9 +7,9 @@ not part of the product.
 | Path | Reason |
 |------|--------|
 | `docs/internal/buildlog.md` | Internal build journal (agent working log), not user documentation. |
-| `handoff.md` | Transient agent handoff notes. |
-| `phases/` | Historical phase working notes from the pre-rename tree. |
-| `pr-draft.md` | Draft PR text, not a deliverable. |
+| `docs/internal/handoff.md` | Transient agent handoff notes. |
+| `docs/internal/phases/` | Historical phase working notes from the pre-rename tree. |
+| `docs/internal/pr-draft.md` | Draft PR text, not a deliverable. |
 | `docs/internal/agents.md` | Pre-rename internal doc (62 unpeel mentions); superseded. |
 | `docs/internal/notice.md` | Pre-rename internal doc; superseded. |
 | `docs/internal/release-checklist.md` | Pre-rename internal doc; superseded. |
