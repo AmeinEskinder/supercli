@@ -131,7 +131,8 @@ void main() {
       final node = settings.build() as UiRow;
       expect(node.children.length, 2);
       final tabs = node.children[0] as UiColumn;
-      expect(tabs.children.length, SettingsTab.values.length);
+      // heading + one button per tab
+      expect(tabs.children.length, 1 + SettingsTab.values.length);
     });
   });
 

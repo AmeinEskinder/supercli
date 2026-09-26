@@ -224,23 +224,23 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 197 | [DESKTOP] | Bundled Host service lifecycle management via launchd | missing | - | - |
 | 198 | [DESKTOP] | Bonjour nearby-host discovery for Add Workspace | missing | - | - |
 | 199 | [DESKTOP] | Remote folder picker for launching on remote Hosts | missing | clients/supercli-app/lib/screens/remotefolderpicker.dart (4-line re-export, bbd8b70) | - |
-| 200 | [DESKTOP] | Settings scope picker (This Mac / workspace / remote Host) with inherit/reset | partial | clients/supercli-app/lib/screens/settingsview.dart (64 lines, bbd8b70) | - |
-| 201 | [DESKTOP] | Settings ▸ Workspaces (unified list, add local/nearby/code/SSH, rename, color, forget, delete) | partial | clients/supercli-app/lib/screens/workspaceopenmenu.dart (85 lines, bbd8b70) | - |
+| 200 | [DESKTOP] | Settings scope picker (This Mac / workspace / remote Host) with inherit/reset | partial | clients/supercli-app/lib/screens/settingsview.dart (152 lines) + settingspanels.dart SettingsScope (519 lines) | - |
+| 201 | [DESKTOP] | Settings ▸ Workspaces (unified list, add local/nearby/code/SSH, rename, color, forget, delete) | partial | clients/supercli-app/lib/screens/workspacessettingspanel.dart (57 lines, real panel + dataset) | - |
 | 202 | [DESKTOP] | Settings ▸ Agents (install CLI, install/reinstall integration, commands and variants, default, activate, reorder) | missing | - | - |
-| 203 | [DESKTOP] | Settings ▸ Plugins (Apps catalog install/update/activate/order) | missing | clients/supercli-app/lib/screens/pluginsettingspanel.dart (4-line re-export, bbd8b70) | - |
-| 204 | [DESKTOP] | Settings ▸ Agent access ▸ Sessions (write policy, worktree permission, auto-gallery, approved pairs/Apps with Revoke) | partial | clients/supercli-app/lib/screens/sessionsaccesssections.dart (65 lines, bbd8b70) | - |
-| 205 | [DESKTOP] | Settings ▸ Agent access ▸ Browser (engine status, access mode, approvals, window/cursor/scope/app path, site rules, clear data) | missing | clients/supercli-app/lib/screens/browseraccesssections.dart (6-line re-export, bbd8b70) | - |
-| 206 | [DESKTOP] | Settings ▸ Appearance (mode, 8 accent colors, background/surface/transparency, terminal font and size, line height, session title mode, gallery chip) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 203 | [DESKTOP] | Settings ▸ Plugins (Apps catalog install/update/activate/order) | partial | clients/supercli-app/lib/screens/pluginsettingspanel.dart (81 lines, real panel + dataset + row actions) | - |
+| 204 | [DESKTOP] | Settings ▸ Agent access ▸ Sessions (write policy, worktree permission, auto-gallery, approved pairs/Apps with Revoke) | partial | clients/supercli-app/lib/screens/sessionsaccesssections.dart (203 lines, real panel) | - |
+| 205 | [DESKTOP] | Settings ▸ Agent access ▸ Browser (engine status, access mode, approvals, window/cursor/scope/app path, site rules, clear data) | partial | clients/supercli-app/lib/screens/sessionsaccesssections.dart BrowserAccessSections (203 lines, real panel) | - |
+| 206 | [DESKTOP] | Settings ▸ Appearance (mode, 8 accent colors, background/surface/transparency, terminal font and size, line height, session title mode, gallery chip) | partial | clients/supercli-app/lib/screens/settingspanels.dart GeneralSettingsPanel (519 lines, theme/accent/font/size) | - |
 | 207 | [DESKTOP] | Settings ▸ Remote Control (share this Mac/workspace QR/code, paired devices, revoke, per-device Link toggle) | partial | clients/supercli-app/lib/screens/hostpickerview.dart (84 lines, bbd8b70) | - |
 | 208 | [DESKTOP] | Add iPhone/iPad to a remote Host (controller-assisted pairing) | missing | clients/supercli-app/lib/screens/remotehostworkspaceview.dart (4-line re-export, bbd8b70) | - |
-| 209 | [DESKTOP] | Unpeel Link license section (activate, seats, release seat, get Link) | missing | clients/supercli-app/lib/screens/licensesettingspanel.dart (4-line re-export, bbd8b70) | - |
-| 210 | [DESKTOP] | Settings ▸ Transcripts (content toggles, info header, range) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
-| 211 | [DESKTOP] | Settings ▸ Notifications (flag select menus, completion, test Mac/phone, delivery diagnostics) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
-| 212 | [DESKTOP] | Settings ▸ Worktrees ("Show agent worktrees", list with create/reveal/remove) | missing | clients/supercli-app/lib/screens/worktreessettingspanel.dart (4-line re-export, bbd8b70) | - |
-| 213 | [DESKTOP] | Settings ▸ Features (Remote workspaces, Git worktrees, Sessions use, Workspaces, Browser use) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
-| 214 | [DESKTOP] | Settings ▸ Advanced (auto-archive cleanup, sidebar archive preview, memory, running hosts by CPU with Stop, sessions folder, trace log) | partial | clients/supercli-app/lib/screens/settingspanels.dart (168 lines, bbd8b70) | - |
+| 209 | [DESKTOP] | Unpeel Link license section (activate, seats, release seat, get Link) | partial | clients/supercli-app/lib/screens/licensesettings.dart (63 lines, real panel + seats dataset) | - |
+| 210 | [DESKTOP] | Settings ▸ Transcripts (content toggles, info header, range) | partial | clients/supercli-app/lib/screens/settingspanels.dart TranscriptsSettingsPanel (519 lines) | - |
+| 211 | [DESKTOP] | Settings ▸ Notifications (flag select menus, completion, test Mac/phone, delivery diagnostics) | partial | clients/supercli-app/lib/screens/settingspanels.dart NotificationsSettingsPanel (519 lines) | - |
+| 212 | [DESKTOP] | Settings ▸ Worktrees ("Show agent worktrees", list with create/reveal/remove) | partial | clients/supercli-app/lib/screens/worktreessettingspanel.dart (72 lines, real panel + filter) | - |
+| 213 | [DESKTOP] | Settings ▸ Features (Remote workspaces, Git worktrees, Sessions use, Workspaces, Browser use) | partial | clients/supercli-app/lib/screens/settingspanels.dart FeaturesSettingsPanel (519 lines) | - |
+| 214 | [DESKTOP] | Settings ▸ Advanced (auto-archive cleanup, sidebar archive preview, memory, running hosts by CPU with Stop, sessions folder, trace log) | partial | clients/supercli-app/lib/screens/settingspanels.dart AdvancedSettingsPanel (519 lines) | - |
 | 215 | [DESKTOP] | Default editor / opener preference | missing | - | - |
-| 216 | [DESKTOP] | Presets stored in the shared app-state.json with live pickup of CLI edits | missing | clients/supercli-app/lib/screens/presetssettingspanel.dart (4-line re-export, bbd8b70) | - |
+| 216 | [DESKTOP] | Presets stored in the shared app-state.json with live pickup of CLI edits | partial | clients/supercli-app/lib/screens/presetssettingspanel.dart (88 lines, real panel + JSON roundtrip) | - |
 | 217 | [DESKTOP] | Remote Host scope uses the same sidebar/content UI with Direct→Link automatic fallback | missing | - | - |
 | 218 | [DESKTOP] | Worktree discovery of agent-created checkouts (opt-in, every 5 s) | missing | - | - |
 | 219 | [DESKTOP] | Startup presentation cache for instant sidebar | missing | clients/supercli-app/lib/screens/sidebarskeleton.dart (4-line re-export, bbd8b70) | - |
