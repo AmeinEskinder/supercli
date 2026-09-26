@@ -436,7 +436,13 @@ pub(crate) mod json;
 #[cfg(feature = "device")]
 pub mod scrcpy;
 #[cfg(feature = "device")]
+pub mod scrcpy_native;
+#[cfg(feature = "device")]
 pub mod simctl;
+
+// Always compiled: pure std wire format + setup planners (no tools).
+pub mod setup;
+pub mod wire_format;
 
 #[cfg(test)]
 mod tests {

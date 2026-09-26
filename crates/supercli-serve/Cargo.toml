@@ -21,6 +21,7 @@ uuid = { version = "1", features = ["v4"] }
 aes-gcm = { version = "0.10.3", features = ["aes", "alloc"] }
 hkdf = "0.12.4"
 sha2 = "0.10.9"
+sha1 = "0.10"
 base64 = { version = "0.23.1", features = ["std"] }
 rand = { version = "0.9.5", features = ["std", "std_rng", "os_rng"] }
 qrcode = { version = "0.14.1", default-features = false }

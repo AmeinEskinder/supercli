@@ -132,3 +132,71 @@ Already added to `docs/gpuidart-requirements.md` as P0-6/P0-7:
 4. CI jobs: android e2e (emulator-runner, scrcpy tier if installable), iOS job (Apple Silicon macOS + Xcode 26 + baguette; honest SKIP otherwise).
 5. Web UI Devices panel (Dioxus web): device frame + stream + input + toolbar + multi-device grid; latency numbers.
 6. P0-6/P0-7 already in `docs/gpuidart-requirements.md` — no action.
+
+---
+
+## 9. Design delta — Amein review 2026-09-26 (headless + native scrcpy client + unified wire format)
+
+**Context:** Amein reviewed `crates/supercli-device` at `e0b131c`. Good: the emulator already boots `-no-window -no-audio`. Problems: (a) the 'scrcpy tier' is only a label — tap/swipe/type still go through `adb shell input` (200–500 ms per call, no multi-touch or pinch); (b) `stream()` runs `scrcpy --no-window --record -`, which scrcpy does not support to stdout — there is no real 60 fps stream, and the fallback `screenrecord` has a 3-minute cap; (c) there is no web Devices panel or WebSocket route at all yet, no `/farm`, no live logs, no webcam.
+
+Android must be HEADLESS and lite exactly like baguette is for iOS: no emulator window, no Android Studio, no scrcpy desktop app.
+
+### 9.1 Headless emulator (the analog of baguette's headless iPhone)
+
+Boot: `emulator -avd <name> -no-window -no-audio -no-boot-anim -gpu host -grpc <port> -camera-back webcam0`. Fall back to `-gpu swiftshader_indirect` when host GPU is unavailable. Quick-boot snapshots for fast start (`-snapshot default_boot` / `snapshot save`). Host webcam → emulated camera is built into the emulator (`-camera-back webcam0`) — this is the analog of baguette's webcam feature, no extra plumbing.
+
+### 9.2 Native scrcpy client in Rust (no scrcpy app)
+
+New module `scrcpy_native.rs` (`#[cfg(feature = "device")]`) speaks the scrcpy-server protocol directly:
+
+1. `adb push` the **pinned** scrcpy-server jar (Apache-2.0, SHA-256 verified at download; pin recorded in `docs/device.md` at implementation), `adb forward tcp:<port>`, then start the server via `app_process` with: h264 video, `max_fps 60`, audio off, control on.
+2. **Video socket** carries H.264 packets → relayed to the browser over WebSocket → WebCodecs decode. No stdout pipe, no 3-minute cap.
+3. **Control socket** carries: multi-touch with pointer ids (so pinch works), HOME / BACK / POWER (Lock), text, clipboard, rotation.
+4. `adb shell input` is dropped to **last-resort fallback** (when the native client cannot start), and its use is logged as a fallback event.
+
+The scrcpy-server jar is Apache-2.0; on implementation its copyright/version notice goes into `THIRD_PARTY_NOTICES.txt`.
+
+**Pinned server (recorded at implementation, 2026-09-26):** scrcpy-server **v2.7**
+(`crates/supercli-device/src/scrcpy_native.rs`).
+- Release asset: `https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-server-v2.7`
+- SHA-256: `a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba`
+  (computed by downloading the asset from the official Genymobile/scrcpy
+  release; independently re-verified with Python hashlib; 71,200 bytes).
+- Notice: `THIRD_PARTY_NOTICES.txt` → "MANUAL NOTICE 1 (scrcpy-server)".
+- Wire details implemented: video header = 64-byte device name + codec id
+  (`b"h264"`) + width + height (u32 BE each); packets = 12-byte header
+  (u64-BE pts in µs + u32-BE size) + Annex-B H.264 payload; keyframes
+  detected by NAL-unit scan for IDR slices (v2.x carries no keyframe flag —
+  the flag bits in the PTS high bits are a scrcpy-3.x protocol change).
+- Control messages (big-endian, leading type byte): keycode (14 B),
+  text (5+len B), touch (32 B: action + u64 pointer id + x/y + u16 w/h +
+  u16 fixed-point pressure + action button + buttons), clipboard set
+  (14+len B), rotate (1 B). All byte-exact encoders are unit-tested.
+- Unified wire format (§9.3) is implemented in the same module:
+  `type (1 B) | length (u32 BE) | payload` with 0x01 description (JSON),
+  0x02 keyframe, 0x03 delta, 0x04 JPEG seed.
+
+### 9.3 One wire format for both platforms
+
+Adopt baguette's framing verbatim: `0x01` description (stream metadata), `0x02` keyframe, `0x03` delta, `0x04` JPEG seed (recovery on packet loss) — plus baguette's device-point coordinate convention for input. supercli then **proxies baguette's iOS stream directly** and emits the **same** format for Android from the native scrcpy client. The web Devices panel and the gpuidart P0-6 surface stay platform-agnostic: one decoder path, one input path, platform selected only by the device id.
+
+### 9.4 Parity with the post (baguette reference)
+
+Full target surface, both platforms: 60 fps H.264 stream; real taps, swipes, **pinch**, Home, Lock; a11y tree (`uiautomator dump` on Android, baguette `describe-ui` on iOS); **live logs streamed over WebSocket** (`logcat` on Android, `os_log` on iOS); webcam-to-camera; and a multi-device **/farm wall** where each tile gets reduced fps/bitrate (e.g. 15 fps, 2 Mbps per tile) so N devices stream without saturating the link.
+
+### 9.5 One-command setup (analog of `brew install baguette`)
+
+- `supercli device setup android` — uses `sdkmanager` to install `emulator` + `platform-tools` + one system image (`arm64` on Apple Silicon, `x86_64` elsewhere), then creates the AVD (`avdmanager create avd`). It **downloads**, so it goes through the approval flow (Ask) like `device.install`.
+- `supercli device setup ios` — checks for baguette on PATH; if missing, prints exactly `brew install baguette` and exits 2. No download, no approval needed.
+
+### 9.6 Web: Devices panel + /farm
+
+`supercli-serve` gains: a **Devices panel** (single focused device: frame + 60 fps stream + toolbar + input) and a **/farm route** (multi-device wall, reduced fps/bitrate tiles, click-to-focus). Both speak the unified wire format from §9.3 over WebSocket. The gpuidart surface lands in `clients/supercli-app/` as **P0-6/P0-7** (already specified in `docs/gpuidart-requirements.md`); web (Dioxus) and gpuidart share the same frame format, so input/decode code stays platform-agnostic.
+
+### 9.7 Proof (CI, not this VM)
+
+- **Real headless emulator in CI:** ubuntu runner **with KVM** (state `/dev/kvm` presence in the report; this VM has none — see §7). No emulator window, ever.
+- **Metrics:** fps measured over 60 s on the H.264 stream; **tap-to-frame latency p50/p95** through the native control channel vs `adb shell input` (same 50-tap protocol as §3, reported side by side — prove the 200–500 ms claim against reality).
+- **Pinch test:** scripted pinch on a map or photo app via control socket (multi-pointer), asserted from the video/a11y state, not from adb.
+- **/farm:** 3 headless devices streaming simultaneously at reduced bitrate; report per-tile fps.
+- **Honesty rule (extends §5):** every implementation report states exactly what ran in CI vs this VM, including whether `/dev/kvm` existed wherever the run happened.

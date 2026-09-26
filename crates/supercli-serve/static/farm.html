@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>supercli — /farm</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; margin: 0; }
+  header { padding: 12px 20px; border-bottom: 1px solid #21262d; display: flex; gap: 16px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header nav a { color: #58a6ff; text-decoration: none; }
+  header .note { font-size: 12px; color: #8b949e; }
+  #wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 16px; }
+  .tile { background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; cursor: pointer; }
+  .tile.focused { outline: 2px solid #58a6ff; }
+  .tile header { padding: 8px 12px; font-size: 13px; display: flex; justify-content: space-between; border-bottom: 1px solid #21262d; }
+  .tile .fps { color: #8b949e; font-size: 12px; }
+  .tile canvas { width: 100%; display: block; aspect-ratio: 9 / 19; object-fit: contain; background: #010409; }
+  .tile .err { padding: 24px; color: #f85149; font-size: 13px; text-align: center; }
+  #empty { padding: 60px; text-align: center; color: #8b949e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>/farm</h1>
+  <nav><a href="/devices">Devices panel</a></nav>
+  <span class="note">Each tile streams at reduced fps/bitrate (15 fps, 2 Mbps). Click a tile to focus input; open <a href="/devices" style="color:#58a6ff">/devices</a> for full-rate control.</span>
+</header>
+<div id="wall"></div>
+<div id="empty" hidden>No devices connected. Boot some with: <code>supercli device boot &lt;avd|udid&gt;</code></div>
+<script src="/static/device-stream.js"></script>
+<script>
+(function () {
+  "use strict";
+  const wall = document.getElementById("wall");
+  const empty = document.getElementById("empty");
+  const streams = new Map();
+  let focusedId = null;
+
+  async function refresh() {
+    let devices = [];
+    try {
+      const res = await fetch("/api/devices");
+      devices = (await res.json()).devices || [];
+    } catch (e) { /* keep empty */ }
+    empty.hidden = devices.length > 0;
+
+    const seen = new Set();
+    devices.forEach((d) => {
+      seen.add(d.id);
+      if (!streams.has(d.id)) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        tile.innerHTML = '<header><span class="name"></span><span class="fps"></span></header><canvas></canvas>';
+        tile.querySelector(".name").textContent = (d.name || d.id) + " · " + d.platform;
+        const canvas = tile.querySelector("canvas");
+        const fpsEl = tile.querySelector(".fps");
+        tile.addEventListener("click", () => {
+          focusedId = d.id;
+          document.querySelectorAll(".tile").forEach((t) => t.classList.remove("focused"));
+          tile.classList.add("focused");
+        });
+        wall.appendChild(tile);
+        const s = new DeviceStream.DeviceStream({
+          deviceId: d.id,
+          canvas: canvas,
+          lowBandwidth: true, // farm tiles: 15 fps / 2 Mbps
+          onDescription: (meta) => s.configureDecoder(meta),
+          onError: (err) => {
+            const errEl = document.createElement("div");
+            errEl.className = "err";
+            errEl.textContent = "stream error: " + (err && err.message);
+            tile.appendChild(errEl);
+          },
+        });
+        s.onFps = (fps) => { fpsEl.textContent = fps + " fps"; };
+        s.start();
+        streams.set(d.id, { stream: s, tile: tile });
+      }
+    });
+    // Remove tiles for devices that went away.
+    for (const [id, entry] of streams) {
+      if (!seen.has(id)) {
+        entry.stream.stop();
+        entry.tile.remove();
+        streams.delete(id);
+      }
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 10000);
+})();
+</script>
+</body>
+</html>

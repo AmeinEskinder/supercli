@@ -2855,7 +2855,22 @@ fn handle_connection(
             respond_upgrade_required(&mut stream, &body);
             return;
         }
-        if !request.path.starts_with("/mobile/") {
+        if crate::devices::is_device_route(&request.path) {
+            // Web Devices panel + /farm (docs/device.md §9.6). Local-only
+            // (this listener binds 127.0.0.1); WebSocket upgrades take over
+            // the stream inside the handler.
+            let keep_open = crate::devices::handle_device_connection(
+                &mut stream,
+                &request.method,
+                &request.path,
+                &request.headers,
+                &request.body,
+                keep,
+            );
+            if !keep_open {
+                return;
+            }
+        } else if !request.path.starts_with("/mobile/") {
             respond(&mut stream, 404, &error_body("not found"), keep);
         } else if request.path == "/mobile/pair" {
             if request.method != "POST" {

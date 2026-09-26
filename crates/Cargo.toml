@@ -10,6 +10,7 @@ members = [
     "supercli-native-bridge",
     "supercli-client",
     "supercli-connector",
+    "supercli-device",
     "supercli-load",
 ]
 # The first-party Apps and the App Kit are their own workspace
