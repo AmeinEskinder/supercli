@@ -6,7 +6,7 @@
 #   inits submodules recursively, and runs the cheap structural gates:
 #   submodule resolution, rename guard, and tree sanity.
 #
-# This exists because track-b-terminal-pane once pointed clients/gpuidart at a
+# This exists because a terminal-pane branch once pointed clients/gpuidart at a
 # VM-only commit, which would have broken every fresh recursive clone.
 set -euo pipefail
 
@@ -43,6 +43,7 @@ matches=$(grep -rli 'unpeel' . \
   --exclude='*.lock' \
   --exclude='*.pyc' \
   --exclude='*.a' \
+  --exclude='fresh-clone-verify.sh' \
   | grep -v -e '^./docs/book/' \
             -e '^./docs/internal/' \
             -e '^./docs/parity/' \
