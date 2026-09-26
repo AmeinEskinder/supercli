@@ -166,11 +166,38 @@ fn grant_queue() -> &'static GrantQueue {
 /// submitters): each batch commit is panic-contained, and a failed batch
 /// acks all its callers with an error before the loop continues.
 fn writer_loop() {
-    writer_loop_for(grant_queue())
+    let queue = grant_queue();
+    loop {
+        let batch = queue.drain();
+        if batch.is_empty() {
+            queue.wait_for_work();
+            continue;
+        }
+        // For the global queue, resolve the home dynamically on each batch
+        // so SUPERCLI_HOME changes (e.g., in tests) take effect. Explicit
+        // test queues use writer_loop_for with their fixed home.
+        let home = crate::app_paths::supercli_home();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            commit_batch_at(batch, &home)
+        }));
+        match result {
+            Ok(r) => {
+                let _ = r;
+            }
+            Err(_) => {
+                // commit_batch panicked: the batch (and its ack Senders) was
+                // dropped during unwind, so every caller in that batch sees a
+                // disconnect and fails fast (Ambiguous) instead of hanging.
+            }
+        }
+        // Ack all submitters in the batch (success or failure).
+        // (The actual ack logic is in commit_batch_at via the PendingGrant senders.)
+    }
 }
 
 /// Writer loop for an explicit queue (used by tests with isolated homes).
 /// The queue's `home` is used for all writes, never the process-global env.
+#[allow(dead_code)] // Used by tests; not used in production writer_loop.
 fn writer_loop_for(queue: &GrantQueue) {
     loop {
         // Drain first: if a submitter notified while we were committing the
@@ -502,7 +529,10 @@ mod tests {
             writer_loop_for(&writer_queue);
         });
         {
-            let mut guard = queue.writer_handle.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = queue
+                .writer_handle
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             *guard = Some(writer_handle);
         }
 
