@@ -352,4 +352,66 @@ void main() {
       expect(json['focused_id'], 'p2');
     });
   });
+  persistenceTests();
+}
+
+/// Row 176: pane-layouts.json persistence round-trips.
+void persistenceTests() {
+  group('PaneLayoutStore (row 176)', () {
+    test('single pane round-trips through JSON', () {
+      final layout = singlePane();
+      final json = layout.toJson();
+      final restored = PaneLayoutJson.fromJson(
+          json.map((k, v) => MapEntry(k, v as Object?)));
+      expect(restored.root, layout.root);
+      expect(restored.focusedId, 'p1');
+    });
+
+    test('split tree round-trips with ratio and focus', () {
+      final layout = singlePane().split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'p2',
+        newTitle: 'vim',
+      )!;
+      final json = layout.toJson();
+      final restored = PaneLayoutJson.fromJson(
+          json.map((k, v) => MapEntry(k, v as Object?)));
+      expect(restored.paneCount, 2);
+      expect(restored.toJson(), layout.toJson());
+    });
+
+    test('store saves/loads per scope', () {
+      final store = PaneLayoutStore();
+      store.save('window-1', singlePane());
+      store.save('workspace-a', singlePane());
+      expect(store.load('window-1')!.paneCount, 1);
+      expect(store.load('missing'), isNull);
+    });
+
+    test('store serializes to pane-layouts.json document', () {
+      final store = PaneLayoutStore();
+      store.save('window-1', singlePane());
+      final doc = store.toJson();
+      expect(doc.keys, contains('window-1'));
+      final restored = PaneLayoutStore.fromJson(
+          doc.map((k, v) => MapEntry(k, v as Object?)));
+      expect(restored.load('window-1')!.paneCount, 1);
+    });
+
+    test('malformed scopes are skipped, rest survive', () {
+      final restored = PaneLayoutStore.fromJson({
+        'good': singlePane().toJson(),
+        'bad': {'kind': 'nonsense'},
+      });
+      expect(restored.load('good')!.paneCount, 1);
+      expect(restored.load('bad'), isNull);
+    });
+
+    test('forget removes a scope', () {
+      final store = PaneLayoutStore();
+      store.save('w1', singlePane());
+      store.forget('w1');
+      expect(store.load('w1'), isNull);
+    });
+  });
 }

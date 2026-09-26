@@ -560,3 +560,86 @@ final class PaneLayout {
     return map;
   }
 }
+
+/// Row 176: Persisted pane layouts per scope (`pane-layouts.json`).
+///
+/// Deserialization mirrors [PaneNode.toJson]. [PaneLayoutStore] keeps one
+/// layout per scope id (window, workspace, or session group) and
+/// serializes the whole map as the `pane-layouts.json` document the Host
+/// persists.
+extension PaneNodeJson on PaneNode {
+  static PaneNode fromJson(Map<String, Object?> json) {
+    final kind = json['kind'] as String?;
+    if (kind == 'leaf') {
+      return PaneLeaf(
+        paneId: json['pane_id'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+      );
+    }
+    if (kind == 'split') {
+      final dir = json['direction'] as String?;
+      return PaneSplit(
+        direction: dir == 'vertical'
+            ? SplitDirection.vertical
+            : SplitDirection.horizontal,
+        ratio: (json['ratio'] as num?)?.toDouble() ?? 0.5,
+        first: PaneNodeJson.fromJson(
+            (json['first'] as Map).cast<String, Object?>()),
+        second: PaneNodeJson.fromJson(
+            (json['second'] as Map).cast<String, Object?>()),
+      );
+    }
+    throw FormatException('unknown pane node kind: $kind');
+  }
+}
+
+extension PaneLayoutJson on PaneLayout {
+  static PaneLayout fromJson(Map<String, Object?> json) {
+    final root = json['root'];
+    if (root is! Map) throw const FormatException('missing layout root');
+    return PaneLayout(
+      root: PaneNodeJson.fromJson(root.cast<String, Object?>()),
+      focusedId: json['focused_id'] as String?,
+      zoomedId: json['zoomed_id'] as String?,
+    );
+  }
+}
+
+/// Per-scope persisted pane layouts (the `pane-layouts.json` document).
+final class PaneLayoutStore {
+  PaneLayoutStore([Map<String, PaneLayout>? layouts])
+      : layouts = layouts ?? {};
+
+  final Map<String, PaneLayout> layouts;
+
+  void save(String scopeId, PaneLayout layout) {
+    layouts[scopeId] = layout;
+  }
+
+  PaneLayout? load(String scopeId) => layouts[scopeId];
+
+  void forget(String scopeId) {
+    layouts.remove(scopeId);
+  }
+
+  /// Serialize the whole store as the `pane-layouts.json` document.
+  Map<String, Object> toJson() => {
+        for (final e in layouts.entries) e.key: e.value.toJson(),
+      };
+
+  /// Parse a `pane-layouts.json` document. Malformed scopes are skipped.
+  static PaneLayoutStore fromJson(Map<String, Object?> json) {
+    final store = PaneLayoutStore();
+    json.forEach((scopeId, value) {
+      try {
+        if (value is Map) {
+          store.save(
+              scopeId, PaneLayoutJson.fromJson(value.cast<String, Object?>()));
+        }
+      } on FormatException {
+        // Skip malformed scopes; keep the rest.
+      }
+    });
+    return store;
+  }
+}

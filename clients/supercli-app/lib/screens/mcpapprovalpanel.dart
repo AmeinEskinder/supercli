@@ -168,3 +168,37 @@ final class ApprovalsPanel {
         ),
       ];
 }
+
+/// Row 186: In-pane MCP approval overlay, pinned to the terminal pane.
+///
+/// Unlike [McpApprovalPanel] (the standalone card), this overlay renders
+/// inside the pane that issued the request, with kind-specific chrome for
+/// write / browser / app-open approvals: write shows the target path,
+/// browser shows the URL, app-open shows the App name.
+enum ApprovalKind { write, browser, appOpen }
+
+final class InPaneApprovalOverlay {
+  const InPaneApprovalOverlay({
+    required this.approval,
+    required this.kind,
+    this.target = '',
+  });
+
+  final PendingApproval approval;
+  final ApprovalKind kind;
+  final String target;
+
+  String get kindLabel => switch (kind) {
+        ApprovalKind.write => 'Write approval',
+        ApprovalKind.browser => 'Browser approval',
+        ApprovalKind.appOpen => 'App open approval',
+      };
+
+  UiNode build() {
+    return UiColumn('in-pane-approval-${approval.id}', [
+      UiText('in-pane-approval-kind', kindLabel),
+      UiText('in-pane-approval-target', target),
+      McpApprovalPanel(approval: approval).build(),
+    ]);
+  }
+}
