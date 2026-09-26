@@ -341,6 +341,16 @@ fn validate_localhost_url(url: &str) -> Result<(), String> {
     }
 }
 
+impl HookRegistry {
+    /// `true` if at least one enabled handler is registered for the entity/event.
+    /// Used by the emit fast path to avoid dispatcher setup when nothing is registered.
+    pub fn has_handlers(&self, entity: DocType, event: DocEvent) -> bool {
+        self.handlers
+            .get(&(entity, event))
+            .map(|hs| !hs.is_empty())
+            .unwrap_or(false)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,16 +453,5 @@ on_update = [
             .handlers_for(DocType::Session, DocEvent::OnUpdate)
             .is_empty());
         assert!(reg.disabled.is_empty());
-    }
-}
-
-impl HookRegistry {
-    /// `true` if at least one enabled handler is registered for the entity/event.
-    /// Used by the emit fast path to avoid dispatcher setup when nothing is registered.
-    pub fn has_handlers(&self, entity: DocType, event: DocEvent) -> bool {
-        self.handlers
-            .get(&(entity, event))
-            .map(|hs| !hs.is_empty())
-            .unwrap_or(false)
     }
 }

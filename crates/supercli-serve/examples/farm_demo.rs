@@ -101,6 +101,7 @@ fn handle(mut stream: std::net::TcpStream) {
 }
 
 /// Split an HTTP request head into method, path, headers, body.
+#[allow(clippy::type_complexity)]
 fn parse_request(raw: &[u8]) -> Option<(String, String, Vec<(String, String)>, Vec<u8>)> {
     let head_end = raw.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
     let head = std::str::from_utf8(&raw[..head_end]).ok()?;

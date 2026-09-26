@@ -218,11 +218,12 @@ impl Default for RoutedBackend {
 impl DeviceBackend for RoutedBackend {
     fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError> {
         let mut out = Vec::new();
-        for devices in [self.android.list(), self.ios_hw.list(), self.ios_sim.list()] {
+        for mut devices in [self.android.list(), self.ios_hw.list(), self.ios_sim.list()]
+            .into_iter()
+            .flatten()
+        {
             // A missing tool means "no devices here", not a fatal error.
-            if let Ok(mut devices) = devices {
-                out.append(&mut devices);
-            }
+            out.append(&mut devices);
         }
         out.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
         out.dedup_by(|a, b| a.id == b.id);
@@ -296,6 +297,7 @@ impl DeviceBackend for RoutedBackend {
 /// Host-side device endpoints); the [`GuardedBackend`] audit trail records
 /// every decision.
 #[cfg(feature = "device")]
+#[allow(dead_code)]
 pub struct HubGate {
     hub: Arc<ApprovalHub>,
     session: String,
@@ -304,6 +306,7 @@ pub struct HubGate {
 
 #[cfg(feature = "device")]
 impl HubGate {
+    #[allow(dead_code)]
     pub fn new(hub: Arc<ApprovalHub>, session: String, timeout: Duration) -> Self {
         HubGate {
             hub,
@@ -354,6 +357,7 @@ pub fn run_device_mcp() -> i32 {
 
 /// Test seam: run the MCP server over caller-supplied streams.
 #[cfg(feature = "device")]
+#[allow(dead_code)]
 pub fn run_device_mcp_with(
     backend: &dyn DeviceBackend,
     input: &mut dyn io::BufRead,

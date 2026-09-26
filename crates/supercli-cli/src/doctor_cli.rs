@@ -6,6 +6,7 @@
 //! - Stale leases (expired but unreleased lease rows)
 //! - Clock skew (system time vs file mtimes — detects major skew)
 
+use std::path::Path;
 use std::path::PathBuf;
 
 fn supercli_home() -> PathBuf {
@@ -262,7 +263,7 @@ fn check_clock_skew(home: &PathBuf) -> (&'static str, bool, String) {
 
 /// S2: Check the sharded grants file (grants.json) is valid JSON.
 /// A corrupt grants file fails closed (grants are re-requested).
-fn check_grants_file(home: &PathBuf) -> (&'static str, bool, String) {
+fn check_grants_file(home: &Path) -> (&'static str, bool, String) {
     let path = home.join("grants.json");
     if !path.exists() {
         return (
