@@ -583,7 +583,7 @@ mod tests {
         //
         // We test this by creating a GrantQueue with a dead (finished)
         // writer handle. The submit should return an error, not block.
-        let q = GrantQueue::new();
+        let q = GrantQueue::new(std::env::temp_dir());
         // Spawn a thread that exits immediately, giving us a finished handle.
         let dead_handle = std::thread::spawn(|| {
             // Exit immediately.
@@ -635,7 +635,7 @@ mod tests {
         // not Ok.
         use std::sync::{Arc, Barrier};
 
-        let q = Arc::new(GrantQueue::new());
+        let q = Arc::new(GrantQueue::new(std::env::temp_dir()));
         // Mark writer as alive (so submit doesn't fail fast).
         {
             let alive_handle = std::thread::spawn(|| {

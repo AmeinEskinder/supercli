@@ -544,11 +544,10 @@ mod tests {
     }
 
     /// Cross-implementation known-answer test: the SAME fixed inputs as
-    /// `RelayCryptoVectorTests.swift` (CryptoKit) and the relay repo's `kat.test.mjs`
-    /// (WebCrypto) must reproduce the committed vectors in
-    /// `protocol/relay-kat-vectors-v1.json`. This is the Rust half of relay
-    /// conformance; the Swift-oracle handshake proof lives in the Apple
-    /// repo's CI against the pinned server version.
+    /// the relay repo's `kat.test.mjs` (WebCrypto) must reproduce the
+    /// committed vectors in `protocol/relay-kat-vectors-v2.json`.
+    /// (Swift side is legacy/frozen under clients/legacy/.)
+    /// This is the Rust half of relay conformance.
     #[test]
     fn known_answer_vectors_match_swift_and_js() {
         fn range(n: usize, f: impl Fn(usize) -> usize) -> Vec<u8> {
@@ -617,3 +616,4 @@ mod tests {
         assert_eq!(host.open(&sealed).unwrap(), b"known-answer-plaintext");
     }
 }
+

@@ -18,7 +18,7 @@
 //! - [`types`] — pure shared types: [`TransportKind`], [`ArtifactMeta`],
 //!   [`PairedHostRecord`]
 //! - [`crypto`] — relay end-to-end crypto, byte-compatible with the Swift and
-//!   JS implementations (pinned by `protocol/relay-kat-vectors-v1.json`)
+//!   JS implementations (pinned by `protocol/relay-kat-vectors-v2.json`)
 //! - [`transport`] — blocking HTTP client for the Host's `/mobile` API
 //! - [`relay`] — relay wire protocol: handshake keys, frame envelopes, DTOs
 //! - [`relay_conn`] — blocking WebSocket relay transport (E2E tunnel)

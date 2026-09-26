@@ -5,7 +5,7 @@
 //! - Per-device static 32-byte `e2e_key`, exchanged at pairing over the LAN.
 //! - Per-connection handshake: both sides contribute a fresh 16-byte salt;
 //!   session keys are `HKDF-SHA256(e2e_key ‖ shared_secret,
-//!   client_salt ‖ host_salt, "supercli-relay-v1:{c2h,h2c}")` — one
+//!   client_salt ‖ host_salt, "supercli-relay-v2:{c2h,h2c}")` — one
 //!   AES-256-GCM key per direction.
 //! - Nonces are 12 bytes: a 4-byte direction tag (`c2h!` / `h2c!`) followed
 //!   by an 8-byte strictly increasing counter. Receivers enforce
@@ -14,7 +14,7 @@
 //! - Any AEAD failure is terminal for the session: callers must drop the
 //!   connection, never skip a frame.
 //!
-//! Byte compatibility is pinned by `protocol/relay-kat-vectors-v1.json`
+//! Byte compatibility is pinned by `protocol/relay-kat-vectors-v2.json`
 //! (see `tests/kat.rs`).
 
 use aes_gcm::aead::{Aead, KeyInit};
@@ -23,7 +23,7 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use thiserror::Error;
 
-const INFO_PREFIX: &str = "supercli-relay-v1:";
+const INFO_PREFIX: &str = "supercli-relay-v2:";
 const CLIENT_TAG: &[u8; 4] = b"c2h!";
 const HOST_TAG: &[u8; 4] = b"h2c!";
 /// `[counter u64 BE]` plus the 16-byte AES-GCM authentication tag.
@@ -196,7 +196,7 @@ pub mod handshake {
         .expect("HKDF expand with fixed length cannot fail");
 
         let mut transcript = Vec::new();
-        transcript.extend_from_slice(&1u32.to_be_bytes()); // protocol version
+        transcript.extend_from_slice(&2u32.to_be_bytes()); // protocol version v2
         for field in [
             device_id.as_bytes(),
             client_salt.as_slice(),
