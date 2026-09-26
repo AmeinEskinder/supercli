@@ -677,6 +677,9 @@ fn try_read<S: Read>(stream: &mut S, buf: &mut [u8]) -> Option<usize> {
 mod tests {
     use super::*;
 
+    /// Serializes the provider-dependent tests: `set_provider` is process-global.
+    static TEST_PROVIDER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// RFC 6455 §1.3 handshake example.
     #[test]
     fn websocket_accept_key_matches_rfc6455_vector() {
@@ -904,6 +907,8 @@ mod tests {
 
     #[test]
     fn websocket_handshake_writes_101_with_rfc_vector() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
+        set_provider(Arc::new(UnwiredProvider));
         let mut stream = MemStream::new();
         let mut headers = HashMap::new();
         headers.insert("upgrade".to_string(), "websocket".to_string());
@@ -932,6 +937,8 @@ mod tests {
 
     #[test]
     fn http_routes_return_expected_statuses() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
+        set_provider(Arc::new(UnwiredProvider));
         // Pages
         let (s, body, ct) = handle_device_http("GET", "/devices", &[]);
         assert_eq!(s, 200);
@@ -1046,6 +1053,7 @@ mod tests {
 
     #[test]
     fn mock_provider_end_to_end() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
         set_provider(Arc::new(MockProvider));
         // list
         let (s, body, _) = handle_device_http("GET", "/api/devices", &[]);
