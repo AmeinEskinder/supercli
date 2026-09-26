@@ -68,6 +68,15 @@ final class SidebarGroup {
   final String? color;
   final bool collapsed;
   final List<SidebarSession> sessions;
+
+  /// Copy with a new folder color (row 155 palette target).
+  SidebarGroup withColor(String? color) => SidebarGroup(
+        id: id,
+        title: title,
+        color: color,
+        collapsed: collapsed,
+        sessions: sessions,
+      );
 }
 
 /// A project: top-level sidebar node with groups, worktree folders and
@@ -81,6 +90,7 @@ final class SidebarProject {
     this.groups = const [],
     this.sessions = const [],
     this.worktrees = const [],
+    this.workspaceId = '',
   });
 
   final String id;
@@ -88,6 +98,9 @@ final class SidebarProject {
 
   /// Folder color as #RRGGBB, or null for default.
   final String? folderColor;
+
+  /// Id of the workspace this project belongs to (row 159).
+  final String workspaceId;
   final bool collapsed;
   final List<SidebarGroup> groups;
 
@@ -96,6 +109,32 @@ final class SidebarProject {
 
   /// Worktree folder names under this project.
   final List<String> worktrees;
+
+  /// Copy with a new folder color (row 155 palette target).
+  SidebarProject withFolderColor(String? folderColor) => SidebarProject(
+        id: id,
+        name: name,
+        folderColor: folderColor,
+        workspaceId: workspaceId,
+        collapsed: collapsed,
+        groups: groups,
+        sessions: sessions,
+        worktrees: worktrees,
+      );
+
+  /// Copy with this project moved to another workspace (row 159).
+  /// The host persists the move via `workspace.project.move`; the sidebar
+  /// re-renders the project under the new workspace's tree.
+  SidebarProject movedTo(String workspaceId) => SidebarProject(
+        id: id,
+        name: name,
+        folderColor: folderColor,
+        workspaceId: workspaceId,
+        collapsed: collapsed,
+        groups: groups,
+        sessions: sessions,
+        worktrees: worktrees,
+      );
 
   /// All sessions in this project (grouped + ungrouped).
   List<SidebarSession> get allSessions => [
@@ -125,11 +164,17 @@ final class SidebarRow {
   static UiRow sessionRow(
     SidebarSession session, {
     required bool selected,
+
+    /// Row 166: held-⌘ hint badge (1-9), or null for no badge.
+    int? numberHint,
   }) {
     final id = session.id;
     return UiRow(
       'session-$id',
       [
+        if (numberHint != null)
+          UiText('hint-$id', '⌘$numberHint',
+              style: const UiStyle(fontSize: 10)),
         if (session.attention)
           UiText('attn-$id', '●',
               style: UiStyle(foreground: _red, fontSize: 11)),
@@ -187,6 +232,7 @@ final class SidebarView {
     this.pinned = const [],
     this.filterText = '',
     this.selectedSessionId,
+    this.showNumberHints = false,
   });
 
   final List<String> workspaces;
@@ -196,6 +242,22 @@ final class SidebarView {
   final String filterText;
   final String? selectedSessionId;
 
+  /// Row 166: when true, the first 9 visible sessions render ⌘1–9 hint
+  /// badges. Driven by the host's real modifier-key state via the
+  /// `hints.show` / `hints.hide` actions (bin/main.dart).
+  final bool showNumberHints;
+
+  /// Next hint number to assign during [build]; reset per build.
+  int _hintCounter = 1;
+
+  /// Session row with held-key hint assignment (row 166).
+  UiRow _row(SidebarSession s) {
+    final hint =
+        showNumberHints && _hintCounter <= 9 ? _hintCounter++ : null;
+    return SidebarRow.sessionRow(s,
+        selected: s.id == selectedSessionId, numberHint: hint);
+  }
+
   /// Sessions matching [filterText] (case-insensitive substring on title).
   bool matchesFilter(SidebarSession s) {
     if (filterText.isEmpty) return true;
@@ -203,6 +265,7 @@ final class SidebarView {
   }
 
   UiNode build() {
+    _hintCounter = 1;
     final children = <UiNode>[
       // Workspace quick-switch dots.
       UiRow('workspace-dots', [
@@ -217,8 +280,7 @@ final class SidebarView {
     if (visiblePinned.isNotEmpty) {
       children.add(const UiText('section-pinned', 'Pinned'));
       for (final s in visiblePinned) {
-        children.add(
-            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId));
+        children.add(_row(s));
       }
     }
 
@@ -260,8 +322,7 @@ final class SidebarView {
         children.add(UiText('worktree-${project.id}-$wt', '  📁 $wt',
             style: const UiStyle(fontSize: 12)));
         for (final s in wtSessions) {
-          children.add(SidebarRow.sessionRow(s,
-              selected: s.id == selectedSessionId));
+          children.add(_row(s));
         }
       }
       // Groups.
@@ -279,16 +340,14 @@ final class SidebarView {
         ]));
         if (!group.collapsed) {
           for (final s in group.sessions.where(matchesFilter)) {
-            children.add(SidebarRow.sessionRow(s,
-                selected: s.id == selectedSessionId));
+            children.add(_row(s));
           }
         }
       }
       // Ungrouped sessions (excluding those shown under worktree folders).
       for (final s in project.sessions
           .where((s) => s.worktree == null && matchesFilter(s))) {
-        children.add(
-            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId));
+        children.add(_row(s));
       }
     }
     return UiColumn('project-tree-${project.id}', children);

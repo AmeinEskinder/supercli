@@ -211,6 +211,40 @@ Future<void> _dispatchAction(
         app.selectedSession++;
         await refresh();
       }
+    // Row 166: ⌘1–9 session switching, ⌃1–9 project switching.
+    case 'session.switch1':
+    case 'session.switch2':
+    case 'session.switch3':
+    case 'session.switch4':
+    case 'session.switch5':
+    case 'session.switch6':
+    case 'session.switch7':
+    case 'session.switch8':
+    case 'session.switch9':
+      app.selectSessionByIndex(
+          int.parse(action.substring('session.switch'.length)));
+      await refresh();
+    case 'project.switch1':
+    case 'project.switch2':
+    case 'project.switch3':
+    case 'project.switch4':
+    case 'project.switch5':
+    case 'project.switch6':
+    case 'project.switch7':
+    case 'project.switch8':
+    case 'project.switch9':
+      app.selectProjectByIndex(
+          int.parse(action.substring('project.switch'.length)));
+      await refresh();
+    // Row 166: held-⌘ hint badges. No key chord: the host watches real
+    // modifier-key state and sends these directly (UiAction requires a
+    // non-empty keys string, so they are not registered as bindings).
+    case 'hints.show':
+      app.showNumberHints = true;
+      await refresh();
+    case 'hints.hide':
+      app.showNumberHints = false;
+      await refresh();
     case 'composer.focus':
       // GAP: gpuidart has no programmatic focus API yet. Logged as P0 gap.
       stderr.writeln('gap: programmatic focus not available in gpuidart');

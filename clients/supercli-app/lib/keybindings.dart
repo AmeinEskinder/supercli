@@ -40,11 +40,22 @@ final class AppKeybindings {
   /// confirms on the host side; Enter covers keyboard-only flows.
   static const switcherConfirm = 'enter';
 
+  /// Row 166: ⌘1–9 switch sessions, ⌃1–9 switch projects.
+  /// `meta` is Cmd on macOS, Super on Linux/Windows (same convention as
+  /// paletteOpen). Digits are valid gpuidart key grammar.
+  static String sessionNumber(int n) => 'meta+$n';
+  static String projectNumber(int n) => 'ctrl+$n';
+
   /// Global (unscoped) bindings. The host registers these once at startup.
-  List<UiAction> globalActions() => const [
-        UiAction(name: 'palette.open', keys: paletteOpen),
-        UiAction(name: 'switcher.next', keys: switcherNext),
-        UiAction(name: 'switcher.previous', keys: switcherPrevious),
+  List<UiAction> globalActions() => [
+        const UiAction(name: 'palette.open', keys: paletteOpen),
+        const UiAction(name: 'switcher.next', keys: switcherNext),
+        const UiAction(name: 'switcher.previous', keys: switcherPrevious),
+        // Row 166: number-key switching.
+        for (var n = 1; n <= 9; n++)
+          UiAction(name: 'session.switch$n', keys: sessionNumber(n)),
+        for (var n = 1; n <= 9; n++)
+          UiAction(name: 'project.switch$n', keys: projectNumber(n)),
       ];
 
   /// Bindings scoped to the open palette overlay node.

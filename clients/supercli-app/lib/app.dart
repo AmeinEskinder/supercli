@@ -13,7 +13,6 @@ import 'package:gpuidart/gpuidart.dart';
 
 import 'keybindings.dart';
 import 'models.dart';
-import 'platform_keys.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
 import 'screens/sidebarview.dart';
@@ -67,33 +66,34 @@ final class SupercliApp {
   /// shortcuts) plus the live sessions. This is what the palette lists,
   /// filters, and executes — not a hardcoded list.
   List<PaletteCommand> paletteCommands() {
-    final mod = currentPrimaryModifier;
     final actionDefs = [
       // (action name, human title, shortcut)
-      // NOTE: `mod` is the platform primary modifier: `meta` (Cmd) on macOS,
-      // `ctrl` on Linux/Windows. Platform-neutral chords (ctrl+enter,
-      // ctrl+tab, ...) stay as `ctrl+` on all platforms by design.
       ('approval.approve', 'Approve pending request', 'ctrl+enter'),
       ('approval.deny', 'Deny pending request', 'ctrl+shift+enter'),
       ('mcp.approve', 'Approve pending MCP request', 'ctrl+enter'),
       ('mcp.deny', 'Deny pending MCP request', 'ctrl+shift+enter'),
       ('mcp.edit', 'Edit pending MCP request before answering', 'ctrl+e'),
-      ('sidebar.toggle', 'Toggle sidebar', '$mod+b'),
+      ('sidebar.toggle', 'Toggle sidebar', 'cmd+b'),
       ('sessions.up', 'Select previous session', 'up'),
       ('sessions.down', 'Select next session', 'down'),
+      // Row 166: number-key switching (also discoverable in the palette).
+      for (var n = 1; n <= 9; n++)
+        ('session.switch$n', 'Switch to session $n', 'meta+$n'),
+      for (var n = 1; n <= 9; n++)
+        ('project.switch$n', 'Switch to project $n', 'ctrl+$n'),
       ('composer.focus', 'Focus message composer', 'ctrl+l'),
-      ('pane.splitRight', 'Split pane right', '$mod+d'),
-      ('pane.splitDown', 'Split pane down', 'shift+$mod+d'),
-      ('pane.zoom', 'Zoom focused pane', 'shift+$mod+enter'),
-      ('pane.equalize', 'Equalize pane sizes', '$mod+shift+e'),
-      ('pane.close', 'Close focused pane', '$mod+w'),
-      ('pane.detach', 'Detach focused pane', '$mod+shift+o'),
+      ('pane.splitRight', 'Split pane right', 'cmd+d'),
+      ('pane.splitDown', 'Split pane down', 'shift+cmd+d'),
+      ('pane.zoom', 'Zoom focused pane', 'shift+cmd+enter'),
+      ('pane.equalize', 'Equalize pane sizes', 'cmd+shift+e'),
+      ('pane.close', 'Close focused pane', 'cmd+w'),
+      ('pane.detach', 'Detach focused pane', 'cmd+shift+o'),
       // NOTE: no shortcut is claimed for pane.focusNext/focusPrev: Ctrl-Tab
       // is the MRU switcher's chord (see switcher.next), so labeling these
       // with it would be misleading. They are reachable from the palette.
       ('pane.focusNext', 'Focus next pane', ''),
       ('pane.focusPrev', 'Focus previous pane', ''),
-      ('find.show', 'Find in terminal', '$mod+f'),
+      ('find.show', 'Find in terminal', 'cmd+f'),
       ('switcher.next', 'Switch to next recent session', 'ctrl+tab'),
       ('switcher.previous', 'Switch to previous recent session',
           'ctrl+shift+tab'),
@@ -136,6 +136,40 @@ final class SupercliApp {
       }
     }
   }
+
+  /// Row 166: ⌘1–9 session switching. Selects the nth live session
+  /// (1-based); out-of-range numbers are ignored.
+  void selectSessionByIndex(int n) {
+    final idx = n - 1;
+    if (idx >= 0 && idx < sessions.length) {
+      selectedSession = idx;
+      mruSwitcher.markUsed(sessions[idx].id);
+    }
+  }
+
+  /// Row 166: ⌃1–9 project switching. Selects the nth project and its
+  /// first session; out-of-range numbers are ignored.
+  void selectProjectByIndex(int n) {
+    final projs = sidebarProjects;
+    final idx = n - 1;
+    if (idx >= 0 && idx < projs.length) {
+      final all = projs[idx].allSessions;
+      if (all.isNotEmpty) {
+        final sidx = sessions.indexWhere((s) => s.id == all.first.id);
+        if (sidx >= 0) {
+          selectedSession = sidx;
+          mruSwitcher.markUsed(all.first.id);
+        }
+      }
+    }
+  }
+
+  /// Row 166: held-⌘ hint badges. The host sets this from real
+  /// modifier-key state via the `hints.show` / `hints.hide` actions.
+  bool showNumberHints = false;
+
+  /// Projects backing the sidebar, derived from the Host bootstrap.
+  List<SidebarProject> get sidebarProjects => _sidebarProjects;
 
   /// Execute a palette selection against live app state.
   ///
@@ -235,6 +269,7 @@ final class SupercliApp {
           selectedSessionId: sessions.isEmpty
               ? null
               : sessions[selectedSession.clamp(0, sessions.length - 1)].id,
+          showNumberHints: showNumberHints,
         ).build()
       else
         UiColumn('sidebar-collapsed', [
@@ -278,9 +313,8 @@ final class SupercliApp {
         // Pane management (mounted PaneLayout).
         ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
             .actions(),
-        // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
-        // ctrl on Linux/Windows).
-        UiAction(name: 'sidebar.toggle', keys: '$currentPrimaryModifier+b'),
+        // Sidebar toggle.
+        const UiAction(name: 'sidebar.toggle', keys: 'cmd+b'),
         // Session list navigation (scoped to the sidebar node, which is
         // the rendered UiColumn('sidebar'); the old 'session-list' scope
         // matched no node and was dead).
