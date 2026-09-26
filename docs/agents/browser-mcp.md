@@ -240,3 +240,27 @@ own** — Supercli authors the server and owns the tool schema).
   tree scoping. Site allowlists currently cannot be combined with an attached
   CDP browser, so setting site rules deliberately falls back to the separate
   per-Session browser mode and reports that limitation in `browser_context`.
+
+## Browser takeover (human takes the wheel)
+
+The agent's browser can be handed to the human live: the agent's browser
+actions pause, the human's clicks and keys are forwarded into the page via
+CDP `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent`, then control
+returns to the agent (`track-b-openmuse`, `crates/supercli-core/src/browser_takeover.rs`).
+
+- **Transport.** A dependency-free blocking CDP client (raw TCP + HTTP
+  upgrade + masked client frames): `ws://` only, **loopback by design**.
+  Any endpoint that is not `127.0.0.1` / `::1` / `localhost` is refused,
+  and the refusal is tested — CDP is full browser control, so there is no
+  remote-CDP mode.
+- **Surface.** `browser_takeover` MCP tool (schema + dispatch in
+  `browser_mcp.rs`), `POST /mobile/browser/takeover` on the Host, and
+  `HostClient.browserTakeover()` in the gpuidart app. `takeover_stream`
+  captures screenshots (watch-only) over the same client.
+- **Transitions are audited.** Pause (agent → human), handoff, and resume
+  (human → agent) each append an audit entry — the record shows exactly
+  who was driving the browser at every moment.
+- The human-takeover input forwarding (pause/handoff/resume) is in
+  progress; the watch-only stream and the loopback guard are implemented
+  and tested (8/8 `browser_takeover` tests, including a WebSocket handshake
+  against a fake CDP server).

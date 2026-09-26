@@ -2344,7 +2344,10 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
         and stream screenshots. The agent-drives/human-watches loop: the agent sees the tab via \
         screenshots while the human watches the real browser. Pass list=true to list tabs, or \
         target_id + frames + interval_ms to capture. Talks to any CDP endpoint (default \
-        ws://127.0.0.1:9222); pass endpoint for a custom webSocketDebuggerUrl.",
+        ws://127.0.0.1:9222); pass endpoint for a custom webSocketDebuggerUrl. Live human takeover: \
+        pass action=begin/pause/mouse/key/resume/status/close to hand browser control to a human \
+        (pausing the agent) and back; human input is forwarded via CDP Input.dispatchMouseEvent / \
+        Input.dispatchKeyEvent and every handoff is audit-logged.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2353,6 +2356,19 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
                     "frames": { "type": "integer", "description": "Screenshots to capture (default 25)" },
                     "interval_ms": { "type": "integer", "description": "Ms between frames (default 200 = 5fps)" },
                     "endpoint": { "type": "string", "description": "CDP ws:// URL (default ws://127.0.0.1:9222)" },
+                    "action": { "type": "string", "description": "Live-takeover action: begin, pause, mouse, key, resume, status, close" },
+                    "session": { "type": "string", "description": "Takeover session token (from action=begin)" },
+                    "actor": { "type": "string", "description": "Who is taking over, e.g. human:device-id" },
+                    "reason": { "type": "string", "description": "Why control is changing hands (audit log)" },
+                    "type": { "type": "string", "description": "Input event type: mousePressed/mouseReleased/mouseMoved, or keyDown/keyUp/char" },
+                    "x": { "type": "number", "description": "Mouse x in CSS pixels" },
+                    "y": { "type": "number", "description": "Mouse y in CSS pixels" },
+                    "button": { "type": "string", "description": "Mouse button: left/middle/right/none" },
+                    "click_count": { "type": "integer", "description": "Click count for mousePressed" },
+                    "key": { "type": "string", "description": "Key value, e.g. Enter" },
+                    "code": { "type": "string", "description": "Physical key code, e.g. Enter" },
+                    "text": { "type": "string", "description": "Text for char events" },
+                    "home": { "type": "string", "description": "Host home dir for the audit log (default supercli home)" },
                 },
                 "additionalProperties": false,
             },

@@ -1499,6 +1499,14 @@ fn principal_device_id(principal: &ControllerPrincipal) -> String {
 /// `{"list": true}` or `{"target_id": "...", "frames": N, "interval_ms": M,
 /// "endpoint": "ws://…"}`. Returns the takeover_tool JSON output.
 ///
+/// Live human takeover adds session actions (`"action": ...`):
+/// `begin` (attach, returns a session token), `pause` (agent stops driving,
+/// control goes to the human), `mouse` / `key` (forward one human input
+/// event via CDP Input.dispatchMouseEvent / Input.dispatchKeyEvent —
+/// refused unless the session is paused for the human), `resume` (control
+/// back to the agent), `status`, `close`. Begin/pause/resume are appended
+/// to the durable audit log `browser-takeover-audit.jsonl`.
+///
 /// The CDP endpoint is loopback-only (ws://); the Host dials it from the
 /// machine the browser runs on, so this works when the gpuidart app and the
 /// browser are on the same host as the Host.

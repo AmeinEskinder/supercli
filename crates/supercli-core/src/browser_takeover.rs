@@ -102,6 +102,42 @@ fn parse_ws_url(url: &str) -> Result<(String, u16, String), String> {
     Ok((host, port, path))
 }
 
+/// CDP grants full browser control (arbitrary script evaluation,
+/// navigation, input injection, credential-bearing pages). Refuse any
+/// endpoint whose host is not loopback.
+///
+/// `localhost` is allowlisted by name; IP literals must parse as loopback
+/// (covers the whole 127.0.0.0/8 and ::1); any other hostname is resolved
+/// and refused unless EVERY resolved address is loopback. Unresolvable
+/// hosts are refused (fail closed) rather than trusted.
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    // Strip brackets from IPv6 literals ("[::1]" -> "::1").
+    let bare = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
+        return ip.is_loopback();
+    }
+    // Non-IP hostname: resolve; all addresses must be loopback.
+    match (host, 0).to_socket_addrs() {
+        Ok(mut addrs) => {
+            let mut any = false;
+            for addr in &mut addrs {
+                any = true;
+                if !addr.ip().is_loopback() {
+                    return false;
+                }
+            }
+            any // false when resolution returned zero addresses
+        }
+        Err(_) => false, // fail closed: do not trust what we cannot resolve
+    }
+}
+
 #[derive(Debug)]
 pub struct WsClient {
     stream: TcpStream,
@@ -273,6 +309,15 @@ pub struct CdpClient {
 
 impl CdpClient {
     pub fn connect(endpoint: &str) -> Result<Self, String> {
+        // Security gate: CDP is full browser control. Refuse non-loopback
+        // endpoints BEFORE any socket is opened (parse_ws_url also rejects
+        // non-ws:// schemes).
+        let (host, _, _) = parse_ws_url(endpoint)?;
+        if !is_loopback_host(&host) {
+            return Err(format!(
+                "CDP endpoint refused: {host:?} is not loopback (CDP grants full browser control)"
+            ));
+        }
         Ok(CdpClient {
             ws: WsClient::connect(endpoint)?,
             next_id: 1,
@@ -388,6 +433,431 @@ impl CdpClient {
     pub fn close(&mut self) {
         self.ws.close();
     }
+
+    /// Forward one input event via `Input.dispatchMouseEvent`.
+    /// `mouse_type`: "mousePressed" | "mouseReleased" | "mouseMoved".
+    /// `button`: "none" | "left" | "middle" | "right".
+    fn dispatch_mouse_event(
+        &mut self,
+        session_id: &str,
+        mouse_type: &str,
+        x: f64,
+        y: f64,
+        button: &str,
+        click_count: u32,
+    ) -> Result<(), String> {
+        match mouse_type {
+            "mousePressed" | "mouseReleased" | "mouseMoved" => {}
+            _ => return Err(format!("bad mouse event type: {mouse_type:?}")),
+        }
+        match button {
+            "none" | "left" | "middle" | "right" => {}
+            _ => return Err(format!("bad mouse button: {button:?}")),
+        }
+        if !x.is_finite() || !y.is_finite() {
+            return Err("mouse coordinates must be finite".to_string());
+        }
+        let id = self.send_command(
+            "Input.dispatchMouseEvent",
+            serde_json::json!({
+                "type": mouse_type, "x": x, "y": y,
+                "button": button, "clickCount": click_count,
+            }),
+            Some(session_id),
+        )?;
+        self.recv_response(id).map(|_| ())
+    }
+
+    /// Forward one input event via `Input.dispatchKeyEvent`.
+    /// `key_type`: "keyDown" | "keyUp" | "rawKeyDown" | "char".
+    fn dispatch_key_event(
+        &mut self,
+        session_id: &str,
+        key_type: &str,
+        key: &str,
+        code: &str,
+        text: Option<&str>,
+    ) -> Result<(), String> {
+        match key_type {
+            "keyDown" | "keyUp" | "rawKeyDown" | "char" => {}
+            _ => return Err(format!("bad key event type: {key_type:?}")),
+        }
+        let mut params = serde_json::json!({ "type": key_type, "key": key, "code": code });
+        if let Some(t) = text {
+            params["text"] = serde_json::Value::String(t.to_string());
+        }
+        let id = self.send_command("Input.dispatchKeyEvent", params, Some(session_id))?;
+        self.recv_response(id).map(|_| ())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Live takeover session: human takes control, then hands it back
+// ---------------------------------------------------------------------------
+
+/// Who currently drives the browser tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TakeoverState {
+    /// The agent drives; human input is refused.
+    Agent,
+    /// The human drives (agent's browser actions are paused); agent input
+    /// paths must not inject events.
+    Human,
+}
+
+/// Audit file for takeover transitions, under the host home dir.
+pub fn takeover_audit_path(home: &std::path::Path) -> std::path::PathBuf {
+    home.join("browser-takeover-audit.jsonl")
+}
+
+fn audit_transition(
+    home: &std::path::Path,
+    event: &str,
+    target_id: &str,
+    actor: &str,
+    reason: &str,
+) -> Result<(), String> {
+    let path = takeover_audit_path(home);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("audit dir: {e}"))?;
+    }
+    let ts_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let line = serde_json::json!({
+        "ts_ms": ts_ms,
+        "event": event,
+        "target_id": target_id,
+        "actor": actor,
+        "reason": reason,
+    })
+    .to_string();
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("audit open: {e}"))?;
+    f.write_all(line.as_bytes())
+        .map_err(|e| format!("audit write: {e}"))?;
+    f.write_all(b"\n")
+        .map_err(|e| format!("audit write: {e}"))?;
+    f.sync_all().map_err(|e| format!("audit fsync: {e}"))?;
+    Ok(())
+}
+
+/// A live takeover session: the human takes control of a browser tab (the
+/// agent's browser actions pause), drives it via CDP input injection, then
+/// hands control back to the agent.
+///
+/// State machine (fail closed):
+/// - `begin` → Agent. `pause_for_human` → Human. `resume_agent` → Agent.
+/// - Human input (`human_mouse`/`human_key`) is refused unless the session
+///   is in Human state; pausing twice or resuming without a pause errors.
+/// - Every transition appends a durable audit entry (fsync) recording who
+///   moved control and why.
+pub struct TakeoverSession {
+    client: CdpClient,
+    session_id: String,
+    target_id: String,
+    home: std::path::PathBuf,
+    actor: String,
+    state: TakeoverState,
+}
+
+impl TakeoverSession {
+    /// Attach to a target and start in Agent state. Audit: `takeover_begin`.
+    pub fn begin(
+        home: &std::path::Path,
+        endpoint: &str,
+        target_id: &str,
+        actor: &str,
+    ) -> Result<Self, String> {
+        let mut client = CdpClient::connect(endpoint)?;
+        let session_id = client.attach(target_id)?;
+        audit_transition(home, "takeover_begin", target_id, actor, "session opened")?;
+        Ok(TakeoverSession {
+            client,
+            session_id,
+            target_id: target_id.to_string(),
+            home: home.to_path_buf(),
+            actor: actor.to_string(),
+            state: TakeoverState::Agent,
+        })
+    }
+
+    pub fn state(&self) -> TakeoverState {
+        self.state
+    }
+
+    pub fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
+    /// Pause the agent's browser actions and hand control to the human.
+    /// Audit: `takeover_pause`.
+    pub fn pause_for_human(&mut self, reason: &str) -> Result<(), String> {
+        if self.state != TakeoverState::Agent {
+            return Err("refused: control is already with the human".to_string());
+        }
+        self.state = TakeoverState::Human;
+        // Audit the transition; if the audit write fails, roll the state
+        // back so we never claim a handoff that is not recorded.
+        if let Err(e) = audit_transition(
+            &self.home,
+            "takeover_pause",
+            &self.target_id,
+            &self.actor,
+            reason,
+        ) {
+            self.state = TakeoverState::Agent;
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Forward a human mouse event. Refused unless the human holds control.
+    pub fn human_mouse(
+        &mut self,
+        mouse_type: &str,
+        x: f64,
+        y: f64,
+        button: &str,
+        click_count: u32,
+    ) -> Result<(), String> {
+        if self.state != TakeoverState::Human {
+            return Err("refused: the agent holds control; call pause_for_human first".to_string());
+        }
+        self.client.dispatch_mouse_event(
+            &self.session_id.clone(),
+            mouse_type,
+            x,
+            y,
+            button,
+            click_count,
+        )
+    }
+
+    /// Forward a human key event. Refused unless the human holds control.
+    pub fn human_key(
+        &mut self,
+        key_type: &str,
+        key: &str,
+        code: &str,
+        text: Option<&str>,
+    ) -> Result<(), String> {
+        if self.state != TakeoverState::Human {
+            return Err("refused: the agent holds control; call pause_for_human first".to_string());
+        }
+        self.client
+            .dispatch_key_event(&self.session_id.clone(), key_type, key, code, text)
+    }
+
+    /// Hand control back to the agent. Audit: `takeover_resume`.
+    pub fn resume_agent(&mut self, reason: &str) -> Result<(), String> {
+        if self.state != TakeoverState::Human {
+            return Err("refused: the agent already holds control".to_string());
+        }
+        self.state = TakeoverState::Agent;
+        if let Err(e) = audit_transition(
+            &self.home,
+            "takeover_resume",
+            &self.target_id,
+            &self.actor,
+            reason,
+        ) {
+            self.state = TakeoverState::Human;
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    pub fn close(&mut self) {
+        self.client.close();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Process-global live-takeover session registry
+//
+// The JSON tool boundary is stateless, but a live takeover spans many
+// calls (begin → pause → mouse/key… → resume → close). Sessions live here,
+// keyed by an unguessable token returned at begin time. Both the MCP tool
+// and the Host HTTP endpoint go through this registry.
+// ---------------------------------------------------------------------------
+
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+static TAKEOVER_SESSIONS: OnceLock<Mutex<HashMap<String, TakeoverSession>>> = OnceLock::new();
+
+fn takeover_sessions() -> &'static Mutex<HashMap<String, TakeoverSession>> {
+    TAKEOVER_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn new_session_token() -> String {
+    static CTR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let n = CTR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let t = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("ts-{t:x}-{n:x}")
+}
+
+fn with_takeover_session<T>(
+    token: &str,
+    f: impl FnOnce(&mut TakeoverSession) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut map = takeover_sessions()
+        .lock()
+        .map_err(|e| format!("takeover session lock: {e}"))?;
+    let sess = map
+        .get_mut(token)
+        .ok_or_else(|| format!("unknown takeover session: {token:?}"))?;
+    f(sess)
+}
+
+/// Live-takeover JSON actions on top of the stateless tool boundary.
+///
+/// Legacy calls (no `action`) keep the old behavior: `{"list": true}` or
+/// a screenshot stream for `target_id`.
+///
+/// Live-takeover calls set `action`:
+/// - `begin`: attach to `target_id` (needs `endpoint`, optional `actor`,
+///   optional `home`). Returns `{"session": token, "state": "agent"}`.
+/// - `pause`: hand control to the human (`reason`). Returns new state.
+/// - `mouse`: forward a click/move (`type`, `x`, `y`, `button`,
+///   `click_count`). Refused unless the human holds control.
+/// - `key`: forward a key (`type`, `key`, `code`, optional `text`).
+///   Refused unless the human holds control.
+/// - `resume`: hand control back to the agent (`reason`).
+/// - `status`: current `state` / `target_id` of a session.
+/// - `close`: detach and drop the session.
+///
+/// Every begin/pause/resume is appended to the durable audit log
+/// (`browser-takeover-audit.jsonl` under the host home dir).
+pub fn takeover_session_tool(args: &serde_json::Value) -> Result<String, String> {
+    let action = args
+        .get("action")
+        .and_then(|v| v.as_str())
+        .ok_or("takeover_session_tool: need action")?;
+    let out = match action {
+        "begin" => {
+            let endpoint = args
+                .get("endpoint")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("ws://127.0.0.1:{DEFAULT_CDP_PORT}"));
+            let target_id = args
+                .get("target_id")
+                .and_then(|v| v.as_str())
+                .ok_or("begin: need target_id")?;
+            let actor = args
+                .get("actor")
+                .and_then(|v| v.as_str())
+                .unwrap_or("human:unknown-device");
+            let home = args
+                .get("home")
+                .and_then(|v| v.as_str())
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(crate::app_paths::supercli_home);
+            let sess = TakeoverSession::begin(&home, &endpoint, target_id, actor)?;
+            let token = new_session_token();
+            let state = format!("{:?}", sess.state()).to_lowercase();
+            let tid = sess.target_id().to_string();
+            takeover_sessions()
+                .lock()
+                .map_err(|e| format!("takeover session lock: {e}"))?
+                .insert(token.clone(), sess);
+            serde_json::json!({ "session": token, "target_id": tid, "state": state })
+        }
+        "pause" | "resume" => {
+            let token = args
+                .get("session")
+                .and_then(|v| v.as_str())
+                .ok_or(format!("{action}: need session token"))?;
+            let reason = args.get("reason").and_then(|v| v.as_str()).unwrap_or("");
+            let state = with_takeover_session(token, |s| {
+                if action == "pause" {
+                    s.pause_for_human(reason)
+                } else {
+                    s.resume_agent(reason)
+                }?;
+                Ok(format!("{:?}", s.state()).to_lowercase())
+            })?;
+            serde_json::json!({ "session": token, "state": state })
+        }
+        "mouse" => {
+            let token = args
+                .get("session")
+                .and_then(|v| v.as_str())
+                .ok_or("mouse: need session token")?;
+            let mouse_type = args
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("mousePressed");
+            let x = args.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let y = args.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let button = args
+                .get("button")
+                .and_then(|v| v.as_str())
+                .unwrap_or("left");
+            let click_count = args
+                .get("click_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as u32;
+            with_takeover_session(token, |s| {
+                s.human_mouse(mouse_type, x, y, button, click_count)
+            })?;
+            serde_json::json!({ "ok": true })
+        }
+        "key" => {
+            let token = args
+                .get("session")
+                .and_then(|v| v.as_str())
+                .ok_or("key: need session token")?;
+            let key_type = args
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("keyDown");
+            let key = args.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let code = args.get("code").and_then(|v| v.as_str()).unwrap_or("");
+            let text = args.get("text").and_then(|v| v.as_str());
+            with_takeover_session(token, |s| s.human_key(key_type, key, code, text))?;
+            serde_json::json!({ "ok": true })
+        }
+        "status" => {
+            let token = args
+                .get("session")
+                .and_then(|v| v.as_str())
+                .ok_or("status: need session token")?;
+            with_takeover_session(token, |s| {
+                Ok(serde_json::json!({
+                    "session": token,
+                    "target_id": s.target_id(),
+                    "state": format!("{:?}", s.state()).to_lowercase(),
+                }))
+            })?
+        }
+        "close" => {
+            let token = args
+                .get("session")
+                .and_then(|v| v.as_str())
+                .ok_or("close: need session token")?;
+            let mut map = takeover_sessions()
+                .lock()
+                .map_err(|e| format!("takeover session lock: {e}"))?;
+            let mut sess = map
+                .remove(token)
+                .ok_or_else(|| format!("unknown takeover session: {token:?}"))?;
+            sess.close();
+            serde_json::json!({ "ok": true })
+        }
+        _ => return Err(format!("unknown takeover action: {action:?}")),
+    };
+    serde_json::to_string(&out).map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +871,12 @@ impl CdpClient {
 /// "interval_ms": M, "endpoint": "ws://…"}`. Output: `{"targets": [...]}` or
 /// `{"target_id":…, "frames": N, "bytes": B, "png_magic_ok": true}`.
 pub fn takeover_tool(args: &serde_json::Value) -> Result<String, String> {
+    // Live-takeover session actions (begin/pause/mouse/key/resume/status/
+    // close) go through the session registry; everything else keeps the
+    // legacy list/stream behavior.
+    if args.get("action").and_then(|v| v.as_str()).is_some() {
+        return takeover_session_tool(args);
+    }
     let endpoint = args
         .get("endpoint")
         .and_then(|v| v.as_str())
@@ -543,6 +1019,9 @@ mod tests {
                 "Page.captureScreenshot" => serde_json::json!({
                     "id": id, "result": {"data": png_b64}
                 }),
+                "Input.dispatchMouseEvent" | "Input.dispatchKeyEvent" => {
+                    serde_json::json!({ "id": id, "result": {} })
+                }
                 _ => serde_json::json!({"id": id, "error": {"message": "unknown"}}),
             };
             server_send(stream, &reply.to_string());
@@ -598,6 +1077,270 @@ mod tests {
         // Non-ws scheme is refused without touching the network.
         let err = CdpClient::connect("http://127.0.0.1:9222/x").unwrap_err();
         assert!(err.contains("only ws://"), "got: {err}");
+    }
+
+    #[test]
+    fn takeover_refuses_non_loopback_endpoint() {
+        // CDP grants full browser control: any non-loopback host must be
+        // refused BEFORE a socket is opened. IP literals first (no DNS
+        // involved, deterministic).
+        for url in [
+            "ws://192.168.1.100:9222/devtools/page/1",
+            "ws://10.0.0.5:9222/devtools/page/1",
+            "ws://8.8.8.8:9222/devtools/page/1",
+            "ws://[2001:db8::1]:9222/devtools/page/1",
+        ] {
+            let err = CdpClient::connect(url).unwrap_err();
+            assert!(
+                err.contains("not loopback"),
+                "non-loopback {url} must be refused, got: {err}"
+            );
+        }
+        // A public hostname resolves to non-loopback (or fails to resolve
+        // in a sandbox — either way it must be refused, fail closed).
+        let err = CdpClient::connect("ws://example.com:9222/x").unwrap_err();
+        assert!(err.contains("not loopback"), "got: {err}");
+
+        // Loopback hosts pass the gate (they fail later at TCP connect,
+        // which proves the refusal is about loopback, not connectivity).
+        for url in [
+            "ws://127.0.0.1:1/nope",
+            "ws://127.0.0.2:1/nope",
+            "ws://localhost:1/nope",
+            "ws://[::1]:1/nope",
+        ] {
+            let err = CdpClient::connect(url).unwrap_err();
+            assert!(
+                !err.contains("not loopback"),
+                "loopback {url} must pass the gate, got: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_loopback_host_unit_cases() {
+        assert!(is_loopback_host("localhost"));
+        assert!(is_loopback_host("LOCALHOST"));
+        assert!(is_loopback_host("127.0.0.1"));
+        assert!(is_loopback_host("127.0.0.2"));
+        assert!(is_loopback_host("::1"));
+        assert!(!is_loopback_host("192.168.1.1"));
+        assert!(!is_loopback_host("10.0.0.1"));
+        assert!(!is_loopback_host("0.0.0.0"));
+        // Unresolvable names fail closed.
+        assert!(!is_loopback_host("no-such-host.invalid"));
+    }
+
+    fn takeover_test_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-takeover-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn read_takeover_audit(home: &std::path::Path) -> Vec<serde_json::Value> {
+        let text = std::fs::read_to_string(takeover_audit_path(home)).unwrap();
+        text.lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn takeover_pause_handoff_resume_is_audited() {
+        let url = fake_cdp_server(false);
+        let home = takeover_test_home();
+
+        // begin -> Agent state, audited.
+        let mut sess = TakeoverSession::begin(&home, &url, "tab-1", "human:test-device").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Agent);
+
+        // Human input while the agent holds control is refused (fail closed).
+        let err = sess
+            .human_mouse("mousePressed", 100.0, 200.0, "left", 1)
+            .unwrap_err();
+        assert!(err.contains("agent holds control"), "got: {err}");
+        let err = sess
+            .human_key("keyDown", "Enter", "Enter", None)
+            .unwrap_err();
+        assert!(err.contains("agent holds control"), "got: {err}");
+
+        // Pause -> Human state, audited.
+        sess.pause_for_human("user clicked Take Over").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Human);
+        // Pausing twice is refused.
+        let err = sess.pause_for_human("again").unwrap_err();
+        assert!(err.contains("already with the human"), "got: {err}");
+
+        // Human input now forwards via CDP Input.* (fake server acks).
+        sess.human_mouse("mousePressed", 100.0, 200.0, "left", 1)
+            .unwrap();
+        sess.human_mouse("mouseReleased", 100.0, 200.0, "left", 1)
+            .unwrap();
+        sess.human_key("keyDown", "Enter", "Enter", None).unwrap();
+        sess.human_key("char", "a", "KeyA", Some("a")).unwrap();
+        // Bad event types are rejected without touching the wire.
+        let err = sess.human_mouse("nope", 0.0, 0.0, "left", 1).unwrap_err();
+        assert!(err.contains("bad mouse event type"), "got: {err}");
+
+        // Resume -> Agent state, audited.
+        sess.resume_agent("user clicked Hand Back").unwrap();
+        assert_eq!(sess.state(), TakeoverState::Agent);
+        // Resuming without a pause is refused.
+        let err = sess.resume_agent("again").unwrap_err();
+        assert!(err.contains("already holds control"), "got: {err}");
+        // Human input is refused again.
+        let err = sess
+            .human_mouse("mousePressed", 1.0, 1.0, "left", 1)
+            .unwrap_err();
+        assert!(err.contains("agent holds control"), "got: {err}");
+        sess.close();
+
+        // Audit log: exactly the three transitions, in order, with actor
+        // and reasons. Nothing else was recorded.
+        let entries = read_takeover_audit(&home);
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0]["event"], "takeover_begin");
+        assert_eq!(entries[1]["event"], "takeover_pause");
+        assert_eq!(entries[2]["event"], "takeover_resume");
+        for e in &entries {
+            assert_eq!(e["target_id"], "tab-1");
+            assert_eq!(e["actor"], "human:test-device");
+            assert!(e["ts_ms"].as_u64().unwrap() > 0);
+        }
+        assert_eq!(entries[1]["reason"], "user clicked Take Over");
+        assert_eq!(entries[2]["reason"], "user clicked Hand Back");
+        // Timestamps are non-decreasing.
+        assert!(entries[0]["ts_ms"].as_u64().unwrap() <= entries[1]["ts_ms"].as_u64().unwrap());
+        assert!(entries[1]["ts_ms"].as_u64().unwrap() <= entries[2]["ts_ms"].as_u64().unwrap());
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn takeover_session_begin_audits_even_before_any_input() {
+        // A session that is opened and closed without pause/resume still
+        // records its lifetime start.
+        let url = fake_cdp_server(false);
+        let home = takeover_test_home();
+        let mut sess = TakeoverSession::begin(&home, &url, "tab-1", "human:x").unwrap();
+        sess.close();
+        let entries = read_takeover_audit(&home);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["event"], "takeover_begin");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn takeover_session_tool_full_lifecycle() {
+        // The JSON boundary (used by the MCP tool and the Host HTTP
+        // endpoint) drives a whole pause/handoff/resume cycle.
+        let url = fake_cdp_server(false);
+        let home = takeover_test_home();
+        let home_str = home.to_string_lossy().to_string();
+
+        // begin
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(&serde_json::json!({
+                "action": "begin", "endpoint": url, "target_id": "tab-9",
+                "actor": "human:gpuidart", "home": home_str,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let token = out["session"].as_str().unwrap().to_string();
+        assert_eq!(out["state"], "agent");
+
+        // status
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(&serde_json::json!({ "action": "status", "session": token })).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["state"], "agent");
+        assert_eq!(out["target_id"], "tab-9");
+
+        // mouse before pause is refused (agent holds control).
+        let err = takeover_tool(&serde_json::json!({
+            "action": "mouse", "session": token,
+            "type": "mousePressed", "x": 10.0, "y": 20.0,
+        }))
+        .unwrap_err();
+        assert!(err.contains("agent holds control"), "got: {err}");
+
+        // pause -> human
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(
+                &serde_json::json!({ "action": "pause", "session": token, "reason": "take over" }),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["state"], "human");
+
+        // mouse + key forward through the registry.
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(&serde_json::json!({
+                "action": "mouse", "session": token,
+                "type": "mousePressed", "x": 10.0, "y": 20.0,
+                "button": "left", "click_count": 1,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["ok"], true);
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(&serde_json::json!({
+                "action": "key", "session": token,
+                "type": "keyDown", "key": "Enter", "code": "Enter",
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["ok"], true);
+
+        // resume -> agent; input refused again.
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(
+                &serde_json::json!({ "action": "resume", "session": token, "reason": "hand back" }),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["state"], "agent");
+        let err = takeover_tool(&serde_json::json!({
+            "action": "key", "session": token, "type": "keyDown", "key": "a", "code": "KeyA",
+        }))
+        .unwrap_err();
+        assert!(err.contains("agent holds control"), "got: {err}");
+
+        // unknown token is refused.
+        let err = takeover_tool(&serde_json::json!({ "action": "status", "session": "ts-nope" }))
+            .unwrap_err();
+        assert!(err.contains("unknown takeover session"), "got: {err}");
+
+        // close drops the session.
+        let out: serde_json::Value = serde_json::from_str(
+            &takeover_tool(&serde_json::json!({ "action": "close", "session": token })).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["ok"], true);
+        let err = takeover_tool(&serde_json::json!({ "action": "status", "session": token }))
+            .unwrap_err();
+        assert!(err.contains("unknown takeover session"), "got: {err}");
+
+        // The audit log recorded begin, pause, resume in order.
+        let entries = read_takeover_audit(&home);
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0]["event"], "takeover_begin");
+        assert_eq!(entries[1]["event"], "takeover_pause");
+        assert_eq!(entries[2]["event"], "takeover_resume");
+        assert_eq!(entries[1]["actor"], "human:gpuidart");
+
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
