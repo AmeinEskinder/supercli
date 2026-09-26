@@ -49,9 +49,55 @@ pub const SCRCPY_SERVER_SHA256: &str =
 /// Where the jar lives on the device.
 pub const SCRCPY_SERVER_DEVICE_PATH: &str = "/data/local/tmp/scrcpy-server.jar";
 
-/// Abstract socket the server listens on (client connects via
-/// `adb forward tcp:<port> localabstract:scrcpy`).
+/// Abstract socket name prefix the server listens on (client connects via
+/// `adb forward tcp:<port> localabstract:scrcpy_<scid>`). With no scid the
+/// server uses the bare name "scrcpy"; see [`generate_scid`].
 pub const SCRCPY_ABSTRACT_SOCKET: &str = "scrcpy";
+
+/// Generate a random 31-bit session id, formatted as 8 lowercase hex
+/// digits (e.g. "a1b2c3d4").
+///
+/// The scrcpy-server v2.7 `scid` option is parsed as hex
+/// (`Integer.parseInt(value, 16)`, must be a 31-bit non-negative value)
+/// and names the abstract socket `scrcpy_<hex8>`
+/// (`DesktopConnection.getSocketName`). Without a scid every server
+/// binds the same `scrcpy` socket, so a second concurrent session (or a
+/// lingering server from a previous run with `cleanup=false`) makes the
+/// new server fail to bind and exit — the client then sees EOF on the
+/// header read. A per-session scid also lets /farm run concurrent
+/// devices/sessions against one daemon.
+///
+/// Entropy comes from the OS (`/dev/urandom`); the fallback mixes
+/// wall-clock nanos with the pid so a missing urandom still yields
+/// distinct ids across processes.
+pub fn generate_scid() -> String {
+    let mut bytes = [0u8; 4];
+    let ok = std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| {
+            use std::io::Read as _;
+            f.read_exact(&mut bytes)
+        })
+        .is_ok();
+    if !ok {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        let mixed = nanos ^ (std::process::id().wrapping_mul(0x9E37_79B9));
+        bytes = mixed.to_le_bytes();
+    }
+    let v = u32::from_le_bytes(bytes) & 0x7FFF_FFFF; // 31 bits
+    format!("{v:08x}")
+}
+
+/// Host path of the captured stdout/stderr of the `adb shell` session
+/// that runs the scrcpy server for `scid`. The server's own log lines
+/// (bind failures, encoder errors, version mismatches) go here so a
+/// failed session leaves its own error in the CI artifacts instead of
+/// vanishing with the dead `adb shell` process.
+pub fn server_log_path(scid: &str, stream: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("scrcpy-server-{scid}.{stream}.log"))
+}
 
 /// Local cache directory for the downloaded jar:
 /// `$XDG_CACHE_HOME/supercli/` or `$HOME/.cache/supercli/`.
@@ -307,6 +353,10 @@ fn put_u16_be(buf: &mut [u8], off: usize, v: u16) {
     buf[off..off + 2].copy_from_slice(&v.to_be_bytes());
 }
 
+fn put_i16_be(buf: &mut [u8], off: usize, v: i16) {
+    buf[off..off + 2].copy_from_slice(&v.to_be_bytes());
+}
+
 fn put_u32_be(buf: &mut [u8], off: usize, v: u32) {
     buf[off..off + 4].copy_from_slice(&v.to_be_bytes());
 }
@@ -373,6 +423,44 @@ pub fn encode_inject_touch(
     put_u16_be(&mut buf, 22, pressure_to_u16(pressure));
     put_u32_be(&mut buf, 24, 0); // action button
     put_u32_be(&mut buf, 28, 0); // buttons
+    buf
+}
+
+/// Encode a scroll amount as the v2.7 server's i16 fixed-point
+/// (`Binary.i16FixedPointToFloat`: `value == 0x7fff ? 1 : value / 2^15`).
+/// `f` is in scroll ticks, clamped to [-1, 1]; 1.0 encodes as 0x7fff so
+/// it decodes back to exactly 1.0.
+fn scroll_to_i16(f: f32) -> i16 {
+    let scaled = (f.clamp(-1.0, 1.0) * 32768.0).round() as i32;
+    scaled.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
+
+/// Encode TYPE_INJECT_SCROLL_EVENT (21 bytes):
+/// type(1) + x(u32) + y(u32) + screen_w(u16) + screen_h(u16) +
+/// hscroll(i16 fixed-point) + vscroll(i16 fixed-point) + buttons(u32).
+///
+/// Verified against the v2.7 server's `ControlMessageReader`:
+/// scroll deltas are **i16** fixed-point here (older scrcpy used i32 —
+/// sending 25 bytes would desync the server's message stream and corrupt
+/// every control message after it).
+pub fn encode_inject_scroll(
+    x: u32,
+    y: u32,
+    screen_w: u16,
+    screen_h: u16,
+    hscroll: f32,
+    vscroll: f32,
+    buttons: u32,
+) -> [u8; 21] {
+    let mut buf = [0u8; 21];
+    buf[0] = control_type::INJECT_SCROLL_EVENT;
+    put_u32_be(&mut buf, 1, x);
+    put_u32_be(&mut buf, 5, y);
+    put_u16_be(&mut buf, 9, screen_w);
+    put_u16_be(&mut buf, 11, screen_h);
+    put_i16_be(&mut buf, 13, scroll_to_i16(hscroll));
+    put_i16_be(&mut buf, 15, scroll_to_i16(vscroll));
+    put_u32_be(&mut buf, 17, buttons);
     buf
 }
 
@@ -655,6 +743,20 @@ impl<W: Write> ControlChannel<W> {
         self.send(&msg)
     }
 
+    /// Inject a scroll event (mouse-wheel style): `hscroll`/`vscroll` are
+    /// in scroll ticks, each clamped to [-1, 1] by the wire encoding.
+    /// Positive vscroll scrolls up, negative scrolls down.
+    pub fn inject_scroll(
+        &mut self,
+        x: u32,
+        y: u32,
+        hscroll: f32,
+        vscroll: f32,
+    ) -> std::io::Result<()> {
+        let msg = encode_inject_scroll(x, y, self.screen_w, self.screen_h, hscroll, vscroll, 0);
+        self.send(&msg)
+    }
+
     /// Press and release a key (DOWN then UP).
     pub fn press_key(&mut self, keycode: AndroidKeycode) -> std::io::Result<()> {
         self.send(&encode_inject_keycode(KeyAction::Down, keycode as u32))?;
@@ -745,7 +847,7 @@ pub fn fallback_adb_input(serial: &DeviceId, input_args: &[&str]) -> Result<(), 
 /// How long to wait for each TCP connect to the forwarded scrcpy sockets.
 const SOCKET_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-fn adb_forward(serial: &DeviceId, local_port: u16) -> Result<(), DeviceError> {
+fn adb_forward(serial: &DeviceId, local_port: u16, scid: &str) -> Result<(), DeviceError> {
     let spec = format!("tcp:{local_port}");
     run_tool_ok(
         "adb",
@@ -754,7 +856,7 @@ fn adb_forward(serial: &DeviceId, local_port: u16) -> Result<(), DeviceError> {
             serial.as_str(),
             "forward",
             &spec,
-            "localabstract:scrcpy",
+            &format!("localabstract:{SCRCPY_ABSTRACT_SOCKET}_{scid}"),
         ],
     )?;
     Ok(())
@@ -780,7 +882,7 @@ fn pick_free_port() -> Result<u16, DeviceError> {
 /// Spawn the scrcpy server on the device, detached (it runs until the video
 /// socket closes or the device reboots; `cleanup` defaults to true so the
 /// jar is removed from /data/local/tmp on exit).
-fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
+fn spawn_server(serial: &DeviceId, scid: &str) -> Result<(), DeviceError> {
     // v2.x server args are `key=value` pairs; the version argument must
     // match the jar exactly ("2.7", not "2.7.0" or "v2.7").
     //
@@ -797,6 +899,10 @@ fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
     // SCRCPY_MAX_SIZE (env): when set, appends `max_size=N` to cap the
     // video resolution (e.g. 720 for a second CI run at lower res). Unset
     // means full device resolution.
+    //
+    // scid (per-session, hex): the v2.7 server parses it as hex and binds
+    // the abstract socket `scrcpy_<hex8>` (DesktopConnection.getSocketName),
+    // so concurrent sessions never collide on the bare `scrcpy` name.
     let max_size_arg = std::env::var("SCRCPY_MAX_SIZE")
         .ok()
         .filter(|v| !v.trim().is_empty())
@@ -804,16 +910,28 @@ fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
         .unwrap_or_default();
     let server_cmd = format!(
         "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
-         tunnel_forward=true audio=false control=true cleanup=false \
+         tunnel_forward=true audio=false control=true cleanup=false scid={scid} \
          video_codec=h264 max_fps=60{max_size_arg}",
         SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");
+    // Capture the server's own stdout/stderr to files: if the server dies
+    // (bind failure, bad args, encoder error) its log lines survive in the
+    // CI artifacts instead of vanishing with the adb shell session.
+    let stdout_log = server_log_path(scid, "stdout");
+    let stderr_log = server_log_path(scid, "stderr");
+    let stdout_file = std::fs::File::create(&stdout_log).map_err(DeviceError::Io)?;
+    let stderr_file = std::fs::File::create(&stderr_log).map_err(DeviceError::Io)?;
+    eprintln!(
+        "scrcpy: server logs: {} {}",
+        stdout_log.display(),
+        stderr_log.display()
+    );
     let mut child = std::process::Command::new("adb")
         .args(["-s", serial.as_str(), "shell", &server_cmd])
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::from(stdout_file))
+        .stderr(std::process::Stdio::from(stderr_file))
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -830,17 +948,9 @@ fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
     match child.try_wait() {
         Ok(Some(status)) => {
             // The adb client exited => the server command failed fast.
-            // Capture any output for diagnostics.
-            let mut stdout = String::new();
-            let mut stderr = String::new();
-            if let Some(mut out) = child.stdout.take() {
-                use std::io::Read as _;
-                let _ = out.read_to_string(&mut stdout);
-            }
-            if let Some(mut err) = child.stderr.take() {
-                use std::io::Read as _;
-                let _ = err.read_to_string(&mut stderr);
-            }
+            // The server's own output is in the log files; surface it.
+            let stdout = std::fs::read_to_string(&stdout_log).unwrap_or_default();
+            let stderr = std::fs::read_to_string(&stderr_log).unwrap_or_default();
             eprintln!("scrcpy: stage=server_died_immediately status={status}");
             eprintln!("scrcpy: server stdout: {stdout}");
             eprintln!("scrcpy: server stderr: {stderr}");
@@ -1017,6 +1127,7 @@ pub(crate) fn handshake_video_control(
 pub struct ScrcpyNative {
     serial: DeviceId,
     local_port: u16,
+    scid: String,
     video: TcpStream,
     control: ControlChannel<TcpStream>,
     device_name: String,
@@ -1042,14 +1153,19 @@ impl ScrcpyNative {
         }
         let serial = DeviceId::new(device_serial);
         eprintln!("scrcpy: stage=connect_start serial={device_serial}");
+        // Per-session scid: the server binds `scrcpy_<scid>` and we forward
+        // to it, so a lingering server from another session (cleanup=false)
+        // can never steal this session's socket.
+        let scid = generate_scid();
+        eprintln!("scrcpy: stage=scid scid={scid}");
         let jar = ensure_server_jar()?;
         eprintln!("scrcpy: stage=jar_ok path={}", jar.display());
         deploy_server_jar(&serial, &jar)?;
         eprintln!("scrcpy: stage=jar_pushed dest={SCRCPY_SERVER_DEVICE_PATH}");
         let port = pick_free_port()?;
-        adb_forward(&serial, port)?;
-        eprintln!("scrcpy: stage=forward_ok port={port}");
-        spawn_server(&serial)?;
+        adb_forward(&serial, port, &scid)?;
+        eprintln!("scrcpy: stage=forward_ok port={port} scid={scid}");
+        spawn_server(&serial, &scid)?;
         eprintln!("scrcpy: stage=server_spawned version={SCRCPY_SERVER_VERSION}");
 
         // v2.x forward-tunnel handshake: video dummy probe, control
@@ -1066,12 +1182,20 @@ impl ScrcpyNative {
         Ok(ScrcpyNative {
             serial,
             local_port: port,
+            scid,
             video,
             control,
             device_name: header.device_name,
             video_width: header.width,
             video_height: header.height,
         })
+    }
+
+    /// This session's scid (8 hex chars). The server binds the abstract
+    /// socket `scrcpy_<scid>`; its captured stdout/stderr live at
+    /// [`server_log_path`] for this scid.
+    pub fn scid(&self) -> &str {
+        &self.scid
     }
 
     pub fn device_name(&self) -> &str {
@@ -1135,6 +1259,20 @@ impl ScrcpyNative {
     ) -> Result<(), DeviceError> {
         self.control
             .inject_touch(action, pointer_id, x, y)
+            .map_err(DeviceError::Io)
+    }
+
+    /// Scroll injection (mouse-wheel style): `hscroll`/`vscroll` in ticks,
+    /// each clamped to [-1, 1]. Positive vscroll scrolls up.
+    pub fn inject_scroll(
+        &mut self,
+        x: u32,
+        y: u32,
+        hscroll: f32,
+        vscroll: f32,
+    ) -> Result<(), DeviceError> {
+        self.control
+            .inject_scroll(x, y, hscroll, vscroll)
             .map_err(DeviceError::Io)
     }
 
@@ -1242,6 +1380,37 @@ mod tests {
         assert!(SCRCPY_SERVER_SHA256.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
+    // -- scid (per-session socket identity) ---------------------------------
+
+    #[test]
+    fn scid_is_31bit_8hex() {
+        // The v2.7 server parses scid as hex (Integer.parseInt(value, 16))
+        // and requires a 31-bit non-negative value; it then binds
+        // `scrcpy_<hex8>`. Check the format contract (not the randomness).
+        for _ in 0..100 {
+            let scid = generate_scid();
+            assert_eq!(scid.len(), 8, "scid must be 8 hex chars: {scid}");
+            assert!(
+                scid.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+                "scid must be lowercase hex: {scid}"
+            );
+            let v = u32::from_str_radix(&scid, 16).expect("scid parses as hex");
+            assert!(v <= 0x7FFF_FFFF, "scid must be 31-bit: {scid}");
+        }
+    }
+
+    #[test]
+    fn server_log_path_names_scid_and_stream() {
+        let (out, err) = (
+            server_log_path("a1b2c3d4", "stdout"),
+            server_log_path("a1b2c3d4", "stderr"),
+        );
+        assert!(out.ends_with("scrcpy-server-a1b2c3d4.stdout.log"));
+        assert!(err.ends_with("scrcpy-server-a1b2c3d4.stderr.log"));
+        assert_ne!(out, err);
+    }
+
     // -- control message encoding (byte-exact) ------------------------------
 
     #[test]
@@ -1278,6 +1447,40 @@ mod tests {
         assert_eq!(&got[2..10], &[0, 0, 0, 0, 0, 0, 0, 7]);
         // pressure 0.5 -> (0x10000 * 0.5) = 0x8000
         assert_eq!(&got[22..24], &[0x80, 0x00]);
+    }
+
+    #[test]
+    fn scroll_encoding_is_byte_exact() {
+        // v2.7 wire format: scroll deltas are i16 FIXED-POINT (not i32).
+        // Sending 25 bytes would desync the server's message stream.
+        let got = encode_inject_scroll(100, 200, 1080, 2400, 0.0, 1.0, 0);
+        let expected: [u8; 21] = [
+            0x03, // type = INJECT_SCROLL_EVENT
+            0x00, 0x00, 0x00, 0x64, // x = 100
+            0x00, 0x00, 0x00, 0xC8, // y = 200
+            0x04, 0x38, // screen width = 1080
+            0x09, 0x60, // screen height = 2400
+            0x00, 0x00, // hscroll 0.0
+            0x7F, 0xFF, // vscroll 1.0 -> 0x7fff (decodes to exactly 1.0)
+            0x00, 0x00, 0x00, 0x00, // buttons
+        ];
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn scroll_negative_one_tick_encodes() {
+        let got = encode_inject_scroll(0, 0, 1080, 2400, 0.0, -1.0, 0);
+        assert_eq!(got[0], 0x03);
+        assert_eq!(got.len(), 21);
+        // -1.0 -> -32768 = 0x8000
+        assert_eq!(&got[15..17], &[0x80, 0x00]);
+    }
+
+    #[test]
+    fn scroll_zero_is_21_bytes() {
+        let got = encode_inject_scroll(540, 1200, 1080, 2400, 0.0, 0.0, 0);
+        assert_eq!(got.len(), 21);
+        assert_eq!(got[0], control_type::INJECT_SCROLL_EVENT);
     }
 
     #[test]

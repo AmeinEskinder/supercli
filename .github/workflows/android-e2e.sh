@@ -171,6 +171,15 @@ echo "=== stage: cargo_test_done full=$FULL_STATUS 720=$TEST_720_STATUS overall=
   grep -i "scrcpy\|E/" "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null | tail -20 || echo "(no matches)"
   echo '```'
   echo ""
+  echo "### scrcpy server stdout/stderr (per-session, by scid)"
+  echo '```'
+  for f in "${TMPDIR:-/tmp}"/scrcpy-server-*.stdout.log "${TMPDIR:-/tmp}"/scrcpy-server-*.stderr.log; do
+    [ -f "$f" ] || continue
+    echo "--- $(basename "$f") ---"
+    tail -15 "$f"
+  done 2>/dev/null || echo "(no scrcpy-server-*.log files)"
+  echo '```'
+  echo ""
   echo "### metrics.json (both resolutions)"
   echo '```json'
   cat "$GITHUB_WORKSPACE/metrics.json" 2>/dev/null || echo "(no metrics.json)"
@@ -189,6 +198,11 @@ adb -s "$SERIAL" logcat -d > "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null || t
 adb -s "$SERIAL" logcat -d 2>/dev/null | grep -i scrcpy > "$GITHUB_WORKSPACE/e2e-logcat-scrcpy.txt" || true
 adb -s "$SERIAL" shell ps -A 2>/dev/null | grep -i -E "scrcpy|app_process" \
   > "$GITHUB_WORKSPACE/e2e-server-ps.txt" 2>/dev/null || true
+# scrcpy server stdout/stderr, captured per-session (filenames carry the
+# scid) by ScrcpyNative::connect. On a server bind failure or crash these
+# hold the server's own error — copy them into the workspace for upload.
+cp "${TMPDIR:-/tmp}"/scrcpy-server-*.stdout.log "${TMPDIR:-/tmp}"/scrcpy-server-*.stderr.log \
+  "$GITHUB_WORKSPACE/" 2>/dev/null || echo "(no scrcpy-server-*.log files found)"
 
 # On failure, surface the tail of both logs as workflow annotations. These
 # are visible on the public run page AND via the unauthenticated check-runs

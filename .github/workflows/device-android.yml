@@ -104,6 +104,8 @@ jobs:
             metrics-full.json
             metrics-720.json
             smoke-server.log
+            scrcpy-server-*.stdout.log
+            scrcpy-server-*.stderr.log
           # Logs exist even when the test fails; the media files and
           # per-run metrics only exist when their run completes.
           if-no-files-found: warn
