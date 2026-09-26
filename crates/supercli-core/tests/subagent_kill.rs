@@ -63,17 +63,38 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
     }
 }
 
-/// Query the DB via the sqlite3 CLI. Returns None if sqlite3 is missing.
+/// Query the DB via rusqlite (bundled). Returns None if the DB is missing
+/// or the query fails. Output mimics the sqlite3 CLI default format:
+/// `|`-separated columns, newline-separated rows.
 fn db_query(home: &PathBuf, sql: &str) -> Option<String> {
     let db = home.join("runs.db");
     if !db.exists() {
         return None;
     }
-    let out = Command::new("sqlite3").arg(&db).arg(sql).output().ok()?;
-    if !out.status.success() {
-        return None;
+    let conn = rusqlite::Connection::open(&db).ok()?;
+    let mut stmt = conn.prepare(sql).ok()?;
+    let col_count = stmt.column_count();
+    let rows = stmt
+        .query_map([], |row| {
+            let mut cols = Vec::with_capacity(col_count);
+            for i in 0..col_count {
+                let v: rusqlite::types::Value = row.get(i)?;
+                cols.push(match v {
+                    rusqlite::types::Value::Null => String::new(),
+                    rusqlite::types::Value::Integer(n) => n.to_string(),
+                    rusqlite::types::Value::Real(f) => f.to_string(),
+                    rusqlite::types::Value::Text(s) => s,
+                    rusqlite::types::Value::Blob(b) => String::from_utf8_lossy(&b).into_owned(),
+                });
+            }
+            Ok(cols.join("|"))
+        })
+        .ok()?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.ok()?);
     }
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    Some(out.join("\n"))
 }
 
 #[test]
@@ -116,7 +137,7 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
         &home,
         &format!("SELECT id FROM runs WHERE parent_run='{}';", parent_id_1),
     )
-    .expect("sqlite3 available");
+    .expect("db query");
     println!("run 1 child id: {}", child_id_1);
     assert!(
         !child_id_1.is_empty(),
@@ -156,7 +177,7 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
             parent_id_1
         ),
     )
-    .expect("sqlite3 available");
+    .expect("db query");
     println!("child rows after restart: {}", child_rows);
     let parts: Vec<&str> = child_rows.split('|').collect();
     assert_eq!(
@@ -169,8 +190,8 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     );
 
     // No duplicate parents either.
-    let parent_count = db_query(&home, "SELECT COUNT(*) FROM runs WHERE parent_run IS NULL;")
-        .expect("sqlite3 available");
+    let parent_count =
+        db_query(&home, "SELECT COUNT(*) FROM runs WHERE parent_run IS NULL;").expect("db query");
     assert_eq!(parent_count, "1", "exactly one parent run must exist");
 
     // Zero duplicates: each child step appears exactly once in the external
@@ -203,7 +224,7 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
             parent_id_1, child_id_1
         ),
     )
-    .expect("sqlite3 available");
+    .expect("db query");
     println!("run states: {}", states);
     for state in states.lines() {
         assert_eq!(state, "DONE", "every run must be DONE, got {}", state);

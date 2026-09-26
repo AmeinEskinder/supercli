@@ -88,7 +88,10 @@ impl ScheduledToolExecutor for FileExecutor {
         // Sleep after too, so a kill can land between side effect and
         // the outcome journal write.
         std::thread::sleep(Duration::from_millis(200));
-        mark(self.progress.as_deref(), &format!("step-completed {}", tool));
+        mark(
+            self.progress.as_deref(),
+            &format!("step-completed {}", tool),
+        );
         Ok(format!("ok:{}", tool))
     }
 }

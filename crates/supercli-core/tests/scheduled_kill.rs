@@ -63,27 +63,22 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
     }
 }
 
-/// Get the (single) run id from <home>/runs.db using the sqlite3 CLI.
-/// Returns None if sqlite3 is unavailable or no run exists.
+/// Get the (single) run id from <home>/runs.db using rusqlite (bundled).
+/// Returns None if the DB is missing or no run exists.
 fn get_run_id(home: &PathBuf) -> Option<String> {
     let db = home.join("runs.db");
     if !db.exists() {
         return None;
     }
-    let out = Command::new("sqlite3")
-        .arg(&db)
-        .arg("SELECT id FROM runs ORDER BY rowid DESC LIMIT 1;")
-        .output()
+    let conn = rusqlite::Connection::open(&db).ok()?;
+    let id: Option<String> = conn
+        .query_row(
+            "SELECT id FROM runs ORDER BY rowid DESC LIMIT 1;",
+            [],
+            |row| row.get(0),
+        )
         .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if id.is_empty() {
-        None
-    } else {
-        Some(id)
-    }
+    id.filter(|s| !s.is_empty())
 }
 
 /// Wait for a specific marker line in the progress file, with a timeout.
@@ -178,7 +173,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     println!("run 1: killed mid-run");
 
     // Capture the run id from the DB before restart.
-    // The DB is at <home>/runs.db; query via a helper python or sqlite3.
+    // The DB is at <home>/runs.db; query via rusqlite.
     let run_id_1 = get_run_id(&home);
     println!("run 1 id: {:?}", run_id_1);
     assert!(run_id_1.is_some(), "run 1 must have created a run");
@@ -239,15 +234,10 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
 #[allow(dead_code)]
 fn count_runs(home: &PathBuf) -> usize {
     let db = home.join("runs.db");
-    let out = Command::new("sqlite3")
-        .arg(&db)
-        .arg("SELECT COUNT(*) FROM runs;")
-        .output();
-    match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
-            .trim()
-            .parse()
-            .unwrap_or(0),
-        _ => 0,
-    }
+    let conn = match rusqlite::Connection::open(&db) {
+        Ok(c) => c,
+        Err(_) => return 0,
+    };
+    conn.query_row("SELECT COUNT(*) FROM runs;", [], |row| row.get(0))
+        .unwrap_or(0)
 }
