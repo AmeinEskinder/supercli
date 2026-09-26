@@ -35,6 +35,39 @@ ls -la /dev/kvm || true
 # Fresh logcat so the post-test dump only covers this run.
 adb -s "$SERIAL" logcat -c || true
 
+# --- Shell smoke test: verify scrcpy-server starts OUTSIDE of Rust --------
+# If this fails, the problem is the server/emulator, not our Rust code.
+# If this succeeds but cargo test fails, the problem is in Rust.
+echo "=== stage: shell_smoke_test ==="
+SMOKE_JAR="$RUNNER_TEMP/scrcpy-server-v2.7"
+curl -fSL --max-time 60 -o "$SMOKE_JAR" \
+  https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-server-v2.7
+ls -lh "$SMOKE_JAR"
+echo "$SMOKE_JAR" | sha256sum
+adb -s "$SERIAL" push "$SMOKE_JAR" /data/local/tmp/scrcpy-server.jar
+adb -s "$SERIAL" shell ls -lh /data/local/tmp/scrcpy-server.jar
+# Start server in background, capture output
+adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 video_codec=h264 max_size=1920 max_fps=60 video_bit_rate=8000000 audio=false control=true" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
+SMOKE_PID=$!
+sleep 8
+# Check if server process is alive on device
+adb -s "$SERIAL" shell ps -A | grep -i scrcpy || echo "smoke: no scrcpy process found in ps"
+# Check if the adb shell session is still alive
+if kill -0 $SMOKE_PID 2>/dev/null; then
+  echo "smoke: server adb session still alive (GOOD - server running)"
+else
+  echo "smoke: server adb session DIED (BAD - server crashed)"
+fi
+echo "=== smoke server log ==="
+cat "$RUNNER_TEMP/smoke-server.log" || true
+# Clean up: kill the smoke test server
+kill $SMOKE_PID 2>/dev/null || true
+adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
+sleep 2
+# Copy smoke log to workspace for artifact upload
+cp "$RUNNER_TEMP/smoke-server.log" "$GITHUB_WORKSPACE/smoke-server.log" || true
+echo "=== stage: shell_smoke_test_done ==="
+
 # Real proof: connect through scrcpy_native, read >=600 H.264 packets,
 # measure fps / tap latency / pinch.
 cd "$GITHUB_WORKSPACE/crates"

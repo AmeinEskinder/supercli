@@ -73,6 +73,7 @@ jobs:
             screenshot.png
             test-10s.mkv
             metrics.json
+            smoke-server.log
           # e2e.log / logcat exist even when the test fails; the media
           # files only exist on success.
           if-no-files-found: warn
