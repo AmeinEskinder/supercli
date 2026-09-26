@@ -31,6 +31,11 @@ adb wait-for-device
 adb -s "$SERIAL" shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
 adb -s "$SERIAL" shell getprop sys.boot_completed
 echo "=== stage: boot_completed ==="
+# Also wait for the package manager: pushing/running the jar before pm is
+# ready can fail on first boot.
+echo "=== stage: pm_wait ==="
+adb -s "$SERIAL" shell 'for i in $(seq 1 60); do pm path android >/dev/null 2>&1 && break; sleep 2; done; pm path android'
+echo "=== stage: pm_ready ==="
 ls -la /dev/kvm || true
 # Fresh logcat so the post-test dump only covers this run.
 adb -s "$SERIAL" logcat -c || true
@@ -66,9 +71,9 @@ adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
 sleep 2
 cp "$RUNNER_TEMP/smoke-minimal.log" "$GITHUB_WORKSPACE/smoke-minimal.log" || true
 
-# Try FULL command (with our args)
+# Try FULL command (Amein's proven args + software encoder for emulator)
 echo "=== smoke: trying FULL server command ==="
-adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 video_codec=h264 max_size=1920 max_fps=60 video_bit_rate=8000000 audio=false control=true" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
+adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60 video_encoder=c2.android.avc.encoder" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
 SMOKE_PID=$!
 sleep 8
 # Check if server process is alive on device
@@ -108,6 +113,7 @@ tail -60 "$GITHUB_WORKSPACE/e2e.log" || true
 # `if: always()`), so the next failure explains itself.
 echo "=== stage: collect_diagnostics ==="
 adb -s "$SERIAL" logcat -d > "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null || true
+adb -s "$SERIAL" logcat -d 2>/dev/null | grep -i scrcpy > "$GITHUB_WORKSPACE/e2e-logcat-scrcpy.txt" || true
 adb -s "$SERIAL" shell ps -A 2>/dev/null | grep -i -E "scrcpy|app_process" \
   > "$GITHUB_WORKSPACE/e2e-server-ps.txt" 2>/dev/null || true
 

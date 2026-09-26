@@ -69,6 +69,7 @@ jobs:
           path: |
             e2e.log
             e2e-logcat.txt
+            e2e-logcat-scrcpy.txt
             e2e-server-ps.txt
             screenshot.png
             test-10s.mkv

@@ -763,11 +763,15 @@ fn pick_free_port() -> Result<u16, DeviceError> {
 /// jar is removed from /data/local/tmp on exit).
 fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
     // v2.x server args are `key=value` pairs; the version argument must
-    // match the jar exactly.
+    // match the jar exactly ("2.7", not "2.7.0" or "v2.7").
+    //
+    // Amein's proven command (2026-09-26): tunnel_forward + cleanup=false
+    // are required; on emulators force the software AVC encoder because
+    // swiftshader has no hardware codec.
     let server_cmd = format!(
         "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
-         video_codec=h264 max_size=1920 max_fps=60 video_bit_rate=8000000 \
-         audio=false control=true",
+         tunnel_forward=true audio=false control=true cleanup=false \
+         video_codec=h264 max_fps=60 video_encoder=c2.android.avc.encoder",
         SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");

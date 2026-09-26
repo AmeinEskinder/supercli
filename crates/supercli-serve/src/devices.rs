@@ -18,7 +18,7 @@
 //! GET  /farm                         — HTML multi-device wall
 //! GET  /static/device-stream.js      — JS WebSocket client + WebCodecs renderer
 //! GET  /api/devices                  — JSON device list
-//! POST /api/devices/<id>/touch       — {"x":0.0-1.0,"y":0.0-1.0,"action":"down|move|up"}
+//! POST /api/devices/<id>/touch       — {"x":device-points,"y":device-points,"action":"down|move|up"}
 //! POST /api/devices/<id>/key         — {"keycode":"home|back|power|lock"}
 //! POST /api/devices/<id>/text        — {"text":"..."}
 //! GET  /api/devices/<id>/a11y        — JSON accessibility tree
@@ -239,7 +239,9 @@ pub struct DeviceInfo {
     pub name: String,
 }
 
-/// Touch action in device-point coordinates (0.0–1.0).
+/// Touch action in DEVICE-POINT coordinates (not normalized 0-1).
+/// Device points are the units from the 0x01 wire description's
+/// width_points/height_points. For Android: points = pixels * 160 / density_dpi.
 #[derive(Clone, Debug)]
 pub struct TouchInput {
     pub x: f64,
@@ -425,7 +427,7 @@ pub fn handle_device_http(method: &str, path: &str, body: &[u8]) -> (u16, String
                 .and_then(TouchAction::parse);
             match (x, y, action) {
                 (Some(x), Some(y), Some(action))
-                    if (0.0..=1.0).contains(&x) && (0.0..=1.0).contains(&y) =>
+                    if x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 =>
                 {
                     match provider().touch(&id, &TouchInput { x, y, action }) {
                         Ok(()) => (200, r#"{"ok":true}"#.to_string(), "application/json"),
@@ -434,7 +436,7 @@ pub fn handle_device_http(method: &str, path: &str, body: &[u8]) -> (u16, String
                 }
                 _ => (
                     400,
-                    json_error("touch requires {x: 0.0-1.0, y: 0.0-1.0, action: down|move|up}"),
+                    json_error("touch requires {x: device-points, y: device-points, action: down|move|up} (x,y >= 0, finite)"),
                     "application/json",
                 ),
             }
@@ -1018,7 +1020,9 @@ mod tests {
         }
         fn touch(&self, id: &str, input: &TouchInput) -> Result<(), String> {
             assert_eq!(id, "emulator-5554");
-            assert!((0.0..=1.0).contains(&input.x));
+            // Device points (not normalized 0-1): finite and non-negative.
+            assert!(input.x.is_finite() && input.x >= 0.0);
+            assert!(input.y.is_finite() && input.y >= 0.0);
             Ok(())
         }
         fn key(&self, id: &str, keycode: &str) -> Result<(), String> {

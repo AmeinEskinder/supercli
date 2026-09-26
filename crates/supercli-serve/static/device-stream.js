@@ -2,15 +2,16 @@
  * device-stream.js — supercli web device streaming client.
  *
  * Speaks the unified wire format (docs/device.md §9.3) over WebSocket:
- *   0x01 description — JSON {width,height,codec,fps}
+ *   0x01 description — JSON {device,platform,width_points,height_points,
+ *                      width_pixels,height_pixels,density_dpi,orientation}
  *   0x02 keyframe    — H.264 IDR packet
  *   0x03 delta       — H.264 P-frame packet
  *   0x04 JPEG seed   — recovery frame
  *
  * Each wire frame: [1 byte type][4 bytes BE payload len][payload].
  * H.264 packets are fed to WebCodecs VideoDecoder and rendered to a canvas.
- * Pointer events on the canvas are converted to device-point coordinates
- * (0.0–1.0) and POSTed to /api/devices/<id>/touch.
+ * Pointer events on the canvas are converted to DEVICE-POINT coordinates
+ * (not normalized 0-1) and POSTed to /api/devices/<id>/touch.
  *
  * In Node (unit tests) this module exports the pure decoder pieces.
  */
@@ -183,6 +184,14 @@
         this.canvas.width = meta.width;
         this.canvas.height = meta.height;
       }
+      // Save device-point dimensions for touch coordinate conversion.
+      // The 0x01 description carries width_points/height_points (device
+      // points, not pixels, not normalized). Touch input MUST be in these
+      // units (see toDevicePoint below).
+      if (meta.width_points && meta.height_points) {
+        this.widthPoints = meta.width_points;
+        this.heightPoints = meta.height_points;
+      }
       this.onDescription(meta);
       return;
     }
@@ -259,7 +268,10 @@
     img.src = url;
   };
 
-  // --- Pointer input → device-point coordinates (0.0–1.0) -----------------
+  // --- Pointer input → DEVICE-POINT coordinates -------------------------
+  // NOT normalized 0-1. Device points are the units from the 0x01
+  // description's width_points/height_points. The canvas may be scaled
+  // by CSS; we map the pointer position to the device's point space.
 
   DeviceStream.prototype._bindPointerInput = function () {
     const canvas = this.canvas;
@@ -268,11 +280,16 @@
 
     function toDevicePoint(ev) {
       const rect = canvas.getBoundingClientRect();
-      const x = (ev.clientX - rect.left) / rect.width;
-      const y = (ev.clientY - rect.top) / rect.height;
+      const nx = (ev.clientX - rect.left) / rect.width;
+      const ny = (ev.clientY - rect.top) / rect.height;
+      // Clamp normalized to [0,1], then scale to device points.
+      const cx = Math.min(1, Math.max(0, nx));
+      const cy = Math.min(1, Math.max(0, ny));
+      const wp = self.widthPoints || 0;
+      const hp = self.heightPoints || 0;
       return {
-        x: Math.min(1, Math.max(0, x)),
-        y: Math.min(1, Math.max(0, y)),
+        x: cx * wp,
+        y: cy * hp,
       };
     }
 
