@@ -1734,4 +1734,164 @@ mod tests {
         let devices = provider().list_devices().expect("list");
         assert!(devices.iter().all(|d| !d.id.is_empty()));
     }
+
+    /// HubGate with no answerer times out -> denied (fail-closed).
+    #[test]
+    fn hub_gate_timeout_denies() {
+        use supercli_device::danger::{ApprovalGate, DangerousOp, DangerousOpKind};
+        use supercli_device::DeviceId;
+
+        let hub = Arc::new(ApprovalHub::default());
+        let gate = HubGate::new(hub, "test-session".to_string(), Duration::from_millis(200));
+        let op = DangerousOp {
+            kind: DangerousOpKind::Install,
+            device: DeviceId::new("emulator-5554"),
+            target: "/tmp/app.apk".to_string(),
+            detail: "app.apk".to_string(),
+        };
+        // No one answers; recv_timeout expires -> approved=false.
+        let decision = gate.decide(&op);
+        assert!(!decision.approved, "timeout must deny");
+        assert!(decision.approved_by.is_none());
+    }
+
+    /// HubGate denial via explicit human deny -> Denied, zero backend calls.
+    /// (Uses a deny gate directly; the HubGate path is covered above.)
+    #[test]
+    fn install_gated_denial_produces_zero_backend_calls() {
+        use supercli_device::danger::{ApprovalDecision, ApprovalGate, DangerousOp};
+        use supercli_device::{DeviceBackend, DeviceError, DeviceId, DeviceInfo, DeviceStream};
+        use std::sync::Mutex;
+
+        struct DenyGate;
+        impl ApprovalGate for DenyGate {
+            fn decide(&self, _op: &DangerousOp) -> ApprovalDecision {
+                ApprovalDecision::deny("test: no dangerous ops")
+            }
+        }
+
+        /// Minimal backend that records install calls.
+        struct RecordingBackend {
+            calls: Mutex<Vec<String>>,
+        }
+        impl DeviceBackend for RecordingBackend {
+            fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError> {
+                Ok(vec![DeviceInfo {
+                    id: DeviceId::new("emulator-5554"),
+                    platform: supercli_device::Platform::Android,
+                    state: supercli_device::DeviceState::Running,
+                    name: "test".to_string(),
+                }])
+            }
+            fn install(
+                &self,
+                _id: &DeviceId,
+                path: &std::path::Path,
+            ) -> Result<(), DeviceError> {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push(format!("install {}", path.display()));
+                Ok(())
+            }
+            fn boot(&self, _id: &DeviceId) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn stop(&self, _id: &DeviceId) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn launch(&self, _id: &DeviceId, _app_id: &str) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn screenshot(&self, _id: &DeviceId) -> Result<Vec<u8>, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn logs(&self, _id: &DeviceId, _clear: bool) -> Result<String, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn tap(&self, _id: &DeviceId, _x: u32, _y: u32) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn type_text(&self, _id: &DeviceId, _text: &str) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn swipe(
+                &self,
+                _id: &DeviceId,
+                _x1: u32,
+                _y1: u32,
+                _x2: u32,
+                _y2: u32,
+                _duration_ms: u32,
+            ) -> Result<(), DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn stream(&self, _id: &DeviceId) -> Result<DeviceStream, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+            fn describe_ui(&self, _id: &DeviceId) -> Result<String, DeviceError> {
+                Err(DeviceError::Unsupported("test".to_string()))
+            }
+        }
+
+        let backend = Arc::new(RecordingBackend {
+            calls: Mutex::new(Vec::new()),
+        });
+        let provider = DeviceBackendProvider::new(
+            vec![BackendEntry {
+                name: "adb",
+                backend: backend.clone(),
+            }],
+            None,
+        );
+        // Refresh to populate routing.
+        let _ = provider.refresh();
+
+        let gate = DenyGate;
+        let err = provider
+            .install_gated(
+                "emulator-5554",
+                std::path::Path::new("/tmp/app.apk"),
+                &gate,
+            )
+            .unwrap_err();
+        assert!(
+            err.contains("denied by approval gate"),
+            "expected denial, got: {err}"
+        );
+        assert!(
+            backend.calls.lock().unwrap().is_empty(),
+            "denied install must not touch backend"
+        );
+    }
+
+    /// Safe routes (touch/key/text/a11y) do NOT require the ApprovalHub.
+    /// They work (or fail for other reasons) without a hub installed.
+    #[test]
+    fn safe_routes_remain_ungated() {
+        let _lock = TEST_PROVIDER_LOCK.lock().unwrap();
+        // Ensure no hub is installed (clear any from other tests).
+        if let Ok(mut guard) = APPROVAL_HUB.write() {
+            *guard = None;
+        }
+        set_provider(Arc::new(UnwiredProvider));
+
+        // Touch without a hub: fails because unwired, NOT because of approval.
+        let (status, body, _) = handle_device_http(
+            "POST",
+            "/api/devices/emulator-5554/touch",
+            br#"{"x":100,"y":200,"action":"down"}"#,
+        );
+        assert_eq!(status, 502); // unwired backend, not 503 (no hub) or 403 (denied)
+        assert!(!body.contains("approval"), "touch must not mention approval: {body}");
+
+        // Install without a hub: 503 (requires approval, hub unavailable).
+        let (status, body, _) = handle_device_http(
+            "POST",
+            "/api/devices/emulator-5554/install",
+            br#"{"path":"/tmp/app.apk"}"#,
+        );
+        assert_eq!(status, 503, "install without hub must be 503, got {status}: {body}");
+        assert!(body.contains("approval"), "install must mention approval: {body}");
+    }
 }
