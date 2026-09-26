@@ -11,149 +11,149 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | Tag | Total | Done | Partial | Missing | Improved |
 |-----|-------|------|---------|---------|----------|
 | [APPS] | 17 | 3 | 13 | 1 | 0 |
-| [CLI] | 40 | 40 | 0 | 0 | 0 |
+| [CLI] | 40 | 40 (inherited) | 0 | 0 | 0 |
 | [DESKTOP] | 70 | 1 | 27 | 42 | 0 |
 | [DIST] | 3 | 2 | 1 | 0 | 0 |
-| [HOST] | 78 | 78 | 0 | 0 | 0 |
+| [HOST] | 78 | 78 (inherited) | 0 | 0 | 0 |
 | [IOS] | 25 | 0 | 0 | 25 | 0 |
-| [PROTO] | 4 | 4 | 0 | 0 | 0 |
-| [RUNTIMES] | 11 | 11 | 0 | 0 | 0 |
-| [SHARED] | 2 | 2 | 0 | 0 | 0 |
+| [PROTO] | 4 | 4 (inherited) | 0 | 0 | 0 |
+| [RUNTIMES] | 11 | 11 (inherited) | 0 | 0 | 0 |
+| [SHARED] | 2 | 2 (inherited) | 0 | 0 | 0 |
 | [WEB] | 3 | 1 | 0 | 2 | 0 |
 
 ## Items
 
 | # | Tag | Description | Status | supercli Path | Test |
 |---|-----|-------------|--------|---------------|------|
-| 1 | [CLI] | `unpeel serve`: run the UI-free Host service for all registered workspaces | done | `crates/supercli-cli/src/cli.rs:1198` (`"serve" =>`) | `crates/supercli-cli/tests/serve_command.rs` |
-| 2 | [CLI] | `unpeel serve install\|uninstall\|status` for the per-user launchd/systemd unit, with a `--graphical` Linux variant | missing | - | - |
-| 3 | [CLI] | `unpeel --workspace NAME <cmd>`: target an isolated workspace for any verb | done | `crates/supercli-cli/src/cli.rs:47` (`--workspace NAME`); `crates/supercli-cli/src/workspaces.rs` | `crates/supercli-cli/tests/` (workspace isolation) |
-| 4 | [CLI] | `unpeel pair` shows a one-time pairing code/QR (auto-starts serve; `--advertise-host/--advertise-port`) | done | `crates/supercli-cli/src/cli.rs:1219` (`"pair" =>`) | `crates/supercli-cli/tests/pairclient/` |
-| 5 | [CLI] | `unpeel pair list\|remove <device>\|relay <device> on\|off` | missing | - | - |
-| 6 | [CLI] | `unpeel ls [--json]`: list sessions with status/project/command | done | `crates/supercli-cli/src/cli.rs:960` (`"ls"\ | "list"`) |
-| 7 | [CLI] | `unpeel new` with `--command\|--preset`, `--cwd`, `--project`, `--cols/--rows`, `--json` | missing | - | - |
-| 8 | [CLI] | `unpeel add [PATH] [--name] [--here]`: add a folder as a project | done | `crates/supercli-cli/src/cli.rs:965` (`"add" =>`) | `crates/supercli-cli/tests/` |
-| 9 | [CLI] | `unpeel send <id> <text> [--enter]`, going through the write policy when run inside a session | done | `crates/supercli-cli/src/cli.rs:970` (`"send" =>`) | `crates/supercli-cli/tests/cli.rs:1283` (arg parsing) |
-| 10 | [CLI] | `unpeel keys <id> <seq>`: raw bytes outside a session, key names inside | done | `crates/supercli-cli/src/cli.rs:986` (`"keys" =>`) | `crates/supercli-cli/tests/` |
-| 11 | [CLI] | `unpeel screen <id>`: parsed screen snapshot | done | `crates/supercli-cli/src/cli.rs:1010` (`"screen"\ | "--snapshot"`) |
-| 12 | [CLI] | `unpeel logs\|tail <id> [--lines] [--follow]` | missing | - | - |
-| 13 | [CLI] | `unpeel wait <id> [--idle] [--text] [--timeout]` with exit code 1 on timeout | done | `crates/supercli-cli/src/cli.rs:1031` (`"wait" =>`) | `crates/supercli-cli/tests/cli.rs:1290` (arg parsing) |
-| 14 | [CLI] | `unpeel resume\|restart <id>` | missing | - | - |
-| 15 | [CLI] | `unpeel stop\|archive\|restore\|rm <id>` | missing | - | - |
-| 16 | [CLI] | `unpeel transcript <id> [--entries N] [--markdown]` | done | `crates/supercli-cli/src/cli.rs:1103` (`"transcript" =>`) | `crates/supercli-cli/tests/` |
-| 17 | [CLI] | `unpeel open <path\|resource> [--with APP] [--kind] [--media-type]`: typed App dispatcher that creates or reuses a companion pane | missing | - | - |
-| 18 | [CLI] | `unpeel settings list\|get\|set` (allowlisted keys, validated before write) | missing | - | - |
-| 19 | [CLI] | `unpeel settings openers set <selector> <editor\|system\|app:id>` | missing | - | - |
-| 20 | [CLI] | `unpeel apps list\|install\|update [--check] [--yes]` | missing | - | - |
-| 21 | [CLI] | `unpeel apps link\|unlink` dev slots | missing | - | - |
-| 22 | [CLI] | `unpeel apps describe\|search\|context` | missing | - | - |
-| 23 | [CLI] | `unpeel integrations [list]` status per agent | done | `crates/supercli-cli/src/cli.rs:1163`; `crates/supercli-cli/src/integrations_cli.rs` | `crates/supercli-cli/tests/` |
-| 24 | [CLI] | `unpeel integrations install <runtime> [--project DIR] \| --all` | missing | - | - |
-| 25 | [CLI] | `unpeel mcp [<tool> [<action> k=v…]]`: every MCP action from the shell with the same identity and grants | done | `crates/supercli-cli/src/cli.rs:994`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
-| 26 | [CLI] | `unpeel browser open\|snapshot\|click\|fill\|type\|press\|get\|screenshot\|scroll\|wait` | missing | - | - |
-| 27 | [CLI] | `unpeel browser install [--check] [--json]` with exit codes 0/1/3/4 | done | `crates/supercli-cli/src/browser_cli.rs` (`install`) | `crates/supercli-cli/tests/` |
-| 28 | [CLI] | `unpeel artifacts publish <image>` | done | `crates/supercli-cli/src/cli.rs:1007`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
-| 29 | [CLI] | `unpeel current` (self plus pane neighbours) | done | `crates/supercli-cli/src/cli.rs:1004`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
-| 30 | [CLI] | `unpeel report <summary> [--status update\|done\|blocked] [--details]` | missing | - | - |
-| 31 | [CLI] | `unpeel worktree create <name> [--branch] [--base] [--project]` | done | `crates/supercli-cli/src/cli.rs:1006`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
-| 32 | [CLI] | `unpeel agents <action>` / `unpeel skills <action>` | done | `crates/supercli-cli/src/cli.rs:1008-1009`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
-| 33 | [CLI] | `unpeel presets list\|add\|remove\|edit` | missing | - | - |
-| 34 | [CLI] | `unpeel presets star\|unstar\|enable\|disable\|reorder` | missing | - | - |
-| 35 | [CLI] | `unpeel link enroll <key>\|status\|deactivate` with exit codes 0/1/2 | missing | - | - |
-| 36 | [CLI] | `unpeel workspaces list\|add\|remove` | missing | - | - |
-| 37 | [CLI] | `unpeel projects list\|add\|remove` | missing | - | - |
-| 38 | [CLI] | `unpeel hosts prune [--json]` (identity-verified orphan reap) | done | `crates/supercli-cli/src/cli.rs:1184` (`"hosts" => "prune"`) | `crates/supercli-cli/tests/` |
-| 39 | [CLI] | Every shared-state mutation is a flocked, unknown-key-preserving write followed by a state-bus flush | done | `crates/supercli-core/src/` (state_bus, flocked writes) | `crates/supercli-core/tests/` |
-| 40 | [CLI] | `--json` output on data verbs plus meaningful exit codes; `help`, `--version`, and a bare-invocation hint | done | `crates/supercli-cli/src/cli.rs` (`--json`, `--help`, `--version`, bare hint) | `crates/supercli-cli/tests/` |
-| 41 | [HOST] | Machine supervisor with one worker per workspace home; machine lease and `serve.json` status | done | crates/supercli-serve/src/service.rs | service.rs: 1 #[test] |
-| 42 | [HOST] | Shared PTY core per workspace (single reactor, timer and journal threads) | done | crates/supercli-core/src/pty_core.rs | pty_core.rs: 3 #[test] |
-| 43 | [HOST] | In-place PTY core upgrade via SCM_RIGHTS takeover (no terminal restart) | done | crates/supercli-core/src/fd_pass.rs; crates/supercli-serve/src/pty_core_supervisor.rs | fd_pass.rs: 4, pty_core_supervisor.rs: 10 |
-| 44 | [HOST] | Sessions survive service stop/restart; per-session fallback host when the core is unavailable | done | crates/supercli-core/src/session_host.rs | session_host.rs: 82 #[test] |
-| 45 | [HOST] | On-disk session dir: manifest.json, output.bin journal, session.sock control | done | crates/supercli-core/src/session_host.rs | session_host.rs: 82 |
-| 46 | [HOST] | Bounded append-only journal with monotonic offsets (~64–72 MiB retained) | done | crates/supercli-core/src/session_host.rs:56 | session_host.rs |
-| 47 | [HOST] | Exact VT snapshot for attach from the resident libghostty-vt grid | done | crates/supercli-core/src/ghostty_vt.rs | ghostty_vt.rs: 1 |
-| 48 | [HOST] | PID + start-time identity guard; never signal a recycled pid | done | crates/supercli-core/src/session_host.rs:3624 | session_host.rs |
-| 49 | [HOST] | Session ownership/provenance fields (owner principal, device, source preset) | done | crates/supercli-core/src/session_host.rs:5783-5806 | session_host.rs |
-| 50 | [HOST] | Auto-titling (agent OSC titles / first prompt / off; skip slash commands; rename wins) | done | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/session_io.rs | session_host.rs |
-| 51 | [HOST] | Titling from a resumed conversation's transcript (`__auto_title__`) | done | crates/supercli-core/src/transcripts/mod.rs:775 | transcripts |
-| 52 | [HOST] | Archive (non-destructive stop) and restore; Restore & Resume | done | crates/supercli-core/src/session_ops.rs:303,332 | session_ops.rs: 23 |
-| 53 | [HOST] | Auto-stop-and-archive idle sweep (30m to 24h; never unread-attention or pinned sessions) | done | crates/supercli-serve/src/auto_archive.rs; crates/supercli-serve/src/driver.rs | auto_archive.rs: 9 |
-| 54 | [HOST] | Resume on restart using the hook-captured provider conversation id | done | crates/supercli-core/src/resume.rs | resume.rs: 6 |
-| 55 | [HOST] | Resume Agent in place (same session id) and restart agent | done | crates/supercli-core/src/resume.rs | resume.rs |
-| 56 | [HOST] | Session reload (replace the host, keep the id) | done | crates/supercli-core/src/session_ops.rs | session_ops.rs |
-| 57 | [HOST] | Restart recommendation when the host protocol version is too old | done | crates/supercli-core/src/session_host.rs | session_host.rs |
-| 58 | [HOST] | Safe text delivery (bracketed paste, settle, double-Enter) | done | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/mcp_host.rs | session_host.rs |
-| 59 | [HOST] | Hook listener ingesting provider lifecycle events via the port registry | done | crates/supercli-serve/src/hook_listener.rs | hook_listener.rs: 6 |
-| 60 | [HOST] | Hook-latched busy/idle/attention activity engine (output is never evidence of work) | done | crates/supercli-core/src/screen_activity.rs; crates/supercli-serve/src/activity.rs | screen_activity.rs: 4 |
-| 61 | [HOST] | Screen-tier busy/idle fallback for Claude/Codex/Gemini without hooks | done | crates/supercli-core/src/screen_activity.rs:48,60 | screen_activity.rs |
-| 62 | [HOST] | Runtime observation of agents started by hand in a shell | done | crates/supercli-core/src/runtime_observer.rs | runtime_observer.rs: 11 |
-| 63 | [HOST] | Agent-drawn select-menu detection sets attention | done | crates/supercli-core/src/menu_prompt.rs | menu_prompt.rs: 13 |
-| 64 | [HOST] | Escape-cancellation fencing of interrupted turns | done | crates/supercli-core/src/hook_cancellation.rs | hook_cancellation.rs: 6 |
-| 65 | [HOST] | Background/subagent tracking keeps the session busy until children stop | done | crates/supercli-core/src/durable_runs.rs | subagent_kill tests |
-| 66 | [HOST] | Lifecycle notification policy (needs-input, opt-in finished, App alerts) with viewing-device suppression | done | crates/supercli-serve/src/notifications.rs | notifications.rs: 2 |
-| 67 | [HOST] | Unread/mark-read and notify-when-done per session | done | crates/supercli-core/src/app_state.rs | app_state.rs |
-| 68 | [HOST] | Shared approval hub (FIFO, coalesced, first answer wins from any Controller) | done | crates/supercli-serve/src/approvals.rs:517 | approvals.rs: 11 |
-| 69 | [HOST] | Viewer presence leases and presence files | done | crates/supercli-serve/src/presence.rs | presence.rs: 3 |
-| 70 | [HOST] | Phone-fit resize and desktop-fit restore of the shared grid | done | crates/supercli-core/src/controller_host.rs; crates/supercli-core/src/remote_session_backend.rs | remote_server.rs: 32 |
-| 71 | [HOST] | Persisted activity log (activity-log.jsonl) | done | crates/supercli-core/src/activity_log.rs | activity_log.rs: 7 |
-| 72 | [HOST] | Local URL detection plus verify/find/stop of session-owned local servers | done | crates/supercli-core/src/local_urls.rs | local_urls.rs: 18 |
-| 73 | [HOST] | First-run preset seeding from agent CLIs found on PATH | done | crates/supercli-core/src/first_run.rs | first_run.rs: 2 |
-| 74 | [HOST] | Projects, plain groups, worktree child projects, pins, manual order and date sort | done | crates/supercli-core/src/state.rs; crates/supercli-core/src/app_state.rs | state.rs |
-| 75 | [HOST] | Cross-frontend state bus notifications | done | crates/supercli-core/src/state_bus.rs | state_bus.rs: 3 |
-| 76 | [HOST] | Git worktree create/list (default base = mainline) | done | crates/supercli-core/src/worktrees.rs | worktrees.rs: 3 |
-| 77 | [HOST] | Unified `unpeel` MCP server (stdio, per agent client, gate outside hosted sessions) | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs: 49 |
-| 78 | [HOST] | MCP `sessions` domain (current, list, inspect, read_screen, read_output, wait_for_text, send_text, send_keys, report) | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
-| 79 | [HOST] | MCP `agents` domain (list, get, read_transcript, wait) with occurrence-bound refs | done | crates/supercli-core/src/mcp_host.rs:702 | mcp_host.rs |
-| 80 | [HOST] | MCP `workspace` domain (list_presets, create_worktree, list_worktrees) | done | crates/supercli-core/src/mcp_host.rs:703 | mcp_host.rs |
-| 81 | [HOST] | MCP `artifacts.add_to_gallery` | done | crates/supercli-core/src/mcp_host.rs:704 | mcp_host.rs |
-| 82 | [HOST] | MCP `browser` domain (13 actions incl. console, context, close) | done | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
-| 83 | [HOST] | MCP `apps` domain (list, catalog, describe, search, context, open) with agent-openable App panes | done | crates/supercli-core/src/apps_mcp.rs | apps_mcp.rs |
-| 84 | [HOST] | MCP `skills` domain (list, search, get) | done | crates/supercli-core/src/skills_mcp.rs | skills_mcp.rs |
-| 85 | [HOST] | Open reads plus approval-controlled cross-session writes (ask/allow/deny, remembered directional pairs) | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/grant_store.rs | grant_store.rs: 3, mcp_host.rs |
-| 86 | [HOST] | Session creation and closing are user-only (agents refused) | done | crates/supercli-core/src/mcp_host.rs:685 | mcp_host.rs |
-| 87 | [HOST] | Caller identity via env or a verified process-ancestry fallback | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/session_host.rs:3624 | mcp_host.rs |
-| 88 | [HOST] | Lazy per-action help with terse schemas under a token budget | done | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
-| 89 | [HOST] | Dual-era MCP protocol support (initialize and server/discover) | done | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/mcp_gate.rs | mcp_host.rs |
-| 90 | [HOST] | MCP in-flight cancellation with ordered execution | done | crates/supercli-core/src/mcp_cancel.rs | mcp_cancel.rs: 4 |
-| 91 | [HOST] | `/mcp/*` routes authenticated with a 0600 auth token | done | crates/supercli-core/src/mcp_auth.rs | mcp_auth.rs |
-| 92 | [HOST] | App live context (`app-context.json`) surfaced to neighbouring agents | done | crates/supercli-serve/src/app_context.rs | app_context.rs: 3 |
-| 93 | [HOST] | Pinned agent-browser engine auto-install (sha256, flock, background at worker start) | done | crates/supercli-core/src/browser_engine.rs | browser_engine.rs: 10 |
-| 94 | [HOST] | Browser shared project window (pinned tab per session, persistent logins) or separate-per-session mode | done | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
-| 95 | [HOST] | Browser access On/Ask/Off with remembered session approvals | done | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/config.rs | browser_mcp.rs |
-| 96 | [HOST] | Browser options: headed, domain allowlist, custom Chromium path, agent cursor overlay, theme | done | crates/supercli-core/src/browser_mcp.rs:965,1832 | browser_mcp.rs |
-| 97 | [HOST] | Remote CDP endpoint mode (`remote-cdp.json`) | done | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/browser_takeover.rs | browser_mcp.rs |
-| 98 | [HOST] | Browser screenshots/downloads as session artifacts (auto-gallery toggle) | done | crates/supercli-core/src/browser_mcp.rs:2098-2114 | browser_mcp.rs |
-| 99 | [HOST] | Session artifact store (list, read, resumable upload, delete, thumbnails) | done | crates/supercli-core/src/session_artifacts.rs | session_artifacts.rs: 21 |
-| 100 | [HOST] | Host filesystem ops for folder pickers and file transfer (scoped to projects) | done | crates/supercli-core/src/host_resources.rs | host_resources.rs |
-| 101 | [HOST] | One-time-code pairing with per-device bearer token and E2E key | done | crates/supercli-serve/src/pairing.rs | pairing.rs: 7 |
-| 102 | [HOST] | Local pairing control route (begin/status/cancel/devices/revoke/relay-allowed) | done | crates/supercli-serve/src/pairing.rs:221,282,676 | pairing.rs |
-| 103 | [HOST] | Controller-assisted pairing (pairing.invitation via an assisting Mac proxy) | done | crates/supercli-serve/src/pairing.rs:248; crates/supercli-core/src/controller_protocol.rs | pairing.rs |
-| 104 | [HOST] | Direct `/mobile` over TLS with the pinned Host certificate | done | crates/supercli-core/src/remote_server.rs:184-192 | remote_server.rs: 32 |
-| 105 | [HOST] | Supervised WSS terminal streamer (backoff, crash-loop ceiling) | done | crates/supercli-serve/src/remote_streamer.rs:222,278 | remote_streamer.rs |
-| 106 | [HOST] | Local `host.sock` framed Controller contract (0600) | done | crates/supercli-core/src/remote_server.rs; crates/supercli-core/src/remote_stdio.rs | remote_server.rs |
-| 107 | [HOST] | SSH stdio Host gateway (`__remote_stdio__`), including interactive-shell compat mode | done | crates/supercli-core/src/remote_stdio.rs | remote_stdio.rs: 6 |
-| 108 | [HOST] | Unpeel Link relay uplink with forward-secret E2E; token rotation without eviction | done | crates/supercli-core/src/relay_uplink.rs; crates/supercli-core/src/relay_crypto.rs | relay_uplink.rs: 8, relay_crypto.rs: 6 |
-| 109 | [HOST] | Relay credential recovery | done | crates/supercli-serve/src/relay.rs:361,611-616 | relay.rs |
-| 110 | [HOST] | Direct-path negotiation and UDP NAT punch upgrade from relay | done | crates/supercli-core/src/direct_path.rs; crates/supercli-core/src/direct_path_punch.rs | direct_path.rs: 4 |
-| 111 | [HOST] | Unpeel Link license activation/entitlement/seat (Ed25519 keys) | done | crates/supercli-core/src/license.rs | license.rs: 6 |
-| 112 | [HOST] | APNs push registration and delivery via relay | done | crates/supercli-serve/src/notifications.rs:6 | notifications.rs |
-| 113 | [HOST] | Platform-adapter seam for native effects (notify, push, approvals, overlay, thumbnails, Link, open-in-editor) | done | crates/supercli-serve/src/platform_adapter.rs | platform_adapter.rs: 5 |
-| 114 | [HOST] | Host-owned App install/open/opener policy (works on SSH/Linux Hosts) | done | crates/supercli-core/src/app_installer.rs; crates/supercli-core/src/app_open.rs | app_installer.rs: 4 |
-| 115 | [HOST] | Plugin activation, ordering and lazy update checks for agents and Apps | done | crates/supercli-core/src/plugins.rs; crates/supercli-core/src/plugin_updates.rs | plugins.rs: 10 |
-| 116 | [HOST] | `__remote_attach__` network attach to another Host's session | done | crates/supercli-core/src/remote_attach.rs | remote_attach.rs: 1 |
-| 117 | [HOST] | Graphical desktop-session service unit and diagnostics (Linux) | done | crates/supercli-core/src/desktop_session.rs; crates/supercli-serve/src/service_install.rs | desktop_session.rs: 3 |
-| 118 | [HOST] | Timestamped trace log for all components | done | crates/supercli-serve/src/tracelog.rs | tracelog.rs |
-| 119 | [RUNTIMES] | Runtime package format (runtime.toml, adapters, hooks, icon) auto-discovered at build | done | `runtimes/*/runtime.toml` (15 files) | `runtimes/hook-plugins.test.js`, `runtimes/test_support.rs` |
-| 120 | [RUNTIMES] | Claude Code integration (hooks, MCP, screen fallback, transcript, semantic titles, subagents) | done | `runtimes/claude-code/` | `runtimes/hook_reporter_tests.rs` |
-| 121 | [RUNTIMES] | Codex integration (native hooks + notify, MCP, screen fallback, transcript) | done | `runtimes/codex/` | `runtimes/hook_reporter_tests.rs` |
-| 122 | [RUNTIMES] | Gemini CLI integration (hooks, screen fallback, transcript) | done | `runtimes/gemini/` | `runtimes/hook_reporter_tests.rs` |
-| 123 | [RUNTIMES] | Cursor Agent, Grok, Kimi, Kiro and Cline integrations (hooks, MCP where declared, transcripts) | done | `runtimes/cursor-agent/`, `runtimes/grok/`, `runtimes/kimi/`, `runtimes/kiro/`, `runtimes/cline/` | `runtimes/hook_reporter_tests.rs` |
-| 124 | [RUNTIMES] | Amp and GitHub Copilot per-project hook integrations | done | `runtimes/amp/`, `runtimes/github-copilot/` | `runtimes/hook_reporter_tests.rs` |
-| 125 | [RUNTIMES] | OpenCode plugin and Muse Code plugin integrations | done | `runtimes/opencode/`, `runtimes/muse-code/` | `runtimes/hook_reporter_tests.rs` |
-| 126 | [RUNTIMES] | Antigravity and fx MCP-only integrations; Pi detection-only | done | `runtimes/antigravity/`, `runtimes/fx/`, `runtimes/pi/` | `runtimes/hook_reporter_tests.rs` |
-| 127 | [RUNTIMES] | Provider-neutral launch (preset runs exactly as typed) with suggested default presets per runtime | done | `crates/supercli-core/src/` (preset launch) | `crates/supercli-cli/tests/` |
-| 128 | [RUNTIMES] | Shared MCP shim (`~/.unpeel/bin/unpeel-mcp`) plus post-upgrade integration refresh | done | `~/.supercli/bin/supercli-mcp` (via `crates/supercli-cli/src/integrations_cli.rs`) | `crates/supercli-cli/tests/` |
-| 129 | [RUNTIMES] | Per-runtime install command, usage stores and resume recipes | done | `crates/supercli-cli/src/integrations_cli.rs`; `runtimes/*/docs/` | `runtimes/hook_reporter_tests.rs` |
+| 1 | [CLI] | `unpeel serve`: run the UI-free Host service for all registered workspaces | done-inherited | `crates/supercli-cli/src/cli.rs:1198` (`"serve" =>`) | `crates/supercli-cli/tests/serve_command.rs` |
+| 2 | [CLI] | `unpeel serve install\|uninstall\|status` for the per-user launchd/systemd unit, with a `--graphical` Linux variant | done-inherited | `crates/supercli-cli/src/cli.rs:1199` (`install\ | uninstall\ |
+| 3 | [CLI] | `unpeel --workspace NAME <cmd>`: target an isolated workspace for any verb | done-inherited | `crates/supercli-cli/src/cli.rs:47` (`--workspace NAME`); `crates/supercli-cli/src/workspaces.rs` | `crates/supercli-cli/tests/` (workspace isolation) |
+| 4 | [CLI] | `unpeel pair` shows a one-time pairing code/QR (auto-starts serve; `--advertise-host/--advertise-port`) | done-inherited | `crates/supercli-cli/src/cli.rs:1219` (`"pair" =>`) | `crates/supercli-cli/tests/pairclient/` |
+| 5 | [CLI] | `unpeel pair list\|remove <device>\|relay <device> on\|off` | done-inherited | `crates/supercli-cli/src/cli.rs:1224-1225` (`list\ | remove\ |
+| 6 | [CLI] | `unpeel ls [--json]`: list sessions with status/project/command | done-inherited | `crates/supercli-cli/src/cli.rs:960` (`"ls"\ | "list"`) |
+| 7 | [CLI] | `unpeel new` with `--command\|--preset`, `--cwd`, `--project`, `--cols/--rows`, `--json` | done-inherited | `crates/supercli-cli/src/cli.rs:964` (`"new" =>`) | `crates/supercli-cli/tests/` |
+| 8 | [CLI] | `unpeel add [PATH] [--name] [--here]`: add a folder as a project | done-inherited | `crates/supercli-cli/src/cli.rs:965` (`"add" =>`) | `crates/supercli-cli/tests/` |
+| 9 | [CLI] | `unpeel send <id> <text> [--enter]`, going through the write policy when run inside a session | done-inherited | `crates/supercli-cli/src/cli.rs:970` (`"send" =>`) | `crates/supercli-cli/tests/cli.rs:1283` (arg parsing) |
+| 10 | [CLI] | `unpeel keys <id> <seq>`: raw bytes outside a session, key names inside | done-inherited | `crates/supercli-cli/src/cli.rs:986` (`"keys" =>`) | `crates/supercli-cli/tests/` |
+| 11 | [CLI] | `unpeel screen <id>`: parsed screen snapshot | done-inherited | `crates/supercli-cli/src/cli.rs:1010` (`"screen"\ | "--snapshot"`) |
+| 12 | [CLI] | `unpeel logs\|tail <id> [--lines] [--follow]` | done-inherited | `crates/supercli-cli/src/cli.rs:1030` (`"logs"\ | "tail"`) |
+| 13 | [CLI] | `unpeel wait <id> [--idle] [--text] [--timeout]` with exit code 1 on timeout | done-inherited | `crates/supercli-cli/src/cli.rs:1031` (`"wait" =>`) | `crates/supercli-cli/tests/cli.rs:1290` (arg parsing) |
+| 14 | [CLI] | `unpeel resume\|restart <id>` | done-inherited | `crates/supercli-cli/src/cli.rs:1032` (`"restart"\ | "resume"`) |
+| 15 | [CLI] | `unpeel stop\|archive\|restore\|rm <id>` | done-inherited | `crates/supercli-cli/src/cli.rs:1052-1069` (`stop\ | archive\ |
+| 16 | [CLI] | `unpeel transcript <id> [--entries N] [--markdown]` | done-inherited | `crates/supercli-cli/src/cli.rs:1103` (`"transcript" =>`) | `crates/supercli-cli/tests/` |
+| 17 | [CLI] | `unpeel open <path\|resource> [--with APP] [--kind] [--media-type]`: typed App dispatcher that creates or reuses a companion pane | done-inherited | `crates/supercli-cli/src/cli.rs:1104`; `crates/supercli-cli/src/open_cli.rs` | `crates/supercli-cli/tests/` |
+| 18 | [CLI] | `unpeel settings list\|get\|set` (allowlisted keys, validated before write) | done-inherited | `crates/supercli-cli/src/cli.rs:1105`; `crates/supercli-cli/src/settings_cli.rs` | `crates/supercli-cli/tests/settings_command.rs` |
+| 19 | [CLI] | `unpeel settings openers set <selector> <editor\|system\|app:id>` | done-inherited | `crates/supercli-cli/src/settings_cli.rs` (openers) | `crates/supercli-cli/tests/settings_command.rs` |
+| 20 | [CLI] | `unpeel apps list\|install\|update [--check] [--yes]` | done-inherited | `crates/supercli-cli/src/cli.rs:1112`; `crates/supercli-cli/src/apps_cli.rs` | `crates/supercli-cli/tests/apps_command.rs` |
+| 21 | [CLI] | `unpeel apps link\|unlink` dev slots | done-inherited | `crates/supercli-cli/src/apps_cli.rs` (`link\ | unlink`) |
+| 22 | [CLI] | `unpeel apps describe\|search\|context` | done-inherited | `crates/supercli-cli/src/cli.rs:1113`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 23 | [CLI] | `unpeel integrations [list]` status per agent | done-inherited | `crates/supercli-cli/src/cli.rs:1163`; `crates/supercli-cli/src/integrations_cli.rs` | `crates/supercli-cli/tests/` |
+| 24 | [CLI] | `unpeel integrations install <runtime> [--project DIR] \| --all` | done-inherited | `crates/supercli-cli/src/integrations_cli.rs` (`install`) | `crates/supercli-cli/tests/` |
+| 25 | [CLI] | `unpeel mcp [<tool> [<action> k=v…]]`: every MCP action from the shell with the same identity and grants | done-inherited | `crates/supercli-cli/src/cli.rs:994`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 26 | [CLI] | `unpeel browser open\|snapshot\|click\|fill\|type\|press\|get\|screenshot\|scroll\|wait` | done-inherited | `crates/supercli-cli/src/cli.rs:1167`; `crates/supercli-cli/src/browser_cli.rs` | `crates/supercli-cli/tests/` |
+| 27 | [CLI] | `unpeel browser install [--check] [--json]` with exit codes 0/1/3/4 | done-inherited | `crates/supercli-cli/src/browser_cli.rs` (`install`) | `crates/supercli-cli/tests/` |
+| 28 | [CLI] | `unpeel artifacts publish <image>` | done-inherited | `crates/supercli-cli/src/cli.rs:1007`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 29 | [CLI] | `unpeel current` (self plus pane neighbours) | done-inherited | `crates/supercli-cli/src/cli.rs:1004`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 30 | [CLI] | `unpeel report <summary> [--status update\|done\|blocked] [--details]` | done-inherited | `crates/supercli-cli/src/cli.rs:1005`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 31 | [CLI] | `unpeel worktree create <name> [--branch] [--base] [--project]` | done-inherited | `crates/supercli-cli/src/cli.rs:1006`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 32 | [CLI] | `unpeel agents <action>` / `unpeel skills <action>` | done-inherited | `crates/supercli-cli/src/cli.rs:1008-1009`; `crates/supercli-cli/src/mcp_cli.rs` | `crates/supercli-cli/tests/` |
+| 33 | [CLI] | `unpeel presets list\|add\|remove\|edit` | done-inherited | `crates/supercli-cli/src/cli.rs:1179`; `crates/supercli-cli/src/state_cli.rs` | `crates/supercli-cli/tests/` |
+| 34 | [CLI] | `unpeel presets star\|unstar\|enable\|disable\|reorder` | done-inherited | `crates/supercli-cli/src/state_cli.rs` (`star\ | unstar\ |
+| 35 | [CLI] | `unpeel link enroll <key>\|status\|deactivate` with exit codes 0/1/2 | done-inherited | `crates/supercli-cli/src/cli.rs:1175`; `crates/supercli-cli/src/link_cli.rs` | `crates/supercli-cli/tests/link_fixtures.py` |
+| 36 | [CLI] | `unpeel workspaces list\|add\|remove` | done-inherited | `crates/supercli-cli/src/cli.rs:1180`; `crates/supercli-cli/src/workspaces.rs` | `crates/supercli-cli/tests/` |
+| 37 | [CLI] | `unpeel projects list\|add\|remove` | done-inherited | `crates/supercli-cli/src/cli.rs:1197` (`"projects" =>`) | `crates/supercli-cli/tests/` (cli.rs:494,592) |
+| 38 | [CLI] | `unpeel hosts prune [--json]` (identity-verified orphan reap) | done-inherited | `crates/supercli-cli/src/cli.rs:1184` (`"hosts" => "prune"`) | `crates/supercli-cli/tests/` |
+| 39 | [CLI] | Every shared-state mutation is a flocked, unknown-key-preserving write followed by a state-bus flush | done-inherited | `crates/supercli-core/src/` (state_bus, flocked writes) | `crates/supercli-core/tests/` |
+| 40 | [CLI] | `--json` output on data verbs plus meaningful exit codes; `help`, `--version`, and a bare-invocation hint | done-inherited | `crates/supercli-cli/src/cli.rs` (`--json`, `--help`, `--version`, bare hint) | `crates/supercli-cli/tests/` |
+| 41 | [HOST] | Machine supervisor with one worker per workspace home; machine lease and `serve.json` status | done-inherited | crates/supercli-serve/src/service.rs | service.rs: 1 #[test] |
+| 42 | [HOST] | Shared PTY core per workspace (single reactor, timer and journal threads) | done-inherited | crates/supercli-core/src/pty_core.rs | pty_core.rs: 3 #[test] |
+| 43 | [HOST] | In-place PTY core upgrade via SCM_RIGHTS takeover (no terminal restart) | done-inherited | crates/supercli-core/src/fd_pass.rs; crates/supercli-serve/src/pty_core_supervisor.rs | fd_pass.rs: 4, pty_core_supervisor.rs: 10 |
+| 44 | [HOST] | Sessions survive service stop/restart; per-session fallback host when the core is unavailable | done-inherited | crates/supercli-core/src/session_host.rs | session_host.rs: 82 #[test] |
+| 45 | [HOST] | On-disk session dir: manifest.json, output.bin journal, session.sock control | done-inherited | crates/supercli-core/src/session_host.rs | session_host.rs: 82 |
+| 46 | [HOST] | Bounded append-only journal with monotonic offsets (~64–72 MiB retained) | done-inherited | crates/supercli-core/src/session_host.rs:56 | session_host.rs |
+| 47 | [HOST] | Exact VT snapshot for attach from the resident libghostty-vt grid | done-inherited | crates/supercli-core/src/ghostty_vt.rs | ghostty_vt.rs: 1 |
+| 48 | [HOST] | PID + start-time identity guard; never signal a recycled pid | done-inherited | crates/supercli-core/src/session_host.rs:3624 | session_host.rs |
+| 49 | [HOST] | Session ownership/provenance fields (owner principal, device, source preset) | done-inherited | crates/supercli-core/src/session_host.rs:5783-5806 | session_host.rs |
+| 50 | [HOST] | Auto-titling (agent OSC titles / first prompt / off; skip slash commands; rename wins) | done-inherited | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/session_io.rs | session_host.rs |
+| 51 | [HOST] | Titling from a resumed conversation's transcript (`__auto_title__`) | done-inherited | crates/supercli-core/src/transcripts/mod.rs:775 | transcripts |
+| 52 | [HOST] | Archive (non-destructive stop) and restore; Restore & Resume | done-inherited | crates/supercli-core/src/session_ops.rs:303,332 | session_ops.rs: 23 |
+| 53 | [HOST] | Auto-stop-and-archive idle sweep (30m to 24h; never unread-attention or pinned sessions) | done-inherited | crates/supercli-serve/src/auto_archive.rs; crates/supercli-serve/src/driver.rs | auto_archive.rs: 9 |
+| 54 | [HOST] | Resume on restart using the hook-captured provider conversation id | done-inherited | crates/supercli-core/src/resume.rs | resume.rs: 6 |
+| 55 | [HOST] | Resume Agent in place (same session id) and restart agent | done-inherited | crates/supercli-core/src/resume.rs | resume.rs |
+| 56 | [HOST] | Session reload (replace the host, keep the id) | done-inherited | crates/supercli-core/src/session_ops.rs | session_ops.rs |
+| 57 | [HOST] | Restart recommendation when the host protocol version is too old | done-inherited | crates/supercli-core/src/session_host.rs | session_host.rs |
+| 58 | [HOST] | Safe text delivery (bracketed paste, settle, double-Enter) | done-inherited | crates/supercli-core/src/session_host.rs; crates/supercli-core/src/mcp_host.rs | session_host.rs |
+| 59 | [HOST] | Hook listener ingesting provider lifecycle events via the port registry | done-inherited | crates/supercli-serve/src/hook_listener.rs | hook_listener.rs: 6 |
+| 60 | [HOST] | Hook-latched busy/idle/attention activity engine (output is never evidence of work) | done-inherited | crates/supercli-core/src/screen_activity.rs; crates/supercli-serve/src/activity.rs | screen_activity.rs: 4 |
+| 61 | [HOST] | Screen-tier busy/idle fallback for Claude/Codex/Gemini without hooks | done-inherited | crates/supercli-core/src/screen_activity.rs:48,60 | screen_activity.rs |
+| 62 | [HOST] | Runtime observation of agents started by hand in a shell | done-inherited | crates/supercli-core/src/runtime_observer.rs | runtime_observer.rs: 11 |
+| 63 | [HOST] | Agent-drawn select-menu detection sets attention | done-inherited | crates/supercli-core/src/menu_prompt.rs | menu_prompt.rs: 13 |
+| 64 | [HOST] | Escape-cancellation fencing of interrupted turns | done-inherited | crates/supercli-core/src/hook_cancellation.rs | hook_cancellation.rs: 6 |
+| 65 | [HOST] | Background/subagent tracking keeps the session busy until children stop | done-inherited | crates/supercli-core/src/durable_runs.rs | subagent_kill tests |
+| 66 | [HOST] | Lifecycle notification policy (needs-input, opt-in finished, App alerts) with viewing-device suppression | done-inherited | crates/supercli-serve/src/notifications.rs | notifications.rs: 2 |
+| 67 | [HOST] | Unread/mark-read and notify-when-done per session | done-inherited | crates/supercli-core/src/app_state.rs | app_state.rs |
+| 68 | [HOST] | Shared approval hub (FIFO, coalesced, first answer wins from any Controller) | done-inherited | crates/supercli-serve/src/approvals.rs:517 | approvals.rs: 11 |
+| 69 | [HOST] | Viewer presence leases and presence files | done-inherited | crates/supercli-serve/src/presence.rs | presence.rs: 3 |
+| 70 | [HOST] | Phone-fit resize and desktop-fit restore of the shared grid | done-inherited | crates/supercli-core/src/controller_host.rs; crates/supercli-core/src/remote_session_backend.rs | remote_server.rs: 32 |
+| 71 | [HOST] | Persisted activity log (activity-log.jsonl) | done-inherited | crates/supercli-core/src/activity_log.rs | activity_log.rs: 7 |
+| 72 | [HOST] | Local URL detection plus verify/find/stop of session-owned local servers | done-inherited | crates/supercli-core/src/local_urls.rs | local_urls.rs: 18 |
+| 73 | [HOST] | First-run preset seeding from agent CLIs found on PATH | done-inherited | crates/supercli-core/src/first_run.rs | first_run.rs: 2 |
+| 74 | [HOST] | Projects, plain groups, worktree child projects, pins, manual order and date sort | done-inherited | crates/supercli-core/src/state.rs; crates/supercli-core/src/app_state.rs | state.rs |
+| 75 | [HOST] | Cross-frontend state bus notifications | done-inherited | crates/supercli-core/src/state_bus.rs | state_bus.rs: 3 |
+| 76 | [HOST] | Git worktree create/list (default base = mainline) | done-inherited | crates/supercli-core/src/worktrees.rs | worktrees.rs: 3 |
+| 77 | [HOST] | Unified `unpeel` MCP server (stdio, per agent client, gate outside hosted sessions) | done-inherited | crates/supercli-core/src/mcp_host.rs | mcp_host.rs: 49 |
+| 78 | [HOST] | MCP `sessions` domain (current, list, inspect, read_screen, read_output, wait_for_text, send_text, send_keys, report) | done-inherited | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
+| 79 | [HOST] | MCP `agents` domain (list, get, read_transcript, wait) with occurrence-bound refs | done-inherited | crates/supercli-core/src/mcp_host.rs:702 | mcp_host.rs |
+| 80 | [HOST] | MCP `workspace` domain (list_presets, create_worktree, list_worktrees) | done-inherited | crates/supercli-core/src/mcp_host.rs:703 | mcp_host.rs |
+| 81 | [HOST] | MCP `artifacts.add_to_gallery` | done-inherited | crates/supercli-core/src/mcp_host.rs:704 | mcp_host.rs |
+| 82 | [HOST] | MCP `browser` domain (13 actions incl. console, context, close) | done-inherited | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
+| 83 | [HOST] | MCP `apps` domain (list, catalog, describe, search, context, open) with agent-openable App panes | done-inherited | crates/supercli-core/src/apps_mcp.rs | apps_mcp.rs |
+| 84 | [HOST] | MCP `skills` domain (list, search, get) | done-inherited | crates/supercli-core/src/skills_mcp.rs | skills_mcp.rs |
+| 85 | [HOST] | Open reads plus approval-controlled cross-session writes (ask/allow/deny, remembered directional pairs) | done-inherited | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/grant_store.rs | grant_store.rs: 3, mcp_host.rs |
+| 86 | [HOST] | Session creation and closing are user-only (agents refused) | done-inherited | crates/supercli-core/src/mcp_host.rs:685 | mcp_host.rs |
+| 87 | [HOST] | Caller identity via env or a verified process-ancestry fallback | done-inherited | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/session_host.rs:3624 | mcp_host.rs |
+| 88 | [HOST] | Lazy per-action help with terse schemas under a token budget | done-inherited | crates/supercli-core/src/mcp_host.rs | mcp_host.rs |
+| 89 | [HOST] | Dual-era MCP protocol support (initialize and server/discover) | done-inherited | crates/supercli-core/src/mcp_host.rs; crates/supercli-core/src/mcp_gate.rs | mcp_host.rs |
+| 90 | [HOST] | MCP in-flight cancellation with ordered execution | done-inherited | crates/supercli-core/src/mcp_cancel.rs | mcp_cancel.rs: 4 |
+| 91 | [HOST] | `/mcp/*` routes authenticated with a 0600 auth token | done-inherited | crates/supercli-core/src/mcp_auth.rs | mcp_auth.rs |
+| 92 | [HOST] | App live context (`app-context.json`) surfaced to neighbouring agents | done-inherited | crates/supercli-serve/src/app_context.rs | app_context.rs: 3 |
+| 93 | [HOST] | Pinned agent-browser engine auto-install (sha256, flock, background at worker start) | done-inherited | crates/supercli-core/src/browser_engine.rs | browser_engine.rs: 10 |
+| 94 | [HOST] | Browser shared project window (pinned tab per session, persistent logins) or separate-per-session mode | done-inherited | crates/supercli-core/src/browser_mcp.rs | browser_mcp.rs |
+| 95 | [HOST] | Browser access On/Ask/Off with remembered session approvals | done-inherited | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/config.rs | browser_mcp.rs |
+| 96 | [HOST] | Browser options: headed, domain allowlist, custom Chromium path, agent cursor overlay, theme | done-inherited | crates/supercli-core/src/browser_mcp.rs:965,1832 | browser_mcp.rs |
+| 97 | [HOST] | Remote CDP endpoint mode (`remote-cdp.json`) | done-inherited | crates/supercli-core/src/browser_mcp.rs; crates/supercli-core/src/browser_takeover.rs | browser_mcp.rs |
+| 98 | [HOST] | Browser screenshots/downloads as session artifacts (auto-gallery toggle) | done-inherited | crates/supercli-core/src/browser_mcp.rs:2098-2114 | browser_mcp.rs |
+| 99 | [HOST] | Session artifact store (list, read, resumable upload, delete, thumbnails) | done-inherited | crates/supercli-core/src/session_artifacts.rs | session_artifacts.rs: 21 |
+| 100 | [HOST] | Host filesystem ops for folder pickers and file transfer (scoped to projects) | done-inherited | crates/supercli-core/src/host_resources.rs | host_resources.rs |
+| 101 | [HOST] | One-time-code pairing with per-device bearer token and E2E key | done-inherited | crates/supercli-serve/src/pairing.rs | pairing.rs: 7 |
+| 102 | [HOST] | Local pairing control route (begin/status/cancel/devices/revoke/relay-allowed) | done-inherited | crates/supercli-serve/src/pairing.rs:221,282,676 | pairing.rs |
+| 103 | [HOST] | Controller-assisted pairing (pairing.invitation via an assisting Mac proxy) | done-inherited | crates/supercli-serve/src/pairing.rs:248; crates/supercli-core/src/controller_protocol.rs | pairing.rs |
+| 104 | [HOST] | Direct `/mobile` over TLS with the pinned Host certificate | done-inherited | crates/supercli-core/src/remote_server.rs:184-192 | remote_server.rs: 32 |
+| 105 | [HOST] | Supervised WSS terminal streamer (backoff, crash-loop ceiling) | done-inherited | crates/supercli-serve/src/remote_streamer.rs:222,278 | remote_streamer.rs |
+| 106 | [HOST] | Local `host.sock` framed Controller contract (0600) | done-inherited | crates/supercli-core/src/remote_server.rs; crates/supercli-core/src/remote_stdio.rs | remote_server.rs |
+| 107 | [HOST] | SSH stdio Host gateway (`__remote_stdio__`), including interactive-shell compat mode | done-inherited | crates/supercli-core/src/remote_stdio.rs | remote_stdio.rs: 6 |
+| 108 | [HOST] | Unpeel Link relay uplink with forward-secret E2E; token rotation without eviction | done-inherited | crates/supercli-core/src/relay_uplink.rs; crates/supercli-core/src/relay_crypto.rs | relay_uplink.rs: 8, relay_crypto.rs: 6 |
+| 109 | [HOST] | Relay credential recovery | done-inherited | crates/supercli-serve/src/relay.rs:361,611-616 | relay.rs |
+| 110 | [HOST] | Direct-path negotiation and UDP NAT punch upgrade from relay | done-inherited | crates/supercli-core/src/direct_path.rs; crates/supercli-core/src/direct_path_punch.rs | direct_path.rs: 4 |
+| 111 | [HOST] | Unpeel Link license activation/entitlement/seat (Ed25519 keys) | done-inherited | crates/supercli-core/src/license.rs | license.rs: 6 |
+| 112 | [HOST] | APNs push registration and delivery via relay | done-inherited | crates/supercli-serve/src/notifications.rs:6 | notifications.rs |
+| 113 | [HOST] | Platform-adapter seam for native effects (notify, push, approvals, overlay, thumbnails, Link, open-in-editor) | done-inherited | crates/supercli-serve/src/platform_adapter.rs | platform_adapter.rs: 5 |
+| 114 | [HOST] | Host-owned App install/open/opener policy (works on SSH/Linux Hosts) | done-inherited | crates/supercli-core/src/app_installer.rs; crates/supercli-core/src/app_open.rs | app_installer.rs: 4 |
+| 115 | [HOST] | Plugin activation, ordering and lazy update checks for agents and Apps | done-inherited | crates/supercli-core/src/plugins.rs; crates/supercli-core/src/plugin_updates.rs | plugins.rs: 10 |
+| 116 | [HOST] | `__remote_attach__` network attach to another Host's session | done-inherited | crates/supercli-core/src/remote_attach.rs | remote_attach.rs: 1 |
+| 117 | [HOST] | Graphical desktop-session service unit and diagnostics (Linux) | done-inherited | crates/supercli-core/src/desktop_session.rs; crates/supercli-serve/src/service_install.rs | desktop_session.rs: 3 |
+| 118 | [HOST] | Timestamped trace log for all components | done-inherited | crates/supercli-serve/src/tracelog.rs | tracelog.rs |
+| 119 | [RUNTIMES] | Runtime package format (runtime.toml, adapters, hooks, icon) auto-discovered at build | done-inherited | `runtimes/*/runtime.toml` (15 files) | `runtimes/hook-plugins.test.js`, `runtimes/test_support.rs` |
+| 120 | [RUNTIMES] | Claude Code integration (hooks, MCP, screen fallback, transcript, semantic titles, subagents) | done-inherited | `runtimes/claude-code/` | `runtimes/hook_reporter_tests.rs` |
+| 121 | [RUNTIMES] | Codex integration (native hooks + notify, MCP, screen fallback, transcript) | done-inherited | `runtimes/codex/` | `runtimes/hook_reporter_tests.rs` |
+| 122 | [RUNTIMES] | Gemini CLI integration (hooks, screen fallback, transcript) | done-inherited | `runtimes/gemini/` | `runtimes/hook_reporter_tests.rs` |
+| 123 | [RUNTIMES] | Cursor Agent, Grok, Kimi, Kiro and Cline integrations (hooks, MCP where declared, transcripts) | done-inherited | `runtimes/cursor-agent/`, `runtimes/grok/`, `runtimes/kimi/`, `runtimes/kiro/`, `runtimes/cline/` | `runtimes/hook_reporter_tests.rs` |
+| 124 | [RUNTIMES] | Amp and GitHub Copilot per-project hook integrations | done-inherited | `runtimes/amp/`, `runtimes/github-copilot/` | `runtimes/hook_reporter_tests.rs` |
+| 125 | [RUNTIMES] | OpenCode plugin and Muse Code plugin integrations | done-inherited | `runtimes/opencode/`, `runtimes/muse-code/` | `runtimes/hook_reporter_tests.rs` |
+| 126 | [RUNTIMES] | Antigravity and fx MCP-only integrations; Pi detection-only | done-inherited | `runtimes/antigravity/`, `runtimes/fx/`, `runtimes/pi/` | `runtimes/hook_reporter_tests.rs` |
+| 127 | [RUNTIMES] | Provider-neutral launch (preset runs exactly as typed) with suggested default presets per runtime | done-inherited | `crates/supercli-core/src/` (preset launch) | `crates/supercli-cli/tests/` |
+| 128 | [RUNTIMES] | Shared MCP shim (`~/.unpeel/bin/unpeel-mcp`) plus post-upgrade integration refresh | done-inherited | `~/.supercli/bin/supercli-mcp` (via `crates/supercli-cli/src/integrations_cli.rs`) | `crates/supercli-cli/tests/` |
+| 129 | [RUNTIMES] | Per-runtime install command, usage stores and resume recipes | done-inherited | `crates/supercli-cli/src/integrations_cli.rs`; `runtimes/*/docs/` | `runtimes/hook_reporter_tests.rs` |
 | 130 | [APPS] | `unpeel-attach` client (snapshot/tail replay, event-driven follow, focus filtering, resize) | done | `crates/supercli-attach/src/lib.rs` | `focus_filter_drops_exact_focus_in_and_out`, `resize_command_encoding_matches_host_protocol` |
 | 131 | [APPS] | `unpeel-apps` "send to adjacent agent" API with clipboard fallback | done | `crates/supercli-apps/src/agent.rs` | (unit tests in `agent.rs`) |
 | 132 | [APPS] | Official App registry with typed resources (file media type, folder, git.working-tree) | done | `crates/supercli-core/src/app_open.rs`, `apps_mcp.rs`, `controller_host.rs` | `typed_resources_are_one_shell_safe_argument`, `opener_projection_migrates_legacy_file_keys_and_keeps_typed_resources` |
@@ -269,12 +269,12 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 242 | [IOS] | Face ID / Touch ID / passcode app lock | missing | — | — |
 | 243 | [IOS] | Session actions from phone (stop, restart, resume agent, archive, remove, reorder, mark read) | missing | — | — |
 | 244 | [IOS] | Capability-gated UI driven by Host bootstrap; connection-lost and push-warning banners; reconnect backoff | missing | — | — |
-| 245 | [SHARED] | One Swift implementation of Host protocol DTOs, pairing client and paired-host records for Mac and iOS | done | crates/supercli-client/src/hosts.rs; crates/supercli-client/src/credentials.rs; crates/supercli-client/src/pairing.rs | supercli-client |
-| 246 | [SHARED] | Relay forward-secret E2E protocol and WebSocket client, pinned by cross-language KAT vectors | done | crates/supercli-core/src/relay_crypto.rs; crates/supercli-client/src/crypto.rs; crates/supercli-client/src/relay_conn.rs; protocol/relay-kat-vectors-v2.json | relay_crypto.rs: 6 |
-| 247 | [PROTO] | Versioned Host capability ledger (52 op ids, major 1 / minor 21, additive, capability-checked) | done | protocol/host-capabilities-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
-| 248 | [PROTO] | Host conformance and bootstrap-compatibility fixtures that every Host implementation must pass | done | protocol/host-conformance-v1.json; protocol/host-bootstrap-compatibility-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
-| 249 | [PROTO] | Normative pane-layout operations, direct-path v1, relay KAT, browser-engine pin and App registry contracts | done | protocol/pane-layout-operations-v1.json; protocol/direct-path-v1.json; protocol/relay-kat-vectors-v2.json; protocol/browser-engine-v1.json; protocol/app-registry.json | crates/supercli-cli/tests/cases/relay_conformance.py |
-| 250 | [PROTO] | Unpeel UI protocol v1 (NDJSON App-to-Host semantic UI) schema, stream and fixtures | done | protocol/supercli-ui-v1.schema.json; protocol/supercli-ui-stream-v1.ndjson; protocol/supercli-ui-fixtures-v1.json | supercli-ui fixtures |
+| 245 | [SHARED] | One Swift implementation of Host protocol DTOs, pairing client and paired-host records for Mac and iOS | done-inherited | crates/supercli-client/src/hosts.rs; crates/supercli-client/src/credentials.rs; crates/supercli-client/src/pairing.rs | supercli-client |
+| 246 | [SHARED] | Relay forward-secret E2E protocol and WebSocket client, pinned by cross-language KAT vectors | done-inherited | crates/supercli-core/src/relay_crypto.rs; crates/supercli-client/src/crypto.rs; crates/supercli-client/src/relay_conn.rs; protocol/relay-kat-vectors-v2.json | relay_crypto.rs: 6 |
+| 247 | [PROTO] | Versioned Host capability ledger (52 op ids, major 1 / minor 21, additive, capability-checked) | done-inherited | protocol/host-capabilities-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
+| 248 | [PROTO] | Host conformance and bootstrap-compatibility fixtures that every Host implementation must pass | done-inherited | protocol/host-conformance-v1.json; protocol/host-bootstrap-compatibility-v1.json | crates/supercli-cli/tests/cases/host_launch_conformance.py |
+| 249 | [PROTO] | Normative pane-layout operations, direct-path v1, relay KAT, browser-engine pin and App registry contracts | done-inherited | protocol/pane-layout-operations-v1.json; protocol/direct-path-v1.json; protocol/relay-kat-vectors-v2.json; protocol/browser-engine-v1.json; protocol/app-registry.json | crates/supercli-cli/tests/cases/relay_conformance.py |
+| 250 | [PROTO] | Unpeel UI protocol v1 (NDJSON App-to-Host semantic UI) schema, stream and fixtures | done-inherited | protocol/supercli-ui-v1.schema.json; protocol/supercli-ui-stream-v1.ndjson; protocol/supercli-ui-fixtures-v1.json | supercli-ui fixtures |
 | 251 | [DIST] | SHA-256-verified curl installers for the CLI and each App; channels alpha/beta/stable on R2 | done | `scripts/install.sh`, `scripts/install-app.sh` | `scripts/release-installer.test.mjs`, `scripts/release-app-installer.test.mjs` |
 | 252 | [DIST] | Lockstep app/CLI versioning; CLI archives carry protocol/, generated/, provenance and notices | done | `scripts/` (release tooling); `crates/Cargo.toml` (version) | `scripts/release-installer.test.mjs` |
 | 253 | [DIST] | Signed and notarized Mac DMG plus Sparkle appcast; iOS via TestFlight | partial | `scripts/` (DMG/appcast tooling) | - |
