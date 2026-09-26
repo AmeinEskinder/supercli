@@ -74,9 +74,9 @@ built from one tree at one version.
 
 **Clients**
 
-- Mac app: [supercli.com/download/mac](https://supercli.com/download/mac)
-- iPhone / iPad: [supercli.com/ios](https://supercli.com/ios)
-- Docs, including headless hosting: [supercli.com/docs](https://supercli.com/docs)
+- Mac app: [superc.li/download/mac](https://superc.li/download/mac)
+- iPhone / iPad: [superc.li/ios](https://superc.li/ios)
+- Docs, including headless hosting: [superc.li/docs](https://superc.li/docs)
 
 This repository holds the Host service, the shared PTY core, the unified
 `supercli` MCP server, the built-in agent runtimes, the CLI, and the Host
@@ -91,7 +91,7 @@ How to build and test them: the "Apple clients" section of
 Mac or Linux:
 
 ```bash
-curl -fsSL https://supercli.com/install.sh | sh
+curl -fsSL https://superc.li/install.sh | sh
 ```
 
 That installs `supercli`, `supercli-host`, and `supercli-attach` (Apple silicon and
@@ -241,10 +241,10 @@ default; session creation stays user-only. Detail:
 - **Mac app** — [`clients/native`](clients/native). The desktop client: a Controller
   of the bundled Host service plus the platform adapter (notifications,
   Keychain, approvals). Signed,
-  notarized builds: [supercli.com/download](https://supercli.com/download).
+  notarized builds: [superc.li/download](https://superc.li/download).
 - **iPhone / iPad app** — [`clients/ios`](clients/ios). A remote Controller: steer
   every session from your phone over your network or through SuperCLI Link.
-  Builds ship through TestFlight; see [supercli.com](https://supercli.com).
+  Builds ship through TestFlight; see [superc.li](https://superc.li).
 - **Shared Swift package** — [`clients/shared/SupercliShared`](clients/shared/SupercliShared):
   pairing, the Host protocol client, and the end-to-end relay crypto both apps
   use, pinned to the same test vectors as the Rust side.
@@ -265,7 +265,7 @@ default; session creation stays user-only. Detail:
 
 Every client speaks the Host protocol in [`protocol/`](protocol/); a headless
 Linux Host is driven from the Mac app or the phone exactly like a Mac Host:
-[supercli.com/docs/headless-host](https://supercli.com/docs/headless-host).
+[superc.li/docs/headless-host](https://superc.li/docs/headless-host).
 Building the apps from source is covered in the "Apple clients" section of
 [`AGENTS.md`](AGENTS.md).
 
@@ -302,7 +302,7 @@ the map of how the session system fits together and what must stay aligned.
 ## Releases
 
 Server releases are CLI archives per channel on Cloudflare R2 behind
-supercli.com (`bun run release:cli`); the installer above reads the same
+superc.li (`bun run release:cli`); the installer above reads the same
 bucket. Every archive carries `BUILD_PROVENANCE.json`,
 `THIRD_PARTY_NOTICES.txt`, and `protocol/`. Details:
 [`docs/agents/releases.md`](docs/agents/releases.md). Third-party licenses

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Build and publish an Unpeel App's tarballs that back
-// `curl -fsSL https://supercli.com/install/<app>/install.sh | sh`.
+// `curl -fsSL https://superc.li/install/<app>/install.sh | sh`.
 //
 // Operator script, same transport as release-cli.mjs (wrangler r2 object put
 // into the supercli-releases bucket). R2 key layout under the channel roots:

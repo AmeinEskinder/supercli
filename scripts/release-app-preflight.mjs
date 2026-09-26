@@ -23,7 +23,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv)
-const baseUrl = String(args['base-url'] ?? 'https://supercli.com')
+const baseUrl = String(args['base-url'] ?? 'https://superc.li')
 const channel = String(args.channel ?? '')
 const version = String(args.version ?? '')
 const build = args.build == null ? undefined : String(args.build)

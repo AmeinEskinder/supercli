@@ -614,7 +614,7 @@ depend on the native app being present.
   route leaves an otherwise-valid legacy credential intact.
   **Paid-service gate**: the
   uplink needs an Ed25519-signed entitlement from
-  `POST supercli.com/api/remote/entitlement` (active-seat checked and persistently
+  `POST superc.li/api/remote/entitlement` (active-seat checked and persistently
   bound to the licensing device id + relay Mac id; an active Pro license is
   the whole **shipped** gate — the old `REMOTE_ACCESS_MODE` knob is retired).
   The target Link identity/seat/login model and the Relay deploy runbook
@@ -623,7 +623,7 @@ depend on the native app being present.
   - **Public website doc (live since 2026-07-23):** a user-facing doc lives
     at `supercli-cloud:apps/website/app/docs/supercli-remote.md`, registered in
     `supercli-cloud:apps/website/app/docs/manifest.ts` as the "Remote access" group and
-    published at `supercli.com/docs/supercli-remote`. The build-time gate
+    published at `superc.li/docs/supercli-remote`. The build-time gate
     `VITE_SUPERCLI_REMOTE` is now set permanently via the committed
     `supercli-cloud:apps/website/.env` (Vite inlines it) — don't remove that file or the group
     drops from `DOC_GROUPS` again (absent from the sidebar and unroutable;

@@ -50,7 +50,7 @@ enum RelayConfig {
     static let enrollmentMigratedDefaultsKey = "supercli.native.linkEnrollmentMigrated"
     /// Hidden override for dev (`ws://127.0.0.1:8787` against `wrangler dev`).
     static let urlOverrideDefaultsKey = "supercli.native.relayURL"
-    private static let productionURL = URL(string: "wss://relay.supercli.com")!
+    private static let productionURL = URL(string: "wss://relay.superc.li")!
 
     static var relayURL: URL {
         if let raw = AppDefaults.shared.string(forKey: urlOverrideDefaultsKey),
@@ -560,11 +560,11 @@ final class RelayUplinkManager: ObservableObject {
     }
 
     /// Cached entitlement while >7 days of validity remain; otherwise a
-    /// fresh one from supercli.com using the stored license key. Nil (with
+    /// fresh one from superc.li using the stored license key. Nil (with
     /// status set) when there's no license or the server refuses.
 
     /// Cached entitlement while >7 days of validity remain; otherwise a
-    /// fresh one from supercli.com using the stored license key. Nil (with
+    /// fresh one from superc.li using the stored license key. Nil (with
     /// status set) when there's no license or the server refuses.
     private func currentEntitlement(macID: String) async -> String? {
         guard !authoritySuppressedInMemory else { return nil }
@@ -589,7 +589,7 @@ final class RelayUplinkManager: ObservableObject {
         }
 
         // LOCAL-DEV ONLY: a dev token (default `supercli.native.relayDevToken`)
-        // is presented verbatim as the entitlement, skipping the supercli.com
+        // is presented verbatim as the entitlement, skipping the superc.li
         // fetch — pairs with the relay Worker's DEV_ENTITLEMENT_BYPASS so a
         // dev Mac with a dev-signed license can run the relay locally. Unset
         // in real builds, so production still fetches a signed entitlement.
@@ -652,7 +652,7 @@ final class RelayUplinkManager: ObservableObject {
             authoritySuppressedInMemory = false
             return issued.entitlement
         } catch {
-            status = .error("Could not reach supercli.com for remote access")
+            status = .error("Could not reach superc.li for remote access")
             return nil
         }
     }

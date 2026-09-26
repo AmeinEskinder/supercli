@@ -2938,10 +2938,10 @@ struct RemoteSettingsPanel: View {
         self.management = store.hostManagement
     }
 
-    /// Install link for the iPhone app. Always supercli.com/ios — the site 302s
+    /// Install link for the iPhone app. Always superc.li/ios — the site 302s
     /// to the current TestFlight public link (and later the App Store page),
     /// so shipped desktop builds never hold a stale store URL.
-    private static let iosAppURL = URL(string: "https://supercli.com/ios")!
+    private static let iosAppURL = URL(string: "https://superc.li/ios")!
 
     /// The default workspace is implicit; every registry record is an
     /// additional workspace on this Mac. Keep the friendlier machine copy on
@@ -3486,7 +3486,7 @@ struct ShareThisMacSheet: View {
                 }
 
                 Text("Run this on another machine with the Supercli CLI installed "
-                    + "(curl -fsSL https://supercli.com/install.sh | sh). It rides your "
+                    + "(curl -fsSL https://superc.li/install.sh | sh). It rides your "
                     + "normal SSH access instead of a pairing code, so this Mac needs "
                     + "Remote Login on (System Settings ▸ General ▸ Sharing) and your "
                     + "SSH config must reach it — over a VPN or Tailscale too, but "
@@ -3694,7 +3694,7 @@ private struct LinkEnrollmentSection: View {
     private var reachDescription: String {
         let target = usesWorkspaceLanguage ? "this workspace" : "this Mac"
         return "These devices reach \(target) — and these Hosts stay "
-            + "reachable — from any network, through the supercli.com "
+            + "reachable — from any network, through the superc.li "
             + "relay. Session traffic is end-to-end encrypted; notification "
             + "titles pass through Supercli and Apple Push. Everything not listed "
             + "here connects direct-only, on your own network."

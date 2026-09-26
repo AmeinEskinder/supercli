@@ -1,8 +1,8 @@
 #!/bin/sh
-# Supercli CLI installer — served at https://supercli.com/install.sh by the
+# Supercli CLI installer — served at https://superc.li/install.sh by the
 # supercli-release-updates worker (which substitutes __DEFAULT_CHANNEL__).
 #
-#   curl -fsSL https://supercli.com/install.sh | sh
+#   curl -fsSL https://superc.li/install.sh | sh
 #
 # Installs the `supercli` CLI (the `supercli serve` Host service plus scriptable
 # session verbs) and its `supercli-host` sibling (Sessions are hosted through
@@ -20,8 +20,8 @@ set -eu
 
 CHANNEL="${SUPERCLI_CHANNEL:-__DEFAULT_CHANNEL__}"
 # __BASE_URL__ is substituted by the worker with the origin the script was
-# fetched from, so v1.supercli.com hands out a script that installs from
-# v1.supercli.com — the whole preview lane stays self-contained.
+# fetched from, so v1.superc.li hands out a script that installs from
+# v1.superc.li — the whole preview lane stays self-contained.
 BASE="${SUPERCLI_INSTALL_BASE:-__BASE_URL__}"
 
 case "$CHANNEL" in
@@ -225,4 +225,4 @@ echo "  supercli serve    run the Host service on this machine (or open the Supe
 echo "  supercli pair     pair a phone or another Mac with this Host"
 echo "  supercli --help   every command and flag"
 echo ""
-echo "Docs: https://supercli.com/docs/cli"
+echo "Docs: https://superc.li/docs/cli"

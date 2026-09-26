@@ -79,16 +79,25 @@ def resolve_archive(note):
     path = os.path.join(cache_dir(), f"supercli-{PINNED_VERSION}-{target}.tar.gz")
     if os.path.isfile(path) and sha256_of(path) == PINNED_SHA256[target]:
         return path
+    # Network fetch is opt-in only: tests must not hit the network by default.
+    # Set SUPERCLI_LIVE_NETWORK_TEST=1 to allow fetching the pinned archive.
+    if os.environ.get("SUPERCLI_LIVE_NETWORK_TEST") != "1":
+        note(
+            f"compat_serve SKIPPED: no cached {PINNED_VERSION} archive at {path}; "
+            "set SUPERCLI_LIVE_NETWORK_TEST=1 to fetch from superc.li, or "
+            "SUPERCLI_MATRIX_COMPAT_ARCHIVE=<path> for offline runs"
+        )
+        return None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     url = (
-        f"https://supercli.com/releases/{PINNED_CHANNEL}/cli/"
+        f"https://superc.li/releases/{PINNED_CHANNEL}/cli/"
         f"supercli-{PINNED_VERSION}-{target}.tar.gz"
     )
     partial = path + ".part"
     try:
         # Cloudflare answers the default python-urllib agent with 403; name ourselves.
         request = urllib.request.Request(
-            url, headers={"User-Agent": "supercli-matrix/compat_serve (+https://supercli.com)"}
+            url, headers={"User-Agent": "supercli-matrix/compat_serve (+https://superc.li)"}
         )
         with urllib.request.urlopen(request, timeout=60) as response, open(partial, "wb") as out:
             shutil.copyfileobj(response, out)

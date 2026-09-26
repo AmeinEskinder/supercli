@@ -492,7 +492,7 @@ fn api_base() -> String {
         .ok()
         .map(|s| s.trim().trim_end_matches('/').to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "https://supercli.com".into())
+        .unwrap_or_else(|| "https://superc.li".into())
 }
 
 /// Minimal HTTPS/HTTP JSON POST (rustls + webpki roots; `http://` allowed

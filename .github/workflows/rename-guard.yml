@@ -62,3 +62,22 @@ jobs:
             exit 1
           fi
           echo "PASS: 0 unpeel references outside allowlist."
+
+      - name: Check for supercli.com references (third-party domain)
+        run: |
+          set -euo pipefail
+          echo "Scanning for 'supercli.com' (third-party domain, must be superc.li)..."
+          matches=$(grep -rli 'supercli\.com' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=.dart_tool \
+            | grep -v -e '^./clients/legacy/' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "FAIL: supercli.com references found (must be superc.li):"
+            echo "$matches"
+            exit 1
+          fi
+          echo "PASS: 0 supercli.com references outside clients/legacy."

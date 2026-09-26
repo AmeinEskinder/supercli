@@ -33,8 +33,8 @@ keep the same behavior.
 > If you find a dev/stale build in `/Applications` (check:
 > `plutil -extract SUFeedURL raw /Applications/Supercli.app/Contents/Info.plist`
 > — no feed = wrong app), tell the operator and reinstall the released build
-> from `supercli.com/download/mac` (download DMG → verify sha256 against
-> `supercli.com/releases/beta/latest.json` → quit app → replace → open). That
+> from `superc.li/download/mac` (download DMG → verify sha256 against
+> `superc.li/releases/beta/latest.json` → quit app → replace → open). That
 > restore is the **only** sanctioned write to `/Applications`.
 >
 > **Leave its running state alone (amended 2026-08-10):** development does not
@@ -46,7 +46,7 @@ keep the same behavior.
 > launching it.
 
 Since 2026-07-10, `/Applications/Supercli.app` is the **real released app**
-(installed from `supercli.com/download/mac`: Developer ID `8M4MM4C2AH`,
+(installed from `superc.li/download/mac`: Developer ID `8M4MM4C2AH`,
 notarized, Sparkle-updating via the baked `SUFeedURL`). It is the operator's
 daily driver and the app paired phones normally talk to. **Never copy a dev
 build over it** — that was the old workflow, and it strands the install on a

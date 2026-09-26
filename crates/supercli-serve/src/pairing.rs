@@ -482,7 +482,7 @@ impl PairingWindow {
 }
 
 fn relay_url() -> String {
-    std::env::var("SUPERCLI_RELAY_URL").unwrap_or_else(|_| "wss://relay.supercli.com".into())
+    std::env::var("SUPERCLI_RELAY_URL").unwrap_or_else(|_| "wss://relay.superc.li".into())
 }
 
 fn mobile_dir() -> std::path::PathBuf {

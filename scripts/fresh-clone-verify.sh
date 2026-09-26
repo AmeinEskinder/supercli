@@ -76,6 +76,22 @@ if [ -n "$matches" ]; then
 fi
 echo "rename guard PASS"
 
+echo "--- 4b. supercli.com domain guard (third-party domain, must be superc.li) ---"
+domain_matches=$(grep -rli 'supercli\.com' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=.dart_tool \
+  | grep -v -e '^./clients/legacy/' \
+  || true)
+if [ -n "$domain_matches" ]; then
+  echo "FAIL: supercli.com references found (must be superc.li):"
+  echo "$domain_matches"
+  exit 1
+fi
+echo "domain guard PASS"
+
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
 for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md; do
   if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi

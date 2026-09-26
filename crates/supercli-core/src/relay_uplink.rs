@@ -17,7 +17,7 @@ pub fn relay_url() -> String {
     std::env::var("SUPERCLI_RELAY_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "wss://relay.supercli.com".into())
+        .unwrap_or_else(|| "wss://relay.superc.li".into())
 }
 
 /// Match the native app's refresh window: keep using a valid entitlement,
