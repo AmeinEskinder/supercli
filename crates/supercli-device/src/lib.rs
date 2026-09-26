@@ -105,6 +105,12 @@ pub enum DeviceError {
     },
     /// The operation is not supported on this backend (e.g. tap via simctl).
     Unsupported(String),
+    /// A dangerous device operation was denied by the approval gate.
+    /// The operation never ran; see [`crate::danger`] for the audit trail.
+    Denied {
+        /// What was denied, e.g. `"install /tmp/app.apk"`.
+        op: String,
+    },
     /// Output could not be parsed (e.g. simctl JSON).
     Parse(String),
     /// Underlying I/O error.
@@ -131,6 +137,7 @@ impl fmt::Display for DeviceError {
                 write!(f, "'{tool}' failed (exit {code}): {short}")
             }
             DeviceError::Unsupported(msg) => f.write_str(msg),
+            DeviceError::Denied { op } => write!(f, "denied by approval gate: {op}"),
             DeviceError::Parse(msg) => write!(f, "could not parse tool output: {msg}"),
             DeviceError::Io(e) => write!(f, "I/O error: {e}"),
         }
@@ -429,16 +436,24 @@ pub trait DeviceBackend {
 pub mod adb;
 #[cfg(feature = "device")]
 pub mod baguette;
+#[cfg(feature = "device")]
+pub mod danger;
 #[cfg(test)]
 mod fake;
 #[cfg(feature = "device")]
 pub(crate) mod json;
+#[cfg(feature = "device")]
+pub mod logs;
+#[cfg(feature = "device")]
+pub mod mcp;
 #[cfg(feature = "device")]
 pub mod scrcpy;
 #[cfg(feature = "device")]
 pub mod scrcpy_native;
 #[cfg(feature = "device")]
 pub mod simctl;
+#[cfg(feature = "device")]
+pub mod ui;
 
 // Always compiled: pure std wire format + setup planners (no tools).
 pub mod setup;
@@ -485,6 +500,13 @@ mod tests {
             stderr: String::new(),
         };
         assert!(signal.to_string().contains("exit signal"));
+        assert_eq!(
+            DeviceError::Denied {
+                op: "install /tmp/app.apk".to_string()
+            }
+            .to_string(),
+            "denied by approval gate: install /tmp/app.apk"
+        );
     }
 
     #[test]
