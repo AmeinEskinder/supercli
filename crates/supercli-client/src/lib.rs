@@ -35,6 +35,8 @@ pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod nearby;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
 pub mod protocol;
 #[cfg(not(target_arch = "wasm32"))]
@@ -43,6 +45,8 @@ pub mod relay;
 pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
