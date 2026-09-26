@@ -356,3 +356,131 @@ do not use gpuidart. Each needs a native gpuidart port:
 **Symptom:** When the sessions table is empty, gpuidart renders an inbox icon plus a stray '✕' glyph where the empty-state label should be (see `docs/internal/proofs/proof-screenshots/approve-after.png` — "No pending approvals" state).
 **Expected:** The empty-state label text renders (no stray glyphs).
 **Note:** Do NOT patch around this in supercli-app; this is a gpuidart renderer issue for Amein.
+
+## P0 gaps from the macOS Swift port (2026-09-26)
+
+Porting the 40 macOS views + 12 app-kit widgets
+(`clients/supercli-app/lib/screens/`, `lib/widgets/`,
+branch `track-b-gpuidart-desktop`) surfaced these missing primitives.
+Screens use gpuidart primitives as stopgaps; nothing is patched around.
+
+### P0-9. Resizable split-pane
+**Status:** Missing. **Blocks:** desktop layout parity.
+`RootView.swift` has a draggable sidebar resizer (220–520px, persists to
+UserDefaults) and a per-project right panel with mirrored resize math.
+Today the sidebar is fixed-width with a collapse button only.
+Needed by: `rootview.dart` (RootView).
+
+```dart
+// Sketch
+final layout = UiSplitPane('main-split',
+  direction: SplitDirection.horizontal,
+  panes: [
+    SplitPane(id: 'sidebar', minPx: 220, maxPx: 520, initialPx: 300,
+              collapsible: true),
+    SplitPane(id: 'content', flex: 1),
+  ],
+  onResize: (id, px) => ...,   // persist width
+);
+// events: {type:'split_resize', id, pane, px, revision}
+```
+
+### P0-10. Terminal grid widget
+**Status:** Missing. **Blocks:** terminal pane parity.
+`TerminalPaneView.swift` (2224 lines) embeds a ghostty surface with ANSI
+colors, cursor positioning, scrollback, selection, and IME. Today terminal
+output renders as plain `UiText` rows — no colors, no cursor, no scrollback
+virtualization, no selection.
+Needed by: `terminalpaneview.dart`, `terminalarea.dart`.
+
+```dart
+// Sketch — Rust owns the grid; Dart pushes byte streams and receives
+// selection/input events.
+final term = UiTerminal('pane-1',
+  cols: 120, rows: 40,
+  fontFamily: 'JetBrains Mono', fontSizePx: 13,
+);
+await host.writeTerminal('pane-1', bytes);       // pty output -> grid
+await host.resizeTerminal('pane-1', 120, 40);
+// events: {type:'terminal_input', id, data_b64, revision}
+//         {type:'terminal_selection', id, text, revision}
+```
+
+### P0-11. QR code widget
+**Status:** Missing. **Blocks:** pairing flow parity.
+`HostPickerView.swift` (`RemoteHostPairingSheet`) shows a QR code encoding
+the sealed pairing payload next to the text pairing code. Today the code is
+text-only with a "(QR renders here)" placeholder.
+Needed by: `hostpickerview.dart` (HostPickerView).
+
+```dart
+// Sketch
+final qr = UiQrCode('pairing-qr', data: 'supercli://pair?...', sizePx: 200);
+// Pure renderer: data -> QR matrix, no events.
+```
+
+### P0-12. Canvas drawing primitive
+**Status:** Missing. **Blocks:** gallery markup, canvas pages.
+`SessionGalleryMarkup.swift` (pen/arrow/box/text annotation),
+`CanvasPageView.swift`, and `SurfaceComponentView.swift` need freeform
+2D drawing. Today they render as button rows / vertical stacks.
+Needed by: `sessiongallerymarkup.dart`, `canvaspageview.dart`,
+`surfacecomponentview.dart`.
+
+```dart
+// Sketch
+final canvas = UiCanvas('markup-canvas',
+  strokes: [...],   // vector strokes, rendered in Rust
+  onStroke: (points) => ...,
+);
+// events: {type:'canvas_stroke', id, points, tool, revision}
+```
+
+### P0-13. Drag-and-drop
+**Status:** Missing. **Blocks:** sidebar reorder, plugin reorder.
+`SidebarSessionDrag.swift` ("Dia feel" detached drag card that crosses the
+sidebar edge) and `PluginListDrag.swift` need pointer-drag with a floating
+drag image and drop-target highlighting. Today rows are static.
+Needed by: `sidebarsessiondrag.dart`, `pluginlistdrag.dart`.
+
+```dart
+// Sketch
+final row = UiDraggable('session-row-1',
+  child: ...,
+  dragData: {'sessionId': 's1'},
+  onDrop: (targetId, data) => ...,
+);
+final target = UiDropTarget('sidebar-gap-3', onAccept: ['sessionId']);
+// events: {type:'drop', id, target, data, revision}
+```
+
+### P0-14. Multi-window support
+**Status:** Missing (one host, one window per process). **Blocks:** pop-out terminals.
+`TerminalPaneWindow.swift` pops a terminal pane into its own window.
+Today everything renders in the single window.
+Needed by: `terminalpanewindow.dart` (TerminalPaneWindow).
+
+```dart
+// Sketch
+final win = await host.openWindow(GpuiWindowOptions(title: 'Terminal'));
+await win.publish(UiColumn('detached', [...]));
+// events: {type:'window_closed', windowId, revision}
+```
+
+### P0-15. Tree widget
+**Status:** Missing. **Blocks:** file tree, workspace tree parity.
+`TreeView.swift` (app-kit) is a collapsible hierarchical list with
+indentation and expand/collapse toggles. `UiTable` can't express hierarchy;
+the port flattens with indent strings. Distinct from P0-2 (flat list).
+Needed by: `treeview.dart` (TreeView), file-tree app port.
+
+```dart
+// Sketch
+final tree = UiTree('file-tree', nodes: [
+  UiTreeNode(id: 'src', label: 'src', expanded: true, children: [
+    UiTreeNode(id: 'src/main.rs', label: 'main.rs'),
+  ]),
+]);
+// events: {type:'tree_toggle', id, node, expanded, revision}
+//         {type:'tree_select', id, node, revision}
+```
