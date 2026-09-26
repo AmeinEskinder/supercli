@@ -80,10 +80,17 @@ toml = { version = "0.8", optional = true }
 name = "ssh_host_probe"
 required-features = ["native-host"]
 
-[[example]]
+[[bin]]
 name = "durable_chaos_helper"
+path = "src/bin/durable_chaos_helper.rs"
 required-features = ["native-host"]
 
-[[example]]
+[[bin]]
 name = "scheduled_kill_helper"
+path = "src/bin/scheduled_kill_helper.rs"
+required-features = ["native-host"]
+
+[[bin]]
+name = "subagent_kill_helper"
+path = "src/bin/subagent_kill_helper.rs"
 required-features = ["native-host"]
