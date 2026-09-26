@@ -1,0 +1,225 @@
+use crate::app_paths::machine_home;
+use crate::hook_assets::{read_mergeable_json_object, write_executable_script, write_file_atomic};
+use serde_json::{json, Value};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub(crate) const KIRO_HOOK_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../runtimes/kiro/assets/hooks/lifecycle.sh"
+));
+
+pub fn install() -> Result<(), String> {
+    let script_path = kiro_hook_script_path();
+    write_executable_script(&script_path, KIRO_HOOK_SCRIPT, "Kiro hook script")?;
+    write_kiro_v3_hooks(&script_path)?;
+    write_kiro_v2_agent(&script_path)?;
+    write_kiro_mcp_config()?;
+    Ok(())
+}
+pub(crate) fn kiro_home_dir() -> Option<PathBuf> {
+    std::env::var_os("KIRO_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".kiro")))
+}
+
+pub(crate) fn kiro_hook_script_path() -> PathBuf {
+    machine_home().join("hooks").join("kiro-hook.sh")
+}
+
+pub(crate) fn kiro_v3_hooks_path() -> Option<PathBuf> {
+    Some(kiro_home_dir()?.join("hooks").join("supercli.json"))
+}
+
+pub(crate) fn kiro_v2_agent_path() -> Option<PathBuf> {
+    Some(kiro_home_dir()?.join("agents").join("supercli-runtime.json"))
+}
+
+pub(crate) fn kiro_mcp_path() -> Option<PathBuf> {
+    Some(kiro_home_dir()?.join("settings").join("mcp.json"))
+}
+pub(crate) fn kiro_hook_command(script_path: &Path, event: &str) -> String {
+    format!(
+        "{} {event}",
+        crate::integrations::shared::shell_quote(&script_path.to_string_lossy())
+    )
+}
+
+pub(crate) fn write_kiro_v3_hooks(script_path: &Path) -> Result<(), String> {
+    let Some(path) = kiro_v3_hooks_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create Kiro hooks dir: {error}"))?;
+    }
+    let definitions = [
+        ("session-start", "SessionStart", None),
+        ("prompt", "UserPromptSubmit", None),
+        ("pre-tool", "PreToolUse", Some(".*")),
+        ("post-tool", "PostToolUse", Some(".*")),
+        ("stop", "Stop", None),
+    ];
+    let hooks = definitions
+        .into_iter()
+        .map(|(name, trigger, matcher)| {
+            let mut hook = json!({
+                "name": format!("supercli-{name}"),
+                "trigger": trigger,
+                "action": {
+                    "type": "command",
+                    "command": kiro_hook_command(script_path, trigger),
+                },
+                "timeout": 5,
+            });
+            if let Some(matcher) = matcher {
+                hook["matcher"] = Value::String(matcher.to_string());
+            }
+            hook
+        })
+        .collect::<Vec<_>>();
+    let config = json!({ "version": "v1", "hooks": hooks });
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|error| format!("Failed to serialize Kiro v3 hooks: {error}"))?;
+    write_file_atomic(&path, &format!("{serialized}\n"), "Kiro v3 hooks")
+}
+
+pub(crate) fn write_kiro_v2_agent(script_path: &Path) -> Result<(), String> {
+    let Some(path) = kiro_v2_agent_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create Kiro agents dir: {error}"))?;
+    }
+    let entry = |event: &str| json!({ "command": kiro_hook_command(script_path, event) });
+    let matched_entry = |event: &str| {
+        json!({
+            "matcher": "*",
+            "command": kiro_hook_command(script_path, event),
+        })
+    };
+    let config = json!({
+        "name": "supercli-runtime",
+        "description": "Supercli lifecycle integration for Kiro CLI v1/v2.",
+        "prompt": Value::Null,
+        "mcpServers": {},
+        "tools": ["*"],
+        "allowedTools": [],
+        "resources": [],
+        "includeMcpJson": true,
+        "hooks": {
+            "agentSpawn": [entry("agentSpawn")],
+            "userPromptSubmit": [entry("userPromptSubmit")],
+            "preToolUse": [matched_entry("preToolUse")],
+            "postToolUse": [matched_entry("postToolUse")],
+            "stop": [entry("stop")],
+        }
+    });
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|error| format!("Failed to serialize Kiro v2 agent: {error}"))?;
+    write_file_atomic(&path, &format!("{serialized}\n"), "Kiro v2 agent")
+}
+
+pub(crate) fn write_kiro_mcp_config() -> Result<(), String> {
+    let Some(path) = kiro_mcp_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create Kiro MCP dir: {error}"))?;
+    }
+    let _settings_lock = crate::app_state::lock_exclusive(&path)?;
+    let Some(mut config) = read_mergeable_json_object(&path, "Kiro mcp.json")? else {
+        return Ok(());
+    };
+    let root = config.as_object_mut().unwrap();
+    let servers = root.entry("mcpServers").or_insert_with(|| json!({}));
+    // Never replace a non-object user value with an Supercli-only map.
+    if !servers.is_object() {
+        return Ok(());
+    }
+    let shim = crate::integrations::install::write_mcp_shim()?;
+    let servers = servers.as_object_mut().unwrap();
+    servers.insert("supercli".into(), kiro_mcp_server_value(&shim));
+    // Prune the pre-rename `supercli-mcp` entry only when its argv matches an
+    // Supercli-owned Kiro server. Keep the legacy argv recognizable across the
+    // migration to the provider-neutral MCP gate.
+    if servers
+        .get("supercli-mcp")
+        .is_some_and(is_owned_kiro_mcp_entry)
+    {
+        servers.remove("supercli-mcp");
+    }
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|error| format!("Failed to serialize Kiro mcp.json: {error}"))?;
+    write_file_atomic(&path, &format!("{serialized}\n"), "Kiro mcp.json")
+}
+
+pub(crate) fn kiro_mcp_server_value(shim: &Path) -> Value {
+    json!({
+        "command": shim.to_string_lossy(),
+        "args": [],
+        // Kiro v3 intentionally gives MCP subprocesses only the variables
+        // declared in this block. Every hosted shell exports these generic
+        // Supercli variables, so concurrent Kiro sessions each resolve their
+        // own identity and home without rewriting the shared settings file;
+        // the shim's gate reads the Session's grants from its manifest.
+        "env": {
+            "SUPERCLI_SESSION_ID": "${SUPERCLI_SESSION_ID}",
+            "SUPERCLI_SESSION_DIR": "${SUPERCLI_SESSION_DIR}",
+            "SUPERCLI_APP_PORT": "${SUPERCLI_APP_PORT}",
+            "SUPERCLI_HOME": "${SUPERCLI_HOME}",
+            "SUPERCLI_HOST_BIN": "${SUPERCLI_HOST_BIN}",
+            "SUPERCLI_APP_PORT_REGISTRY_FILE": "${SUPERCLI_APP_PORT_REGISTRY_FILE}",
+            "SUPERCLI_HOOK_TRACE_FILE": "${SUPERCLI_HOOK_TRACE_FILE}",
+        },
+    })
+}
+
+fn is_owned_kiro_mcp_entry(entry: &Value) -> bool {
+    let Some(args) = entry.get("args").and_then(Value::as_array) else {
+        return false;
+    };
+    let argv = args.iter().filter_map(Value::as_str).collect::<Vec<_>>();
+    matches!(argv.as_slice(), ["__kiro_mcp__"])
+        || matches!(
+            argv.as_slice(),
+            [gate, kind]
+                if *gate == crate::mcp_gate::MCP_GATE_ARG
+                    && *kind == crate::mcp_gate::UNIFIED_KIND
+        )
+        || (argv.is_empty()
+            && entry
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(crate::integrations::install::is_mcp_shim_command))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migration_recognizes_only_supercli_owned_kiro_server_argv() {
+        assert!(is_owned_kiro_mcp_entry(
+            &json!({ "args": ["__kiro_mcp__"] })
+        ));
+        assert!(is_owned_kiro_mcp_entry(&json!({
+            "args": [crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::UNIFIED_KIND]
+        })));
+        assert!(!is_owned_kiro_mcp_entry(&json!({
+            "args": [crate::mcp_gate::MCP_GATE_ARG, crate::mcp_gate::SESSIONS_KIND]
+        })));
+        assert!(!is_owned_kiro_mcp_entry(
+            &json!({ "args": ["custom-server"] })
+        ));
+        assert!(is_owned_kiro_mcp_entry(
+            &json!({ "command": "/home/me/.supercli/bin/supercli-mcp", "args": [] })
+        ));
+        assert!(!is_owned_kiro_mcp_entry(
+            &json!({ "command": "/usr/local/bin/other-mcp", "args": [] })
+        ));
+    }
+}

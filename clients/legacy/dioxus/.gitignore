@@ -1,0 +1,4 @@
+# Rust build output — never stage this (a past `git add -A -N` scooped up
+# 23k+ build-cache files as intent-to-add entries and made `git status`
+# take minutes; they were unstaged, working tree untouched).
+target/

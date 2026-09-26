@@ -1,0 +1,410 @@
+//! Host-owned execution context for the public App Kit.
+//!
+//! Apps must not parse manifests, app-state, native defaults, or the workspace
+//! registry themselves. This module resolves those sources into one small,
+//! versioned response shared by native and headless Hosts.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use serde::Serialize;
+use supercli_core::session_host::HostedSessionManifest;
+use supercli_core::state::AppState;
+
+use crate::overlay::NativeOverlay;
+
+const CONTEXT_VERSION: u32 = 1;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct WorkspaceContext {
+    id: Option<String>,
+    name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct ProjectContext {
+    id: String,
+    name: String,
+    path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct WorktreeContext {
+    path: String,
+    branch: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct UserContext {
+    id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AppContextResponse {
+    version: u32,
+    session_id: String,
+    workspace: Option<WorkspaceContext>,
+    project: Option<ProjectContext>,
+    worktree: Option<WorktreeContext>,
+    user: Option<UserContext>,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectRecord {
+    id: String,
+    name: String,
+    path: String,
+    parent_id: Option<String>,
+    worktree_branch: Option<String>,
+}
+
+pub(crate) fn response_with_overlay(
+    manifest: &HostedSessionManifest,
+    overlay: Option<&NativeOverlay>,
+) -> String {
+    let app_state = crate::sessions::load_app_state();
+    let records = project_records(app_state.as_ref(), overlay);
+    let (project, worktree) = resolve_project(
+        &manifest.session.project_id,
+        manifest.session.worktree_path.as_deref(),
+        manifest.session.worktree_branch.as_deref(),
+        &manifest.cwd,
+        &records,
+    );
+    let user_id = manifest.session.owner_principal_id.clone().or_else(|| {
+        supercli_core::relay_uplink::ensure_host_id()
+            .ok()
+            .map(|host_id| supercli_core::state::host_owner_principal_id(&host_id))
+    });
+    let user = user_id
+        .filter(|id| supercli_core::state::valid_session_attribution_id(id))
+        .map(|id| UserContext { id });
+    let response = AppContextResponse {
+        version: CONTEXT_VERSION,
+        session_id: manifest.session.id.clone(),
+        workspace: Some(current_workspace(overlay)),
+        project,
+        worktree,
+        user,
+    };
+    serde_json::to_string(&response).unwrap_or_else(|_| {
+        format!(
+            r#"{{"version":{CONTEXT_VERSION},"session_id":"","workspace":null,"project":null,"worktree":null,"user":null}}"#
+        )
+    })
+}
+
+fn project_records(
+    app_state: Option<&AppState>,
+    overlay: Option<&NativeOverlay>,
+) -> HashMap<String, ProjectRecord> {
+    let mut records = HashMap::new();
+    if let Some(app_state) = app_state {
+        for project in &app_state.projects {
+            records.insert(
+                project.id.clone(),
+                ProjectRecord {
+                    id: project.id.clone(),
+                    name: project.name.clone(),
+                    path: project.path.clone(),
+                    parent_id: project.parent_project_id.clone(),
+                    worktree_branch: project.worktree_branch.clone(),
+                },
+            );
+        }
+    }
+    if let Some(overlay) = overlay {
+        for (id, name) in &overlay.projects {
+            let path = overlay.project_paths.get(id).cloned().unwrap_or_default();
+            let child = overlay.child_parents.get(id);
+            let record = records.entry(id.clone()).or_insert_with(|| ProjectRecord {
+                id: id.clone(),
+                name: name.clone(),
+                path: path.clone(),
+                parent_id: child.map(|(parent, _)| parent.clone()),
+                worktree_branch: child.and_then(|(_, branch)| branch.clone()),
+            });
+            record.name.clone_from(name);
+            if !path.is_empty() {
+                record.path = path;
+            }
+            if let Some((parent, branch)) = child {
+                record.parent_id = Some(parent.clone());
+                record.worktree_branch.clone_from(branch);
+            }
+        }
+    }
+    records
+}
+
+fn resolve_project(
+    project_id: &str,
+    session_worktree_path: Option<&str>,
+    session_worktree_branch: Option<&str>,
+    cwd: &str,
+    records: &HashMap<String, ProjectRecord>,
+) -> (Option<ProjectContext>, Option<WorktreeContext>) {
+    let selected = records.get(project_id);
+    let selected_is_worktree = selected
+        .is_some_and(|project| project.parent_id.is_some() && project.worktree_branch.is_some());
+    let base = if selected_is_worktree {
+        selected
+            .and_then(|project| project.parent_id.as_deref())
+            .and_then(|parent| records.get(parent))
+            .or(selected)
+    } else {
+        selected
+    };
+    let project = base.and_then(|project| {
+        let path = absolute_wire_path(&project.path)?;
+        valid_wire_text(&project.id, 256)
+            .then_some(())
+            .and_then(|()| valid_wire_text(&project.name, 1024).then_some(()))?;
+        Some(ProjectContext {
+            id: project.id.clone(),
+            name: project.name.clone(),
+            path,
+        })
+    });
+
+    let selected_worktree_branch = selected_is_worktree
+        .then(|| selected.and_then(|project| project.worktree_branch.clone()))
+        .flatten();
+    let selected_worktree_path = selected_is_worktree
+        .then(|| selected.map(|project| project.path.clone()))
+        .flatten();
+    let branch = session_worktree_branch
+        .map(str::to_owned)
+        .or(selected_worktree_branch);
+    let path = session_worktree_path
+        .map(str::to_owned)
+        .or(selected_worktree_path)
+        .or_else(|| branch.is_some().then(|| cwd.to_owned()));
+    let worktree = path.and_then(|path| {
+        let path = absolute_wire_path(&path)?;
+        if branch
+            .as_deref()
+            .is_some_and(|branch| !valid_wire_text(branch, 1024))
+        {
+            return None;
+        }
+        Some(WorktreeContext { path, branch })
+    });
+    (project, worktree)
+}
+
+fn current_workspace(overlay: Option<&NativeOverlay>) -> WorkspaceContext {
+    let explicit_home = std::env::var_os("SUPERCLI_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty());
+    let real_supercli = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".supercli");
+    workspace_at(explicit_home.as_deref(), &real_supercli, overlay)
+}
+
+/// The name Controllers should show for THIS Host when it serves an isolated
+/// workspace (`SUPERCLI_HOME` other than the real `~/.supercli`): the registered
+/// workspace name — exactly what the desktop's workspace picker shows — so a
+/// phone paired to two workspaces on one Mac can tell them apart instead of
+/// seeing the hostname twice. `None` for the default workspace, which keeps
+/// naming itself after the Mac.
+pub(crate) fn isolated_workspace_name() -> Option<String> {
+    let explicit_home = std::env::var_os("SUPERCLI_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())?;
+    let real_supercli = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".supercli");
+    isolated_workspace_name_at(&explicit_home, &real_supercli)
+}
+
+/// The name this Host advertises to Controllers: pairing invitations,
+/// bootstrap `macName`, and the Bonjour service a Nearby list shows. It is
+/// the workspace's own name — a registered workspace's picker name, or the
+/// default workspace's rename — and only an unnamed default workspace falls
+/// back to the machine's user-facing name. Never the raw DNS hostname.
+pub(crate) fn advertised_host_name(overlay: Option<&NativeOverlay>) -> String {
+    isolated_workspace_name()
+        .or_else(|| {
+            overlay
+                .and_then(|overlay| overlay.default_workspace_name.clone())
+                .filter(|name| valid_wire_text(name, 1024))
+        })
+        .unwrap_or_else(supercli_core::host_name::machine_display_name)
+}
+
+fn isolated_workspace_name_at(explicit_home: &Path, real_supercli: &Path) -> Option<String> {
+    if normalized_path(explicit_home) == normalized_path(real_supercli) {
+        return None;
+    }
+    Some(workspace_at(Some(explicit_home), real_supercli, None).name)
+}
+
+fn workspace_at(
+    explicit_home: Option<&Path>,
+    real_supercli: &Path,
+    overlay: Option<&NativeOverlay>,
+) -> WorkspaceContext {
+    let Some(explicit_home) = explicit_home else {
+        return WorkspaceContext {
+            id: Some("default".to_string()),
+            name: overlay
+                .and_then(|overlay| overlay.default_workspace_name.clone())
+                .filter(|name| valid_wire_text(name, 1024))
+                .unwrap_or_else(|| "Personal".to_string()),
+        };
+    };
+    let target = normalized_path(explicit_home);
+    if let Some(record) = supercli_core::app_paths::read_workspace_registry(real_supercli)
+        .into_iter()
+        .find(|record| normalized_path(&record.home) == target)
+    {
+        if valid_wire_text(&record.name, 1024) {
+            return WorkspaceContext {
+                id: valid_wire_text(&record.id, 256).then_some(record.id),
+                name: record.name,
+            };
+        }
+    }
+    let name = explicit_home
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| valid_wire_text(name, 1024))
+        .unwrap_or("Workspace")
+        .to_string();
+    WorkspaceContext { id: None, name }
+}
+
+fn normalized_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn absolute_wire_path(value: &str) -> Option<String> {
+    (Path::new(value).is_absolute() && valid_wire_text(value, 16_384)).then(|| value.to_string())
+}
+
+fn valid_wire_text(value: &str, maximum_bytes: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= maximum_bytes
+        && value.trim() == value
+        && !value.chars().any(char::is_control)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worktree_children_resolve_to_the_base_project_and_checkout() {
+        let records = HashMap::from([
+            (
+                "base".to_string(),
+                ProjectRecord {
+                    id: "base".into(),
+                    name: "Supercli".into(),
+                    path: "/repo".into(),
+                    parent_id: None,
+                    worktree_branch: None,
+                },
+            ),
+            (
+                "child".to_string(),
+                ProjectRecord {
+                    id: "child".into(),
+                    name: "Feature".into(),
+                    path: "/repo-feature".into(),
+                    parent_id: Some("base".into()),
+                    worktree_branch: Some("feature/context".into()),
+                },
+            ),
+        ]);
+        let (project, worktree) = resolve_project("child", None, None, "/repo-feature", &records);
+        assert_eq!(project.unwrap().path, "/repo");
+        assert_eq!(
+            worktree.unwrap(),
+            WorktreeContext {
+                path: "/repo-feature".into(),
+                branch: Some("feature/context".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn workspace_resolution_uses_registry_and_default_overlay_names() {
+        let root =
+            std::env::temp_dir().join(format!("supercli-app-context-{}", uuid::Uuid::new_v4()));
+        let scoped = root.join("profiles/work");
+        std::fs::create_dir_all(&scoped).unwrap();
+        std::fs::write(
+            root.join("profiles.json"),
+            serde_json::json!({
+                "version": 1,
+                "profiles": [{"id":"workspace-1","name":"Work","home":scoped}]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            workspace_at(Some(&scoped), &root, None),
+            WorkspaceContext {
+                id: Some("workspace-1".into()),
+                name: "Work".into(),
+            }
+        );
+        // The Controller-facing Host name follows the same registry: a
+        // registered workspace is named like the desktop picker names it,
+        // an unregistered home falls back to its folder, and the default
+        // workspace keeps the hostname (None here).
+        assert_eq!(
+            isolated_workspace_name_at(&scoped, &root).as_deref(),
+            Some("Work")
+        );
+        let unregistered = root.join("profiles/scratch");
+        std::fs::create_dir_all(&unregistered).unwrap();
+        assert_eq!(
+            isolated_workspace_name_at(&unregistered, &root).as_deref(),
+            Some("scratch")
+        );
+        assert_eq!(isolated_workspace_name_at(&root, &root), None);
+
+        let overlay = NativeOverlay {
+            default_workspace_name: Some("Personal renamed".into()),
+            ..NativeOverlay::default()
+        };
+        assert_eq!(
+            workspace_at(None, &root, Some(&overlay)),
+            WorkspaceContext {
+                id: Some("default".into()),
+                name: "Personal renamed".into(),
+            }
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn advertised_host_name_prefers_the_workspace_rename_over_the_machine() {
+        let overlay = NativeOverlay {
+            default_workspace_name: Some("Supercli".into()),
+            ..NativeOverlay::default()
+        };
+        // A default-home worker (no SUPERCLI_HOME in this test process) names
+        // itself after the renamed default workspace.
+        if std::env::var_os("SUPERCLI_HOME").is_none_or(|home| home.is_empty()) {
+            assert_eq!(advertised_host_name(Some(&overlay)), "Supercli");
+        }
+        let machine = advertised_host_name(None);
+        assert!(!machine.is_empty());
+        assert!(
+            !machine.ends_with(".lan") && !machine.ends_with(".local"),
+            "{machine}"
+        );
+        let blank = NativeOverlay {
+            default_workspace_name: Some("   ".into()),
+            ..NativeOverlay::default()
+        };
+        assert_eq!(advertised_host_name(Some(&blank)), machine);
+    }
+}

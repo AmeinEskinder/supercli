@@ -1,0 +1,26 @@
+# SuperCLI Host service, one workspace — Linux systemd user template unit.
+#
+# The scoped single-workspace shape (`supercli --workspace NAME serve`) for
+# containers and explicitly scoped units. Most machines want the plain
+# supercli-serve.service instead, which supervises every registered workspace.
+#
+#   cp supercli-serve@.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now supercli-serve@NAME.service
+#
+# Requires `supercli` at /usr/local/bin/supercli (the install.sh default) and a
+# registered workspace NAME (`supercli workspaces add NAME`). Headless boxes
+# need `sudo loginctl enable-linger <user>`. Do not run the plain machine
+# unit and a scoped unit for the same workspace at once; the workspace lease
+# makes the second owner report it as external rather than compete.
+
+[Unit]
+Description=SuperCLI Host service (workspace %i)
+
+[Service]
+ExecStart=/usr/local/bin/supercli --workspace %i serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

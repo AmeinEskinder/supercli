@@ -1,0 +1,19 @@
+[package]
+name = "supercli-desktop"
+version = "0.8.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Supercli desktop client (Dioxus) — Codex-like chat GUI over the Host protocol"
+
+[[bin]]
+name = "supercli-desktop"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true, features = ["desktop", "launch"] }
+supercli-ui = { workspace = true }
+supercli-client = { workspace = true }
+supercli-core = { path = "../../../crates/supercli-core", default-features = false, features = ["native-host"] }
+serde_json = { workspace = true }
+base64 = "0.22"

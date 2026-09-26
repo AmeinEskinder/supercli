@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "license-notices",
+    "supercli-core",
+    "supercli-host",
+    "supercli-apps",
+    "supercli-serve",
+    "supercli-cli",
+    "supercli-native-bridge",
+    "supercli-client",
+    "supercli-connector",
+    "supercli-device",
+    "supercli-load",
+    "supercli-events",
+]
+# The first-party Apps and the App Kit are their own workspace
+# (`crates/apps/Cargo.toml`): separate cadence, separate versions, and a
+# TUI dependency tree the Host's gates should not pay for.
+exclude = ["apps"]
+
+[workspace.package]
+version = "0.9.0"
+edition = "2021"
+# Locked dependencies (notably plist/time/instability) require Rust 1.88.
+# Keep this honest with the MSRV check in .github/workflows/linux-cli.yml.
+rust-version = "1.88.0"
+license = "MIT"
+authors = ["Supercli"]
+
+[profile.release]
+# R3: fast optimized builds for the Host, CLI, and launchers.
+# - lto = "thin" + codegen-units = 16: parallel codegen, fast link
+# - strip: remove debug symbols
+# - panic = "unwind": REQUIRED for R2's catch_unwind panic safety.
+#   panic = "abort" would silently disable the request-boundary and
+#   mid-call panic catches (all of R2 stops working in release).
+strip = true
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+
+[profile.dist]
+# R3: maximum-optimization distribution builds. Inherits release (so
+# panic = "unwind" is preserved) and tightens LTO + codegen units for the
+# smallest/slowest-link binaries. Only used where the extra link time is
+# affordable.
+inherits = "release"
+lto = "fat"
+codegen-units = 1

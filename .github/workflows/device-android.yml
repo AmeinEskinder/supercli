@@ -1,0 +1,111 @@
+# Headless Android emulator proof for the native scrcpy client.
+#
+# Runs on every push to track-b-device (and manual dispatch). Boots a real
+# emulator with KVM (no window, no audio), then drives it through
+# crates/supercli-device/src/scrcpy_native.rs at two resolutions:
+#   - full device resolution (1080x2400, max_size unset)
+#   - max_size=720
+# Each run:
+#   - connects (jar deploy + SHA-256, port forward, server start,
+#     v2.x forward-tunnel handshake)
+#   - fps measured over 60 s WHILE ANIMATING (Settings + fling-scroll loop:
+#     scrcpy only emits frames on screen change, so static-screen fps is
+#     meaningless). The emulator's OWN render rate (dumpsys gfxinfo) is
+#     recorded alongside, so we know whether the renderer or the
+#     (software) encoder is the bottleneck.
+#   - tap-to-frame p50/p95: native control channel vs `adb shell input`
+#     (20 trials each, swipe-up/HOME alternating; no-frame-in-1s = miss)
+#   - two-pointer pinch
+#
+# CI is a CORRECTNESS gate, not a performance gate: the runner has no GPU
+# (SwiftShader + software encode on 2-4 vCPUs), so 60 fps is not achievable
+# there. Gates: handshake works, >= 100 packets, pinch ok, HOME ok,
+# misses <= 10%, control p50 < adb p50. fps and latency are recorded as
+# NUMBERS in metrics.json, not gates.
+#
+# Uploads: screenshot.png, test-10s.mkv, metrics.json (both resolutions),
+# per-run logs and metrics.
+#
+# Device profile: pixel_7 (1080x2400) so the numbers mean something; the
+# default tiny skin (320x640) is not representative. max_size is unset.
+# disable-animations=false: we WANT the screen animating for the fps window,
+# and animated drawer/HOME transitions give the latency trials frames.
+#
+# Choice of runner action: ReactiveCircus/android-emulator-runner@v2 is the
+# de-facto standard (used by google/iosched etc.); it handles SDK install,
+# AVD creation, KVM accel detection and boot-wait reliably. A hand-rolled
+# sdkmanager flow would duplicate all of that.
+#
+# GOTCHA (run #1, exit 127): the action executes each LINE of its `script:`
+# input as a separate `sh -c '<line>'` (see parseScript in the action source).
+# Backslash continuations, `export`, and `cd` do not survive across lines, so
+# the e2e logic lives in android-e2e.sh, invoked here via a single line.
+
+name: device-android
+
+on:
+  push:
+    branches: [track-b-device]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.88.0"
+
+jobs:
+  android-headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm || echo "NO /dev/kvm (emulator will fall back to software accel)"
+
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+
+      - name: Headless emulator + native scrcpy e2e
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          # Real device profile (1080x2400); the default skin is 320x640.
+          profile: pixel_7
+          # We measure fps while animating: keep window animations on.
+          disable-animations: false
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back webcam0
+          # Single line: the action runs each script: line as its own sh -c,
+          # so the multi-line e2e logic lives in android-e2e.sh.
+          script: bash "$GITHUB_WORKSPACE/.github/workflows/android-e2e.sh"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-results
+          path: |
+            e2e-full.log
+            e2e-720.log
+            e2e-logcat.txt
+            e2e-logcat-scrcpy.txt
+            e2e-server-ps.txt
+            screenshot.png
+            test-10s.mkv
+            metrics.json
+            metrics-full.json
+            metrics-720.json
+            smoke-server.log
+            scrcpy-server-*.stdout.log
+            scrcpy-server-*.stderr.log
+          # Logs exist even when the test fails; the media files and
+          # per-run metrics only exist when their run completes.
+          if-no-files-found: warn

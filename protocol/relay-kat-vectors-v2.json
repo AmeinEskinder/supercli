@@ -1,0 +1,5 @@
+{
+  "_comment": "Cross-language known-answer vectors for the relay E2E crypto. Regenerated for protocol v2 (supercli-relay-v2 labels). No deployed v1 clients exist.",
+  "transcriptMAC": "DOrpKR7/ooVOBLEnGAlALJsVDUDMjygs05/83+GLxdI=",
+  "sealedFrame": "AAAAAAAAAAFDQwuCO9x63TOIs79+6KpAlNJkP8QanN4KN3I7IZEQJy9H1V9SNQ=="
+}

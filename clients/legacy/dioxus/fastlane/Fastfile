@@ -1,0 +1,63 @@
+# Fastlane for the Dioxus iOS app (Track B).
+#
+# Everything secret comes from the environment — nothing is committed here.
+# See docs/APPLE_SETUP.md for the operator inputs this lane needs.
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload the Dioxus mobile app to TestFlight"
+  lane :testflight do
+    # Operator inputs (all required; fail fast with a clear message).
+    %w[
+      UNPEEL_APPLE_ID
+      UNPEEL_TEAM_ID
+      UNPEEL_APP_IDENTIFIER
+      APP_STORE_CONNECT_API_KEY_ID
+      APP_STORE_CONNECT_API_ISSUER_ID
+      APP_STORE_CONNECT_API_KEY_BASE64
+    ].each do |var|
+      UI.user_error!("Set #{var} in the environment before running this lane.") if ENV[var].to_s.empty?
+    end
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+      key_content: Base64.decode64(ENV["APP_STORE_CONNECT_API_KEY_BASE64"]),
+      is_key_content_base64: false
+    )
+
+    # 1. Build the Rust core + iOS bridge staticlib for the device target.
+    sh("cargo", "build", "--release", "-p", "unpeel-ios-bridge",
+       "--target", "aarch64-apple-ios")
+
+    # 2. Bundle the Dioxus mobile launcher as an unsigned .app, then let
+    #    Xcode archive it so signing happens in one place (the Xcode
+    #    project that hosts the WKWebView shell + Swift bridges).
+    sh("dx", "bundle", "--platform", "ios", "--package", "unpeel-mobile")
+
+    # 3. Archive + export through the Xcode shell project.
+    gym(
+      scheme: "UnpeelDioxusShell",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          ENV["UNPEEL_APP_IDENTIFIER"] => ENV.fetch("UNPEEL_PROVISIONING_PROFILE_NAME", "match AppStore #{ENV['UNPEEL_APP_IDENTIFIER']}")
+        }
+      }
+    )
+
+    # 4. Upload to TestFlight.
+    pilot(
+      api_key: api_key,
+      app_identifier: ENV["UNPEEL_APP_IDENTIFIER"],
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Build a simulator .app for MobAI device tests (no signing)"
+  lane :simulator do
+    sh("dx", "bundle", "--platform", "ios", "--package", "unpeel-mobile")
+  end
+end

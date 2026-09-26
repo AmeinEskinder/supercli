@@ -1,0 +1,23 @@
+{
+  "name": "supercli-workspace",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test:release": "node --test scripts/release-*.test.mjs",
+    "generate:runtimes": "bun scripts/generate-runtime-client-catalog.mjs && bun scripts/generate-runtime-client-catalog.mjs --out clients/legacy/shared/SupercliShared/Sources/SuperCLIShared/GeneratedRuntimeCatalog.swift",
+    "check:runtimes": "bun scripts/generate-runtime-client-catalog.mjs --check && bun scripts/generate-runtime-client-catalog.mjs --check --out generated/GeneratedRuntimeCatalog.swift && bun scripts/generate-runtime-client-catalog.mjs --check --out clients/legacy/shared/SupercliShared/Sources/SuperCLIShared/GeneratedRuntimeCatalog.swift",
+    "test:runtimes": "bun test runtimes/hook-plugins.test.js",
+    "validate:runtimes": "bun run check:runtimes && bun run test:runtimes && cargo test --manifest-path crates/Cargo.toml -p supercli-core runtime_catalog",
+    "release:cli": "node scripts/release-cli.mjs",
+    "release:app": "node scripts/release-app.mjs",
+    "apps:link": "scripts/apps-link.sh",
+    "test:apps": "cargo test --manifest-path crates/apps/Cargo.toml --workspace",
+    "release:cli:linux": "scripts/build-cli-linux.sh",
+    "release:mac": "clients/native/release.sh",
+    "dev:native": "clients/native/dev-app.sh",
+    "dev:native:blank": "clients/native/dev-blank.sh"
+  },
+  "devDependencies": {
+    "wrangler": "^4.110.0"
+  }
+}

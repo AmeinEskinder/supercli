@@ -1,0 +1,20 @@
+# Unpeel Dioxus mobile: dictation toggle on and off
+# Tags: smoke, dictation
+# Timeout: 120000
+# Param: bundle_id = com.unpeel.controller
+# Param: session_id
+
+app "${bundle_id}"
+wait_for @"new-session-button" timeout:30000
+tap @"session-row-${session_id}" type:cell
+wait_for @"terminal-view" timeout:15000
+
+# Start dictation from the terminal shell; the recognizer shows listening.
+tap @"dictation-toggle" type:button
+wait_for @"dictation-status" timeout:15000
+assert_exists @"dictation-status"
+
+# Stop it again. No audio is asserted — this is a control-plane smoke test;
+# real transcription needs a mic and the iOS shell bridge (see docs/APPLE_SETUP.md).
+tap @"dictation-toggle" type:button
+assert_not_exists @"dictation-status"

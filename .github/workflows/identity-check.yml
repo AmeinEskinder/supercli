@@ -1,0 +1,77 @@
+name: Identity check
+
+# Fails if any NEW commit on supercli branches uses an author or committer
+# email other than Amein's verified GitHub no-reply address.
+# Does not rewrite history; Amein handles old commits separately.
+
+on:
+  push:
+    branches:
+      - 'track-b-*'
+      - 'supercli-*'
+  pull_request:
+    branches:
+      - 'track-b-*'
+      - 'supercli-*'
+
+jobs:
+  identity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check commit identity
+        run: |
+          set -euo pipefail
+          EXPECTED_EMAIL="62555273+AmeinEskinder@users.noreply.github.com"
+          EXPECTED_NAME="Amein Eskinder"
+          
+          # Get the base for comparison (merge-base with main, or previous commit for single-commit pushes)
+          if git rev-parse --verify origin/main >/dev/null 2>&1; then
+            BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
+          else
+            BASE=""
+          fi
+          
+          if [ -z "$BASE" ]; then
+            # No main branch or no merge-base; check the last commit only
+            COMMITS=$(git rev-parse HEAD)
+          else
+            COMMITS=$(git rev-list "${BASE}..HEAD")
+          fi
+          
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to check."
+            exit 0
+          fi
+          
+          FAILED=0
+          for sha in $COMMITS; do
+            AUTHOR_EMAIL=$(git log -1 --format='%ae' "$sha")
+            AUTHOR_NAME=$(git log -1 --format='%an' "$sha")
+            COMMITTER_EMAIL=$(git log -1 --format='%ce' "$sha")
+            COMMITTER_NAME=$(git log -1 --format='%cn' "$sha")
+            
+            if [ "$AUTHOR_EMAIL" != "$EXPECTED_EMAIL" ] || [ "$AUTHOR_NAME" != "$EXPECTED_NAME" ]; then
+              echo "FAIL: $sha has wrong author: $AUTHOR_NAME <$AUTHOR_EMAIL>"
+              echo "  Expected: $EXPECTED_NAME <$EXPECTED_EMAIL>"
+              FAILED=1
+            fi
+            
+            if [ "$COMMITTER_EMAIL" != "$EXPECTED_EMAIL" ] || [ "$COMMITTER_NAME" != "$EXPECTED_NAME" ]; then
+              echo "FAIL: $sha has wrong committer: $COMMITTER_NAME <$COMMITTER_EMAIL>"
+              echo "  Expected: $EXPECTED_NAME <$EXPECTED_EMAIL>"
+              FAILED=1
+            fi
+          done
+          
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "All commits must use:"
+            echo "  git config user.name \"Amein Eskinder\""
+            echo "  git config user.email \"62555273+AmeinEskinder@users.noreply.github.com\""
+            exit 1
+          fi
+          
+          echo "All new commits use the correct identity."

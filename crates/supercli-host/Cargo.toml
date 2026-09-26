@@ -1,0 +1,29 @@
+[package]
+name = "supercli-host"
+description = "Standalone Supercli session host, Host-service launcher, and unified Supercli MCP server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "supercli-host"
+path = "src/main.rs"
+
+[features]
+# Allocator spike (Round 3, Lane 2): swap the global allocator for mimalloc.
+# Default-off; adoption is a coordinator decision from paired bench numbers.
+mimalloc = ["dep:mimalloc", "supercli-core/mimalloc"]
+
+[dependencies]
+supercli-core = { version = "0.9.0", path = "../supercli-core" }
+supercli-serve = { version = "0.9.0", path = "../supercli-serve" }
+# MIT (crate and the Microsoft C library it vendors); compiled via `cc`, so
+# it builds for the gnu Linux targets in .github/workflows/linux-cli.yml.
+mimalloc = { version = "0.1", optional = true, default-features = false }
+
+[dev-dependencies]
+base64 = "0.22"
+libc = "0.2"
+serde_json = "1"

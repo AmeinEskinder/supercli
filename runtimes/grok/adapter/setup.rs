@@ -1,0 +1,114 @@
+use crate::app_paths::machine_home;
+use crate::hook_assets::{write_executable_script, write_file_atomic};
+use serde_json::json;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub(crate) const GROK_HOOK_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../runtimes/grok/assets/hooks/lifecycle.sh"
+));
+
+pub fn install() -> Result<(), String> {
+    // Grok-native hooks map argv[1] -> Supercli lifecycle events and POST to the
+    // hook port. SessionStart only latches provider metadata; UserPromptSubmit
+    // is the turn-opening busy event. Grok also scans Claude/Cursor hook files;
+    // those Supercli scripts no-op when GROK_SESSION_ID is set so a Claude-shaped
+    // session_start cannot latch busy. Real attention comes from
+    // Notification/PreToolUse in supercli.json.
+    let script_path = grok_hook_script_path();
+    write_executable_script(&script_path, GROK_HOOK_SCRIPT, "Grok hook script")?;
+    ensure_grok_hooks(&script_path)?;
+    Ok(())
+}
+
+pub(crate) fn grok_hook_script_path() -> PathBuf {
+    machine_home().join("hooks").join("grok-hook.sh")
+}
+
+pub(crate) fn grok_hooks_path() -> Option<PathBuf> {
+    // Grok merges every `*.json` under ~/.grok/hooks/ (global hooks are always
+    // trusted). We own `supercli.json`, so it can be rewritten wholesale.
+    dirs::home_dir().map(|home| home.join(".grok").join("hooks").join("supercli.json"))
+}
+pub(crate) fn ensure_grok_hooks(script_path: &Path) -> Result<(), String> {
+    let Some(hooks_path) = grok_hooks_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = hooks_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create Grok hooks dir {}: {e}", parent.display()))?;
+    }
+
+    let _lock = crate::app_state::lock_exclusive(&hooks_path)?;
+    let json = grok_hooks_json(script_path)?;
+    write_file_atomic(&hooks_path, &format!("{json}\n"), "Grok hooks")?;
+
+    Ok(())
+}
+
+pub(crate) fn grok_hooks_json(script_path: &Path) -> Result<String, String> {
+    let command = script_path.to_string_lossy();
+    // Grok-native event names (10-hooks.md): SessionStart means the interactive
+    // CLI opened, not that the agent is working, so it only latches provider
+    // metadata. UserPromptSubmit drives busy; turn/session end events drive
+    // idle. Attention is wired from
+    // approval_required notifications and ask_user_question PreToolUse only —
+    // not generic Notification/Stop pairs (those stuck sessions yellow) and
+    // not Cursor-compat beforeShellExecution PermissionRequest (auto-approved
+    // noise under --always-approve).
+    let attention_command = format!("{command} Attention");
+    let hooks_json = json!({
+        "hooks": {
+            "SessionStart": [
+                { "hooks": [ { "type": "command", "command": format!("{command} HookSeen") } ] }
+            ],
+            "UserPromptSubmit": [
+                { "hooks": [ { "type": "command", "command": format!("{command} UserPromptSubmit") } ] }
+            ],
+            "Stop": [
+                { "hooks": [ { "type": "command", "command": format!("{command} Stop") } ] }
+            ],
+            "StopFailure": [
+                { "hooks": [ { "type": "command", "command": format!("{command} StopFailure") } ] }
+            ],
+            // Native cancellation covers Ctrl+C/client stops and ordinary
+            // interrupts. The Host's ESC fallback also covers early rewinds,
+            // which omit this event (and can delay the idle notification).
+            "StopCancelled": [
+                { "hooks": [ { "type": "command", "command": format!("{command} StopCancelled") } ] }
+            ],
+            "SessionEnd": [
+                { "hooks": [ { "type": "command", "command": format!("{command} Stop") } ] }
+            ],
+            "Notification": [
+                {
+                    // Grok's session-scoped backstop also covers rewind and
+                    // superseded turns, which can omit all three Stop events.
+                    // Idle is not evidence of successful completion.
+                    "matcher": "^idle_prompt$",
+                    "hooks": [
+                        { "type": "command", "command": format!("{command} Idle") }
+                    ]
+                },
+                {
+                    "matcher": "^(approval_required|permission_prompt)$",
+                    "hooks": [
+                        { "type": "command", "command": attention_command.clone() }
+                    ]
+                }
+            ],
+            "PreToolUse": [
+                {
+                    "matcher": "ask_user_question|AskUserQuestion",
+                    "hooks": [
+                        { "type": "command", "command": attention_command }
+                    ]
+                }
+            ]
+        }
+    });
+
+    serde_json::to_string_pretty(&hooks_json)
+        .map_err(|e| format!("Failed to serialize Grok hooks file: {e}"))
+}
