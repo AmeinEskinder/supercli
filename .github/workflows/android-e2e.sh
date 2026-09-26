@@ -107,6 +107,30 @@ cargo test -p supercli-device --features device \
 TEST_STATUS=$?
 set -e
 echo "=== stage: cargo_test_done exit=$TEST_STATUS (full output in e2e.log) ==="
+
+# --- Publish key diagnostics to the GitHub Step Summary -------------------
+# The step summary is visible on the public Actions run page WITHOUT
+# needing artifact download auth. This is the primary diagnostic channel
+# for agents without GitHub API tokens.
+{
+  echo "## Android E2E Diagnostics"
+  echo ""
+  echo "**Test exit code:** $TEST_STATUS"
+  echo ""
+  echo "### Smoke test results"
+  echo "- Minimal command alive: ${MINIMAL_OK:-unknown}"
+  echo ""
+  echo "### Last 50 lines of e2e.log"
+  echo '```'
+  tail -50 "$GITHUB_WORKSPACE/e2e.log" 2>/dev/null || echo "(no e2e.log)"
+  echo '```'
+  echo ""
+  echo "### scrcpy errors from logcat"
+  echo '```'
+  grep -i "scrcpy\|E/" "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null | tail -20 || echo "(no matches)"
+  echo '```'
+} >> "$GITHUB_STEP_SUMMARY" || true
+echo "=== stage: summary_written ==="
 tail -60 "$GITHUB_WORKSPACE/e2e.log" || true
 
 # Diagnostics are collected even when the test fails (upload step runs
