@@ -115,11 +115,6 @@ pub enum DeviceError {
     Parse(String),
     /// Underlying I/O error.
     Io(io::Error),
-    /// Denied by the approval gate: no human allowed the dangerous operation.
-    Denied {
-        /// What was denied, e.g. "install /tmp/app.apk".
-        op: String,
-    },
 }
 
 impl fmt::Display for DeviceError {
