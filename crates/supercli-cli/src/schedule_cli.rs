@@ -347,7 +347,15 @@ fn run_once(args: &[String]) -> Result<i32, String> {
     }
     let session_dir = session_host::session_dir(&spec.session_id);
     let mut executor = SessionConnectors::resolve(&spec.session_id, &session_dir);
-    let runner = ScheduledRunner::new(SystemClock);
+    // Wire durable runs: scheduled triggers are journaled, and a crash
+    // mid-run is resumed by the next trigger instead of restarted.
+    let runner = match supercli_core::durable_runs::RunsDb::open(&home) {
+        Ok(db) => ScheduledRunner::new(SystemClock).with_durable_runs(db),
+        Err(e) => {
+            eprintln!("warning: durable runs unavailable ({e}); trigger will not be journaled");
+            ScheduledRunner::new(SystemClock)
+        }
+    };
     match runner.run_trigger(spec, &session_dir, &mut executor) {
         Ok(record) => {
             if json {
@@ -428,6 +436,16 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     )
     .map_err(|e| format!("cannot open schedule lease database: {e}"))?;
     let mut scheduler = scheduler.with_lease_store(leases);
+    // Durable runs: journal every trigger; a crash mid-run is resumed by
+    // the next tick instead of restarted from scratch.
+    match supercli_core::durable_runs::RunsDb::open(&home) {
+        Ok(db) => {
+            scheduler = scheduler.with_durable_runs(db);
+        }
+        Err(e) => {
+            eprintln!("warning: durable runs unavailable ({e}); triggers will not be journaled");
+        }
+    }
     let mut make_executor = |session_id: &str, session_dir: &Path| {
         // Fresh connector set per trigger: no state leaks between runs,
         // and the runner puts it in autonomous mode for the run's duration.
