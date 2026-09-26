@@ -256,10 +256,13 @@ fn durable_chaos_sigkill_50_iterations() {
                     // Still running: SIGKILL it (Child::kill sends SIGKILL).
                     child.kill().expect("SIGKILL helper");
                     let status = child.wait().expect("wait after kill");
-                    assert!(
-                        !status.success(),
-                        "run {run_id}: killed helper reported success?"
-                    );
+                    if status.success() {
+                        // TOCTOU: the helper exited on its own in the window
+                        // between try_wait and kill; the SIGKILL landed on an
+                        // already-exited (zombie) process and wait() reaped
+                        // its success status. Treat as a clean exit.
+                        break;
+                    }
                 }
             }
 
