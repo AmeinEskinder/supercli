@@ -1,8 +1,8 @@
 # Document events — Frappe-style `doc_events` for supercli
 
-**Status:** design only. No implementation in this document.
-**Implementation:** new crate `crates/supercli-events`, after the rename lands,
-as a subagent track in parallel with the OpenMuse ideas.
+**Status:** Phase 1 implemented (`crates/supercli-events`, `track-b-events`).
+This document is the spec; the "Implementation status" section below records
+what is wired today.
 **Goal:** users script supercli through document lifecycle hooks, like
 Frappe's `hooks.py` `doc_events` — without a parallel event system.
 
@@ -29,6 +29,66 @@ Two similarly-named things are **not** involved, to avoid confusion:
   pub/sub channel. Doc hooks are a **synchronous interception layer** on the
   document lifecycle, not broadcast messages. The only reuse is the
   post-change `announce` so UIs refresh.
+
+---
+
+## 1a. Implementation status (2026-09-26, `track-b-events`)
+
+The crate exists and is wired into the two safety-critical paths:
+
+```
+crates/supercli-events/
+  src/lib.rs       # DocEvent, DocType, Decision (allow < escalate < reject),
+                   #          HandlerContext, Actor::Hook integration
+  src/registry.rs  # hooks.toml load + merge (global ~/.supercli/hooks.toml
+                   #          + project .supercli/hooks.toml), validation
+  src/handlers.rs  # shell-command executor + localhost-only webhook client
+  src/runner.rs    # dispatcher: sync before_*/validate (priority-ordered,
+                   #          2 s default timeout, tighten-only, depth cap 3)
+  src/outbox.rs    # durable hook-outbox.jsonl, retries with backoff,
+                   #          dead-letter file, boot replay with event-id dedup
+  src/cli.rs       # `hooks list` / `hooks test` / `hooks trace` logic
+```
+
+**Wired emission points:**
+
+| Event | Emission point |
+|---|---|
+| `Approval.before_submit` | `ApprovalHub::answer` (`supercli-serve/src/approvals.rs`) — synchronous, before the answer is applied. A hook may **reject the proposed answer** (the approval stays pending); it can never substitute its own answer. |
+| `Approval.on_submit` / `on_cancel` | same function, after the decision is durably recorded — observers only. |
+| `ToolCall.before_execute` | `SessionConnectors::execute_call` (`supercli-core/src/session_connectors.rs`) — after the write-ahead review is fsynced, before any tool bytes are sent. Installed via `set_before_execute_hook` (same pattern as `outcome_listener`). |
+| `ToolCall` observers | `on_execute` / `on_fail` / `on_outcome_unknown` fire after the outcome entry is durable. |
+
+**Escalate semantics (corrected 2026-09-26):** `escalate` on an Allow-policy
+call does **not** fail closed — it turns Allow into Ask by re-entering the
+normal approval flow, with the hook's reason attached to the approval card.
+The user approves → the tool runs once (the human is the authorizer). The
+user denies → `NeverRan` is recorded, audited, nothing is sent. Autonomous
+mode (no human present) fails closed (`NoHumanPresent`), consistent with the
+Ask path. Escalate on Ask/Deny is a no-op (tighten-only: hooks cannot loosen).
+Rejecting would make `escalate` identical to `reject` and remove the "ask me
+first" use case — that was the shipped-then-fixed bug.
+
+**CLI** (grammar as implemented; the §7 sketch used `<Entity> <event>` and
+was simplified):
+
+- `supercli hooks list [--json]` — merged global + project handlers in
+  effective execution order, with `timeout_ms`, source, and disabled state
+  (disabled handlers show their config error).
+- `supercli hooks test <name>` — dry-runs one handler against a synthetic
+  doc (`dry_run: true`, depth 0). Never touches real docs, never executes
+  tools, never answers approvals. Fail-closed on bad output (exit 2).
+- `supercli hooks trace [--limit N]` — recent hook runs from the audit log:
+  event id, entity/event, handler, decision, elapsed ms, outcome, contract
+  violations (e.g. observer patch ignored).
+
+**Not yet wired:** `Session`, `Turn`, `Run` (`Schedule`/`Job`), `Device`,
+`Grant`, `Connector`, `FileWrite` doctypes (emission points in progress);
+`Idea` is still reserved.
+
+**Tests:** `cargo test -p supercli-events` 30/30; `supercli-core` lib
+991/0/4. Escalate is pinned by two tests: escalate → approval → approve →
+tool runs exactly once; escalate → deny → 0 invocations, `never_ran`.
 
 ---
 
@@ -129,6 +189,9 @@ Decisions form a strictness lattice: `allow < escalate < reject`.
 - A hook can **never**: turn Ask or Deny into Allow, lower strictness in any
   way, or answer an approval. `before_submit` on an Approval may only block
   the proposed answer (approval stays pending); it cannot supply one.
+- `escalate` on an Allow-policy ToolCall re-enters the normal approval flow
+  with the hook's reason attached (see §1a) — it is implemented as Ask, not
+  as fail-closed rejection.
 - Patches are field-scoped per entity (fixed at implementation; e.g. a
   ToolCall patch may add context fields but may not change the tool name or
   widen its arguments). Out-of-scope patch keys are dropped and logged.
@@ -279,12 +342,11 @@ port unchanged to Phase 2 scripts.
   effective execution order (priority, then file precedence), with
   `timeout_ms` and enabled/disabled state. Disabled handlers show their
   config error.
-- `supercli hooks test <Entity> <event> --doc sample.json [--handler name]` —
-  dry run. Loads the doc from file, runs the matching `before_*`/`validate`
-  handlers synchronously against a fake context (`dry_run: true`, depth 0),
-  prints the effective decision, the merged patch, per-handler timings, and
-  the audit entry that *would* be written. **Never touches real docs,
-  never executes tools, never answers approvals.**
+- `supercli hooks test <name> [--json]` —
+  dry run. Runs one handler against a synthetic doc with a fake context
+  (`dry_run: true`, depth 0), prints the effective decision, the merged
+  patch, per-handler timings, and the audit entry that *would* be written.
+  **Never touches real docs, never executes tools, never answers approvals.**
 - `supercli hooks trace [--limit 50] [--json]` — recent hook runs read from
   the audit log: event id, entity/event, handler, decision, elapsed ms,
   outcome, and any contract violations (e.g. observer patch ignored).
@@ -368,7 +430,12 @@ Implemented in `crates/supercli-events` (unit) plus Host integration tests:
 
 ## 11. Implementation plan (`crates/supercli-events`)
 
-After the rename lands; subagent track, parallel with the OpenMuse ideas.
+~~After the rename lands; subagent track, parallel with the OpenMuse ideas.~~
+**Done** — see §1a for the shipped layout. The crate matches this plan
+(`lib`/`registry`/`handlers`/`runner`/`outbox`/`cli`); `dispatcher.rs` was
+folded into `runner.rs`, and `audit.rs`/`script.rs` were deferred (audit
+reuses `action_reviews.rs` directly; Rhai scripting stays a Phase 2
+feature-flagged item).
 
 ```
 crates/supercli-events/

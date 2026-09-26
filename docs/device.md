@@ -1,6 +1,6 @@
-# Device support design — Android & iOS in supercli
+# Device support — Android & iOS in supercli
 
-**Status:** design only (no implementation yet)
+**Status:** implemented on `track-b-device` (CI green pending final gate).
 **Reference:** [baguette](https://github.com/tddworks/baguette) (Apache-2.0) — an agent drives it while its browser UI streams a headless iPhone: 60 fps H.264 over WebSocket, real taps/swipes/pinch/Home/Lock, an a11y tree, live `os_log`. That agent-drives, human-watches loop is the whole point.
 **Constraint:** LITE. Shell out to installed platform tools. No bundled emulators, no vendored servers, no heavy deps. Behind a `device` cargo feature; zero cost when unused.
 
@@ -8,9 +8,29 @@
 
 ---
 
-## 1. CLI surface
+## 1. What is implemented today
+
+| Piece | Location | State |
+|---|---|---|
+| `supercli-device` crate (trait, errors, backends) | `crates/supercli-device/` | implemented, `device` feature |
+| Native scrcpy backend (no `scrcpy` CLI needed) | `src/scrcpy_native.rs` | implemented, CI-tested |
+| Wire format 0x01–0x04, device points | `src/wire_format.rs` | implemented |
+| `adb` fallback backend | `src/adb.rs` | implemented |
+| `simctl` lifecycle backend | `src/simctl.rs` | implemented (lifecycle + screenshots only) |
+| baguette iOS backend | `src/baguette.rs` | in progress |
+| `supercli device setup android\|ios` | `crates/supercli-cli/src/device_cli.rs` | implemented |
+| Web Devices panel + `/farm` wall | `crates/supercli-serve/src/devices.rs`, `static/devices.html`, `static/farm.html` | implemented |
+| Android CI (headless emulator) | `.github/workflows/device-android.yml` | correctness gate (see §7) |
+| Mac bench script | `scripts/device-bench.sh` | implemented, untested on hardware |
+| Full `supercli device` verb table (§2) | — | planned |
+
+## 2. CLI surface (target)
 
 New top-level verb group: `supercli device <subcommand>`. All subcommands take `--device <id>` (adb serial / baguette session id / simctl UDID); when omitted, the single running device is used, and multiple running devices is an error asking for `--device`.
+
+Implemented today: `supercli device setup android [--yes] [--dry-run]` (checks adb/emulator, downloads the pinned scrcpy-server jar, verifies SHA-256) and `supercli device setup ios` (checks macOS + Apple Silicon + baguette on PATH). Exit codes: 0 success · 1 tool failure · 2 missing tool / bad usage / not-macOS.
+
+The rest of the table is the target, implemented backend-first:
 
 | Subcommand | Android | iOS |
 |---|---|---|
@@ -25,56 +45,45 @@ New top-level verb group: `supercli device <subcommand>`. All subcommands take `
 | `type <text>` | scrcpy input injection; fallback `adb -s <id> shell input text <escaped>` | **baguette** (real key input). |
 | `swipe <x1> <y1> <x2> <y2> [ms]` | scrcpy input injection; fallback `adb -s <id> shell input swipe …` | **baguette** (real swipe; pinch also available via baguette only) |
 | `describe-ui` | `adb -s <id> shell uiautomator dump` → XML a11y tree | baguette a11y-tree JSON |
-| `stream` | scrcpy-server H.264 (60 fps) piped to stdout (see §3); fallback `adb exec-out screenrecord --output-format=h264 -` | baguette `serve` WebSocket (60 fps H.264); fallback `simctl io recordVideo` segments |
+| `stream` | scrcpy-server H.264 piped to stdout (see §3); fallback `adb exec-out screenrecord --output-format=h264 -` | baguette `serve` WebSocket (H.264); fallback `simctl io recordVideo` segments |
 
-**Platform gating:** every iOS subcommand first checks `cfg!(target_os = "macos")`. On other hosts it exits 2 with exactly: `iOS Simulator requires a macOS host`. No fake success, no partial output. baguette-backed commands additionally check for Apple Silicon (`std::env::consts::ARCH == "aarch64"`) and baguette on PATH; missing → exit 2 with `baguette not found on PATH (see https://github.com/tddworks/baguette; requires Apple Silicon, macOS 15+, Xcode 26)`. Android subcommands check for `adb` on PATH (exit 2, `adb not found on PATH (install Android SDK platform-tools)`); scrcpy-backed paths check for `scrcpy` on PATH and fall back to adb automatically.
+**Platform gating:** every iOS subcommand first checks `cfg!(target_os = "macos")`. On other hosts it exits 2 with exactly: `iOS Simulator requires a macOS host`. No fake success, no partial output. baguette-backed commands additionally check for Apple Silicon (`std::env::consts::ARCH == "aarch64"`) and baguette on PATH; missing → exit 2 with `baguette not found on PATH (see https://github.com/tddworks/baguette; requires Apple Silicon, macOS 15+, Xcode 26)`. Android subcommands check for `adb` on PATH (exit 2, `adb not found on PATH (install Android SDK platform-tools)`).
 
 **Timeouts:** all tool invocations go through one `run_tool()` helper with a 120 s default timeout, capturing stdout/stderr; on timeout the child is killed and exit 124 is reported with the tool name.
 
 ---
 
-## 2. LITE architecture
+## 3. Native scrcpy backend (`scrcpy_native.rs`)
 
-New crate `crates/supercli-device`, added to the workspace `members` list from day one (named `supercli-device`, no rename conflict).
+No `scrcpy` CLI is required. The backend downloads the pinned server jar and drives it directly:
 
-```
-crates/supercli-device/
-  Cargo.toml          # [features] device = [] ; no mandatory deps
-  src/lib.rs          # Backend trait + error types (always compiled)
-  src/adb.rs          # #[cfg(feature = "device")] Android via adb/emulator (fallback tier)
-  src/scrcpy.rs       # #[cfg(feature = "device")] Android via installed scrcpy-server (primary tier)
-  src/simctl.rs       # #[cfg(feature = "device")] iOS lifecycle + screenshots ONLY
-  src/baguette.rs     # #[cfg(feature = "device")] iOS via installed baguette (stream/input/a11y/logs)
-  src/fake.rs         # #[cfg(test)] ONLY — test double, never compiled into any binary
-```
+- **Pinned server:** scrcpy-server **v2.7** (`SCRCPY_SERVER_VERSION`), SHA-256 verified after download, cached under `~/.supercli`, pushed to `/data/local/tmp/scrcpy-server.jar` via `adb push` (only after `sys.boot_completed=1` **and** `pm path android` — the package manager must be ready).
+- **Server launch:** `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60`. The first `app_process` argument must be the **exact** server version string (`2.7`, not `2.7.0`); anything else and the server dies immediately.
+- **v2.x forward-tunnel handshake** (`handshake_video_control`) — this ordering is load-bearing. With `tunnel_forward=true` the server accepts **all** sockets first (video, then control) and only then writes anything, so a client that waits for the video header before opening the control socket deadlocks:
+  1. Connect socket #1 (video).
+  2. Connect socket #2 (control) **immediately** (no audio socket: `audio=false`).
+  3. Read the 1-byte dummy on the video socket. EOF/reset here means the server isn't listening yet: close both sockets and retry the connect every 100 ms for up to 10 s.
+  4. Read the 76-byte header: 64-byte NUL-padded device name, then u32 codec id (`h264`), u32 width, u32 height, big-endian.
+  5. Packets: 8-byte pts/flags header (config = bit 63, keyframe = bit 62), u32 length, payload.
+- **Control channel** (`ControlChannel`): touch injection in **device points** (see §4), keycodes, text injection, back/screen-on, clipboard, display power, rotate, notification panel expand/collapse.
+- `send_device_meta` and `send_dummy_byte` stay at their defaults. The default encoder is used (the forced `video_encoder=c2.android.avc.encoder` was dropped).
+- The handshake is pinned by unit tests against a scripted fake server that reproduces the exact server ordering (accepts both sockets before writing anything), so the deadlock cannot regress.
 
-- **Core (`lib.rs`, no feature gate):** `DeviceId`, `DeviceInfo`, `DeviceBackend` trait (`list/boot/stop/install/launch/screenshot/logs/input/stream/describe_ui`), `DeviceError` (ToolMissing, NotMacOSHost, Timeout, ToolFailed { tool, code, stderr }, Unsupported). Compiles to ~nothing without the feature.
-- **Backends (`adb.rs`, `scrcpy.rs`, `simctl.rs`, `baguette.rs`):** `#[cfg(feature = "device")]`. Only dependency is `std::process::Command` (+ std WebSocket client for baguette's `serve` socket — `tungstenite` is allowed as an optional dependency only if hand-rolling proves unworkable; default to std). No vendored servers: baguette and scrcpy must be installed by the user; the crate shells out to them.
-  - **iOS:** `BraidBackend` wraps baguette (CLI JSON for control, `serve` WebSocket for H.264 + a11y + os_log + input). `SimctlBackend` handles boot/shutdown/install/launch/screenshot only. `tap`/`type`/`swipe`/`describe_ui` on simctl return `Unsupported` honestly.
-  - **Android:** `ScrcpyBackend` is tried first when `scrcpy` is on PATH (H.264 stream + input injection + `uiautomator dump` a11y + logcat). `AdbBackend` is the fallback (screenrecord stream, `input` injection, uiautomator, logcat).
-- **`fake.rs` is a test double, full stop.** `#[cfg(test)]` only — it is never a runtime path and can never report success to a user. If a fake backend is ever needed outside tests, it must be a separate explicit `--dry-run` flag, not this module.
-- **CLI wiring:** `supercli-cli` gets `device` as an *optional* dependency: `supercli-device = { path = "../supercli-device", optional = true }`, and a `device` feature on the CLI that enables it. `supercli device …` without the feature prints: `rebuild with --features device` (exit 2).
-- **Zero cost when unused:** default build has no `device` feature → `supercli-device` compiles to the trait + error types only (a few KB). All four backends are `#[cfg]`'d out entirely.
+## 4. Wire format (`wire_format.rs`) — device points, baguette convention
 
-**Binary-size delta (to be measured at implementation):** build `supercli` release with and without `--features device`, report both sizes. Expected delta: < 50 KB (pure `std::process` wrappers, no new mandatory crates). The number goes in this doc after measurement — do not ship without it.
+Touch input uses `DevicePoint`: coordinates in the **device's point coordinate system**, not normalized 0.0–1.0 and not raw pixels. Callers pipe the 0x01 description's `width_points`/`height_points` straight through; `DevicePoint::from_android_pixels` / `to_android_pixels` convert via density DPI at the edges.
 
----
+Frame types 0x01–0x04: `0x01` stream description (screen size in device points), `0x02` H.264 packet, `0x03` JPEG seed frame, `0x04` baguette-passthrough frame (`wire_from_baguette`). The iOS baguette path reuses the same framing so the web panel and the Host see one stream shape.
 
-## 3. Web UI Devices panel
+## 5. Web UI: Devices panel + `/farm`
 
-Location: new tab in the Dioxus web UI next to the conversation (mirrors the baguette reference: live device preview beside the chat — the agent drives, the human watches).
+`crates/supercli-serve/src/devices.rs` (local-only routes):
 
-- **Chrome:** minimal — device frame (rounded rect, notch/Dynamic Island for iOS, punch-hole for Android), live screen filling the frame, one small toolbar (home, back, rotate).
-- **Multi-device grid:** when more than one device is running, the panel shows them side-by-side in a grid; clicking a device focuses it (input routes to the focused device, `device_id` is explicit everywhere).
-- **Input:** click on screen → `tap x y` (frame pixels scaled to device pixels via the last a11y/screenshot dimensions). Keyboard focus on screen → `type`. Drag → `swipe`; two-finger/pinch gesture → baguette pinch (iOS only). Toolbar → home/back/rotate.
-- **iOS streaming (primary):** baguette `serve` WebSocket → 60 fps H.264 → WebCodecs `VideoDecoder` → `<canvas>`. Fallback: `simctl io recordVideo` 10 s segments played sequentially, or `simctl io screenshot` polling at 2 fps. Honest labeling: the panel shows "baguette" or "simctl fallback" as the stream source.
-- **Android streaming (primary):** scrcpy-server H.264 (60 fps) → WebCodecs. Fallback: `adb exec-out screenrecord` (reconnect every 170 s under the 180 s cap), then `screencap -p` polling at 2 fps.
-- **a11y overlay (optional):** `describe-ui` results can be overlaid as element outlines on the stream (debug aid; agents consume the raw tree).
-- **Latency:** measure input-to-frame as (a) time from `tap` command spawn to next decoded frame presented, sampled over 50 taps per backend, reported as p50/p99 in the implementation report. **Do not claim "low latency"** — publish the numbers.
+- `GET /farm` — HTML multi-device wall (`static/farm.html`): a grid of live tiles, one per running device, at reduced fps per tile.
+- Devices panel (`static/devices.html`): single focused device — live screen filling a device frame (notch/punch-hole styling), toolbar (home, back, rotate), click → tap, drag → swipe, keyboard → type. All coordinates are device points end-to-end (JS multiplies by the 0x01 description's `width_points`/`height_points`; the Rust `/touch` API validates finite, non-negative points).
+- Streaming: scrcpy H.264 → WebCodecs `VideoDecoder` → `<canvas>` (Android); baguette WebSocket → same path (iOS). Fallback: `adb exec-out screenrecord`, then `screencap -p` polling at 2 fps — the panel labels the stream source honestly.
 
----
-
-## 4. Agent tools (MCP surface on the Host)
+## 6. Agent tools (MCP surface on the Host) — planned
 
 New tools on the unified MCP server (`supercli-host __mcp__`), all taking `device_id`. The loop: agent calls `device.describe-ui` → picks an element → acts via `tap`/`type`/`swipe` → human watches the stream. **Agents act on elements, not pixels** — `describe-ui` is the primary perception tool; raw-coordinate input is the fallback.
 
@@ -82,7 +91,7 @@ New tools on the unified MCP server (`supercli-host __mcp__`), all taking `devic
 |---|---|---|
 | `device.describe-ui` | none (read-only) | **NEW.** a11y tree: baguette JSON on iOS, `uiautomator dump` XML on Android. Element ids, labels, bounds, actions. |
 | `device.screenshot` | none (read-only) | returns PNG bytes (base64) + width/height |
-| `device.tap` | none | x, y in device pixels (prefer element bounds from describe-ui) |
+| `device.tap` | none | x, y in device points (prefer element bounds from describe-ui) |
 | `device.type` | none | text; Android `input text` escaping documented |
 | `device.swipe` | none | x1,y1,x2,y2, duration_ms; pinch via baguette on iOS |
 | `device.logs` | none (read-only) | last N lines (logcat / os_log); `--clear` not exposed to agents |
@@ -94,16 +103,61 @@ Read-only/input/perception tools are agent-usable without prompting (same policy
 
 ---
 
-## 5. Tests
+## 7. CI: Android correctness gate
 
-- **Unit (`#[cfg(test)]` in `supercli-device/src/fake.rs`):** a `FakeBackend` implementing `DeviceBackend` with scripted responses. Tests: list parsing (adb + simctl JSON + baguette JSON fixtures), `describe-ui` fixture parsing (uiautomator XML + baguette a11y JSON), boot timeout path, `NotMacOSHost` gating (assert the exact error string), tool-missing error, tap coordinate passthrough, `Unsupported` on simctl input. Runs on every PR via the existing `linux-cli.yml` workspace tests. No emulator needed.
-- **Android e2e (CI):** new job in `.github/workflows/android.yml` using `ReactiveCircus/android-emulator-runner@v2` on `ubuntu-latest` with `api-level: 34, arch: x86_64, target: google_apis`. Steps: boot AVD, `supercli device list` shows `emulator-5554`, `describe-ui` returns non-empty XML, `screenshot` produces a PNG, `tap`/`type`/`swipe` exit 0, `logs` non-empty. If scrcpy is installable on the runner, run the scrcpy tier; otherwise adb tier — the report states which.
-- **iOS e2e (CI):** new job in `.github/workflows/apple.yml` on an Apple Silicon macOS runner with Xcode 26 and baguette installed: boot a simulator via simctl, drive it through the baguette tier (`describe-ui`, `tap`, `screenshot`, live `os_log`), `shutdown`. If the runner lacks Xcode 26 / baguette, the job reports `SKIP (missing Xcode 26 or baguette)` honestly — never fake-passes.
-- **Report rule:** the implementation report must state exactly what ran where (e.g. "fake-backend 31/31 on ubuntu-22.04; android adb-tier e2e on GHA ubuntu-latest KVM; ios e2e SKIP — no macOS runner with Xcode 26; no local runs — this VM has no /dev/kvm and no Xcode").
+`.github/workflows/device-android.yml` runs the native-scrcpy e2e on a real headless emulator (`ReactiveCircus/android-emulator-runner@v2`, API 34 `google_apis` x86_64, `pixel_7` profile = 1080x2400).
 
----
+The CI runner has no GPU: the emulator renders with SwiftShader and scrcpy software-encodes 1080x2400 on 2–4 vCPUs. That hardware cannot do 60 fps, and the encoder dominates latency — so CI is a **correctness gate**, not a performance gate:
 
-## 6. gpuidart widgets needed (for Amein)
+- handshake completes (dummy byte, control connected, valid 76-byte header);
+- ≥ 100 H.264 packets in the window;
+- pinch OK, HOME key OK;
+- tap-to-frame misses ≤ 10% (a trial with no frame within 1 s is a miss, counted, not fatal);
+- control-channel tap-to-frame p50 **<** `adb shell input` tap-to-frame p50.
+
+fps and latency are **recorded in `metrics.json` as numbers, not gates**. The same job also runs a `max_size=720` pass and records both; the emulator's own render rate during the fling window (`dumpsys gfxinfo` / SurfaceFlinger) is captured so the renderer vs encoder bottleneck is visible.
+
+Measured (run #12, 1080x2400): control-channel tap-to-frame p50 382 ms / p95 1035 ms vs adb input p50 676 ms / p95 1156 ms — the control channel is ~1.8× faster. fps while the home screen is static is ~2–3 (scrcpy only emits on screen change); fps is measured while animating (Settings fling-scroll loop via the control channel).
+
+Artifacts on every run (`if: always()`): `metrics.json`, screenshot, 10 s MKV, `e2e.log`, scrcpy-filtered logcat, server stderr. The workflow publishes key stages to `GITHUB_STEP_SUMMARY` (boot_completed, jar pushed, server alive, first packet, packet count) so the run page is readable without log access.
+
+## 8. Local bench: `scripts/device-bench.sh`
+
+60 fps gets proven on real hardware, not CI. `scripts/device-bench.sh` runs on an Apple Silicon Mac (HVF + GPU):
+
+- prereq checks (`emulator`, `adb`, `cargo`, `ANDROID_SDK_ROOT`; one-time SDK install steps in the header);
+- creates/reuses AVD `supercli-bench` (API 34 `google_apis/arm64-v8a`, `pixel_7`);
+- headless boot (`-no-window -no-audio -no-boot-anim -gpu host`), waits for `sys.boot_completed=1` **and** `pm path android`;
+- runs the same e2e as CI (`SUPERCLI_ANDROID_E2E=1 cargo test -p supercli-device --features device --test android_e2e`), so `metrics.json` is byte-for-byte the same schema CI uploads;
+- saves `screenshot.png`, a 10 s screen recording, and `e2e.log`; kills the emulator on exit unless `KEEP_EMULATOR=1`.
+
+Env overrides: `AVD_NAME`, `API_LEVEL`, `DEVICE_PROFILE`, `ANDROID_SERIAL`, `OUT_DIR`, `WIPE_DATA`, `KEEP_EMULATOR`.
+
+## 9. iOS
+
+`simctl.rs` covers lifecycle + screenshots only (boot/shutdown/install/launch/screenshot). Input, streaming, a11y, and live logs go through the baguette passthrough (`baguette.rs`, in progress): baguette's `serve` WebSocket framed as 0x04 wire frames, proxied to the same Devices panel and `/farm` infrastructure as Android.
+
+## 10. LITE architecture notes
+
+```
+crates/supercli-device/
+  Cargo.toml          # [features] device = [] ; no mandatory deps
+  src/lib.rs          # DeviceId, Platform, DeviceInfo, DeviceBackend trait, DeviceError
+  src/adb.rs          # Android via adb/emulator (fallback tier)
+  src/scrcpy.rs       # Android via installed scrcpy CLI (alternate tier)
+  src/scrcpy_native.rs# Android via pushed scrcpy-server v2.7 (primary tier)
+  src/simctl.rs       # iOS lifecycle + screenshots ONLY
+  src/baguette.rs     # iOS via installed baguette (stream/input/a11y/logs)
+  src/wire_format.rs  # 0x01–0x04 framing, DevicePoint
+  src/setup.rs        # `device setup` checks + jar download/verify
+  src/fake.rs         # #[cfg(test)] ONLY — test double, never compiled into any binary
+```
+
+**Binary-size delta (to be measured at implementation):** build `supercli` release with and without `--features device`, report both sizes. Expected delta: < 50 KB (pure `std::process` wrappers, no new mandatory crates). The number goes in this doc after measurement — do not ship without it.
+
+**`fake.rs` is a test double, full stop.** `#[cfg(test)]` only — it is never a runtime path and can never report success to a user. If a fake backend is ever needed outside tests, it must be a separate explicit `--dry-run` flag, not this module.
+
+## 11. gpuidart widgets needed (for Amein)
 
 Already added to `docs/gpuidart-requirements.md` as P0-6/P0-7:
 
@@ -112,23 +166,3 @@ Already added to `docs/gpuidart-requirements.md` as P0-6/P0-7:
 **P0-7. Device-frame container.** Rounded-rect frame with notch/status-bar styling so the panel reads as a device. Multi-device grid is a layout of several P0-7 frames.
 
 **Note for P0-7/future:** the a11y tree from `describe-ui` could later be rendered as an element-outline overlay; not a new widget, just data the app draws.
-
----
-
-## 7. Environment facts (this VM, 2026-09-26)
-
-- `/dev/kvm`: **does not exist** — no KVM, Android emulator cannot run here.
-- `adb`, `emulator`, `scrcpy`, `xcrun`, `baguette`: **not installed**.
-- Host arch: `x86_64` Linux. iOS work must be macOS-only by design (§1 gating); baguette additionally needs Apple Silicon.
-- Consequence: all emulator e2e runs in CI (GHA ubuntu KVM runners, Apple Silicon macOS runner with Xcode 26 + baguette). Local verification here is limited to the fake-backend unit suite and CLI arg parsing.
-
----
-
-## 8. Implementation order (for the 2–3 h push)
-
-1. `crates/supercli-device`: lib.rs (trait + errors, incl. `describe_ui`) → adb.rs → scrcpy.rs → simctl.rs (lifecycle only) → baguette.rs → fake.rs + unit tests.
-2. CLI wiring: `supercli device` subcommands (incl. `describe-ui`) in `supercli-cli` behind `device` feature; measure binary-size delta.
-3. MCP tools in `supercli-host` (`device.*` incl. `device.describe-ui`; approval on install/uninstall/erase).
-4. CI jobs: android e2e (emulator-runner, scrcpy tier if installable), iOS job (Apple Silicon macOS + Xcode 26 + baguette; honest SKIP otherwise).
-5. Web UI Devices panel (Dioxus web): device frame + stream + input + toolbar + multi-device grid; latency numbers.
-6. P0-6/P0-7 already in `docs/gpuidart-requirements.md` — no action.

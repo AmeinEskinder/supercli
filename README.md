@@ -28,6 +28,30 @@ built from one tree at one version.
   idle, and send text to another. Reads are open; the first write into
   another session asks you, and approved pairs are remembered. Sessions are
   created and closed by people, never by agents.
+- 📲 **Drive real devices.** Android emulators stream over native scrcpy
+  (pinned server, no `scrcpy` CLI needed) and iOS simulators over baguette;
+  touch coordinates use device points end-to-end. The web Devices panel and
+  `/farm` wall show live screens with tap/type/swipe, and `scripts/device-bench.sh`
+  reproduces the same `metrics.json` on a Mac with a GPU. Detail:
+  [`docs/device.md`](docs/device.md).
+- 🪝 **Script it with hooks.** Frappe-style `doc_events` on `ToolCall`
+  (`before_execute` runs after the write-ahead review is fsynced, before any
+  tool bytes), `Approval` (`before_submit` / `on_submit` / `on_cancel`),
+  and more. Handlers are shell commands or localhost webhooks in
+  `~/.supercli/hooks.toml`, ordered by priority, time-boxed, tighten-only
+  (escalate turns Allow into Ask — it re-enters the approval flow, never
+  fails closed), with a durable outbox, dead-letter file, and
+  `supercli hooks list|test|trace`. Detail: [`docs/events.md`](docs/events.md).
+- ⏰ **Scheduled runs survive `kill -9`.** Every scheduled trigger is
+  journaled write-ahead: `begin_step` before the side effect,
+  `complete_step` after. A crashed daemon reconciles on restart — rerunning
+  what is safe, hash-probing file writes, failing closed on opaque writes —
+  with zero duplicates. The daemon refuses to fire unjournaled unless you
+  pass `--no-durable`. Detail: [`docs/agents/cli.md`](docs/agents/cli.md#durable-runs).
+- 🧠 **Operator memory.** `supercli memory set|get|promote|forget|list` with
+  session and longterm scopes, atomic saves, and an operator profile whose
+  approval hints are advisory only — suggestions never grant anything.
+  Detail: [`docs/agents/cli.md`](docs/agents/cli.md#operator-memory-supercli-memory).
 - 🧑‍💻 **Any agent, any task.** Claude Code, Codex, Gemini, Cursor Agent, Grok,
   Kimi, Kiro, Cline, Amp, OpenCode, Muse Code, Antigravity, Pi, or anything that runs in a
   terminal, for coding, research, writing, ops, or design. It is a terminal,
@@ -224,6 +248,18 @@ default; session creation stays user-only. Detail:
 - **Shared Swift package** — [`clients/shared/SupercliShared`](clients/shared/SupercliShared):
   pairing, the Host protocol client, and the end-to-end relay crypto both apps
   use, pinned to the same test vectors as the Rust side.
+- **gpuidart desktop app** — `clients/supercli-app` (on the feature branch
+  `track-b-app`; integrates with `supercli-next`). The cross-platform client
+  on [gpuidart](https://github.com/ameineskinder/gpuidart): retained-mode
+  GPU-accelerated UI in Dart, talking to a real Host over TLS with Bearer
+  auth and blocking approvals. Keyboard-first via the `UiAction` API
+  (`Ctrl+Enter` approve, `Ctrl+Shift+Enter` deny, `Ctrl+L` focus composer).
+  Proof: `dart analyze` 0 issues, `dart test` 19/19, and a headless
+  Host-connection e2e where the Dart app answers a real approval and the
+  Host asserts `approved == true` and `answered_by == Some("paired-device")`
+  (`dart test` + the Rust e2e both run in `apps.yml`). The same approval
+  driven through the rendered window's `Ctrl+Enter` path is the remaining
+  proof item.
 - **`supercli` CLI** — this repository's `crates/supercli-cli`, for terminals and
   headless Hosts.
 

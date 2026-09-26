@@ -366,3 +366,57 @@ of record; this section is the operator-facing summary:
 - `remove` deletes the schedule but keeps the audit trail in the session
   dir. `run-once` fires one trigger through the same runner (audited
   identically); exit code 0 only on `Completed`.
+
+### Durable runs
+
+Scheduled triggers are journaled in a write-ahead runs database so a
+`kill -9` of the daemon mid-run never loses or duplicates work
+(`crates/supercli-core/src/durable_runs.rs`, `track-b-durable-runs`).
+
+- **Write-ahead intent protocol.** Each step is journaled with
+  `begin_step()` *before* its side effect runs and closed with
+  `complete_step()` after. A crash between the two leaves an orphaned
+  intent, never an ambiguous replay. The old `append_step()` (which could
+  leave legacy NULL outcomes) is not used by the scheduler.
+- **Per-kind reconciliation.** On restart, orphaned intents are classified
+  by `StepKind`: `Model` and `Read` rerun safely; `FileWrite` is
+  probe-completed by content hash; `IdempotentHttp` reruns idempotently;
+  `OpaqueWrite` (unverifiable side effects) goes to `NEEDS_REVIEW` —
+  fail closed, never replayed blind.
+- **Proof.** 50-iteration real-`SIGKILL` chaos against external
+  side-effect ground truth (not journal assertions): 50/50 terminal,
+  0 duplicates, 36 `DONE` / 14 `NEEDS_REVIEW`, and only opaque writes
+  needed review.
+- **Fail closed by default.** `ScheduledRunner` refuses to fire when the
+  runs DB is unavailable (`durable_required`, the default). The explicit
+  opt-out is `--no-durable` on `run-once` / `daemon` — unjournaled mode is
+  never the default.
+- **Kill/resume.** A dedicated integration test `SIGKILL`s a real daemon
+  process mid-run and restarts it: the same run id resumes, completed steps
+  are not re-executed, each side effect appears exactly once.
+
+### Operator memory (`supercli memory`)
+
+A small durable key/value store for operator preferences and session facts
+(`crates/supercli-core/src/memory.rs`, `crates/supercli-cli/src/memory_cli.rs`):
+
+```text
+supercli memory set <key> <value...> [--session <id>] [--longterm]
+supercli memory get <key>
+supercli memory promote <key>      # session scope -> longterm scope
+supercli memory forget <key>
+supercli memory list [--json]
+```
+
+- **Scopes.** `Session` entries belong to one session id; `Longterm`
+  entries are operator-wide. `promote` moves a key from session to
+  longterm explicitly — nothing is promoted automatically.
+- **Atomic saves.** The store is written temp + fsync + rename under a
+  lock; concurrent writers cannot tear it.
+- **Operator profile.** Alongside memory, an operator profile
+  (`crates/supercli-core/src/profile.rs`) keeps preferences and
+  approval/denial counters fed by real human review decisions
+  (`record_review` counts Human actors only). `approval_hint()` surfaces
+  "usually approved/denied" signals to UIs — it is **advisory only**: a
+  suggestion never grants anything by itself. Any auto-allow requires an
+  explicit user action that creates a normal audited grant.

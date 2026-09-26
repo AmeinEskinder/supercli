@@ -81,7 +81,11 @@ await host.setComposerText('composer', '');   // controlled clear
 ```
 
 ### P0-4. Keyboard focus navigation + scoped keymap
-No focus API and no keybindings exist. supercli must be fully keyboard
+~~No focus API and no keybindings exist.~~ **Shipped in gpuidart 135d300**
+(the `UiAction` API) and used by `clients/supercli-app`: `approval.approve`
+(`ctrl+enter`), `approval.deny` (`ctrl+shift+enter`), list navigation
+(`arrowup`/`arrowdown` scoped to `session-list`), `composer.focus`
+(`ctrl+l`). supercli must be fully keyboard
 operable (the accessibility pass requirement): tab order, arrow-key list
 navigation, and shortcuts. gpuidart's own `docs/feature-stack.md` already
 designs "actions and scoped keymaps" — implement that design.
