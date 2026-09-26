@@ -1,10 +1,11 @@
-//! Known-answer tests pinning byte compatibility with the Swift
-//! (`CryptoKit`) and JS (`WebCrypto`) relay crypto implementations.
+//! Known-answer tests pinning byte compatibility with the JS (`WebCrypto`)
+//! relay crypto implementation.
 //!
-//! Fixed inputs mirror `RelayCryptoVectorTests.swift` exactly; expected
-//! outputs are the locked values from `protocol/relay-kat-vectors-v1.json`.
+//! Fixed inputs; expected outputs are the locked values from
+//! `protocol/relay-kat-vectors-v2.json` (supercli-relay-v2 labels).
+//! (Swift side is legacy/frozen under clients/legacy/.)
 //! If this test fails, a Rust client could not establish a relay channel
-//! with a Swift phone or Mac — treat it as a release blocker.
+//! — treat it as a release blocker.
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -28,8 +29,8 @@ fn transcript_mac_known_answer() {
     let mac = handshake::transcript_mac(&e2e, "phone-kat-1", &cs, &hs, &client_eph, &host_eph);
     assert_eq!(
         B64.encode(mac),
-        "+BBTo0DBUwkP829M9w6eviupf+3pv5XxzrtNnUeYNQc=",
-        "transcript MAC drifted — Rust and Swift/JS handshakes would disagree"
+        "DOrpKR7/ooVOBLEnGAlALJsVDUDMjygs05/83+GLxdI=",
+        "transcript MAC drifted — Rust and JS handshakes would disagree"
     );
 }
 
@@ -48,8 +49,8 @@ fn sealed_frame_known_answer() {
     // deterministic too (fixed key + counter nonce). Lock the whole frame.
     assert_eq!(
         B64.encode(&sealed),
-        "AAAAAAAAAAFXoFTergM+a27Rbw/LTzDUy/OhPJRbGDcDIEpfVPJbKdy1zzcoCQ==",
-        "sealed frame drifted — Rust and Swift/JS AEAD would disagree"
+        "AAAAAAAAAAFDQwuCO9x63TOIs79+6KpAlNJkP8QanN4KN3I7IZEQJy9H1V9SNQ==",
+        "sealed frame drifted — Rust and JS AEAD would disagree"
     );
 
     // And it must open on the matching host session.
