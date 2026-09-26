@@ -7,8 +7,10 @@ fn apps_install_refuses_noninteractive_without_yes() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let home =
-        std::env::temp_dir().join(format!("supercli-apps-cli-{}-{nonce:x}", std::process::id()));
+    let home = std::env::temp_dir().join(format!(
+        "supercli-apps-cli-{}-{nonce:x}",
+        std::process::id()
+    ));
 
     let output = Command::new(env!("CARGO_BIN_EXE_supercli"))
         .args(["apps", "install", "supercli.app.markdown"])

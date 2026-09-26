@@ -548,7 +548,9 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
         device: serial.to_string(),
         video_w: vw,
         video_h: vh,
-        max_size: std::env::var("SCRCPY_MAX_SIZE").ok().filter(|v| !v.trim().is_empty()),
+        max_size: std::env::var("SCRCPY_MAX_SIZE")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
         packets_read,
         keyframes,
         fps_animating,
