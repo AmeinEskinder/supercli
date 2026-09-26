@@ -71,14 +71,14 @@ paths = ['''^clients/shared/SupercliShared/Sources/SupercliShared/RelayProtocol\
 regexes = ['''privateKey''']
 
 # 2026-09-26: self-signed TEST TLS keypair embedded in the TLS e2e test
-# fixture (crates/unpeel-client/tests/tls_e2e.rs, renamed to
+# fixture (renamed from the pre-rename client path to
 # crates/supercli-client/tests/tls_e2e.rs). Generated for tests only, never
 # used in production, never a real credential.
 [[allowlists]]
 description = "Test-only TLS keypair in the TLS e2e test fixture"
 targetRules = ["private-key"]
 paths = [
-  '''^crates/unpeel-client/tests/tls_e2e\.rs$''',
-  '''^crates/supercli-client/tests/tls_e2e\.rs$''',
+  # Matches both the pre-rename and post-rename client test paths.
+  '''^crates/[^/]*-client/tests/tls_e2e\.rs$''',
 ]
 
