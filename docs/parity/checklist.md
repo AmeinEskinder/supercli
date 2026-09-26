@@ -192,7 +192,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 165 | [DESKTOP] | ⌃Tab MRU session switcher | missing | - | - |
 | 166 | [DESKTOP] | ⌘1–9 session switching and ⌃1–9 project switching with held-key hints | missing | - | - |
 | 167 | [DESKTOP] | Recent activity page (⇧⌘R) and titlebar activity bell dropdown | partial | clients/supercli-app/lib/screens/recentactivityview.dart, globalactivitymenu.dart (bbd8b70) | - |
-| 168 | [DESKTOP] | Toast notifications (for example, device connected) | partial | clients/supercli-app/lib/screens/toastcenter.dart (25 lines, bbd8b70) | - |
+| 168 | [DESKTOP] | Toast notifications (for example, device connected) | done | clients/supercli-app/lib/screens/toastcenter.dart (queue-driven, auto-dismiss TTL, click-to-focus; RLE fallback) + lib/notifications.dart (NotificationQueue: FIFO, bounded eviction, TTL prune) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: queue FIFO/evict/TTL/dismiss, toast render/dismiss/focus); screenshot docs/internal/proofs/proof-screenshots/parity-approvals.png |
 | 169 | [DESKTOP] | libghostty Metal terminal surfaces, retained per session | partial | clients/supercli-app/lib/screens/terminalpaneview.dart (54 lines, bbd8b70) | - |
 | 170 | [DESKTOP] | Remote-host panes rendered via in-memory Ghostty surfaces (same UI as local) | missing | - | - |
 | 171 | [DESKTOP] | Split Pane Right/Down (⌘D / ⇧⌘D), recursive tree up to 8 panes | done | clients/supercli-app/lib/pane_layout.dart (PaneLayout split H/V, 8-pane limit, track-b-parity-panes) | clients/supercli-app/test/pane_layout_test.dart |
@@ -210,7 +210,7 @@ Parity against upstream unpeel . Each item measured per FEATURE.
 | 183 | [DESKTOP] | Restart recommendation banner | missing | - | - |
 | 184 | [DESKTOP] | Agent TUI background color matching for chrome | missing | - | - |
 | 185 | [DESKTOP] | Viewer presence avatars and "Fit to desktop" control | partial | clients/supercli-app/lib/screens/vieweravatarsview.dart (20 lines, bbd8b70) | - |
-| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | done | clients/supercli-app/lib/app.dart (de51bb2) | clients/supercli-app/test/app_test.dart |
+| 186 | [DESKTOP] | In-pane MCP approval overlay (write/browser/app-open) | done | clients/supercli-app/lib/screens/mcpapprovalpanel.dart (McpApprovalPanel: attention dot, tool/summary/detail, N-more-waiting, Allow Ctrl+Enter / Don't Allow Ctrl+Shift+Enter / Edit Ctrl+E; ApprovalsPanel list with selection; RLE fallback) + lib/app.dart (de51bb2 inline card) | clients/supercli-app/test/approvals_panel_test.dart (25 tests: approve/deny/edit decision flow, key bindings, list empty/count/selection) + test/app_test.dart; screenshots docs/internal/proofs/proof-screenshots/approve-{before,after}.png, deny-{before,after}.png, parity-approvals.png |
 | 187 | [DESKTOP] | Session gallery panel (screenshots, downloads, uploads) | partial | clients/supercli-app/lib/screens/sessiongallerypanel.dart (50 lines, bbd8b70) | - |
 | 188 | [DESKTOP] | Gallery arrow + crop markup and "Add to prompt" | missing | clients/supercli-app/lib/screens/sessiongallerymarkup.dart (6-line re-export, bbd8b70) | - |
 | 189 | [DESKTOP] | Take Screenshot (⇧⌘S) into the session and attach it to the prompt | partial | clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (21 lines, bbd8b70) | - |
