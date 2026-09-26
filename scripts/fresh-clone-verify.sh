@@ -76,7 +76,25 @@ if [ -n "$matches" ]; then
 fi
 echo "rename guard PASS"
 
-echo "--- 5. HEAD sha ---"
+echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
+for p in docs/internal/buildlog.md docs/internal/handoff.md docs/internal/phases docs/internal/pr-draft.md; do
+  if [ -e "$p" ]; then echo "FAIL: excluded path present: $p"; exit 1; fi
+done
+echo "exclusions OK"
+
+echo "--- 6. CHANGELOG is the fresh supercli 0.1.0 (not the old Unpeel one) ---"
+head -1 CHANGELOG.md | grep -q '^# Changelog — supercli' || { echo "FAIL: CHANGELOG.md is not the supercli 0.1.0 changelog"; head -3 CHANGELOG.md; exit 1; }
+grep -q 'Track B + Phases' CHANGELOG.md && { echo "FAIL: CHANGELOG.md still references old Unpeel phases"; exit 1; }
+echo "CHANGELOG OK"
+
+echo "--- 7. docs/book generated output has no stale unpeel mentions ---"
+if [ -d docs/book/book ]; then
+  stale=$(grep -rli 'unpeel' docs/book/book/ 2>/dev/null || true)
+  if [ -n "$stale" ]; then echo "FAIL: docs/book/book/ contains stale unpeel mentions:"; echo "$stale"; exit 1; fi
+fi
+echo "docs/book OK"
+
+echo "--- 8. HEAD sha ---"
 git rev-parse HEAD
 
 echo "=== fresh-clone-verify: ALL GREEN ==="
