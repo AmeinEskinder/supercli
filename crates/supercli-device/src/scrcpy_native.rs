@@ -766,12 +766,18 @@ fn spawn_server(serial: &DeviceId) -> Result<(), DeviceError> {
     // match the jar exactly ("2.7", not "2.7.0" or "v2.7").
     //
     // Amein's proven command (2026-09-26): tunnel_forward + cleanup=false
-    // are required; on emulators force the software AVC encoder because
-    // swiftshader has no hardware codec.
+    // are required. tunnel_forward=true makes the server listen on the
+    // abstract socket (client does adb forward and connects); without it
+    // the server expects adb reverse and never listens.
+    //
+    // Note: video_encoder is NOT forced here. Amein suggested
+    // c2.android.avc.encoder for emulators, but if that specific encoder
+    // is absent the server hangs during MediaCodec init (45s timeout).
+    // Let scrcpy pick the default encoder.
     let server_cmd = format!(
         "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
          tunnel_forward=true audio=false control=true cleanup=false \
-         video_codec=h264 max_fps=60 video_encoder=c2.android.avc.encoder",
+         video_codec=h264 max_fps=60",
         SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");

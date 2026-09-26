@@ -71,9 +71,9 @@ adb -s "$SERIAL" shell "pkill -f com.genymobile.scrcpy" || true
 sleep 2
 cp "$RUNNER_TEMP/smoke-minimal.log" "$GITHUB_WORKSPACE/smoke-minimal.log" || true
 
-# Try FULL command (Amein's proven args + software encoder for emulator)
+# Try FULL command (Amein's proven args, no forced encoder)
 echo "=== smoke: trying FULL server command ==="
-adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60 video_encoder=c2.android.avc.encoder" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
+adb -s "$SERIAL" shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 2.7 tunnel_forward=true audio=false control=true cleanup=false video_codec=h264 max_fps=60" > "$RUNNER_TEMP/smoke-server.log" 2>&1 &
 SMOKE_PID=$!
 sleep 8
 # Check if server process is alive on device
