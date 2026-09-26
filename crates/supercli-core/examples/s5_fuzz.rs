@@ -60,7 +60,7 @@ fn main() {
         }
         iterations += 1;
 
-        if iterations % 100000 == 0 {
+        if iterations.is_multiple_of(100000) {
             eprintln!(
                 "progress: {} iterations, {} crashes, elapsed {:?}",
                 iterations,

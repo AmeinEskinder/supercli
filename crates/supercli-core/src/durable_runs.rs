@@ -2182,9 +2182,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
     }
 
-    /// Normal flow: begin -> execute -> complete. The outcome row (attempt
-    /// + 1) supersedes the intent; no orphans remain; resume replays the
-    /// completed step.
+    /// Normal flow: begin -> execute -> complete. The outcome row for
+    /// attempt (n + 1) supersedes the intent; no orphans remain; resume
+    /// replays the completed step.
     #[test]
     fn complete_step_after_intent() {
         let home = test_home("complete");
