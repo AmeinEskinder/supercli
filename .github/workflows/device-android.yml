@@ -67,6 +67,12 @@ jobs:
         with:
           name: android-test-results
           path: |
+            e2e.log
+            e2e-logcat.txt
+            e2e-server-ps.txt
             screenshot.png
             test-10s.mkv
             metrics.json
+          # e2e.log / logcat exist even when the test fails; the media
+          # files only exist on success.
+          if-no-files-found: warn

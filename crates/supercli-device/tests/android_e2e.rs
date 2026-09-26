@@ -132,9 +132,39 @@ fn tap_latency_adb(serial: &str, x: u32, y: u32) -> Result<Duration, DeviceError
     Ok(t0.elapsed())
 }
 
+/// Wait for the emulator to finish booting, polling
+/// `sys.boot_completed`. The CI script also waits, but the test must not
+/// trust its invoker: a panic here used to be indistinguishable from a
+/// scrcpy failure (CI run #2 died in ~2 min total, i.e. suspiciously fast
+/// for boot + 60 s of video).
+fn wait_for_boot(serial: &str) -> Result<(), DeviceError> {
+    use std::process::Command;
+    eprintln!("e2e: stage=boot_wait_start");
+    let deadline = Instant::now() + Duration::from_secs(300);
+    loop {
+        let out = Command::new("adb")
+            .args(["-s", serial, "shell", "getprop", "sys.boot_completed"])
+            .output()
+            .map_err(DeviceError::Io)?;
+        let prop = String::from_utf8_lossy(&out.stdout);
+        if prop.trim() == "1" {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(DeviceError::Timeout {
+                tool: format!("adb shell getprop sys.boot_completed on {serial}"),
+            });
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
 fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
     let kvm_present = Path::new("/dev/kvm").exists();
     eprintln!("e2e: /dev/kvm present = {kvm_present}");
+
+    wait_for_boot(serial)?;
+    eprintln!("e2e: stage=boot_completed serial={serial}");
 
     eprintln!("e2e: connecting to {serial} ...");
     let mut client = ScrcpyNative::connect(serial)?;
@@ -164,6 +194,12 @@ fn run_e2e(serial: &str) -> Result<Metrics, DeviceError> {
             match iter.next() {
                 Some(Ok(pkt)) => {
                     packets_read += 1;
+                    if packets_read == 1 {
+                        eprintln!("e2e: stage=first_packet");
+                    }
+                    if packets_read.is_multiple_of(100) {
+                        eprintln!("e2e: stage=packets n={packets_read}");
+                    }
                     if pkt.is_keyframe {
                         keyframes += 1;
                     }
@@ -280,7 +316,13 @@ fn android_headless_e2e() {
     let metrics_out =
         std::env::var("METRICS_OUT").unwrap_or_else(|_| "metrics.json".to_string());
 
-    let m = run_e2e(&serial).expect("android e2e failed");
+    let m = match run_e2e(&serial) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("e2e: FATAL stage dump above; error = {e:?}");
+            panic!("android e2e failed: {e:?}");
+        }
+    };
     let json = m.to_json();
     eprintln!("e2e metrics:\n{json}");
     fs::write(&metrics_out, &json).expect("write metrics.json");

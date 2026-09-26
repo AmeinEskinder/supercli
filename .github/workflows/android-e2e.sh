@@ -26,28 +26,54 @@ export PATH="$HOME/.cargo/bin:$PATH"
 # The action exports ANDROID_SERIAL=emulator-<port> into the script env.
 SERIAL="${ANDROID_SERIAL:-emulator-5554}"
 
+echo "=== stage: boot_wait ==="
 adb wait-for-device
 adb -s "$SERIAL" shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
 adb -s "$SERIAL" shell getprop sys.boot_completed
+echo "=== stage: boot_completed ==="
 ls -la /dev/kvm || true
+# Fresh logcat so the post-test dump only covers this run.
+adb -s "$SERIAL" logcat -c || true
 
 # Real proof: connect through scrcpy_native, read >=600 H.264 packets,
 # measure fps / tap latency / pinch.
 cd "$GITHUB_WORKSPACE/crates"
+echo "=== stage: cargo_test_start ==="
+set +e
 SUPERCLI_ANDROID_E2E=1 \
 ANDROID_SERIAL="$SERIAL" \
 METRICS_OUT="$GITHUB_WORKSPACE/metrics.json" \
 cargo test -p supercli-device --features device \
-  --test android_e2e -- --nocapture
+  --test android_e2e -- --nocapture > "$GITHUB_WORKSPACE/e2e.log" 2>&1
+TEST_STATUS=$?
+set -e
+echo "=== stage: cargo_test_done exit=$TEST_STATUS (full output in e2e.log) ==="
+tail -60 "$GITHUB_WORKSPACE/e2e.log" || true
 
-# Screenshot artifact.
-adb -s "$SERIAL" exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png"
+# Diagnostics are collected even when the test fails (upload step runs
+# `if: always()`), so the next failure explains itself.
+echo "=== stage: collect_diagnostics ==="
+adb -s "$SERIAL" logcat -d > "$GITHUB_WORKSPACE/e2e-logcat.txt" 2>/dev/null || true
+adb -s "$SERIAL" shell ps -A 2>/dev/null | grep -i -E "scrcpy|app_process" \
+  > "$GITHUB_WORKSPACE/e2e-server-ps.txt" 2>/dev/null || true
 
-# 10 s screen recording, remuxed to mkv.
-adb -s "$SERIAL" shell screenrecord --time-limit 10 /sdcard/test.mp4
-adb -s "$SERIAL" pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4"
-sudo apt-get install -y ffmpeg
-ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv"
+# Screenshot artifact (best effort on failure).
+adb -s "$SERIAL" exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png" 2>/dev/null || true
 
-echo "=== metrics.json ==="
-cat "$GITHUB_WORKSPACE/metrics.json"
+# 10 s screen recording only on success: it costs ~15 s and is a demo
+# artifact, not a diagnostic.
+if [ "$TEST_STATUS" -eq 0 ]; then
+  adb -s "$SERIAL" shell screenrecord --time-limit 10 /sdcard/test.mp4
+  adb -s "$SERIAL" pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4"
+  sudo apt-get install -y ffmpeg
+  ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv"
+fi
+
+if [ -f "$GITHUB_WORKSPACE/metrics.json" ]; then
+  echo "=== metrics.json ==="
+  cat "$GITHUB_WORKSPACE/metrics.json"
+else
+  echo "=== no metrics.json (test did not complete) ==="
+fi
+
+exit "$TEST_STATUS"

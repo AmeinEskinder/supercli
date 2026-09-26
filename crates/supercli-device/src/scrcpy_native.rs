@@ -718,7 +718,13 @@ pub fn fallback_adb_input(serial: &DeviceId, input_args: &[&str]) -> Result<(), 
 const SOCKET_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How long to poll for the server's listening socket after `app_process`.
-const SERVER_START_POLL_TIMEOUT: Duration = Duration::from_secs(15);
+///
+/// 45 s: on a swiftshader (software-GL) emulator the JVM start plus
+/// MediaCodec init can take well over 15 s on first boot; giving up early
+/// was the prime suspect for CI run #2's fast panic (exit 101) in
+/// `ScrcpyNative::connect`. The poll loop logs progress so a future timeout
+/// is visible in the test output instead of silent.
+const SERVER_START_POLL_TIMEOUT: Duration = Duration::from_secs(45);
 
 fn adb_forward(serial: &DeviceId, local_port: u16) -> Result<(), DeviceError> {
     let spec = format!("tcp:{local_port}");
@@ -784,13 +790,33 @@ fn connect_socket(port: u16) -> Result<TcpStream, DeviceError> {
     let addr: SocketAddr = format!("127.0.0.1:{port}")
         .parse()
         .map_err(|_| DeviceError::Parse(format!("bad loopback port: {port}")))?;
-    let deadline = std::time::Instant::now() + SERVER_START_POLL_TIMEOUT;
+    eprintln!("scrcpy: stage=video_connect_wait port={port}");
+    let start = std::time::Instant::now();
+    let deadline = start + SERVER_START_POLL_TIMEOUT;
+    let mut logged_secs = 0u64;
     loop {
         match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
-            Ok(s) => return Ok(s),
+            Ok(s) => {
+                eprintln!(
+                    "scrcpy: stage=video_connected after={}ms",
+                    start.elapsed().as_millis()
+                );
+                return Ok(s);
+            }
             Err(e) => {
                 if std::time::Instant::now() >= deadline {
+                    eprintln!(
+                        "scrcpy: stage=video_connect_timeout after={}ms last_err={e}",
+                        start.elapsed().as_millis()
+                    );
                     return Err(DeviceError::Io(e));
+                }
+                let elapsed_secs = start.elapsed().as_secs();
+                // One line every 5 s so a slow (but alive) server start is
+                // visible; silence here + eventual timeout = server died.
+                if elapsed_secs >= logged_secs + 5 {
+                    logged_secs = elapsed_secs;
+                    eprintln!("scrcpy: still waiting for video socket ({elapsed_secs}s) ...");
                 }
                 std::thread::sleep(Duration::from_millis(200));
             }
@@ -821,11 +847,16 @@ impl ScrcpyNative {
             return Err(DeviceError::ToolMissing("adb".to_string()));
         }
         let serial = DeviceId::new(device_serial);
+        eprintln!("scrcpy: stage=connect_start serial={device_serial}");
         let jar = ensure_server_jar()?;
+        eprintln!("scrcpy: stage=jar_ok path={}", jar.display());
         deploy_server_jar(&serial, &jar)?;
+        eprintln!("scrcpy: stage=jar_pushed dest={SCRCPY_SERVER_DEVICE_PATH}");
         let port = pick_free_port()?;
         adb_forward(&serial, port)?;
+        eprintln!("scrcpy: stage=forward_ok port={port}");
         spawn_server(&serial)?;
+        eprintln!("scrcpy: stage=server_spawned version={SCRCPY_SERVER_VERSION}");
 
         // Video socket first: read and validate the stream header.
         let video = connect_socket(port)?;
@@ -842,9 +873,14 @@ impl ScrcpyNative {
                 header.codec
             )));
         }
+        eprintln!(
+            "scrcpy: stage=header_ok codec=h264 size={}x{} device='{}'",
+            header.width, header.height, header.device_name
+        );
 
         // Control socket second (audio is disabled, so this is socket #2).
         let control_stream = connect_socket(port)?;
+        eprintln!("scrcpy: stage=control_connected");
         let control = ControlChannel::new(
             control_stream,
             header.width.min(u16::MAX as u32) as u16,
