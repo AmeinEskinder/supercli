@@ -172,7 +172,7 @@ final class AppSettings {
       return v is Map<String, dynamic>
           ? v
           : v is Map
-              ? Map<String, dynamic>.from(v as Map)
+              ? Map<String, dynamic>.from(v)
               : <String, dynamic>{};
     }
 
