@@ -23,6 +23,24 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Minimal JSON string escaper for the audit log (the full `ui` module is
+/// not ported; this is all the audit path needs).
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// Which dangerous operation is being requested.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DangerousOpKind {
@@ -174,19 +192,19 @@ impl DangerAudit {
 
     pub fn to_json(&self) -> String {
         let by = match &self.approved_by {
-            Some(b) => format!("\"{}\"", super::ui::json_escape(b)),
+            Some(b) => format!("\"{}\"", json_escape(b)),
             None => "null".to_string(),
         };
         format!(
             "{{\"ts\":{},\"op\":\"{}\",\"device\":\"{}\",\"target\":\"{}\",\
              \"approved\":{},\"approved_by\":{},\"note\":\"{}\"}}",
             self.timestamp_ms,
-            super::ui::json_escape(&self.op),
-            super::ui::json_escape(&self.device),
-            super::ui::json_escape(&self.target),
+            json_escape(&self.op),
+            json_escape(&self.device),
+            json_escape(&self.target),
             self.approved,
             by,
-            super::ui::json_escape(&self.note),
+            json_escape(&self.note),
         )
     }
 }

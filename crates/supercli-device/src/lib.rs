@@ -115,6 +115,11 @@ pub enum DeviceError {
     Parse(String),
     /// Underlying I/O error.
     Io(io::Error),
+    /// Denied by the approval gate: no human allowed the dangerous operation.
+    Denied {
+        /// What was denied, e.g. "install /tmp/app.apk".
+        op: String,
+    },
 }
 
 impl fmt::Display for DeviceError {
@@ -450,6 +455,61 @@ pub trait DeviceBackend: Send + Sync {
     }
 }
 
+/// Forwarding impl so `Arc<dyn DeviceBackend>` can be used with
+/// [`danger::GuardedBackend`] (e.g. in the serve device provider).
+impl DeviceBackend for std::sync::Arc<dyn DeviceBackend> {
+    fn list(&self) -> Result<Vec<DeviceInfo>, DeviceError> {
+        (**self).list()
+    }
+    fn boot(&self, id: &DeviceId) -> Result<(), DeviceError> {
+        (**self).boot(id)
+    }
+    fn stop(&self, id: &DeviceId) -> Result<(), DeviceError> {
+        (**self).stop(id)
+    }
+    fn install(&self, id: &DeviceId, path: &std::path::Path) -> Result<(), DeviceError> {
+        (**self).install(id, path)
+    }
+    fn launch(&self, id: &DeviceId, app_id: &str) -> Result<(), DeviceError> {
+        (**self).launch(id, app_id)
+    }
+    fn screenshot(&self, id: &DeviceId) -> Result<Vec<u8>, DeviceError> {
+        (**self).screenshot(id)
+    }
+    fn logs(&self, id: &DeviceId, clear: bool) -> Result<String, DeviceError> {
+        (**self).logs(id, clear)
+    }
+    fn tap(&self, id: &DeviceId, x: u32, y: u32) -> Result<(), DeviceError> {
+        (**self).tap(id, x, y)
+    }
+    fn type_text(&self, id: &DeviceId, text: &str) -> Result<(), DeviceError> {
+        (**self).type_text(id, text)
+    }
+    fn swipe(
+        &self,
+        id: &DeviceId,
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        duration_ms: u32,
+    ) -> Result<(), DeviceError> {
+        (**self).swipe(id, x1, y1, x2, y2, duration_ms)
+    }
+    fn stream(&self, id: &DeviceId) -> Result<DeviceStream, DeviceError> {
+        (**self).stream(id)
+    }
+    fn describe_ui(&self, id: &DeviceId) -> Result<String, DeviceError> {
+        (**self).describe_ui(id)
+    }
+    fn density_dpi(&self, id: &DeviceId) -> Result<u32, DeviceError> {
+        (**self).density_dpi(id)
+    }
+    fn key(&self, id: &DeviceId, keycode: &str) -> Result<(), DeviceError> {
+        (**self).key(id, keycode)
+    }
+}
+
 #[cfg(feature = "device")]
 pub mod adb;
 #[cfg(feature = "device")]
@@ -458,6 +518,7 @@ pub mod baguette;
 pub mod baguette_native;
 #[cfg(feature = "device")]
 pub mod danger;
+#[cfg(feature = "device")]
 #[cfg(test)]
 mod fake;
 #[cfg(feature = "device")]
