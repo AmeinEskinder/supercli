@@ -6,11 +6,17 @@
 //! and verifies from the external file that there are zero duplicates and
 //! the same run id is resumed.
 //!
-//! Usage: scheduled_kill_helper --home <dir> --side-effects <path>
+//! Progress markers: with `--progress <path>`, writes `run-created <id>`
+//! when the durable run is created, and `step-started <tool>` /
+//! `step-completed <tool>` around each tool call. The test waits for the
+//! `run-created` marker (with timeout) before SIGKILL, making the kill
+//! timing deterministic relative to run creation.
+//!
+//! Usage: scheduled_kill_helper --home <dir> --side-effects <path> [--progress <path>]
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use supercli_core::durable_runs::RunsDb;
@@ -20,15 +26,28 @@ use supercli_core::scheduled::{
     ScheduledToolExecutor, SystemClock,
 };
 
+/// Append a progress marker line to the progress file (fsync for durability
+/// across SIGKILL). No-op if `progress` is None.
+fn mark(progress: Option<&Path>, line: &str) {
+    if let Some(p) = progress {
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(p) {
+            let _ = writeln!(f, "{}", line);
+            let _ = f.sync_all();
+        }
+    }
+}
+
 struct FileExecutor {
     side_effects: PathBuf,
+    progress: Option<PathBuf>,
     lease_fence: Option<LeaseFence>,
 }
 
 impl FileExecutor {
-    fn new(side_effects: PathBuf) -> Self {
+    fn new(side_effects: PathBuf, progress: Option<PathBuf>) -> Self {
         Self {
             side_effects,
+            progress,
             lease_fence: None,
         }
     }
@@ -62,12 +81,14 @@ impl ScheduledToolExecutor for FileExecutor {
         tool: &str,
         _arguments: &serde_json::Value,
     ) -> Result<String, supercli_core::session_connectors::ToolCallFailure> {
+        mark(self.progress.as_deref(), &format!("step-started {}", tool));
         // Widen the kill window: sleep before the side effect.
         std::thread::sleep(Duration::from_millis(400));
         self.record(tool);
         // Sleep after too, so a kill can land between side effect and
         // the outcome journal write.
         std::thread::sleep(Duration::from_millis(200));
+        mark(self.progress.as_deref(), &format!("step-completed {}", tool));
         Ok(format!("ok:{}", tool))
     }
 }
@@ -76,6 +97,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut home: Option<PathBuf> = None;
     let mut side_effects: Option<PathBuf> = None;
+    let mut progress: Option<PathBuf> = None;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -87,8 +109,14 @@ fn main() {
                 side_effects = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
+            "--progress" => {
+                progress = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
             _ => {
-                eprintln!("usage: scheduled_kill_helper --home <dir> --side-effects <path>");
+                eprintln!(
+                    "usage: scheduled_kill_helper --home <dir> --side-effects <path> [--progress <path>]"
+                );
                 std::process::exit(2);
             }
         }
@@ -98,7 +126,15 @@ fn main() {
 
     // Open (or create) the durable-runs DB. Fail closed: no journal, no run.
     let db = RunsDb::open(&home).expect("open RunsDb");
-    let runner = ScheduledRunner::new(SystemClock).with_durable_runs(db);
+    let progress_clone = progress.clone();
+    let runner = ScheduledRunner::new(SystemClock)
+        .with_durable_runs(db)
+        .on_run_created(move |run_id| {
+            mark(
+                progress_clone.as_deref(),
+                &format!("run-created {}", run_id),
+            );
+        });
 
     // Fixed schedule id so restarts find the orphaned run.
     let spec = ScheduleSpec {
@@ -125,7 +161,7 @@ fn main() {
 
     let session_dir = home.join("sess");
     std::fs::create_dir_all(&session_dir).expect("create session dir");
-    let mut executor = FileExecutor::new(side_effects);
+    let mut executor = FileExecutor::new(side_effects, progress);
 
     match runner.run_trigger(&spec, &session_dir, &mut executor) {
         Ok(record) => {
