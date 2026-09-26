@@ -6,7 +6,7 @@ name: Apple prep (Dioxus, legacy frozen)
 on:
   workflow_dispatch:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
       - 'crates/supercli-client/**'

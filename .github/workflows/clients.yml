@@ -7,7 +7,7 @@ name: Apple clients (legacy, frozen)
 on:
   workflow_dispatch:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       # Legacy clients are frozen — no CI triggers. Manual dispatch only.
       - 'crates/supercli-native-bridge/**'

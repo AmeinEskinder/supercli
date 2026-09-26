@@ -1,6 +1,6 @@
 # Headless Android emulator proof for the native scrcpy client.
 #
-# Runs on every push to track-b-device (and manual dispatch). Boots a real
+# Runs on every push to main, next, feat/** (and manual dispatch). Boots a real
 # emulator with KVM (no window, no audio), then drives it through
 # crates/supercli-device/src/scrcpy_native.rs at two resolutions:
 #   - full device resolution (1080x2400, max_size unset)
@@ -45,7 +45,7 @@ name: device-android
 
 on:
   push:
-    branches: [track-b-device]
+    branches: ['main', 'next', 'feat/**']
   workflow_dispatch:
 
 env:

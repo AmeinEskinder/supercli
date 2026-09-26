@@ -6,7 +6,7 @@ name: Third-party notices
 
 on:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       - 'crates/**/Cargo.toml'
       - 'crates/Cargo.lock'

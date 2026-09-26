@@ -16,7 +16,7 @@ name: Memory benchmark
 on:
   workflow_dispatch:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       - 'crates/**'
       - 'crates/supercli-attach/**'

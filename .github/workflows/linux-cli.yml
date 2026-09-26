@@ -10,7 +10,7 @@ name: Linux CLI
 on:
   workflow_dispatch:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       - 'crates/**'
       - 'scripts/build-cli-linux.sh'

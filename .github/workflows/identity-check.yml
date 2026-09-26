@@ -6,13 +6,9 @@ name: Identity check
 
 on:
   push:
-    branches:
-      - 'track-b-*'
-      - 'supercli-*'
+    branches: ['main', 'next', 'feat/**']
   pull_request:
-    branches:
-      - 'track-b-*'
-      - 'supercli-*'
+    branches: ['main', 'next', 'feat/**']
 
 jobs:
   identity:

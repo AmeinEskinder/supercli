@@ -7,7 +7,7 @@ name: Native attach
 on:
   workflow_dispatch:
   push:
-    branches: ['track-b*', main]
+    branches: ['main', 'next', 'feat/**']
     paths:
       - 'crates/supercli-attach/**'
       - '.github/workflows/native-attach.yml'
