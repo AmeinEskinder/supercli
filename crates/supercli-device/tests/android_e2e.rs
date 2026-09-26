@@ -161,7 +161,10 @@ fn wait_settings_resumed(serial: &str) -> Result<(), DeviceError> {
         let out = adb_shell_output(serial, &["dumpsys", "activity", "activities"])?;
         for line in out.lines() {
             let t = line.trim();
-            if t.starts_with("mResumedActivity:") || t.starts_with("topResumedActivity:") {
+            // Separator-agnostic match: Android 14 emits
+            // `topResumedActivity=ActivityRecord{...}` (with `=`), older
+            // dumps use `topResumedActivity:`/`mResumedActivity:`.
+            if t.contains("mResumedActivity") || t.contains("topResumedActivity") {
                 eprintln!("e2e: resumed-activity field: {t}");
                 if t.contains("com.android.settings") {
                     return Ok(());
