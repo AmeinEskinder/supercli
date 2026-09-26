@@ -131,6 +131,45 @@ pub fn profile_path(home: &Path) -> std::path::PathBuf {
     home.join("profile.json")
 }
 
+/// Lock file guarding concurrent profile writers. Uses the same
+/// flock-on-a-lockfile pattern as the action-review log: the kernel
+/// releases the lock on process exit, so a crashed writer can never
+/// wedge the profile.
+fn profile_lock_path(home: &Path) -> std::path::PathBuf {
+    home.join("profile.json.lock")
+}
+
+#[cfg(unix)]
+fn lock_profile(home: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::io::AsRawFd;
+    let lock_path = profile_lock_path(home);
+    if let Some(dir) = lock_path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)?;
+    // Blocking flock: profile writes are rare and fast; a crashed holder
+    // is released by the kernel, so this cannot wedge.
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(file)
+}
+
+#[cfg(not(unix))]
+fn lock_profile(_home: &Path) -> std::io::Result<std::fs::File> {
+    // Non-Unix: no flock; the atomic rename below still guarantees a
+    // non-torn profile, just without cross-process exclusion.
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "flock not available",
+    ))
+}
+
 pub fn load_profile(home: &Path) -> Profile {
     let path = profile_path(home);
     match fs::read_to_string(&path) {
@@ -139,11 +178,81 @@ pub fn load_profile(home: &Path) -> Profile {
     }
 }
 
-/// Best-effort save; a profile write must never break the caller.
-pub fn save_profile(home: &Path, profile: &Profile) {
+/// Atomic, lock-protected save: serialize, write to a temp file, fsync,
+/// then rename over `profile.json`. A crash at any point leaves either
+/// the old profile or the new one — never a torn file.
+///
+/// Best-effort: a profile write must never break the caller, so all
+/// errors are swallowed. Returns true if the profile was durably written.
+pub fn save_profile(home: &Path, profile: &Profile) -> bool {
     let path = profile_path(home);
-    if let Ok(text) = serde_json::to_string_pretty(profile) {
-        let _ = fs::write(path, text);
+    if let Some(dir) = path.parent() {
+        if fs::create_dir_all(dir).is_err() {
+            return false;
+        }
+    }
+    let text = match serde_json::to_string_pretty(profile) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+    // Hold the lock for the read-modify-write cycle; the caller is
+    // expected to have loaded, mutated, and now saves under this lock.
+    // If locking fails (non-Unix), fall through to the atomic rename
+    // which still prevents torn reads.
+    let _lock = lock_profile(home).ok();
+
+    let tmp = path.with_extension("json.tmp");
+    let write_ok = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.flush()?;
+        f.sync_all()?;
+        Ok(())
+    })();
+    if write_ok.is_err() {
+        let _ = fs::remove_file(&tmp);
+        return false;
+    }
+    if fs::rename(&tmp, &path).is_err() {
+        let _ = fs::remove_file(&tmp);
+        return false;
+    }
+    true
+}
+
+/// Load, mutate, and atomically save the profile under the lock.
+/// The mutation runs while holding the exclusive lock, so concurrent
+/// writers cannot lose updates.
+pub fn update_profile(home: &Path, f: impl FnOnce(&mut Profile)) {
+    let _lock = lock_profile(home).ok();
+    let mut profile = load_profile(home);
+    f(&mut profile);
+    // Save without re-locking (we already hold it); the rename is atomic.
+    let path = profile_path(home);
+    if let Ok(text) = serde_json::to_string_pretty(&profile) {
+        let tmp = path.with_extension("json.tmp");
+        use std::io::Write;
+        let ok = (|| -> std::io::Result<()> {
+            let mut fh = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&tmp)?;
+            fh.write_all(text.as_bytes())?;
+            fh.flush()?;
+            fh.sync_all()?;
+            Ok(())
+        })()
+        .is_ok()
+            && fs::rename(&tmp, &path).is_ok();
+        if !ok {
+            let _ = fs::remove_file(&tmp);
+        }
     }
 }
 
@@ -202,7 +311,7 @@ mod tests {
         let mut p = Profile::default();
         p.record_approval("cargo test", true);
         p.set_pref("shell", "fish");
-        save_profile(&dir, &p);
+        assert!(save_profile(&dir, &p));
         let loaded = load_profile(&dir);
         assert_eq!(loaded, p);
         let _ = fs::remove_dir_all(&dir);
@@ -213,5 +322,44 @@ mod tests {
         let dir = std::env::temp_dir().join("supercli-profile-test-nonexistent-dir-xyz");
         let _ = fs::remove_dir_all(&dir);
         assert_eq!(load_profile(&dir), Profile::default());
+    }
+
+    #[test]
+    fn update_profile_is_atomic_under_concurrent_writers() {
+        use std::sync::{Arc, Barrier};
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-profile-test-atomic-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let dir = Arc::new(dir);
+        let barrier = Arc::new(Barrier::new(8));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let dir = dir.clone();
+            let barrier = barrier.clone();
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                for j in 0..25 {
+                    let tool = format!("tool-{i}-{j}");
+                    update_profile(&dir, |p| {
+                        p.record_approval(&tool, true);
+                    });
+                }
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        // All 200 updates landed: no lost updates, no torn JSON.
+        let loaded = load_profile(&dir);
+        assert_eq!(loaded.tool_outcomes.len(), 200);
+        // The file is valid JSON (never torn).
+        let text = fs::read_to_string(profile_path(&dir)).unwrap();
+        let _: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let _ = fs::remove_dir_all(&*dir);
     }
 }
