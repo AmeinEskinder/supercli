@@ -229,12 +229,21 @@ fi
 adb -s "$SERIAL" exec-out screencap -p > "$GITHUB_WORKSPACE/screenshot.png" 2>/dev/null || true
 
 # 10 s screen recording only on success: it costs ~15 s and is a demo
-# artifact, not a diagnostic.
+# artifact, not a diagnostic. Capture is NON-FATAL (Amein run #25): under
+# `set -e`, any failing capture command would flip the whole job red even
+# when both e2e tests passed. The job's exit code is tied ONLY to the two
+# e2e test exit codes.
 if [ "$TEST_STATUS" -eq 0 ]; then
-  adb -s "$SERIAL" shell screenrecord --time-limit 10 /sdcard/test.mp4
-  adb -s "$SERIAL" pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4"
-  sudo apt-get install -y ffmpeg
-  ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv"
+  echo "=== stage: capture_mkv (non-fatal) ==="
+  adb -s "$SERIAL" shell screenrecord --time-limit 10 /sdcard/test.mp4 \
+    || echo "capture failed: screenrecord"
+  adb -s "$SERIAL" pull /sdcard/test.mp4 "$RUNNER_TEMP/test.mp4" \
+    || echo "capture failed: adb pull test.mp4"
+  sudo apt-get install -y ffmpeg \
+    || echo "capture failed: apt-get install ffmpeg"
+  ffmpeg -y -i "$RUNNER_TEMP/test.mp4" -c copy "$GITHUB_WORKSPACE/test-10s.mkv" \
+    || echo "capture failed: ffmpeg remux to mkv"
+  echo "=== stage: capture_mkv_done ==="
 fi
 
 if [ -f "$GITHUB_WORKSPACE/metrics.json" ]; then
