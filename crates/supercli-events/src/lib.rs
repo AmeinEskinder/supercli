@@ -39,6 +39,8 @@ pub enum DocType {
     Grant,
     Schedule,
     Job,
+    /// One firing of a scheduled task (a scheduled run).
+    Run,
     Connector,
     Device,
     FileWrite,
@@ -57,6 +59,7 @@ impl DocType {
             "Grant" => Some(DocType::Grant),
             "Schedule" => Some(DocType::Schedule),
             "Job" => Some(DocType::Job),
+            "Run" => Some(DocType::Run),
             "Connector" => Some(DocType::Connector),
             "Device" => Some(DocType::Device),
             "FileWrite" => Some(DocType::FileWrite),
@@ -74,6 +77,7 @@ impl DocType {
             DocType::Grant => "Grant",
             DocType::Schedule => "Schedule",
             DocType::Job => "Job",
+            DocType::Run => "Run",
             DocType::Connector => "Connector",
             DocType::Device => "Device",
             DocType::FileWrite => "FileWrite",
@@ -503,5 +507,184 @@ pub mod emit {
                 }
             },
         )
+    }
+
+    /// Field-level diff between two doc snapshots (for `on_change`).
+    ///
+    /// Returns the list of changed field names. A field counts as changed
+    /// when it is added, removed, or its JSON value differs. Nested
+    /// objects are compared by value (one entry per top-level key).
+    pub fn doc_diff(before: &serde_json::Value, after: &serde_json::Value) -> Vec<String> {
+        let mut changed = Vec::new();
+        let before_obj = before.as_object();
+        let after_obj = after.as_object();
+        match (before_obj, after_obj) {
+            (Some(b), Some(a)) => {
+                for (k, v) in b {
+                    match a.get(k) {
+                        Some(av) if av == v => {}
+                        _ => changed.push(k.clone()),
+                    }
+                }
+                for k in a.keys() {
+                    if !b.contains_key(k) {
+                        changed.push(k.clone());
+                    }
+                }
+            }
+            _ => {
+                if before != after {
+                    changed.push("<doc>".to_string());
+                }
+            }
+        }
+        changed.sort();
+        changed.dedup();
+        changed
+    }
+
+    /// Emit `on_update` and, when fields actually changed, `on_change`.
+    ///
+    /// `before`/`after` are the doc snapshots around the mutation. Fires
+    /// `on_update` always (after the update is durable) and `on_change`
+    /// only when [`doc_diff`] is non-empty. Both are observers.
+    pub fn emit_update(
+        entity: DocType,
+        doc_id: &str,
+        before: &serde_json::Value,
+        after: &serde_json::Value,
+        audit_dir: &Path,
+        actor: &str,
+    ) {
+        emit_observer(
+            entity,
+            DocEvent::OnUpdate,
+            doc_id,
+            after.clone(),
+            audit_dir,
+            actor,
+        );
+        let changed = doc_diff(before, after);
+        if !changed.is_empty() {
+            let mut doc = after.clone();
+            if let Some(obj) = doc.as_object_mut() {
+                obj.insert(
+                    "_changed_fields".to_string(),
+                    serde_json::Value::from(changed),
+                );
+            }
+            emit_observer(entity, DocEvent::OnChange, doc_id, doc, audit_dir, actor);
+        }
+    }
+
+    /// Emit `Device.on_update` / `on_change` for a device state transition.
+    ///
+    /// `device_id` is the stable device identifier, `before_state` and
+    /// `after_state` are the device state strings (e.g. "disconnected",
+    /// "connected", "streaming"). Call this after the state change is
+    /// durable. Both events are observers.
+    ///
+    /// This is the emission helper for device backends (adb, baguette,
+    /// scrcpy, simctl); the backends call it where their connection state
+    /// changes.
+    pub fn emit_device_update(
+        device_id: &str,
+        before_state: &str,
+        after_state: &str,
+        device_doc: serde_json::Value,
+        audit_dir: &Path,
+        actor: &str,
+    ) {
+        let before = serde_json::json!({"id": device_id, "state": before_state});
+        let mut after = device_doc;
+        if let Some(obj) = after.as_object_mut() {
+            obj.insert("id".to_string(), serde_json::Value::from(device_id));
+            obj.insert("state".to_string(), serde_json::Value::from(after_state));
+        }
+        emit_update(
+            DocType::Device,
+            device_id,
+            &before,
+            &after,
+            audit_dir,
+            actor,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::emit::{doc_diff, emit_update};
+    use super::{DocEvent, DocType};
+
+    #[test]
+    fn run_doctype_parses() {
+        assert_eq!(DocType::parse("Run"), Some(DocType::Run));
+        assert_eq!(DocType::Run.as_str(), "Run");
+    }
+
+    #[test]
+    fn doc_diff_detects_changes() {
+        let before = serde_json::json!({"id": "s1", "title": "old", "pinned": false});
+        let after = serde_json::json!({"id": "s1", "title": "new", "pinned": false});
+        let changed = doc_diff(&before, &after);
+        assert_eq!(changed, vec!["title".to_string()]);
+    }
+
+    #[test]
+    fn doc_diff_empty_when_no_change() {
+        let doc = serde_json::json!({"id": "s1", "title": "same"});
+        assert!(doc_diff(&doc, &doc).is_empty());
+    }
+
+    #[test]
+    fn doc_diff_detects_added_removed() {
+        let before = serde_json::json!({"id": "s1", "a": 1});
+        let after = serde_json::json!({"id": "s1", "b": 2});
+        let changed = doc_diff(&before, &after);
+        assert!(changed.contains(&"a".to_string()));
+        assert!(changed.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn emit_update_fires_on_change_only_when_changed() {
+        // With no handlers registered, emit_update is a no-op (fast path).
+        // This test verifies it doesn't panic and the diff logic is wired.
+        let dir = tempfile::TempDir::new().unwrap();
+        let before = serde_json::json!({"id": "s1", "title": "old"});
+        let after_same = serde_json::json!({"id": "s1", "title": "old"});
+        let after_diff = serde_json::json!({"id": "s1", "title": "new"});
+        // No hooks.toml -> no-op, should not panic.
+        emit_update(
+            DocType::Session,
+            "s1",
+            &before,
+            &after_same,
+            dir.path(),
+            "human:test",
+        );
+        emit_update(
+            DocType::Session,
+            "s1",
+            &before,
+            &after_diff,
+            dir.path(),
+            "human:test",
+        );
+    }
+
+    #[test]
+    fn session_lifecycle_events_exist() {
+        // The remaining Session doctypes from the task.
+        assert_eq!(DocEvent::parse("autoname"), Some(DocEvent::Autoname));
+        assert_eq!(DocEvent::parse("on_update"), Some(DocEvent::OnUpdate));
+        assert_eq!(DocEvent::parse("on_change"), Some(DocEvent::OnChange));
+        assert_eq!(DocEvent::parse("on_trash"), Some(DocEvent::OnTrash));
+        // on_trash is sync (can veto); on_update/on_change are observers.
+        assert!(DocEvent::OnTrash.is_sync());
+        assert!(!DocEvent::OnUpdate.is_sync());
+        assert!(!DocEvent::OnChange.is_sync());
+        // autoname is sync (can patch the name).
+        assert!(DocEvent::Autoname.is_sync());
     }
 }

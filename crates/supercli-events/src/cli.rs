@@ -184,6 +184,127 @@ pub struct TraceRow {
     pub violation: Option<String>,
 }
 
+/// One hook run from the durable audit log (action-reviews.jsonl).
+///
+/// The audit log is the durable lineage: every hook run appends exactly one
+/// hash-chained entry with actor `hook:<name>`. The `tool` field encodes
+/// `<Entity>:<event>:<handler>`; the `args_hash` authenticates the full
+/// run details (event id, decision, patch, timing).
+#[derive(Debug, Clone)]
+pub struct AuditTraceRow {
+    /// When the run was recorded (unix ms).
+    pub ts_ms: u64,
+    /// The handler name (from actor `hook:<name>`).
+    pub handler: String,
+    /// Entity (from tool field).
+    pub entity: String,
+    /// Event (from tool field).
+    pub event: String,
+    /// Hook decision mapped to review decision: Approved (allow/escalate)
+    /// or Denied (reject).
+    pub decision: String,
+    /// SHA-256 of the canonical run details (event id, decision, patch,
+    /// timing, priority, outcome). Use to verify a specific run.
+    pub args_hash: String,
+    /// Hash-chain entry hash (for chain verification).
+    pub entry_hash: String,
+    /// Previous entry's hash (chain link).
+    pub prev_hash: String,
+}
+
+/// Read hook-run lineage from the audit log (action-reviews.jsonl).
+///
+/// Returns hook entries (actor `hook:*`, connector `hook`) newest-first,
+/// capped at `limit`. Each row carries the timing (ts_ms), handler
+/// decision, and audit hashes for verification.
+pub fn trace_audit(session_dir: &std::path::Path, limit: usize) -> Vec<AuditTraceRow> {
+    let path = session_dir.join("action-reviews.jsonl");
+    let content = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut rows: Vec<AuditTraceRow> = Vec::new();
+    for line in content.lines().rev() {
+        if rows.len() >= limit.max(1) {
+            break;
+        }
+        let v: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        // Hook entries have actor "hook:<name>" and connector "hook".
+        let actor = v.get("actor").and_then(|a| a.as_str()).unwrap_or("");
+        let connector = v.get("connector").and_then(|c| c.as_str()).unwrap_or("");
+        if connector != "hook" || !actor.starts_with("hook:") {
+            continue;
+        }
+        let handler = actor.strip_prefix("hook:").unwrap_or("").to_string();
+        // Tool field: "<Entity>:<event>:<handler>".
+        let tool = v.get("tool").and_then(|t| t.as_str()).unwrap_or("");
+        let mut parts = tool.splitn(3, ':');
+        let entity = parts.next().unwrap_or("").to_string();
+        let event = parts.next().unwrap_or("").to_string();
+        // Decision: Approved (allow/escalate) or Denied (reject).
+        let decision = v
+            .get("decision")
+            .and_then(|d| d.as_str())
+            .unwrap_or("")
+            .to_string();
+        rows.push(AuditTraceRow {
+            ts_ms: v.get("ts_ms").and_then(|t| t.as_u64()).unwrap_or(0),
+            handler,
+            entity,
+            event,
+            decision,
+            args_hash: v
+                .get("args_hash")
+                .and_then(|h| h.as_str())
+                .unwrap_or("")
+                .to_string(),
+            entry_hash: v
+                .get("entry_hash")
+                .and_then(|h| h.as_str())
+                .unwrap_or("")
+                .to_string(),
+            prev_hash: v
+                .get("prev_hash")
+                .and_then(|h| h.as_str())
+                .unwrap_or("")
+                .to_string(),
+        });
+    }
+    rows
+}
+
+/// Filter audit trace rows by event lineage.
+///
+/// Matches `filter` against entity, event, handler, or the args_hash /
+/// entry_hash prefix. Used by `hooks trace <id>` to show the full
+/// lineage for one event.
+pub fn filter_trace(rows: Vec<AuditTraceRow>, filter: &str) -> Vec<AuditTraceRow> {
+    let f = filter.to_lowercase();
+    rows.into_iter()
+        .filter(|r| {
+            r.entity.to_lowercase().contains(&f)
+                || r.event.to_lowercase().contains(&f)
+                || r.handler.to_lowercase().contains(&f)
+                || r.args_hash.to_lowercase().starts_with(&f)
+                || r.entry_hash.to_lowercase().starts_with(&f)
+        })
+        .collect()
+}
+
+/// Format a unix-ms timestamp as human-readable relative time.
+pub fn format_relative_time(ts_ms: u64, now_ms: u64) -> String {
+    let diff_s = now_ms.saturating_sub(ts_ms) / 1000;
+    if diff_s < 60 {
+        format!("{diff_s}s ago")
+    } else if diff_s < 3600 {
+        format!("{}m ago", diff_s / 60)
+    } else if diff_s < 86400 {
+        format!("{}h ago", diff_s / 3600)
+    } else {
+        format!("{}d ago", diff_s / 86400)
+    }
+}
+
 /// Recent handler runs, newest first, capped at `limit`.
 pub fn trace(dispatcher: &crate::runner::Dispatcher, limit: usize) -> Vec<TraceRow> {
     let mut entries = dispatcher.trace();
@@ -319,5 +440,99 @@ before_save = [
         assert_eq!(rows.len(), 2);
         assert!(rows[0].event_id.ends_with(":3"));
         assert!(rows[1].event_id.ends_with(":2"));
+    }
+}
+
+#[cfg(test)]
+mod trace_tests {
+    use super::*;
+
+    fn write_audit_log(dir: &std::path::Path, entries: &[serde_json::Value]) {
+        let path = dir.join("action-reviews.jsonl");
+        let mut content = String::new();
+        for e in entries {
+            content.push_str(&serde_json::to_string(e).unwrap());
+            content.push('\n');
+        }
+        std::fs::write(&path, content).unwrap();
+    }
+
+    fn hook_entry(handler: &str, entity: &str, event: &str, ts_ms: u64) -> serde_json::Value {
+        serde_json::json!({
+            "review_id": format!("r-{handler}"),
+            "ts_ms": ts_ms,
+            "actor": format!("hook:{handler}"),
+            "connector": "hook",
+            "tool": format!("{entity}:{event}:{handler}"),
+            "args_hash": format!("args-{handler}"),
+            "decision": "Approved",
+            "prev_hash": "prev",
+            "entry_hash": format!("entry-{handler}"),
+        })
+    }
+
+    #[test]
+    fn trace_audit_reads_hook_entries_newest_first() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write_audit_log(
+            dir.path(),
+            &[
+                hook_entry("h1", "Session", "on_update", 1000),
+                hook_entry("h2", "Session", "on_change", 2000),
+                // Non-hook entry should be skipped.
+                serde_json::json!({
+                    "review_id": "r-x",
+                    "ts_ms": 1500,
+                    "actor": "human:dev",
+                    "connector": "tool",
+                    "tool": "write_file",
+                    "args_hash": "x",
+                    "decision": "Approved",
+                    "prev_hash": "p",
+                    "entry_hash": "e",
+                }),
+            ],
+        );
+        let rows = trace_audit(dir.path(), 10);
+        assert_eq!(rows.len(), 2);
+        // Newest first.
+        assert_eq!(rows[0].handler, "h2");
+        assert_eq!(rows[1].handler, "h1");
+        assert_eq!(rows[0].entity, "Session");
+        assert_eq!(rows[0].event, "on_change");
+        assert_eq!(rows[0].decision, "Approved");
+        assert_eq!(rows[0].entry_hash, "entry-h2");
+    }
+
+    #[test]
+    fn filter_trace_matches_handler_and_hash() {
+        let dir = tempfile::TempDir::new().unwrap();
+        write_audit_log(
+            dir.path(),
+            &[
+                hook_entry("notify", "Session", "on_update", 1000),
+                hook_entry("audit", "Turn", "on_change", 2000),
+            ],
+        );
+        let rows = trace_audit(dir.path(), 10);
+        let filtered = filter_trace(rows.clone(), "notify");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].handler, "notify");
+
+        let filtered = filter_trace(rows.clone(), "entry-audit");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].handler, "audit");
+
+        let filtered = filter_trace(rows, "nonexistent");
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn format_relative_time_human_readable() {
+        let now = 1_000_000_000;
+        assert_eq!(format_relative_time(now - 30_000, now), "30s ago");
+        assert_eq!(format_relative_time(now - 120_000, now), "2m ago");
+        assert_eq!(format_relative_time(now - 3_600_000, now), "1h ago");
+        assert_eq!(format_relative_time(now - 172_800_000, now), "2d ago");
     }
 }

@@ -16,7 +16,11 @@ supercli hooks — document lifecycle hooks (hooks.toml)
   supercli hooks list [--json]     list registered handlers
   supercli hooks test <name> [--entity E] [--event V]
                                   dry-run one handler against a synthetic doc
-  supercli hooks trace [--limit N] recent handler runs (in-memory)
+  supercli hooks trace [<id>] [--limit N]
+                                  hook-run lineage from the audit log.
+                                  <id> filters by entity/event/handler or
+                                  hash prefix. Shows timing, decisions, and
+                                  audit hashes.
 
 Handlers are declared in hooks.toml:
   global:  ~/.supercli/hooks.toml
@@ -78,9 +82,14 @@ fn list(args: &[String]) -> Result<i32, String> {
             .collect();
         println!("{}", serde_json::to_string_pretty(&out).unwrap());
     } else if rows.is_empty() {
-        println!("No hooks registered. Add handlers to ~/.supercli/hooks.toml or .supercli/hooks.toml.");
+        println!(
+            "No hooks registered. Add handlers to ~/.supercli/hooks.toml or .supercli/hooks.toml."
+        );
     } else {
-        println!("{:<24} {:<12} {:<16} {:<8} {}", "NAME", "ENTITY", "EVENT", "PRIO", "TARGET");
+        println!(
+            "{:<24} {:<12} {:<16} {:<8} {}",
+            "NAME", "ENTITY", "EVENT", "PRIO", "TARGET"
+        );
         for r in &rows {
             if r.disabled {
                 println!(
@@ -114,14 +123,12 @@ fn test(args: &[String]) -> Result<i32, String> {
             "--entity" => {
                 i += 1;
                 let s = args.get(i).ok_or("--entity needs a value")?;
-                entity = DocType::parse(s)
-                    .ok_or_else(|| format!("unknown entity {s:?}"))?;
+                entity = DocType::parse(s).ok_or_else(|| format!("unknown entity {s:?}"))?;
             }
             "--event" => {
                 i += 1;
                 let s = args.get(i).ok_or("--event needs a value")?;
-                event = DocEvent::parse(s)
-                    .ok_or_else(|| format!("unknown event {s:?}"))?;
+                event = DocEvent::parse(s).ok_or_else(|| format!("unknown event {s:?}"))?;
             }
             other => return Err(format!("unknown flag {other:?}")),
         }
@@ -149,11 +156,11 @@ fn test(args: &[String]) -> Result<i32, String> {
 }
 
 fn trace(args: &[String]) -> Result<i32, String> {
-    // The dispatcher's trace ring is per-process (in-memory). For durable
-    // visibility, the outbox persists every observer delivery: pending /
-    // retrying entries in hook-outbox.jsonl, exhausted ones in the
-    // dead-letter file. Both live under the Supercli home.
+    // Polished trace: full event lineage from the durable audit log
+    // (action-reviews.jsonl), with timing, handler decisions, and audit
+    // hashes. The outbox shows pending/retrying observer deliveries.
     let mut limit = 20usize;
+    let mut filter: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -162,19 +169,109 @@ fn trace(args: &[String]) -> Result<i32, String> {
                 let s = args.get(i).ok_or("--limit needs a value")?;
                 limit = s.parse().map_err(|_| "invalid --limit")?;
             }
-            other => return Err(format!("unknown flag {other:?}")),
+            "--json" => {
+                // Handled below.
+            }
+            other if other.starts_with("--") => {
+                return Err(format!("unknown flag {other:?}"));
+            }
+            other => {
+                if filter.is_some() {
+                    return Err("trace takes at most one <id> filter".to_string());
+                }
+                filter = Some(other.to_string());
+            }
         }
         i += 1;
     }
+    let json = args.iter().any(|a| a == "--json");
     let home = supercli_core::app_paths::supercli_home();
-    let outbox = supercli_events::outbox::Outbox::new(&home);
+    let now = now_ms();
 
+    // 1. Audit lineage: every hook run, newest first.
+    let mut audit_rows = hooks_cli::trace_audit(&home, limit * 2);
+    if let Some(f) = &filter {
+        audit_rows = hooks_cli::filter_trace(audit_rows, f);
+    }
+    audit_rows.truncate(limit);
+
+    if json {
+        let out: Vec<serde_json::Value> = audit_rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "ts_ms": r.ts_ms,
+                    "age": hooks_cli::format_relative_time(r.ts_ms, now),
+                    "handler": r.handler,
+                    "entity": r.entity,
+                    "event": r.event,
+                    "decision": r.decision,
+                    "args_hash": r.args_hash,
+                    "entry_hash": r.entry_hash,
+                    "prev_hash": r.prev_hash,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&out).unwrap());
+    } else if audit_rows.is_empty() {
+        if filter.is_some() {
+            println!(
+                "No hook runs match the filter. Hook runs appear here after handlers execute."
+            );
+        } else {
+            println!("No hook runs recorded yet. Hook runs appear here after handlers execute.");
+        }
+    } else {
+        if let Some(f) = &filter {
+            println!("Hook lineage for {f:?} ({} runs):", audit_rows.len());
+        } else {
+            println!("Recent hook runs ({}):", audit_rows.len());
+        }
+        println!(
+            "{:<10} {:<18} {:<14} {:<10} {:<12} {}",
+            "AGE", "HANDLER", "ENTITY", "EVENT", "DECISION", "AUDIT HASH"
+        );
+        for r in &audit_rows {
+            // Decision marker: ✓ allow/escalate (Approved), ✗ reject (Denied).
+            let marker = if r.decision.eq_ignore_ascii_case("denied") {
+                "✗"
+            } else {
+                "✓"
+            };
+            let hash_short = r.entry_hash.get(..12).unwrap_or(&r.entry_hash);
+            println!(
+                "{:<10} {:<18} {:<14} {:<10} {} {:<12} {}",
+                hooks_cli::format_relative_time(r.ts_ms, now),
+                truncate(&r.handler, 18),
+                truncate(&r.entity, 14),
+                truncate(&r.event, 10),
+                marker,
+                r.decision,
+                hash_short,
+            );
+        }
+        println!();
+        println!("Full hashes (for verification):");
+        for r in audit_rows.iter().take(5) {
+            println!("  {}:{}:{}", r.entity, r.event, r.handler);
+            println!("    entry: {}", r.entry_hash);
+            println!("    args:  {}", r.args_hash);
+            println!("    prev:  {}", r.prev_hash);
+        }
+        if audit_rows.len() > 5 {
+            println!("  ... ({} more; use --json for all)", audit_rows.len() - 5);
+        }
+    }
+
+    // 2. Outbox: pending / retrying observer deliveries.
+    let outbox = supercli_events::outbox::Outbox::new(&home);
     let mut pending = outbox.load_all().map_err(|e| format!("outbox: {e}"))?;
     let mut pending_vec: Vec<_> = pending.drain().map(|(_, e)| e).collect();
     pending_vec.sort_by_key(|e| e.enqueued_ms);
+    println!();
     println!("Pending observer deliveries: {}", pending_vec.len());
     for e in pending_vec.iter().take(limit) {
-        let retry_in = e.next_retry_ms.saturating_sub(now_ms()) / 1000;
+        let retry_in = e.next_retry_ms.saturating_sub(now) / 1000;
         println!(
             "  {} {}:{} attempts={} retry_in={}s{}",
             e.event_id,
@@ -197,6 +294,14 @@ fn trace(args: &[String]) -> Result<i32, String> {
         println!("  {d}");
     }
     Ok(0)
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max.saturating_sub(1)])
+    }
 }
 
 fn now_ms() -> u64 {

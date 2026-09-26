@@ -457,6 +457,20 @@ impl EventBus {
     pub fn emit_turn_finished(&self, session_id: &str, turn_id: &str, outcome: &str) {
         let turn_id = turn_id.to_owned();
         let outcome = outcome.to_owned();
+        // Document-lifecycle event: Turn/on_update + on_change. The turn doc
+        // transitions from "started" to "finished" with an outcome; the
+        // outcome field changed, so on_change fires with the changed fields.
+        let before =
+            serde_json::json!({"id": turn_id, "session_id": session_id, "status": "started"});
+        let after = serde_json::json!({"id": turn_id, "session_id": session_id, "status": "finished", "outcome": outcome});
+        supercli_events::emit::emit_update(
+            supercli_events::DocType::Turn,
+            &turn_id,
+            &before,
+            &after,
+            &supercli_core::app_paths::supercli_home(),
+            "human:host",
+        );
         self.emit(session_id, |seq, at_ms| SessionEvent::TurnFinished {
             session_id: session_id.to_owned(),
             seq,
@@ -987,9 +1001,12 @@ mod tests {
     fn approval_answer_emits_approved_or_denied() {
         with_temp_home("answered", || {
             let bus = EventBus::new();
-            let approved_id =
-                write_review("s1", supercli_core::action_reviews::ReviewDecision::Approved);
-            let denied_id = write_review("s1", supercli_core::action_reviews::ReviewDecision::Denied);
+            let approved_id = write_review(
+                "s1",
+                supercli_core::action_reviews::ReviewDecision::Approved,
+            );
+            let denied_id =
+                write_review("s1", supercli_core::action_reviews::ReviewDecision::Denied);
             bus.emit_tool_answered("s1", &approved_id, true, Some("device:phone-1"));
             bus.emit_tool_answered("s1", &denied_id, false, None);
             let (events, _, _) = bus.poll("s1", 0, 128);

@@ -2151,6 +2151,10 @@ fn handle_with_effects(
                 }
             }
             if let Some(title) = title {
+                // Document-lifecycle event: Session/on_update + on_change.
+                let before = supercli_core::session_ops::title_marker(&session_id)
+                    .map(|t| serde_json::json!({"id": session_id, "title": t}))
+                    .unwrap_or_else(|| serde_json::json!({"id": session_id}));
                 if let Err(e) = supercli_core::session_ops::set_title(&session_id, &title) {
                     return (
                         500,
@@ -2159,6 +2163,15 @@ fn handle_with_effects(
                         )),
                     );
                 }
+                let after = serde_json::json!({"id": session_id, "title": title});
+                supercli_events::emit::emit_update(
+                    supercli_events::DocType::Session,
+                    &session_id,
+                    &before,
+                    &after,
+                    &supercli_core::app_paths::supercli_home(),
+                    "human:host",
+                );
             }
             match archived {
                 Some(true) => {
@@ -2225,7 +2238,8 @@ fn handle_with_effects(
             (200, supercli_core::plugin_updates::request().to_string())
         }
         ("POST", "/mobile/openers") => {
-            let (status, body) = supercli_core::controller_host::opener_response(&body_json(request));
+            let (status, body) =
+                supercli_core::controller_host::opener_response(&body_json(request));
             (status, body.to_string())
         }
         ("POST", "/mobile/integrations/install") => {
@@ -2446,8 +2460,11 @@ fn handle_project_organization(
         Ok(())
     };
     let color_writer: Option<ProjectColorWriter<'_>> = Some(&write_color);
-    let (status, body) =
-        supercli_core::controller_host::project_organization_response(body, &projects, color_writer);
+    let (status, body) = supercli_core::controller_host::project_organization_response(
+        body,
+        &projects,
+        color_writer,
+    );
     (status, body.to_string())
 }
 
@@ -3908,9 +3925,11 @@ mod tests {
             supercli_core::action_reviews::Actor::PolicyAllow,
         )
         .unwrap();
-        assert!(supercli_core::action_reviews::inflight_reviews(&session_dir)
-            .unwrap()
-            .is_empty());
+        assert!(
+            supercli_core::action_reviews::inflight_reviews(&session_dir)
+                .unwrap()
+                .is_empty()
+        );
 
         let request = Request {
             request_id: None,
@@ -5238,7 +5257,8 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
                     response.get("hostProtocol"),
                     Some(
                         &serde_json::to_value(
-                            supercli_core::controller_protocol::HostProtocolDescriptor::headless_v1()
+                            supercli_core::controller_protocol::HostProtocolDescriptor::headless_v1(
+                            )
                         )
                         .expect("descriptor json")
                     )
