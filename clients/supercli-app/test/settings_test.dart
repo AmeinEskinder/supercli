@@ -304,7 +304,7 @@ void main() {
     test('renders add and edit rows', () {
       const panel = WorkspacesSettingsPanel(
         workspaces: [
-          WorkspaceEntry(id: 'w1', name: 'unpeel', kind: 'local', path: '/src'),
+          WorkspaceEntry(id: 'w1', name: 'supercli', kind: 'local', path: '/src'),
         ],
       );
       final node = panel.build() as UiColumn;

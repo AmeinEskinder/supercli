@@ -1,7 +1,7 @@
 /// License settings: key entry, activation, seats.
 ///
 /// Port of `LicenseSettingsPanel.swift`. Covers checklist item 209:
-/// "Unpeel Link license section (activate, seats, release seat, get Link)".
+/// "Supercli Link license section (activate, seats, release seat, get Link)".
 library;
 
 import 'package:gpuidart/gpuidart.dart';
@@ -40,7 +40,7 @@ final class LicenseSettingsPanel {
       if (!activated) ...[
         const UiInput('license-key', placeholder: 'License key…'),
         const UiButton('license-activate', 'Activate'),
-        const UiButton('license-get-link', 'Get Unpeel Link'),
+        const UiButton('license-get-link', 'Get Supercli Link'),
       ] else
         UiRow('license-active-row', [
           UiText('license-key-masked', 'Key: ••••-${_last4(licenseKey)}'),

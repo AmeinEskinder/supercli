@@ -1,7 +1,7 @@
 /// Shared rendering helpers for the Git app pane.
 ///
 /// Status glyphs, diff-line classification, and the RLE-style diff renderer
-/// used by [GitPaneView]. These mirror the Rust `unpeel-apps` diffs app
+/// used by [GitPaneView]. These mirror the Rust `supercli-apps` diffs app
 /// (`crates/apps/diffs/src/ui.rs`, `git.rs`): status glyphs, unified diffs
 /// with size limits, and syntax-agnostic line coloring.
 ///

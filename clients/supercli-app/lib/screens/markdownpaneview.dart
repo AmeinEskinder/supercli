@@ -45,12 +45,12 @@ final class StubMarkdownDataSource {
       updated: '2026-09-26',
       body:
           '# supercli roadmap\n\n'
-          'Parity with **unpeel**, then *beyond*.\n\n'
+          'Parity with **supercli**, then *beyond*.\n\n'
           '## Milestones\n\n'
           '- [x] M1: rename + guard\n'
           '- [ ] M2: gpuidart desktop\n'
           '- [ ] M3: mobile parity\n\n'
-          '> Ship every feature unpeel had, with improvements.\n\n'
+          '> Ship every feature supercli had, with improvements.\n\n'
           '```sh\ncargo test --workspace --locked\n```\n\n'
           'See the [parity checklist](docs/parity/checklist.md).',
     ),
