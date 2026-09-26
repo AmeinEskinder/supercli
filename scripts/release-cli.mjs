@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Build and publish the SuperCLI CLI (`supercli` + `supercli-host` + `supercli-attach`) tarballs that
-// back `curl -fsSL https://supercli.com/install.sh | sh`.
+// back `curl -fsSL https://superc.li/install.sh | sh`.
 //
 // Operator/CI script, same transport as publish-cloudflare-release.mjs
 // (wrangler r2 object put into the supercli-releases bucket). R2 key layout,
@@ -103,7 +103,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv)
 const channel = String(args.channel ?? 'beta').toLowerCase()
 const bucket = String(args.bucket ?? process.env.SUPERCLI_RELEASE_BUCKET ?? configBucket ?? 'supercli-releases')
-const baseUrl = String(args['base-url'] ?? process.env.SUPERCLI_RELEASE_BASE_URL ?? 'https://supercli.com')
+const baseUrl = String(args['base-url'] ?? process.env.SUPERCLI_RELEASE_BASE_URL ?? 'https://superc.li')
 const dryRun = Boolean(args['dry-run'])
 const force = Boolean(args.force)
 const skipBuild = Boolean(args['skip-build'])
@@ -526,4 +526,4 @@ console.log(
   `Published cli ${channel} ${version}` +
     `${artifactRevision ? ` revision ${artifactRevision}` : ''} (${targets.join(', ')}) to ${bucket}`
 )
-console.log('Install with: curl -fsSL https://supercli.com/install.sh | sh')
+console.log('Install with: curl -fsSL https://superc.li/install.sh | sh')

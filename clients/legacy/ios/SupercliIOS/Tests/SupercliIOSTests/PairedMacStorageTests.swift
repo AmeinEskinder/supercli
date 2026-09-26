@@ -234,7 +234,7 @@ final class PairedMacStorageTests: XCTestCase {
 
     private var sampleRelay: RelayCredentials {
         RelayCredentials(
-            relayURL: URL(string: "wss://relay.supercli.com")!,
+            relayURL: URL(string: "wss://relay.superc.li")!,
             macID: "mac-1",
             relayToken: "relay-token",
             e2eKey: Data(repeating: 7, count: 32)
@@ -521,7 +521,7 @@ final class PairedMacStorageTests: XCTestCase {
         let legacy = record(macID: "mac-1", name: "Build 12 Mac")
         seedLegacy(legacy)
         let invalidRelay = RelayCredentials(
-            relayURL: URL(string: "wss://relay.supercli.com")!,
+            relayURL: URL(string: "wss://relay.superc.li")!,
             macID: "wrong-mac",
             relayToken: "relay-token",
             e2eKey: Data(repeating: 7, count: 32)
@@ -720,7 +720,7 @@ final class PairedMacStorageTests: XCTestCase {
             .invalid
         )
         let wrongLength = RelayCredentials(
-            relayURL: URL(string: "wss://relay.supercli.com")!,
+            relayURL: URL(string: "wss://relay.superc.li")!,
             macID: "mac-1",
             relayToken: "relay-token",
             e2eKey: Data(repeating: 7, count: 16)

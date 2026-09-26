@@ -2844,7 +2844,7 @@ mod tests {
             "version": 1,
             "devices": [{
                 "id": "device-1",
-                "name": "Tommy's iPhone",
+                "name": "Alex's iPhone",
                 "platform": "ios",
                 "tokenHash": sha256_hex("devtok"),
                 "pairedAtUnixMs": 1,
@@ -2854,7 +2854,7 @@ mod tests {
 
         assert_eq!(
             paired_device_for_token(&path, "devtok"),
-            Some(("device-1".into(), "Tommy's iPhone".into()))
+            Some(("device-1".into(), "Alex's iPhone".into()))
         );
         assert_eq!(paired_device_for_token(&path, "wrong"), None);
         assert_eq!(paired_device_for_token(&path, ""), None);
@@ -2875,7 +2875,7 @@ mod tests {
             "version": 1,
             "devices": [{
                 "id": "device-1",
-                "name": "Tommy's iPhone",
+                "name": "Alex's iPhone",
                 "tokenHash": sha256_hex("new-token"),
             }],
         });
@@ -2946,13 +2946,13 @@ mod tests {
         let mut registry = ClientRegistry::default();
         let now = 1_000_000;
         assert!(registry.touch_http(&ip(4), None, now));
-        assert!(!registry.touch_http(&ip(4), Some("Tommy's iPhone (device-1)"), now + 1));
+        assert!(!registry.touch_http(&ip(4), Some("Alex's iPhone (device-1)"), now + 1));
         let ws_id = registry.register_ws(&ip(5), None, "sess-a", now);
         let snapshot = registry.snapshot(now + 2);
         assert_eq!(snapshot.len(), 2);
         assert!(snapshot
             .iter()
-            .any(|c| c["device"] == "Tommy's iPhone (device-1)"));
+            .any(|c| c["device"] == "Alex's iPhone (device-1)"));
         registry.remove(&ws_id);
         assert_eq!(registry.snapshot(now + 2).len(), 1);
         // Idle expiry.

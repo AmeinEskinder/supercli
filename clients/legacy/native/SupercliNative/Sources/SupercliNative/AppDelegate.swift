@@ -797,7 +797,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, SPUU
     }
 
     @objc private func openHelpFromMenu() {
-        NSWorkspace.shared.open(URL(string: "https://supercli.com/docs")!)
+        NSWorkspace.shared.open(URL(string: "https://superc.li/docs")!)
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
@@ -850,7 +850,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, SPUU
 
     private static func isTrustedUpdateHost(_ host: String?) -> Bool {
         guard let host else { return false }
-        return host == "supercli.com" || host.hasSuffix(".supercli.com")
+        return host == "superc.li" || host.hasSuffix(".superc.li")
     }
 
     func feedURLString(for _: SPUUpdater) -> String? {

@@ -17,5 +17,5 @@ daemon:
 - `__viewport__` — parsed-screen snapshots of a hosted session
 
 Distributed two ways: bundled inside Supercli.app, and as part of the CLI
-install (`curl -fsSL https://supercli.com/install.sh | sh`) alongside the
+install (`curl -fsSL https://superc.li/install.sh | sh`) alongside the
 `supercli` TUI.

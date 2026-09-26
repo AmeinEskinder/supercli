@@ -38,7 +38,7 @@ Once the release artifact is published, the checksum-verified binary installer
 will be:
 
 ```sh
-curl -fsSL https://supercli.com/install/filetree/install.sh | sh
+curl -fsSL https://superc.li/install/filetree/install.sh | sh
 ```
 
 Supercli detects the installed `supercli-filetree` CLI directly from `PATH`; no

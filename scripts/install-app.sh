@@ -1,9 +1,9 @@
 #!/bin/sh
-# __BIN__ installer — served at https://supercli.com/install/__APP__/install.sh by
+# __BIN__ installer — served at https://superc.li/install/__APP__/install.sh by
 # the supercli-release-updates worker (which substitutes __DEFAULT_CHANNEL__
 # and the app placeholders).
 #
-#   curl -fsSL https://supercli.com/install/__APP__/install.sh | sh
+#   curl -fsSL https://superc.li/install/__APP__/install.sh | sh
 #
 # Installs `__BIN__`, an Supercli App (a standalone terminal tool that lights
 # up inside Supercli). Tarballs live in the same R2 release bucket as the Mac

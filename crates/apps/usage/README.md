@@ -20,7 +20,7 @@ logins; Codex, Claude, Grok, and Muse history stays local.
 ## Install
 
 ```sh
-curl -fsSL https://supercli.com/install/usage/install.sh | sh
+curl -fsSL https://superc.li/install/usage/install.sh | sh
 ```
 
 The checksum-verified installer places `supercli-usage` on `PATH`, where Supercli

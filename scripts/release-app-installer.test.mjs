@@ -29,7 +29,7 @@ function renderInstaller(root, app = 'filetree') {
   const binary = `supercli-${app}`
   const rendered = installerTemplate
     .replaceAll('__DEFAULT_CHANNEL__', 'beta')
-    .replaceAll('__BASE_URL__', 'https://supercli.com')
+    .replaceAll('__BASE_URL__', 'https://superc.li')
     .replaceAll('__APP__', app)
     .replaceAll('__BIN__', binary)
     .replaceAll('__TRY_LINES__', `echo "Try it:  ${binary}"`)
