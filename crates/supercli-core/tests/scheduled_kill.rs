@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -65,7 +65,7 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
 
 /// Get the (single) run id from <home>/runs.db using rusqlite (bundled).
 /// Returns None if the DB is missing or no run exists.
-fn get_run_id(home: &PathBuf) -> Option<String> {
+fn get_run_id(home: &Path) -> Option<String> {
     let db = home.join("runs.db");
     if !db.exists() {
         return None;
@@ -232,7 +232,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
 
 /// Count runs in the DB.
 #[allow(dead_code)]
-fn count_runs(home: &PathBuf) -> usize {
+fn count_runs(home: &Path) -> usize {
     let db = home.join("runs.db");
     let conn = match rusqlite::Connection::open(&db) {
         Ok(c) => c,

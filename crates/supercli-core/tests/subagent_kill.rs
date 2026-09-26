@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -66,7 +66,7 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
 /// Query the DB via rusqlite (bundled). Returns None if the DB is missing
 /// or the query fails. Output mimics the sqlite3 CLI default format:
 /// `|`-separated columns, newline-separated rows.
-fn db_query(home: &PathBuf, sql: &str) -> Option<String> {
+fn db_query(home: &Path, sql: &str) -> Option<String> {
     let db = home.join("runs.db");
     if !db.exists() {
         return None;
