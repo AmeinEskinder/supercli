@@ -1,32 +1,19 @@
-# Dioxus launcher Apple preparation (Track B Rust rewrite).
-#
-# This is NOT the upstream Swift Apple clients — those live in clients.yml
-# (macos-26, the macOS 26 SDK, Swift 6.2) and must stay there. This workflow
-# runs on macos-15 and covers only the Dioxus Rust launchers:
-#   1. Apple-target Rust checks (iOS bridge staticlib + the full client
-#      workspace — ring compiles on macOS where the Apple SDK exists).
-#   2. An unsigned iOS simulator app built with `dx bundle --platform ios`.
-#   3. MobAI device tests: the sim app is installed on a booted iOS
-#      simulator and the tests/device/ .mob smoke flows run through
-#      mobai-ci (free local-simulator lane; no account, no API key).
-#
-# MobAI does not replace Xcode/signing: the simulator .app here is unsigned
-# and runs in the simulator only. Device IPAs are operator-signed per
-# docs/APPLE_SETUP.md.
-name: Apple prep (Dioxus)
+# Dioxus launchers are FROZEN under clients/legacy/dioxus/ per Amein 2026-09-26.
+# This workflow no longer triggers on legacy changes. Manual dispatch only.
+# The gpuidart app (clients/supercli-app/) will get its own workflow.
+name: Apple prep (Dioxus, legacy frozen)
 
 on:
   workflow_dispatch:
   push:
     branches: ['track-b*', main]
     paths:
-      - 'clients/dioxus/**'
+      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
       - 'crates/supercli-client/**'
       - 'tests/device/**'
       - '.github/workflows/apple.yml'
   pull_request:
     paths:
-      - 'clients/dioxus/**'
       - 'crates/supercli-client/**'
       - 'tests/device/**'
       - '.github/workflows/apple.yml'

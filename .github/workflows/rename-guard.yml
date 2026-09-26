@@ -1,0 +1,53 @@
+name: rename-guard
+
+# Fails if any `unpeel` reference exists outside the documented allowlist.
+# See docs/rename-allowlist.md for the intentional exceptions.
+
+on:
+  push:
+    branches:
+      - 'track-b*'
+      - 'supercli*'
+  pull_request:
+
+jobs:
+  rename-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for unpeel references outside allowlist
+        run: |
+          set -euo pipefail
+          echo "Scanning for 'unpeel' (case-insensitive) outside allowlist..."
+          matches=$(grep -rli 'unpeel' . \
+            --exclude-dir=.git \
+            --exclude-dir=target \
+            --exclude-dir=node_modules \
+            --exclude-dir=__pycache__ \
+            --exclude-dir=gpuidart \
+            --exclude='*.lock' \
+            --exclude='*.pyc' \
+            --exclude='*.a' \
+            | grep -v -e '^./docs/book/' \
+                      -e '^./docs/internal/' \
+                      -e '^./clients/gpuidart/' \
+                      -e '^./clients/legacy/' \
+                      -e '^./clients/native/release-notes/' \
+                      -e '^./clients/native/licenses/' \
+                      -e 'CHANGELOG.md' \
+                      -e 'THIRD_PARTY_NOTICES.txt' \
+                      -e 'crates/apps/diffs/LICENSE' \
+                      -e 'crates/apps/filetree/LICENSE' \
+                      -e 'crates/supercli-cli/src/import_unpeel_cli.rs' \
+                      -e 'crates/supercli-core/fuzz/out/' \
+                      -e 'package-lock.json' \
+                      -e 'docs/rename-allowlist.md' \
+                      -e '.github/workflows/rename-guard.yml' \
+            || true)
+          if [ -n "$matches" ]; then
+            echo "FAIL: unpeel references found outside allowlist:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "PASS: 0 unpeel references outside allowlist."

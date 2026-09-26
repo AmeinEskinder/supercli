@@ -1,30 +1,19 @@
-# The Apple clients (clients/native, clients/ios, clients/shared) and the C-ABI bridge
-# crate build from this tree. One macOS job, kept cheap (macOS minutes cost
-# 10x): an unsigned Mac app assembled through the default from-source path,
-# the iOS package tests in a simulator, and the shared package's `swift test`.
-# No signing identities, notary credentials, or Sparkle keys exist here;
-# official signed builds are cut by the release scripts on an operator's Mac.
-name: Apple clients
+# The Apple clients are FROZEN under clients/legacy/ per Amein 2026-09-26.
+# This workflow no longer triggers on legacy client changes. The gpuidart
+# app (clients/supercli-app/) will get its own workflow when ready.
+# Kept for manual dispatch only.
+name: Apple clients (legacy, frozen)
 
 on:
   workflow_dispatch:
   push:
     branches: ['track-b*', main]
     paths:
-      # The Dioxus rewrite tree (clients/dioxus/**) is deliberately excluded:
-      # it is covered by apple.yml on macos-15 and nothing in the Swift
-      # clients consumes it, so a Dioxus-only push must not fire the
-      # expensive macos-26 Swift build.
-      - 'clients/native/**'
-      - 'clients/ios/**'
-      - 'clients/shared/**'
+      # Legacy clients are frozen — no CI triggers. Manual dispatch only.
       - 'crates/supercli-native-bridge/**'
       - '.github/workflows/clients.yml'
   pull_request:
     paths:
-      - 'clients/native/**'
-      - 'clients/ios/**'
-      - 'clients/shared/**'
       - 'crates/supercli-native-bridge/**'
       - '.github/workflows/clients.yml'
 

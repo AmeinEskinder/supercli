@@ -1,29 +1,19 @@
-# Android APK assembly for the Supercli Dioxus mobile launcher.
-#
-# The Rust code cross-compiles to Android (libmain.so) via `dx bundle`.
-# This workflow assembles the signed APK on an Ubuntu runner where the
-# Gradle daemon IPC works (it is broken in sandboxed environments).
-#
-# Local status (2026-09-22): APK assembly blocked in this sandbox.
-# `gradle --no-daemon -Dorg.gradle.daemon=false assembleDebug` fails with:
-#   "Could not receive a message from the daemon."
-# The --no-daemon flag still forks a single-use daemon for JVM settings,
-# and the daemon IPC channel is broken in this sandbox. Needs a real
-# machine/CI (this workflow).
+# Android APK assembly — FROZEN. The Dioxus mobile launcher is under
+# clients/legacy/dioxus/ per Amein 2026-09-26. Manual dispatch only.
+# The gpuidart mobile app will get its own workflow when mobile shells land.
 
-name: Android APK (Dioxus)
+name: Android APK (Dioxus, legacy frozen)
 
 on:
   workflow_dispatch:
   push:
     branches: ['track-b*', main]
     paths:
-      - 'clients/dioxus/**'
+      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
       - 'crates/supercli-client/**'
       - '.github/workflows/android.yml'
   pull_request:
     paths:
-      - 'clients/dioxus/**'
       - 'crates/supercli-client/**'
 
 env:
