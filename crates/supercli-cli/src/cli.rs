@@ -83,6 +83,7 @@ supercli — run and steer CLI agent sessions
   supercli workspaces [list | add <name> | remove <name>]
   supercli schedule add|list|pause|resume|remove|run-once|daemon
                                   scheduled autonomous sessions (opt-in)
+  supercli hooks list|test|trace   document lifecycle hooks (hooks.toml)
   supercli ideas add|list|done      capture and track ideas
   supercli migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
@@ -338,6 +339,16 @@ fn new_session(args: &Args) -> Result<(), String> {
     let id = supercli_core::session_ops::spawn_session(session, &cwd, None, cols, rows_n)?;
     supercli_core::session_host::wait_until_ready(&id, SESSION_READY_TIMEOUT)
         .map_err(|error| format!("session {id} did not become ready: {error}"))?;
+    // Document-lifecycle event: Session/AfterInsert. Fires after the session
+    // is durable and ready; observers cannot mutate the outcome.
+    supercli_events::emit::emit_observer(
+        supercli_events::DocType::Session,
+        supercli_events::DocEvent::AfterInsert,
+        &id,
+        serde_json::json!({"id": id, "cwd": cwd}),
+        &supercli_core::app_paths::supercli_home(),
+        "human:cli",
+    );
     if args.has("json") {
         println!("{}", serde_json::json!({ "id": id }));
     } else {
@@ -1033,6 +1044,7 @@ pub fn run(args: &[String]) -> i32 {
         },
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
+        "hooks" => Ok(crate::hooks_cli::run(&args[1..])),
         "ideas" => Ok(crate::ideas_cli::run(&args[1..])),
         "migrate" => {
             if args[1..].iter().any(|a| a == "--from-unpeel") {

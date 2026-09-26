@@ -11,6 +11,7 @@ members = [
     "supercli-client",
     "supercli-connector",
     "supercli-load",
+    "supercli-events",
 ]
 # The first-party Apps and the App Kit are their own workspace
 # (`crates/apps/Cargo.toml`): separate cadence, separate versions, and a

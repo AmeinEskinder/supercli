@@ -16,6 +16,7 @@ mod computer_cli;
 mod config_cli;
 mod connectors_cli;
 mod doctor_cli;
+mod hooks_cli;
 mod ideas_cli;
 mod import_unpeel_cli;
 mod init_cli;
