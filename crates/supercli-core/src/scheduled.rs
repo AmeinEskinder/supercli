@@ -850,31 +850,34 @@ impl<C: RunClock> ScheduledRunner<C> {
             }
             // Write-ahead: journal the intent BEFORE executing. A crash
             // after this row but before the call leaves a 'started' row
-            // with no outcome; resume classifies it via AttemptOutcome
-            // (NeverRan = safe to run, Ambiguous = NEEDS_REVIEW).
+            // with no outcome; resume classifies it via reconcile_orphan
+            // (Rerun/AlreadyComplete/NeedsReview).
             let input_hash = step_input_hash(&format!("{}:{}", call.tool, call.arguments));
-            if let Some((run_id, _)) = durable {
+            let intent = if let Some((run_id, _)) = durable {
                 if let Some(db) = self.runs_db.as_ref() {
-                    let _ =
-                        db.append_step(run_id, step_no, StepKind::Tool, &input_hash, None, None);
+                    match db.begin_step(run_id, step_no, StepKind::Tool, &input_hash) {
+                        Ok(intent) => Some(intent),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
                 }
-            }
+            } else {
+                None
+            };
             match executor.call_tool_detailed(&call.tool, &call.arguments) {
                 Ok(text) => {
                     steps += 1;
                     output_bytes = output_bytes.saturating_add(text.len() as u64);
                     // Journal the completion.
-                    if let Some((run_id, _)) = durable {
+                    if let Some(intent) = intent {
                         if let Some(db) = self.runs_db.as_ref() {
-                            let _ = db.append_step(
-                                run_id,
-                                step_no,
-                                StepKind::Tool,
-                                &input_hash,
-                                Some(&text),
-                                Some(&crate::action_reviews::AttemptOutcome::Executed {
+                            let _ = db.complete_step(
+                                &intent,
+                                &crate::action_reviews::AttemptOutcome::Executed {
                                     success: true,
-                                }),
+                                },
+                                Some(&text),
                             );
                         }
                     }
@@ -912,7 +915,7 @@ impl<C: RunClock> ScheduledRunner<C> {
                     // Journal the failure. An uncertain failure maps to
                     // Ambiguous (NEEDS_REVIEW, never replayed); a definite
                     // failure maps to Executed{success:false}.
-                    if let Some((run_id, _)) = durable {
+                    if let Some(intent) = intent {
                         if let Some(db) = self.runs_db.as_ref() {
                             let outcome = if failure.uncertain {
                                 crate::action_reviews::AttemptOutcome::Ambiguous {
@@ -921,14 +924,7 @@ impl<C: RunClock> ScheduledRunner<C> {
                             } else {
                                 crate::action_reviews::AttemptOutcome::Executed { success: false }
                             };
-                            let _ = db.append_step(
-                                run_id,
-                                step_no,
-                                StepKind::Tool,
-                                &input_hash,
-                                None,
-                                Some(&outcome),
-                            );
+                            let _ = db.complete_step(&intent, &outcome, None);
                         }
                     }
                     return AttemptResult {
