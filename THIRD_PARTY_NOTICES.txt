@@ -1,4 +1,4 @@
-UNPEEL THIRD-PARTY NOTICES — RUST
+SUPERCLI THIRD-PARTY NOTICES — RUST
 
 This file is generated deterministically from cargo metadata --locked.
 Identical license texts are included once and list every resolved package that uses them.
