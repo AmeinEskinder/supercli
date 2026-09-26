@@ -25,9 +25,9 @@ pub const DIRECTORY_PAGE_ENTRIES: usize = 128;
 pub const FILE_READ_DEFAULT_BYTES: u64 = 192 * 1024;
 pub const FILE_READ_MAX_BYTES: u64 = 1024 * 1024;
 
-type Failure = (u16, Value);
+pub(crate) type Failure = (u16, Value);
 
-fn fail(status: u16, message: impl Into<String>) -> Failure {
+pub(crate) fn fail(status: u16, message: impl Into<String>) -> Failure {
     (status, json!({ "error": message.into() }))
 }
 
@@ -74,7 +74,7 @@ impl ResourceScope {
     /// Lexically normalizes a Controller-supplied path and binds it to the
     /// scope root it lives under. No filesystem access happens here, so a
     /// denied path is refused before anything is opened.
-    fn resolve(&self, raw: &str) -> Result<ResolvedPath, Failure> {
+    pub(crate) fn resolve(&self, raw: &str) -> Result<ResolvedPath, Failure> {
         if raw.len() > 16 * 1024 || raw.chars().any(char::is_control) {
             return Err(fail(400, "Invalid Host path"));
         }
@@ -166,19 +166,81 @@ impl ResourceScope {
 
 /// A Controller path bound to its scope root: `root` joined with `relative`
 /// is `display`, and `relative` is walked component by component.
-struct ResolvedPath {
+pub(crate) struct ResolvedPath {
     root: PathBuf,
     relative: Vec<String>,
     display: PathBuf,
 }
 
+/// One entry of a directory listing for the files pane.
+#[derive(Debug, Clone)]
+pub(crate) struct FileEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u64,
+}
+
 impl ResolvedPath {
+    /// The normalized absolute path, for display and for subprocess use
+    /// (e.g. `git -C`).
+    pub(crate) fn display_path(&self) -> &Path {
+        &self.display
+    }
+
+    /// List files and directories (no-follow), sorted dirs-first then by name.
+    pub(crate) fn list_file_entries(&self) -> Result<Vec<FileEntry>, Failure> {
+        let dir = self.open_dir()?;
+        let names = secure_fs::entry_names(&dir).map_err(walk_error)?;
+        let mut entries = Vec::new();
+        for name in names {
+            let Ok(name) = String::from_utf8(name) else {
+                continue;
+            };
+            if name == "." || name == ".." {
+                continue;
+            }
+            let (is_dir, size) = match secure_fs::metadata_at(&dir, name.as_bytes()) {
+                Ok(metadata) if metadata.directory => (true, 0),
+                Ok(metadata) if metadata.regular_file => {
+                    let size = secure_fs::open_regular_read_at(&dir, name.as_bytes())
+                        .and_then(|f| f.metadata())
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    (false, size)
+                }
+                // Symlinks and specials are listed without a size; never followed.
+                Ok(_) => (false, 0),
+                Err(_) => continue,
+            };
+            entries.push(FileEntry { name, is_dir, size });
+            if entries.len() > 2 * DIRECTORY_PAGE_ENTRIES {
+                break;
+            }
+        }
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        entries.truncate(DIRECTORY_PAGE_ENTRIES);
+        Ok(entries)
+    }
+
+    /// Atomically write bytes to this path (parent walked no-follow; the
+    /// leaf itself is never a symlink — `atomic_write_regular_at` refuses
+    /// non-regular targets).
+    pub(crate) fn write_bytes(&self, bytes: &[u8]) -> Result<(), Failure> {
+        let (parent, leaf) = self.open_parent()?;
+        secure_fs::atomic_write_regular_at(&parent, leaf.as_bytes(), bytes)
+            .map_err(walk_error)
+    }
+
     fn open_root(&self) -> Result<File, Failure> {
         secure_fs::open_configured_root(&self.root).map_err(walk_error)
     }
 
     /// Opens the directory at this path, one no-follow component at a time.
-    fn open_dir(&self) -> Result<File, Failure> {
+    pub(crate) fn open_dir(&self) -> Result<File, Failure> {
         let mut dir = self.open_root()?;
         for component in &self.relative {
             dir = step_into(&dir, component)?;
@@ -187,7 +249,7 @@ impl ResolvedPath {
     }
 
     /// Opens the parent directory no-follow and returns it with the leaf.
-    fn open_parent(&self) -> Result<(File, &str), Failure> {
+    pub(crate) fn open_parent(&self) -> Result<(File, &str), Failure> {
         let Some((leaf, parents)) = self.relative.split_last() else {
             return Err(fail(
                 400,
@@ -385,6 +447,9 @@ fn body_path(request: &ControllerRequest) -> Result<&str, Failure> {
 }
 
 pub fn route(request: &ControllerRequest) -> Option<ControllerResponse> {
+    if let Some(response) = crate::host_git::route(request) {
+        return Some(response);
+    }
     let query = |key: &str| {
         request
             .query

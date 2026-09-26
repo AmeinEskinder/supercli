@@ -30,23 +30,27 @@ are for Amein; host-backend gaps block live data until the Host ships routes.
 
 ## Host backend gaps (supercli-serve)
 
-### GAP-A1 — No git backend route
-- The Host exposes no git status/diff/log/push route (`HostClient` has
-  approvals/sessions/messages/browser only). The Git pane renders from
-  `StubGitDataSource` (clearly marked STUB in
-  `lib/widgets/git_widgets.dart`). Live data needs e.g.
-  `GET /mobile/git/status`, `GET /mobile/git/diff?path=…`,
-  `GET /mobile/git/log`, `POST /mobile/git/{stage,commit,push,…}`.
+### GAP-A1 — Git backend route now exists (Host side)
+- RESOLVED (Host side, 2026-09-26, `track-b-parity-hostroutes`):
+  `crates/supercli-core/src/host_git.rs` exposes `GET /mobile/git/status`,
+  `GET /mobile/git/diff`, `GET /mobile/git/history`,
+  `POST /mobile/git/{stage,unstage,commit,fetch,pull,push}` (all scoped
+  through `ResourceScope`; 10 Rust tests against a temp repo).
+  `HostClient` gained `gitStatus/gitDiff/gitHistory/gitStage/gitUnstage/
+  gitCommit/gitFetch/gitPull/gitPush` (12 Dart mock-Host tests) and
+  `lib/screens/git_pane_controller.dart` binds the view's callbacks.
+- REMAINING: the Git pane still renders from `StubGitDataSource` by
+  default; the app shell must construct it via `GitPaneController.view()`
+  and feed live data (worker h's app-shell integration).
 
-### GAP-A2 — No file-browse / notes / usage backend routes
-- The Files pane (`StubFilesDataSource`), Markdown pane
-  (`StubMarkdownDataSource`), and Usage pane (`StubUsageDataSource`) all
-  render representative stub data. Live data needs e.g.
-  `GET /mobile/files/list?path=…`, `GET /mobile/notes`,
-  `GET /mobile/usage`.
-- Row 140 (panes follow the neighbouring agent's project/worktree) is
-  modeled via `rootPath` on the Files stub; the real follow behavior needs
-  the Host to report the adjacent agent's worktree.
+### GAP-A2 — File-browse / usage backend routes now exist (Host side)
+- RESOLVED (Host side, 2026-09-26, `track-b-parity-hostroutes`):
+  `GET /mobile/files/list`, `POST /mobile/files/write` (atomic,
+  scope-checked), `GET /mobile/usage/stats` (session counts + provider
+  transcript presence) in `host_git.rs`; `HostClient.filesList/filesRead/
+  filesWrite/usageStats` with Dart tests.
+- REMAINING: Files/Usage panes still render stub data; shell integration
+  pending (worker h). Notes (`GET /mobile/notes`) not yet implemented.
 
 ## Deliberately not gaps
 - `UiColumn`, `UiRow`, `UiText`, `UiButton`, `UiStyle`, `UiColor`,
