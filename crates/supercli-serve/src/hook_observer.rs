@@ -74,8 +74,8 @@ fn pump_once(outbox: &Outbox, dispatcher: &Dispatcher) -> Result<(), String> {
     for entry in due {
         let entity = DocType::parse(&entry.entity)
             .ok_or_else(|| format!("bad entity {:?}", entry.entity))?;
-        let event = DocEvent::parse(&entry.event)
-            .ok_or_else(|| format!("bad event {:?}", entry.event))?;
+        let event =
+            DocEvent::parse(&entry.event).ok_or_else(|| format!("bad event {:?}", entry.event))?;
         if event.is_sync() {
             // Sync events never reach the outbox; a corrupt entry that
             // claims otherwise is dead-lettered, never delivered.

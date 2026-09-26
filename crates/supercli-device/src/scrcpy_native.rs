@@ -996,7 +996,9 @@ fn spawn_server(serial: &DeviceId, scid: &str) -> Result<(), DeviceError> {
                 // The server's own output is in the log files; surface it.
                 let stdout = std::fs::read_to_string(&stdout_log).unwrap_or_default();
                 let stderr = std::fs::read_to_string(&stderr_log).unwrap_or_default();
-                eprintln!("scrcpy: stage=server_died_immediately status={status} attempt={attempt}/3");
+                eprintln!(
+                    "scrcpy: stage=server_died_immediately status={status} attempt={attempt}/3"
+                );
                 eprintln!("scrcpy: server stdout: {stdout}");
                 eprintln!("scrcpy: server stderr: {stderr}");
                 last_err = Some(DeviceError::Parse(format!(

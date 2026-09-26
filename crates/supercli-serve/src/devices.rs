@@ -77,7 +77,11 @@ pub struct HubGate {
 
 impl HubGate {
     pub fn new(hub: Arc<ApprovalHub>, session: String, timeout: Duration) -> Self {
-        HubGate { hub, session, timeout }
+        HubGate {
+            hub,
+            session,
+            timeout,
+        }
     }
 
     /// Build a HubGate from the globally installed ApprovalHub, if present.
@@ -910,10 +914,7 @@ pub fn handle_device_http(method: &str, path: &str, body: &[u8]) -> (u16, String
             match v.get("path").and_then(|p| p.as_str()) {
                 Some(path_str) => {
                     let path = std::path::Path::new(path_str);
-                    match HubGate::from_global(
-                        format!("device-{id}"),
-                        Duration::from_secs(120),
-                    ) {
+                    match HubGate::from_global(format!("device-{id}"), Duration::from_secs(120)) {
                         Some(gate) => match provider().install_gated(&id, path, &gate) {
                             Ok(()) => (200, r#"{"ok":true}"#.to_string(), "application/json"),
                             Err(e) if e.starts_with("denied by approval gate:") => {
@@ -923,7 +924,9 @@ pub fn handle_device_http(method: &str, path: &str, body: &[u8]) -> (u16, String
                         },
                         None => (
                             503,
-                            json_error("approval hub not available; install requires human approval"),
+                            json_error(
+                                "approval hub not available; install requires human approval",
+                            ),
                             "application/json",
                         ),
                     }
@@ -1759,9 +1762,9 @@ mod tests {
     /// (Uses a deny gate directly; the HubGate path is covered above.)
     #[test]
     fn install_gated_denial_produces_zero_backend_calls() {
+        use std::sync::Mutex;
         use supercli_device::danger::{ApprovalDecision, ApprovalGate, DangerousOp};
         use supercli_device::{DeviceBackend, DeviceError, DeviceId, DeviceInfo, DeviceStream};
-        use std::sync::Mutex;
 
         struct DenyGate;
         impl ApprovalGate for DenyGate {
@@ -1783,11 +1786,7 @@ mod tests {
                     name: "test".to_string(),
                 }])
             }
-            fn install(
-                &self,
-                _id: &DeviceId,
-                path: &std::path::Path,
-            ) -> Result<(), DeviceError> {
+            fn install(&self, _id: &DeviceId, path: &std::path::Path) -> Result<(), DeviceError> {
                 self.calls
                     .lock()
                     .unwrap()
@@ -1849,11 +1848,7 @@ mod tests {
 
         let gate = DenyGate;
         let err = provider
-            .install_gated(
-                "emulator-5554",
-                std::path::Path::new("/tmp/app.apk"),
-                &gate,
-            )
+            .install_gated("emulator-5554", std::path::Path::new("/tmp/app.apk"), &gate)
             .unwrap_err();
         assert!(
             err.contains("denied by approval gate"),
@@ -1883,7 +1878,10 @@ mod tests {
             br#"{"x":100,"y":200,"action":"down"}"#,
         );
         assert_eq!(status, 502); // unwired backend, not 503 (no hub) or 403 (denied)
-        assert!(!body.contains("approval"), "touch must not mention approval: {body}");
+        assert!(
+            !body.contains("approval"),
+            "touch must not mention approval: {body}"
+        );
 
         // Install without a hub: 503 (requires approval, hub unavailable).
         let (status, body, _) = handle_device_http(
@@ -1891,7 +1889,13 @@ mod tests {
             "/api/devices/emulator-5554/install",
             br#"{"path":"/tmp/app.apk"}"#,
         );
-        assert_eq!(status, 503, "install without hub must be 503, got {status}: {body}");
-        assert!(body.contains("approval"), "install must mention approval: {body}");
+        assert_eq!(
+            status, 503,
+            "install without hub must be 503, got {status}: {body}"
+        );
+        assert!(
+            body.contains("approval"),
+            "install must mention approval: {body}"
+        );
     }
 }

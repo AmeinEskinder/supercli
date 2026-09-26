@@ -666,8 +666,11 @@ impl ActivityEngine {
         );
         if accepted && starts_turn(&canonical) {
             let entry = self.entries.get_mut(session_id).unwrap();
-            if supercli_core::hook_assets::hook_turn_expired(session_dir, current_generation, seed_at)
-            {
+            if supercli_core::hook_assets::hook_turn_expired(
+                session_dir,
+                current_generation,
+                seed_at,
+            ) {
                 entry.state = Some(HookState::Idle);
                 entry.deadline_at = None;
             } else {
@@ -1051,7 +1054,8 @@ mod tests {
 
     #[test]
     fn durable_stop_recovers_a_missed_post_after_live_hooks_have_latched() {
-        let dir = std::env::temp_dir().join(format!("supercli-hook-recovery-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("supercli-hook-recovery-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let seed = dir.join("last-hook-event.json");
         fs::write(
@@ -1296,8 +1300,10 @@ mod tests {
 
     #[test]
     fn runtime_generation_resets_old_latch_and_rejects_older_seed() {
-        let dir =
-            std::env::temp_dir().join(format!("supercli-tui-generation-seed-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-tui-generation-seed-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("last-hook-event.json"),

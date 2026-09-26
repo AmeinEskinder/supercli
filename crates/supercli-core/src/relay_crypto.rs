@@ -616,4 +616,3 @@ mod tests {
         assert_eq!(host.open(&sealed).unwrap(), b"known-answer-plaintext");
     }
 }
-

@@ -1531,7 +1531,8 @@ impl HostRuntime {
                 Ok(LinkRefreshResult::StoredKey { key, result }) => {
                     self.link_refresh_rx = None;
                     let request_is_current = self.owns_controller_serving()
-                        && supercli_core::license::stored().is_some_and(|(stored, _)| stored == key);
+                        && supercli_core::license::stored()
+                            .is_some_and(|(stored, _)| stored == key);
                     match result {
                         Ok(pending) if request_is_current => {
                             match supercli_core::license::commit_relay_entitlement_for_key(
@@ -1642,7 +1643,9 @@ impl HostRuntime {
             return;
         }
 
-        if supercli_core::license::stored_file_exists() && supercli_core::license::stored().is_none() {
+        if supercli_core::license::stored_file_exists()
+            && supercli_core::license::stored().is_none()
+        {
             if let Some(uplink) = self.relay_uplink.take() {
                 uplink.stop();
                 emitted.push(ServeEvent::LinkStopped {

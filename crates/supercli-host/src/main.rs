@@ -71,7 +71,8 @@ fn main() {
     }
 
     if args.as_slice() == [supercli_serve::service::WORKSPACE_WORKER_ARG] {
-        if let Err(error) = supercli_serve::service::run_workspace_worker(|event| println!("{event}"))
+        if let Err(error) =
+            supercli_serve::service::run_workspace_worker(|event| println!("{event}"))
         {
             eprintln!("{error}");
             std::process::exit(1);

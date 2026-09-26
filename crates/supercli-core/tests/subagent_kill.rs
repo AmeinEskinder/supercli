@@ -112,9 +112,11 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     println!("run 1 parent id: {}", parent_id_1);
 
     // The child run id, from the DB.
-    let child_id_1 =
-        db_query(&home, &format!("SELECT id FROM runs WHERE parent_run='{}';", parent_id_1))
-            .expect("sqlite3 available");
+    let child_id_1 = db_query(
+        &home,
+        &format!("SELECT id FROM runs WHERE parent_run='{}';", parent_id_1),
+    )
+    .expect("sqlite3 available");
     println!("run 1 child id: {}", child_id_1);
     assert!(
         !child_id_1.is_empty(),
@@ -134,10 +136,7 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("run 2 stdout:\n{}", stdout);
     println!("run 2 stderr:\n{}", stderr);
-    assert!(
-        output.status.success(),
-        "helper run 2 must exit 0"
-    );
+    assert!(output.status.success(), "helper run 2 must exit 0");
 
     // SAME parent id: the pointer file is only written on the fresh path.
     let parent_id_2 = fs::read_to_string(home.join("parent_run_id"))
@@ -160,16 +159,18 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     .expect("sqlite3 available");
     println!("child rows after restart: {}", child_rows);
     let parts: Vec<&str> = child_rows.split('|').collect();
-    assert_eq!(parts[0], "1", "exactly one child run must exist (no respawn)");
+    assert_eq!(
+        parts[0], "1",
+        "exactly one child run must exist (no respawn)"
+    );
     assert_eq!(
         parts[1], child_id_1,
         "the child run id must be unchanged after restart"
     );
 
     // No duplicate parents either.
-    let parent_count =
-        db_query(&home, "SELECT COUNT(*) FROM runs WHERE parent_run IS NULL;")
-            .expect("sqlite3 available");
+    let parent_count = db_query(&home, "SELECT COUNT(*) FROM runs WHERE parent_run IS NULL;")
+        .expect("sqlite3 available");
     assert_eq!(parent_count, "1", "exactly one parent run must exist");
 
     // Zero duplicates: each child step appears exactly once in the external

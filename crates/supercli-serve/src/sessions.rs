@@ -727,7 +727,9 @@ pub fn scan_sidebar(
                 exited_at,
             );
             let active_runtime_id = running
-                .then(|| supercli_core::session_host::active_runtime_id(manifest).map(str::to_owned))
+                .then(|| {
+                    supercli_core::session_host::active_runtime_id(manifest).map(str::to_owned)
+                })
                 .flatten();
             // Evidence-based surfaces: `can_archive_manifest` proves a real
             // resumable conversation (managed storage or provider markers).
@@ -1316,7 +1318,8 @@ pub fn model_from_bridge(
                 // evidence the app-less path uses, so bridge rows offer
                 // exactly what local rows would.
                 .unwrap_or_else(|| {
-                    command.trim().is_empty() || supercli_core::session_ops::can_archive_session(&id)
+                    command.trim().is_empty()
+                        || supercli_core::session_ops::can_archive_session(&id)
                 });
             rows.push(SessionRow {
                 host_started_at: None,
@@ -2212,7 +2215,8 @@ pub fn mobile_snapshot(
             ));
     }
 
-    let workspace_state = supercli_core::app_state::load().unwrap_or_else(|_| serde_json::json!({}));
+    let workspace_state =
+        supercli_core::app_state::load().unwrap_or_else(|_| serde_json::json!({}));
     let mut workspace_settings =
         supercli_core::controller_host::wire_workspace_settings(&workspace_state);
     let agents = supercli_core::plugins::agents_wire();

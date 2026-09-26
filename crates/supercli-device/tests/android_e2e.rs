@@ -157,12 +157,12 @@ where
 /// (older versions use `mResumedActivity`), so match either; poll for up
 /// to 10 s instead of checking once because the launch can be slow.
 /// Poll for Settings being the resumed activity.
-/// 
+///
 /// Returns `Ok(true)` if Settings resumed, `Ok(false)` if it did not resume
 /// after retries (caller should fall back to launcher-swipe animation rather
 /// than failing — the fps metric is not gated, and CI emulator slowness can
 /// leave Settings at INITIALIZING).
-/// 
+///
 /// Amein (run #24): poll for up to 20 s; the Settings launch exists only to
 /// animate the screen for the (ungated) fps metric.
 fn wait_settings_resumed(serial: &str) -> Result<bool, DeviceError> {

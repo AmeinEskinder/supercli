@@ -5,7 +5,9 @@
 
 use std::path::Path;
 
-use supercli_core::runtime_catalog::{builtin_runtime_catalog, RuntimeDescriptor, RuntimeLifecycle};
+use supercli_core::runtime_catalog::{
+    builtin_runtime_catalog, RuntimeDescriptor, RuntimeLifecycle,
+};
 
 fn runtime_for_identity(identity: &str) -> Option<&'static RuntimeDescriptor> {
     let catalog = builtin_runtime_catalog();

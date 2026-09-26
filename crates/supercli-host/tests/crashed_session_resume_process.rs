@@ -136,8 +136,9 @@ fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected()
     assert_eq!(manifest_pid_identity(&live_manifest), PidIdentity::Matches);
     supercli_core::session_host::save_manifest(&live_manifest).unwrap();
     assert!(!supercli_core::session_host::socket_path(live_missing_socket_id).exists());
-    let live_error = supercli_core::session_ops::resume_session(live_missing_socket_id, None, 80, 24)
-        .expect_err("a matching live child without a socket must not be replaced");
+    let live_error =
+        supercli_core::session_ops::resume_session(live_missing_socket_id, None, 80, 24)
+            .expect_err("a matching live child without a socket must not be replaced");
     assert!(live_error.contains("still running"), "{live_error}");
     assert!(live_child.try_wait().unwrap().is_none());
     assert_eq!(
@@ -167,8 +168,9 @@ fn crashed_running_manifest_resumes_but_a_healthy_running_manifest_is_rejected()
             && supercli_core::session_host::load_manifest(&replacement_id)
                 .is_some_and(|manifest| manifest.state == HostedSessionState::Running)
     }));
-    let replacement_error = supercli_core::session_ops::resume_session(&replacement_id, None, 80, 24)
-        .expect_err("the healthy replacement Host must not be replaced again");
+    let replacement_error =
+        supercli_core::session_ops::resume_session(&replacement_id, None, 80, 24)
+            .expect_err("the healthy replacement Host must not be replaced again");
     assert!(
         replacement_error.contains("still running"),
         "{replacement_error}"

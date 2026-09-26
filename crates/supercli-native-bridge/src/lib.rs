@@ -5196,8 +5196,11 @@ mod tests {
             let instance_id = registration.instance_id.clone();
             let hub = PlatformAdapterHub::default();
             hub.register(generation, registration).unwrap();
-            let response =
-                supercli_core::relay_wire::encode_tunnel_response(request.id, 200, br#"{"ok":true}"#);
+            let response = supercli_core::relay_wire::encode_tunnel_response(
+                request.id,
+                200,
+                br#"{"ok":true}"#,
+            );
             supercli_core::remote_stdio::write_frame(
                 &mut stream,
                 supercli_core::remote_stdio::FRAME_KIND_RESPONSE,
@@ -7215,7 +7218,8 @@ mod tests {
         unsafe {
             let mut pointer = ptr::null_mut();
             let mut length = 0;
-            let opener = br#"{"selector":"file:text/markdown","opener":"app:supercli.app.markdown"}"#;
+            let opener =
+                br#"{"selector":"file:text/markdown","opener":"app:supercli.app.markdown"}"#;
             let code = supercli_native_bridge_remote_opener_set(
                 handle,
                 opener.as_ptr(),

@@ -24,9 +24,7 @@ use std::time::Duration;
 
 use supercli_core::action_reviews::AttemptOutcome;
 use supercli_core::browser_engine::sha256_hex;
-use supercli_core::durable_runs::{
-    ReconcileHint, RunState, RunsDb, StepKind, step_input_hash,
-};
+use supercli_core::durable_runs::{step_input_hash, ReconcileHint, RunState, RunsDb, StepKind};
 
 const CHILD_STEPS: u64 = 3;
 const LEASE_TTL_MS: u64 = 500;
@@ -111,7 +109,10 @@ fn drive_child(db: &RunsDb, child_id: &str, log_path: &Path) {
         return;
     }
     let took_over = claim_with_retry(db, child_id);
-    println!("helper: child {} claimed (took_over={})", child_id, took_over);
+    println!(
+        "helper: child {} claimed (took_over={})",
+        child_id, took_over
+    );
     let plan = db.resume_run(child_id).expect("resume child");
     println!(
         "helper: child resume plan: completed={} first_incomplete={:?} needs_review={:?}",
@@ -210,11 +211,7 @@ fn main() {
 
         claim_with_retry(&db, &parent_id);
         let child_id = db
-            .create_run(
-                Some(&parent_id),
-                r#"{"task":"child-subagent"}"#,
-                "{}",
-            )
+            .create_run(Some(&parent_id), r#"{"task":"child-subagent"}"#, "{}")
             .expect("create child run");
         println!("helper: spawned child {}", child_id);
         drive_child(&db, &child_id, &side_effects);

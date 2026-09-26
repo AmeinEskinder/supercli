@@ -99,7 +99,9 @@ pub fn keygen(key_id: &str) -> Result<(PathBuf, PathBuf), SigningError> {
 pub fn load_secret_key(key_id: &str) -> Result<SigningKey, SigningError> {
     let path = keys_dir().join(format!("{key_id}.key"));
     let text = std::fs::read_to_string(&path).map_err(|_| {
-        SigningError::BadKey(format!("no key {key_id:?} (run `supercli connector keygen`)"))
+        SigningError::BadKey(format!(
+            "no key {key_id:?} (run `supercli connector keygen`)"
+        ))
     })?;
     let b64 = text
         .trim()
