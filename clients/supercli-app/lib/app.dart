@@ -16,6 +16,9 @@ import 'models.dart';
 import 'platform_keys.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
+import 'screens/settings_controller.dart';
+import 'screens/settingsview.dart';
+import 'screens/settingspanels.dart';
 import 'screens/sidebarview.dart';
 import 'screens/terminalarea.dart';
 import 'screens/toastcenter.dart';
@@ -30,6 +33,16 @@ final class SupercliApp {
   int selectedSession = 0;
   String statusLine = 'Connecting…';
   bool sidebarCollapsed = false;
+
+  /// Settings persistence controller, wired to the Host via
+  /// GET/POST /mobile/workspace-settings. Set by main.dart on startup.
+  SettingsController? settingsController;
+
+  /// True while the settings overlay is visible.
+  bool settingsOpen = false;
+
+  /// The currently visible settings tab.
+  SettingsTab activeSettingsTab = SettingsTab.general;
 
   /// Transient notifications from Host events (approvals, errors, …).
   final NotificationQueue notifications = NotificationQueue();
@@ -262,6 +275,13 @@ final class SupercliApp {
         ).build(),
       // MRU session switcher overlay (Ctrl-Tab): live MRU ordering.
       if (switcherOpen) MruSwitcherView(switcher: mruSwitcher).build(),
+      // Settings overlay (Ctrl+,): live settings from the Host via
+      // SettingsController. Edits debounce-persist to the Host.
+      if (settingsOpen && settingsController != null)
+        SettingsView(
+          settings: settingsController!.settings,
+          activeTab: activeSettingsTab,
+        ).build(),
     ]);
   }
 
@@ -304,6 +324,14 @@ final class SupercliApp {
         // Switcher-scoped dismiss while the overlay is open.
         if (switcherOpen)
           ...const AppKeybindings().switcherActions('mru-switcher'),
+        // Settings overlay (Ctrl+, to open, Esc to close when open).
+        const UiAction(name: 'settings.open', keys: 'ctrl+,'),
+        if (settingsOpen)
+          const UiAction(
+            name: 'settings.close',
+            keys: 'escape',
+            context: UiActionContext.node('settings-view'),
+          ),
       ];
   }
 

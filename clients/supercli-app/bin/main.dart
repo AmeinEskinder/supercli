@@ -24,6 +24,9 @@ import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/notifications.dart';
 import 'package:supercli_app/pane_layout.dart';
+import 'package:supercli_app/screens/settings_controller.dart';
+import 'package:supercli_app/screens/settingsview.dart';
+import 'package:supercli_app/screens/settingspanels.dart';
 
 Future<void> main(List<String> args) async {
   final host = _parseArg(args, '--host=') ?? '127.0.0.1';
@@ -46,6 +49,21 @@ Future<void> main(List<String> args) async {
     token: token,
   );
   final app = SupercliApp();
+
+  // Settings persistence: load workspace settings from the Host on startup.
+  // Edits debounce-persist via POST /mobile/workspace-settings. Failures
+  // surface as toasts through the NotificationQueue.
+  final settingsController = SettingsController(
+    host: client,
+    onError: (message) => app.notifications.add(AppNotification(
+      id: 'settings-error',
+      title: 'Settings error',
+      message: message,
+      severity: NotificationSeverity.error,
+    )),
+  );
+  app.settingsController = settingsController;
+  await settingsController.load();
 
   // Allow headless smoke runs (no native window) for CI.
   final headless = args.contains('--headless');
@@ -218,6 +236,13 @@ Future<void> _dispatchAction(
     case 'palette.open':
       app.openPalette();
       await refresh();
+    // --- Settings (Ctrl+,) ---
+    case 'settings.open':
+      app.settingsOpen = true;
+      await refresh();
+    case 'settings.close':
+      app.settingsOpen = false;
+      await refresh();
     case 'palette.up':
       app.paletteState?.moveUp();
       await refresh();
@@ -348,6 +373,33 @@ Future<void> _handleClick(
   HostClient client,
   Future<void> Function() refresh,
 ) async {
+  final id = event.id ?? '';
+
+  // Settings tab switching: buttons are 'settings-tab-<tabName>'.
+  if (id.startsWith('settings-tab-')) {
+    final tabName = id.substring('settings-tab-'.length);
+    final tab = SettingsTab.values.cast<SettingsTab?>().firstWhere(
+          (t) => t?.name == tabName,
+          orElse: () => null,
+        );
+    if (tab != null) {
+      app.activeSettingsTab = tab;
+      await refresh();
+    }
+    return;
+  }
+
+  // Settings toggles: buttons are '<setting-id>-toggle'. Map the ID to an
+  // AppSettings field, flip it, and debounce-persist via the controller.
+  if (id.endsWith('-toggle') && app.settingsController != null) {
+    final settingId = id.substring(0, id.length - '-toggle'.length);
+    if (_toggleSetting(app.settingsController!.settings, settingId)) {
+      app.settingsController!.edited();
+      await refresh();
+    }
+    return;
+  }
+
   final approval = app.pendingApproval;
   if (approval == null) return;
   if (event.id == 'mcp-allow' || event.id == 'approve') {
@@ -356,6 +408,54 @@ Future<void> _handleClick(
   } else if (event.id == 'mcp-deny' || event.id == 'deny') {
     await client.answerApproval(ApprovalAnswer.deny(approval.id));
     await refresh();
+  }
+}
+
+/// Flip a boolean [AppSettings] field by its UI control ID. Returns true
+/// if the ID mapped to a known setting.
+bool _toggleSetting(AppSettings settings, String id) {
+  switch (id) {
+    case 'worktree-access':
+      settings.worktreeAccess = !settings.worktreeAccess;
+      return true;
+    case 'auto-gallery':
+      settings.autoGallery = !settings.autoGallery;
+      return true;
+    case 'sessions-mcp':
+      settings.sessionsMcp = !settings.sessionsMcp;
+      return true;
+    case 'browser-mcp':
+      settings.browserMcp = !settings.browserMcp;
+      return true;
+    case 'feat-remote-ws':
+      settings.remoteWorkspaces = !settings.remoteWorkspaces;
+      return true;
+    case 'feat-git-worktrees':
+      settings.gitWorktrees = !settings.gitWorktrees;
+      return true;
+    case 'feat-browser-mcp':
+      settings.browserMcp = !settings.browserMcp;
+      return true;
+    case 'feat-auto-screenshots':
+      settings.autoAddBrowserScreenshots = !settings.autoAddBrowserScreenshots;
+      return true;
+    case 'transcript-content':
+      settings.transcriptContentEnabled = !settings.transcriptContentEnabled;
+      return true;
+    case 'notify-completion':
+      settings.notifyOnCompletion = !settings.notifyOnCompletion;
+      return true;
+    case 'notify-flags':
+      settings.notifyFlags = !settings.notifyFlags;
+      return true;
+    case 'adv-show-worktrees':
+      settings.showAgentWorktrees = !settings.showAgentWorktrees;
+      return true;
+    case 'adv-trace-log':
+      settings.traceLog = !settings.traceLog;
+      return true;
+    default:
+      return false;
   }
 }
 
