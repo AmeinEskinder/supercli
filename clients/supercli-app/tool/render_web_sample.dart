@@ -28,7 +28,6 @@ void main(List<String> args) {
       const UiButton('sample-new', 'New session'),
       const UiButton('sample-archive', 'Archive'),
     ]),
-    const HelpLinksView().build(),
   ]);
 
   final page = renderWebPage(rootJson: tree.toJson(), title: 'supercli web renderer sample');

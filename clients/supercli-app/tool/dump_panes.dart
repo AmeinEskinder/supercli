@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:supercli_app/pane_layout.dart';
+
 import 'package:supercli_app/screens/terminalarea.dart';
 import 'package:supercli_app/screens/terminalfindbar.dart';
 

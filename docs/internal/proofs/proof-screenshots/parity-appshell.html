@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>supercli app shell — mounted proof</title>
+<style>
+body { font-family: system-ui, sans-serif; background: #1e1e1e; color: #d4d4d4; margin: 0; padding: 16px; }
+h1 { font-size: 16px; color: #888; }
+.row { display: flex; gap: 8px; border: 1px solid #333; padding: 8px; margin: 4px 0; }
+.col { display: flex; flex-direction: column; gap: 8px; border: 1px solid #333; padding: 8px; margin: 4px 0; flex: 1; }
+.text { padding: 2px 4px; }
+.btn { background: #0e639c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.input { background: #3c3c3c; color: #d4d4d4; border: 1px solid #555; padding: 6px; border-radius: 4px; }
+.table { background: #252526; padding: 8px; border: 1px dashed #555; }
+#app-shell { border-color: #0e639c; }
+#sidebar { max-width: 280px; background: #252526; }
+#mcp-approval-overlay { background: #3a2e1a; border: 1px solid #d7a21b; }
+#toast-center { position: fixed; bottom: 16px; right: 16px; width: 320px; }
+</style></head>
+<body>
+<h1>supercli app shell — real UiNode tree from live Host bootstrap (worker h)</h1>
+  <div class="row" data-id="app-shell">
+    <div class="col" data-id="sidebar">
+      <div class="row" data-id="workspace-dots">
+        <button class="btn" data-id="wsdot-local">● local</button>
+      </div>
+      <input class="input" data-id="sidebar-filter" placeholder="Filter sessions…" />
+      <button class="btn" data-id="new-session">+ New Session</button>
+      <button class="btn" data-id="show-archived">Archived Sessions</button>
+    </div>
+    <div class="col" data-id="content-area">
+      <div class="col" data-id="terminal-area-root">
+        <div class="col" data-id="pane-layout">
+          <div class="col" data-id="pane-leaf-pane-1">
+            <div class="row" data-id="pane-header-pane-1">
+              <div class="text" data-id="pane-title-pane-1">zsh</div>
+              <div class="text" data-id="pane-focused-marker">●</div>
+              <button class="btn" data-id="pane-zoom-pane-1">⛶</button>
+              <button class="btn" data-id="pane-split-h-pane-1">◫</button>
+              <button class="btn" data-id="pane-split-v-pane-1">◧</button>
+              <button class="btn" data-id="pane-close-pane-1">×</button>
+            </div>
+            <div class="text" data-id="pane-body-pane-1">[zsh]</div>
+          </div>
+        </div>
+        <div class="text" data-id="terminal-status">Connected — 0 sessions, 0 pending approval(s).</div>
+      </div>
+      <div class="text" data-id="no-approval">No pending approvals.</div>
+      <div class="col" data-id="toast-center">
+
+      </div>
+      <input class="input" data-id="composer" placeholder="Type a message… (Enter to send)" />
+    </div>
+  </div>
+</body></html>

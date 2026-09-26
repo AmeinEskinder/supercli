@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:supercli_app/models.dart';
-import 'package:supercli_app/notifications.dart';
+
 import 'package:supercli_app/screens/mcpapprovalpanel.dart';
 import 'package:supercli_app/screens/toastcenter.dart';
 

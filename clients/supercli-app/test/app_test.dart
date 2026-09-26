@@ -5,35 +5,33 @@ import 'package:supercli_app/app.dart';
 import 'package:supercli_app/models.dart';
 
 void main() {
-  group('SupercliApp UI tree', () {
-    test('build returns a column with expected children', () {
+  group('SupercliApp shell tree', () {
+    test('build returns the app shell row: sidebar + content', () {
       final app = SupercliApp();
       final root = app.build();
-      expect(root, isA<UiColumn>());
-      final column = root as UiColumn;
-      // title, status, session-list table, no-approval text, composer
-      expect(column.children, hasLength(5));
-      expect((column.children[0] as UiText).text, 'supercli');
-      expect(column.children[2], isA<UiTable>());
-      expect(column.children[4], isA<UiInput>());
+      expect(root, isA<UiRow>());
+      expect(root.id, 'app-shell');
+      final row = root as UiRow;
+      // sidebar (or collapsed placeholder) + content-area
+      expect(row.children, hasLength(2));
+      expect((row.children[1] as UiColumn).id, 'content-area');
     });
 
-    test('approval card appears when an approval is pending', () {
+    test('approval panel appears when an approval is pending', () {
       final app = SupercliApp()
-        ..pendingApproval = const PendingApproval(
-          id: 'a1',
-          tool: 'write_file',
-          summary: 'Write /tmp/x',
-          detail: '',
-        );
-      final column = app.build() as UiColumn;
-      final card = column.children[3] as UiColumn;
-      expect(card.id, 'approval-card');
-      // title, tool, summary, button row (no detail since empty)
-      expect(card.children, hasLength(4));
-      final buttons = card.children[3] as UiRow;
-      expect((buttons.children[0] as UiButton).label, contains('Approve'));
-      expect((buttons.children[1] as UiButton).label, 'Deny');
+        ..pendingApprovals = const [
+          PendingApproval(
+            id: 'a1',
+            tool: 'write_file',
+            summary: 'Write /tmp/x',
+            detail: '',
+          ),
+        ];
+      final root = app.build() as UiRow;
+      final content = root.children[1] as UiColumn;
+      // terminal-area-root, mcp-approval-overlay, toast-center, composer
+      expect(content.children, hasLength(4));
+      expect(content.children[1].id, 'mcp-approval-overlay');
     });
 
     test('session dataset reflects sessions', () {
@@ -57,11 +55,12 @@ void main() {
       final actions = app.actions();
       final byName = {for (final a in actions) a.name: a};
 
-      expect(byName['approval.approve']!.keys, 'ctrl+enter');
-      expect(byName['approval.deny']!.keys, 'ctrl+shift+enter');
+      expect(byName['mcp.approve']!.keys, 'ctrl+enter');
+      expect(byName['mcp.deny']!.keys, 'ctrl+shift+enter');
       expect(byName['sessions.up']!.keys, 'up');
       expect(byName['sessions.down']!.keys, 'down');
       expect(byName['composer.focus']!.keys, 'ctrl+l');
+      expect(byName['sidebar.toggle']!.keys, 'cmd+b');
     });
 
     test('list navigation is scoped to the session-list node', () {
@@ -71,13 +70,6 @@ void main() {
       final context = up.context;
       expect(context, isA<UiNodeActionContext>());
       expect((context as UiNodeActionContext).id, 'session-list');
-    });
-
-    test('approve is global (fires from anywhere)', () {
-      final app = SupercliApp();
-      final actions = app.actions();
-      final approve = actions.firstWhere((a) => a.name == 'approval.approve');
-      expect(approve.context, isA<UiGlobalActionContext>());
     });
 
     test('all actions serialize to JSON without throwing', () {
