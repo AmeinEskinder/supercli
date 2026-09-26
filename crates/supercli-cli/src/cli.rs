@@ -85,6 +85,8 @@ supercli — run and steer CLI agent sessions
                                   scheduled autonomous sessions (opt-in)
   supercli hooks list|test|trace   document lifecycle hooks (hooks.toml)
   supercli ideas add|list|done      capture and track ideas
+  supercli runs list|show|resume|pause|cancel|retry
+                                  durable agent runs (crash-safe journal)
   supercli migrate [--apply] [--json]
                                   upgrade on-disk state (dry-run by default)
   supercli self-update --check [--manifest PATH] [--json]
@@ -1105,6 +1107,7 @@ pub fn run(args: &[String]) -> i32 {
         "connector" => Ok(crate::connectors_cli::run(&args[1..])),
         "schedule" => Ok(crate::schedule_cli::run(&args[1..])),
         "hooks" => Ok(crate::hooks_cli::run(&args[1..])),
+        "runs" => Ok(crate::runs_cli::run(&args[1..])),
         "ideas" => Ok(crate::ideas_cli::run(&args[1..])),
         "memory" => Ok(crate::memory_cli::run(&args[1..])),
         "migrate" => {

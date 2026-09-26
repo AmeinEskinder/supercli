@@ -26,6 +26,7 @@ mod mcp_cli;
 mod memory_cli;
 mod migrate_cli;
 mod open_cli;
+mod runs_cli;
 mod schedule_cli;
 mod self_update_cli;
 mod settings_cli;

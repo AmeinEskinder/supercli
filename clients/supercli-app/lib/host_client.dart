@@ -22,11 +22,15 @@ final class HostException implements Exception {
 }
 
 final class HostClient {
-  HostClient({required this.baseUrl, http.Client? httpClient})
+  HostClient({required this.baseUrl, http.Client? httpClient, this.token})
       : _http = httpClient ?? http.Client();
 
   final Uri baseUrl;
   final http.Client _http;
+
+  /// Paired-device `Bearer` token. The real Host requires it on every
+  /// /mobile route (over TLS); without it the Host answers 401.
+  final String? token;
 
   /// Tracks answered approval ids for client-side idempotency. The Host
   /// also enforces idempotency server-side (answer is a no-op if already
@@ -35,7 +39,21 @@ final class HostClient {
 
   bool get isAnswered => _answered.isNotEmpty;
 
+  Map<String, String> get _authHeaders =>
+      token == null ? const {} : {'authorization': 'Bearer $token'};
+
+  /// GET /mobile/bootstrap — the real Host's state snapshot. Carries
+  /// `pendingApprovals` (from the ApprovalHub) and session info.
+  Future<Map<String, dynamic>> bootstrap() async {
+    final response = await _get('/mobile/bootstrap');
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// GET /mobile/sessions — list session summaries.
+  ///
+  /// NOTE: the real Host does not expose this route; sessions come from
+  /// `GET /mobile/bootstrap`. Kept for the mock-era tests; prefer
+  /// [sessionsFromBootstrap].
   Future<List<SessionSummary>> listSessions() async {
     final response = await _get('/mobile/sessions');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -45,7 +63,29 @@ final class HostClient {
         .toList();
   }
 
+  /// Sessions parsed from a bootstrap body. Tolerates absence.
+  static List<SessionSummary> sessionsFromBootstrap(
+      Map<String, dynamic> bootstrap) {
+    final sessions = (bootstrap['sessions'] as List?) ?? const [];
+    return sessions
+        .map((s) => SessionSummary.fromJson(s as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Pending approvals parsed from a bootstrap body (real Host wire format).
+  static List<PendingApproval> approvalsFromBootstrap(
+      Map<String, dynamic> bootstrap) {
+    final approvals = (bootstrap['pendingApprovals'] as List?) ?? const [];
+    return approvals
+        .map((a) => PendingApproval.fromJson(a as Map<String, dynamic>))
+        .toList();
+  }
+
   /// GET /mobile/approvals — list pending approvals.
+  ///
+  /// NOTE: the real Host does not expose this route; approvals come from
+  /// `GET /mobile/bootstrap` as `pendingApprovals`. Kept for the mock-era
+  /// tests; prefer [approvalsFromBootstrap].
   Future<List<PendingApproval>> listApprovals() async {
     final response = await _get('/mobile/approvals');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -86,7 +126,9 @@ final class HostClient {
       path: '${baseUrl.path}/mobile/events/poll',
       queryParameters: {'timeout_ms': '${timeout.inMilliseconds}'},
     );
-    final response = await _http.get(url).timeout(timeout + const Duration(seconds: 5));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(timeout + const Duration(seconds: 5));
     if (response.statusCode != 200) {
       throw HostException('poll failed', statusCode: response.statusCode);
     }
@@ -116,7 +158,8 @@ final class HostClient {
 
   Future<http.Response> _get(String path) async {
     final url = baseUrl.replace(path: '${baseUrl.path}$path');
-    final response = await _http.get(url).timeout(const Duration(seconds: 10));
+    final response =
+        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw HostException('GET $path failed', statusCode: response.statusCode);
     }
@@ -128,7 +171,7 @@ final class HostClient {
     final response = await _http
         .post(
           url,
-          headers: {'content-type': 'application/json'},
+          headers: {'content-type': 'application/json', ..._authHeaders},
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 10));

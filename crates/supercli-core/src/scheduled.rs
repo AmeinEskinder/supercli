@@ -58,6 +58,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use supercli_connector::ApprovalPolicy;
 
+use crate::durable_runs::{step_input_hash, RunState, RunsDb, StepKind};
 use crate::schedule_leases::LeaseFence;
 
 /// Minimum schedule interval: 60 s. Sub-minute schedules are rejected —
@@ -523,6 +524,11 @@ struct AttemptResult {
 pub struct ScheduledRunner<C: RunClock = SystemClock> {
     guard: RunGuard,
     clock: C,
+    runs_db: Option<RunsDb>,
+    /// Fail closed by default: if true and `runs_db` is None, `run_trigger`
+    /// refuses to fire (audits a Failed record) instead of running
+    /// unjournaled. Explicit opt-out via [`Self::allow_unjournaled`].
+    durable_required: bool,
 }
 
 impl<C: RunClock> ScheduledRunner<C> {
@@ -530,7 +536,38 @@ impl<C: RunClock> ScheduledRunner<C> {
         Self {
             guard: RunGuard::new(),
             clock,
+            runs_db: None,
+            durable_required: true,
         }
+    }
+
+    /// Attach a durable-runs database. When present, triggers are journaled
+    /// as durable runs: the run is created (or an orphaned run for the same
+    /// schedule is resumed) before execution, every tool call is journaled
+    /// write-ahead, and a crash mid-run is picked up by the next trigger
+    /// invocation instead of starting over.
+    pub fn with_durable_runs(mut self, db: RunsDb) -> Self {
+        self.runs_db = Some(db);
+        self
+    }
+
+    /// Set the durable-runs database on an existing runner.
+    pub fn set_durable_runs(&mut self, db: RunsDb) {
+        self.runs_db = Some(db);
+    }
+
+    /// Explicit opt-out of fail-closed durable runs: the runner will fire
+    /// triggers without journaling. This is the only way to run unjournaled;
+    /// the default is to refuse. The caller must have an explicit reason
+    /// (e.g., `--no-durable` flag) to use this.
+    pub fn allow_unjournaled(mut self) -> Self {
+        self.durable_required = false;
+        self
+    }
+
+    /// Set the unjournaled opt-out on an existing runner.
+    pub fn set_allow_unjournaled(&mut self) {
+        self.durable_required = false;
     }
 
     /// Fire one trigger for `spec` against `session_dir`, driving
@@ -574,6 +611,28 @@ impl<C: RunClock> ScheduledRunner<C> {
                 },
             );
         }
+        // Fail closed: without a durable-runs database, a crash mid-run
+        // would lose the journal and risk double-execution on resume.
+        // Refuse to fire unless the operator explicitly opted out of
+        // journaling (allow_unjournaled).
+        if self.durable_required && self.runs_db.is_none() {
+            return self.audit(
+                session_dir,
+                RunRecord {
+                    schedule_id: spec.id.clone(),
+                    session_id: spec.session_id.clone(),
+                    triggered_at_ms,
+                    outcome: RunOutcome::Failed,
+                    steps: 0,
+                    denied_tools: vec![],
+                    error: Some(
+                        "durable runs unavailable: refusing to fire without journal \
+                         (explicit opt-out required: allow_unjournaled / --no-durable)"
+                            .to_string(),
+                    ),
+                },
+            );
+        }
         let Some(token) = self.guard.try_begin(&spec.id) else {
             return self.audit(
                 session_dir,
@@ -607,12 +666,71 @@ impl<C: RunClock> ScheduledRunner<C> {
         let policy = spec.policy;
         let ScheduledTask::ToolCalls(calls) = &spec.task;
 
+        // Durable runs: find an orphaned run for this schedule (crash
+        // recovery) or create a fresh one. The run id links the journal to
+        // this trigger; on resume, already-completed steps are skipped.
+        let durable_ctx: Option<(String, u64)> = self.runs_db.as_ref().and_then(|db| {
+            // Look for a non-terminal run whose plan names this schedule.
+            let orphan = db.list_runs(None).ok()?.into_iter().find(|r| {
+                !r.state.is_terminal()
+                    && r.plan.contains(&format!("\"schedule_id\":\"{}\"", spec.id))
+            });
+            match orphan {
+                Some(run) => {
+                    // Resume: replay completed steps, continue at the first
+                    // incomplete one. An ambiguous step forces NEEDS_REVIEW.
+                    match db.resume_run(&run.id) {
+                        Ok(plan) => {
+                            if plan.needs_review_step_no.is_some() {
+                                // Uncertain write: do not execute anything.
+                                // The run is already marked NEEDS_REVIEW.
+                                return Some((run.id, u64::MAX));
+                            }
+                            let start = plan.first_incomplete_step_no.unwrap_or(0);
+                            // Claim the lease for this run so a concurrent
+                            // trigger cannot double-execute.
+                            let _ = db.claim_run(&run.id);
+                            Some((run.id, start))
+                        }
+                        Err(_) => None,
+                    }
+                }
+                None => {
+                    // Fresh run: plan JSON carries the schedule identity.
+                    let plan = format!(
+                        "{{\"schedule_id\":\"{}\",\"session_id\":\"{}\",\"triggered_at_ms\":{}}}",
+                        spec.id, spec.session_id, triggered_at_ms
+                    );
+                    let budgets = format!(
+                        "{{\"max_steps\":{},\"max_duration_secs\":{}}}",
+                        policy.max_steps, policy.max_duration_secs
+                    );
+                    match db.create_run(None, &plan, &budgets) {
+                        Ok(id) => {
+                            let _ = db.claim_run(&id);
+                            // Transition QUEUED -> EXECUTING_TOOLS.
+                            let _ = db.transition(&id, RunState::Queued, RunState::ExecutingTools);
+                            Some((id, 0))
+                        }
+                        Err(_) => None,
+                    }
+                }
+            }
+        });
+
         // Denied tools accumulate across retries (deduped below): a denial
         // is a security-relevant signal even if a later retry succeeds.
         let mut denied_tools: Vec<String> = Vec::new();
         let mut attempt_index: u32 = 0;
         let result = loop {
-            let attempt = self.run_attempt(&policy, calls, autonomous.executor);
+            let attempt = self.run_attempt(
+                &policy,
+                calls,
+                autonomous.executor,
+                durable_ctx
+                    .as_ref()
+                    .map(|(id, start)| (id.as_str(), *start)),
+            );
             for tool in &attempt.denied {
                 if !denied_tools.contains(tool) {
                     denied_tools.push(tool.clone());
@@ -638,6 +756,34 @@ impl<C: RunClock> ScheduledRunner<C> {
         };
         denied_tools.sort();
         denied_tools.dedup();
+
+        // Mark the durable run terminal. A crash before this point leaves
+        // the run in a non-terminal state, so the next trigger resumes it.
+        if let Some((run_id, _)) = durable_ctx.as_ref() {
+            if let Some(db) = self.runs_db.as_ref() {
+                if result.outcome == RunOutcome::Completed {
+                    // The run was in EXECUTING_TOOLS; transition to DONE.
+                    // (If it was already terminal, the conditional update
+                    // is a no-op.) Also try from other non-terminal states,
+                    // in case the run was created but never transitioned.
+                    let _ = db.transition(run_id, RunState::ExecutingTools, RunState::Done);
+                    let _ = db.transition(run_id, RunState::Queued, RunState::Done);
+                    let _ = db.transition(run_id, RunState::AwaitingModel, RunState::Done);
+                    let _ = db.transition(run_id, RunState::AwaitingApproval, RunState::Done);
+                    let _ = db.transition(run_id, RunState::Paused, RunState::Done);
+                } else if result.uncertain {
+                    let _ = db.mark_needs_review(run_id);
+                } else {
+                    let _ = db.transition(run_id, RunState::ExecutingTools, RunState::Failed);
+                    let _ = db.transition(run_id, RunState::Queued, RunState::Failed);
+                    let _ = db.transition(run_id, RunState::AwaitingModel, RunState::Failed);
+                    let _ = db.transition(run_id, RunState::AwaitingApproval, RunState::Failed);
+                    let _ = db.transition(run_id, RunState::Paused, RunState::Failed);
+                }
+                // Release the lease now that the run is terminal.
+                let _ = db.release_run(run_id);
+            }
+        }
 
         // Run completion is a side-effecting step: a worker that lost its
         // lease mid-run must not write a completion record for a run
@@ -685,18 +831,48 @@ impl<C: RunClock> ScheduledRunner<C> {
     /// Execute the task list once, enforcing the wall-clock, step, and
     /// output caps. The first denied or failed tool ends the attempt
     /// immediately (fail closed); completed steps before it still count.
+    ///
+    /// When `durable` is `Some((run_id, start_step))`, every tool call is
+    /// journaled write-ahead to the durable run: a 'started' intent row
+    /// (no outcome) is appended before the call, then a completion row
+    /// after. Steps before `start_step` were completed by a previous
+    /// (crashed) invocation and are skipped, not re-executed.
     fn run_attempt(
         &self,
         policy: &AutonomousPolicy,
         calls: &[ScheduledToolCall],
         executor: &mut dyn ScheduledToolExecutor,
+        durable: Option<(&str, u64)>,
     ) -> AttemptResult {
         let started_ms = self.clock.now_ms();
         let deadline_ms = started_ms.saturating_add(policy.max_duration_secs.saturating_mul(1000));
         let mut steps: u32 = 0;
         let mut output_bytes: u64 = 0;
         let mut denied: Vec<String> = Vec::new();
-        for call in calls {
+        // Durable resume: skip steps already completed by a crashed
+        // invocation. `step_no` is the journal index; `steps` counts
+        // steps executed in this attempt.
+        let start_step = durable.map(|(_, s)| s).unwrap_or(0);
+        // A resumed run with an ambiguous step never reaches here: the
+        // caller returns early with NEEDS_REVIEW (see run_trigger).
+        if start_step == u64::MAX {
+            return AttemptResult {
+                outcome: RunOutcome::NeedsReview,
+                steps: 0,
+                denied,
+                error: Some("durable run has an ambiguous step; human review required".to_string()),
+                uncertain: true,
+                stale_lease: false,
+            };
+        }
+        for (idx, call) in calls.iter().enumerate() {
+            let step_no = idx as u64;
+            if step_no < start_step {
+                // Already completed by a previous invocation: count it
+                // toward the total but do not re-execute.
+                steps += 1;
+                continue;
+            }
             // The wall-clock cap is enforced between tool calls. A single
             // call is itself bounded by the connector transport timeout,
             // so the deadline can be overshot by at most one call.
@@ -713,10 +889,37 @@ impl<C: RunClock> ScheduledRunner<C> {
                     stale_lease: false,
                 };
             }
+            // Write-ahead: journal the intent BEFORE executing. A crash
+            // after this row but before the call leaves a 'started' row
+            // with no outcome; resume classifies it via reconcile_orphan
+            // (Rerun/AlreadyComplete/NeedsReview).
+            let input_hash = step_input_hash(&format!("{}:{}", call.tool, call.arguments));
+            let intent = if let Some((run_id, _)) = durable {
+                if let Some(db) = self.runs_db.as_ref() {
+                    match db.begin_step(run_id, step_no, StepKind::Tool, &input_hash) {
+                        Ok(intent) => Some(intent),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
             match executor.call_tool_detailed(&call.tool, &call.arguments) {
                 Ok(text) => {
                     steps += 1;
                     output_bytes = output_bytes.saturating_add(text.len() as u64);
+                    // Journal the completion.
+                    if let Some(intent) = intent {
+                        if let Some(db) = self.runs_db.as_ref() {
+                            let _ = db.complete_step(
+                                &intent,
+                                &crate::action_reviews::AttemptOutcome::Executed { success: true },
+                                Some(&text),
+                            );
+                        }
+                    }
                     if output_bytes > policy.max_output_bytes {
                         return AttemptResult {
                             outcome: RunOutcome::Killed,
@@ -747,6 +950,21 @@ impl<C: RunClock> ScheduledRunner<C> {
                 Err(failure) => {
                     if failure.denied.is_some() && !denied.contains(&call.tool) {
                         denied.push(call.tool.clone());
+                    }
+                    // Journal the failure. An uncertain failure maps to
+                    // Ambiguous (NEEDS_REVIEW, never replayed); a definite
+                    // failure maps to Executed{success:false}.
+                    if let Some(intent) = intent {
+                        if let Some(db) = self.runs_db.as_ref() {
+                            let outcome = if failure.uncertain {
+                                crate::action_reviews::AttemptOutcome::Ambiguous {
+                                    reason: failure.message.clone(),
+                                }
+                            } else {
+                                crate::action_reviews::AttemptOutcome::Executed { success: false }
+                            };
+                            let _ = db.complete_step(&intent, &outcome, None);
+                        }
                     }
                     return AttemptResult {
                         outcome: RunOutcome::Failed,
@@ -919,6 +1137,20 @@ impl<C: RunClock> Scheduler<C> {
     /// worker's lease expires and another worker takes over.
     pub fn with_lease_store(mut self, leases: crate::schedule_leases::ScheduleLeases) -> Self {
         self.leases = Some(Arc::new(Mutex::new(leases)));
+        self
+    }
+
+    /// Attach a durable-runs database: triggers fired by this scheduler
+    /// are journaled, and crashes are resumed instead of restarted.
+    pub fn with_durable_runs(mut self, db: RunsDb) -> Self {
+        self.runner.set_durable_runs(db);
+        self
+    }
+
+    /// Explicit opt-out of fail-closed durable runs: the scheduler will
+    /// fire triggers without journaling. Requires explicit operator intent.
+    pub fn allow_unjournaled(mut self) -> Self {
+        self.runner.set_allow_unjournaled();
         self
     }
 
@@ -1608,7 +1840,7 @@ mod tests {
     #[test]
     fn runner_completes_task_in_autonomous_mode() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("complete");
         let mut executor = FakeExecutor::new(&clock)
             .behavior(FakeBehavior::Ok("a".to_string()))
@@ -1638,7 +1870,7 @@ mod tests {
     #[test]
     fn runner_denies_ask_tool_and_fails_closed() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("deny");
         let mut executor = FakeExecutor::new(&clock)
             .behavior(FakeBehavior::Ok("ok".to_string()))
@@ -1664,7 +1896,7 @@ mod tests {
     #[test]
     fn runner_enforces_output_cap() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("output");
         let mut spec = two_call_spec();
         spec.policy.max_output_bytes = 10;
@@ -1688,7 +1920,7 @@ mod tests {
     #[test]
     fn runner_enforces_duration_cap() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("duration");
         let mut spec = two_call_spec();
         spec.policy.max_duration_secs = 1;
@@ -1708,7 +1940,7 @@ mod tests {
     #[test]
     fn runner_retries_failures_with_backoff_then_gives_up() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("retries");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1733,7 +1965,7 @@ mod tests {
     #[test]
     fn runner_retry_success_counts_final_attempt() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("retry-ok");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1759,7 +1991,7 @@ mod tests {
         // not be retried even when max_retries > 0: a retry could
         // double-apply a write. The attempt is terminal after one try.
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("uncertain");
         let mut spec = two_call_spec();
         spec.policy.max_retries = 2;
@@ -1790,7 +2022,7 @@ mod tests {
     #[test]
     fn runner_skips_overlapping_trigger() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("overlap");
         // Simulate a still-running trigger by holding its guard token.
         let token = runner.guard.try_begin("nightly-triage").unwrap();
@@ -1810,7 +2042,7 @@ mod tests {
     #[test]
     fn runner_audits_invalid_and_paused_specs() {
         let clock = FakeClock::new();
-        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled(); // test: runner logic, not journal
         let dir = runner_test_dir("invalid");
 
         let mut bad = two_call_spec();
@@ -1892,7 +2124,8 @@ mod tests {
     fn scheduler_fires_due_triggers_and_notifies_on_persistent_failure() {
         let (home, sessions, clock) = daemon_fixture("daemon");
         save_schedules(&home, &[schedule_with_calls("hourly", "sess-1")]).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock));
+        // Test: scheduler tick logic, not journal — explicit opt-out.
+        let mut scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled();
 
         let queue: Rc<RefCell<VecDeque<FakeBehavior>>> = Rc::new(RefCell::new(VecDeque::new()));
         queue
@@ -1964,8 +2197,12 @@ mod tests {
         // Two workers share one lease database: models two daemons.
         let leases_a = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
         let leases_b = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut sched_a = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases_a);
-        let mut sched_b = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases_b);
+        let mut sched_a = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases_a);
+        let mut sched_b = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases_b);
 
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
@@ -2022,7 +2259,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2090,7 +2329,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2156,7 +2397,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2238,7 +2481,9 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
 
         let leases = ScheduleLeases::open(&home, DEFAULT_TENANT).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock)).with_lease_store(leases);
+        let mut scheduler = Scheduler::new(Rc::clone(&clock))
+            .allow_unjournaled()
+            .with_lease_store(leases);
         let mk_exec = || {
             let clock2 = Rc::clone(&clock);
             move |_: &str, _: &Path| {
@@ -2301,7 +2546,7 @@ mod tests {
         let mut paused = schedule_with_calls("paused", "sess-1");
         paused.enabled = false;
         save_schedules(&home, &[paused]).unwrap();
-        let mut scheduler = Scheduler::new(Rc::clone(&clock));
+        let mut scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled(); // test: scheduler logic, not journal
         let clock2 = Rc::clone(&clock);
         let mut make_executor = move |_: &str, _: &Path| {
             Box::new(FakeExecutor::new(&clock2)) as Box<dyn ScheduledToolExecutor>
@@ -2336,9 +2581,211 @@ mod tests {
     #[test]
     fn scheduler_next_wake_is_clamped() {
         let (_home, _sessions, clock) = daemon_fixture("daemon-wake");
-        let scheduler = Scheduler::new(Rc::clone(&clock));
-        // Nothing armed: wake in 60s to pick up registry edits.
+        let scheduler = Scheduler::new(Rc::clone(&clock)).allow_unjournaled(); // test: scheduler logic, not journal
+                                                                               // Nothing armed: wake in 60s to pick up registry edits.
         assert_eq!(scheduler.next_wake_in(), Duration::from_secs(60));
         let _ = std::fs::remove_dir_all(&_home);
+    }
+
+    #[test]
+    fn durable_run_journals_scheduled_trigger_steps() {
+        use crate::durable_runs::RunsDb;
+        let dir = std::env::temp_dir().join(format!(
+            "sched-durable-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = RunsDb::open(&dir).unwrap();
+
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).with_durable_runs(db);
+        let mut spec = valid_spec();
+        spec.task = ScheduledTask::ToolCalls(vec![
+            ScheduledToolCall {
+                tool: "t1".to_string(),
+                arguments: serde_json::json!({}),
+            },
+            ScheduledToolCall {
+                tool: "t2".to_string(),
+                arguments: serde_json::json!({}),
+            },
+        ]);
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(record.outcome, RunOutcome::Completed);
+        assert_eq!(record.steps, 2);
+        // Both tools were actually called.
+        assert_eq!(executor.calls, vec!["t1".to_string(), "t2".to_string()]);
+
+        // The durable run was journaled: one run, DONE, with 4 step rows
+        // (2 intents + 2 completions).
+        let db2 = RunsDb::open(&dir).unwrap();
+        let runs = db2.list_runs(Some("DONE")).unwrap();
+        assert_eq!(runs.len(), 1, "expected one DONE run");
+        let run = &runs[0];
+        assert!(
+            run.plan.contains("\"schedule_id\":\"nightly-triage\""),
+            "plan should link the schedule: {}",
+            run.plan
+        );
+        let plan = db2.resume_run(&run.id).unwrap();
+        // All steps completed; resume would start at step 2 (no more work).
+        assert_eq!(plan.completed.len(), 2);
+        assert_eq!(plan.first_incomplete_step_no, Some(2));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn durable_run_resumes_after_crash() {
+        use crate::durable_runs::{RunsDb, StepKind};
+        let dir = std::env::temp_dir().join(format!(
+            "sched-resume-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Simulate a crashed run: create the run, journal step 0 as
+        // completed, leave step 1 as a 'started' intent with no outcome
+        // (crash between intent and completion).
+        let db = RunsDb::open(&dir).unwrap();
+        let plan = "{\"schedule_id\":\"resume-test\",\"session_id\":\"sess-1\"}";
+        let run_id = db.create_run(None, plan, "{}").unwrap();
+        let h0 = crate::durable_runs::step_input_hash("t1:{}");
+        db.append_step(&run_id, 0, StepKind::Tool, &h0, None, None)
+            .unwrap();
+        db.append_step(
+            &run_id,
+            0,
+            StepKind::Tool,
+            &h0,
+            Some("out1"),
+            Some(&crate::action_reviews::AttemptOutcome::Executed { success: true }),
+        )
+        .unwrap();
+        let h1 = crate::durable_runs::step_input_hash("t2:{}");
+        db.append_step(&run_id, 1, StepKind::Tool, &h1, None, None)
+            .unwrap();
+        // Crash: db dropped without completing step 1 or marking terminal.
+        drop(db);
+
+        // New runner invocation finds the orphan and resumes.
+        let db2 = RunsDb::open(&dir).unwrap();
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).with_durable_runs(db2);
+        let mut spec = valid_spec();
+        spec.id = "resume-test".to_string();
+        spec.task = ScheduledTask::ToolCalls(vec![
+            ScheduledToolCall {
+                tool: "t1".to_string(),
+                arguments: serde_json::json!({}),
+            },
+            ScheduledToolCall {
+                tool: "t2".to_string(),
+                arguments: serde_json::json!({}),
+            },
+        ]);
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(record.outcome, RunOutcome::Completed);
+        // Step 0 was skipped (already done); only t2 executed.
+        // `steps` counts skipped + executed.
+        assert_eq!(record.steps, 2);
+        assert_eq!(
+            executor.calls,
+            vec!["t2".to_string()],
+            "t1 must not be re-executed after resume"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_trigger_refuses_without_journal_by_default() {
+        // Fail closed: a runner without a RunsDb refuses to fire.
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock));
+        let spec = valid_spec();
+        let dir = std::env::temp_dir().join(format!(
+            "sched-failclosed-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(
+            record.outcome,
+            RunOutcome::Failed,
+            "must refuse without journal"
+        );
+        assert!(
+            record
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("durable runs unavailable"),
+            "error must explain the refusal: {:?}",
+            record.error
+        );
+        // Nothing executed.
+        assert_eq!(record.steps, 0);
+        assert!(executor.calls.is_empty(), "no tool must run");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_trigger_fires_unjournaled_with_explicit_opt_out() {
+        // Explicit opt-out: allow_unjournaled fires without a journal.
+        let clock = FakeClock::new();
+        let runner = ScheduledRunner::new(Rc::clone(&clock)).allow_unjournaled();
+        let mut spec = valid_spec();
+        spec.task = ScheduledTask::ToolCalls(vec![ScheduledToolCall {
+            tool: "t1".to_string(),
+            arguments: serde_json::json!({}),
+        }]);
+        let dir = std::env::temp_dir().join(format!(
+            "sched-optout-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session_dir = dir.join("sess");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let mut executor = FakeExecutor::new(&clock);
+
+        let record = runner
+            .run_trigger(&spec, &session_dir, &mut executor)
+            .unwrap();
+        assert_eq!(record.outcome, RunOutcome::Completed);
+        assert_eq!(executor.calls, vec!["t1".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

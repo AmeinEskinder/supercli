@@ -41,15 +41,21 @@ supercli schedule — scheduled autonomous sessions (explicit operator opt-in)
   supercli schedule pause <id>      pause (takes effect before the next trigger)
   supercli schedule resume <id>     resume a paused schedule
   supercli schedule remove <id>     delete a schedule (audit logs are kept)
-  supercli schedule run-once <id> [--json]
+  supercli schedule run-once <id> [--json] [--no-durable]
                                   fire one trigger now (audited like any trigger)
-  supercli schedule daemon          fire due triggers until killed; run this
+  supercli schedule daemon [--no-durable]
+                                  fire due triggers until killed; run this
                                   under systemd/launchd, not cron
 
 A scheduled run executes an explicit ordered list of connector tool calls
 with no human present: Ask tools are denied immediately, explicit Deny
 stays denied. Every trigger appends one record to
 <session-dir>/scheduled-runs.jsonl. Nothing runs unless a schedule exists.
+
+Durable runs: triggers are journaled to <SUPERCLI_HOME>/runs.db by default;
+a crash mid-run is resumed by the next trigger instead of restarted. If the
+journal is unavailable, run-once/daemon refuse to fire (fail closed) unless
+--no-durable is passed explicitly.
 ";
 
 pub fn run(args: &[String]) -> i32 {
@@ -331,11 +337,25 @@ fn remove(args: &[String]) -> Result<i32, String> {
 // ---------------------------------------------------------------------------
 
 fn run_once(args: &[String]) -> Result<i32, String> {
-    let (id, json) = match args {
-        [id] => (id.clone(), false),
-        [id, flag] if flag == "--json" => (id.clone(), true),
-        _ => return Err("usage: supercli schedule run-once <id> [--json]".to_string()),
-    };
+    // Parse flags: --json and --no-durable (explicit opt-out of journaling).
+    let mut id: Option<String> = None;
+    let mut json = false;
+    let mut no_durable = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            "--no-durable" => no_durable = true,
+            _ if id.is_none() && !arg.starts_with("--") => id = Some(arg.clone()),
+            _ => {
+                return Err(
+                    "usage: supercli schedule run-once <id> [--json] [--no-durable]".to_string()
+                )
+            }
+        }
+    }
+    let id = id.ok_or_else(|| {
+        "usage: supercli schedule run-once <id> [--json] [--no-durable]".to_string()
+    })?;
     let home = app_paths::supercli_home();
     let specs = load_schedules(&home).map_err(|e| e.to_string())?;
     let spec = specs
@@ -350,7 +370,24 @@ fn run_once(args: &[String]) -> Result<i32, String> {
     // Wire ToolCall.before_execute doc-event hooks (no-op when no
     // hooks.toml is configured).
     executor.set_before_execute_hook(supercli_events::emit::before_execute_hook());
-    let runner = ScheduledRunner::new(SystemClock);
+    // Wire durable runs: scheduled triggers are journaled, and a crash
+    // mid-run is resumed by the next trigger instead of restarted.
+    // Fail closed: refuse to fire without the journal unless the operator
+    // explicitly passed --no-durable.
+    let runner = match supercli_core::durable_runs::RunsDb::open(&home) {
+        Ok(db) => ScheduledRunner::new(SystemClock).with_durable_runs(db),
+        Err(e) => {
+            if no_durable {
+                eprintln!("warning: durable runs unavailable ({e}); firing UNJOURNALED by explicit --no-durable opt-out");
+                ScheduledRunner::new(SystemClock).allow_unjournaled()
+            } else {
+                return Err(format!(
+                    "durable runs unavailable ({e}); refusing to fire without journal. \
+                     Pass --no-durable to explicitly opt out of journaling."
+                ));
+            }
+        }
+    };
     match runner.run_trigger(spec, &session_dir, &mut executor) {
         Ok(record) => {
             if json {
@@ -412,8 +449,17 @@ fn notify_failure(spec: &ScheduleSpec, record: &RunRecord) {
 }
 
 fn daemon(args: &[String]) -> Result<i32, String> {
-    if !args.is_empty() {
-        return Err("usage: supercli schedule daemon (no arguments)".to_string());
+    // Parse flags: --no-durable (explicit opt-out of journaling).
+    let mut no_durable = false;
+    for arg in args {
+        match arg.as_str() {
+            "--no-durable" => no_durable = true,
+            _ => {
+                return Err(
+                    "usage: supercli schedule daemon [--no-durable]".to_string()
+                )
+            }
+        }
     }
     let home = app_paths::ensure_supercli_home().map_err(|e| e.to_string())?;
     eprintln!(
@@ -431,6 +477,26 @@ fn daemon(args: &[String]) -> Result<i32, String> {
     )
     .map_err(|e| format!("cannot open schedule lease database: {e}"))?;
     let mut scheduler = scheduler.with_lease_store(leases);
+    // Durable runs: journal every trigger; a crash mid-run is resumed by
+    // the next tick instead of restarted from scratch.
+    // Fail closed: refuse to start without the journal unless the operator
+    // explicitly passed --no-durable.
+    match supercli_core::durable_runs::RunsDb::open(&home) {
+        Ok(db) => {
+            scheduler = scheduler.with_durable_runs(db);
+        }
+        Err(e) => {
+            if no_durable {
+                eprintln!("warning: durable runs unavailable ({e}); daemon will fire UNJOURNALED by explicit --no-durable opt-out");
+                scheduler = scheduler.allow_unjournaled();
+            } else {
+                return Err(format!(
+                    "durable runs unavailable ({e}); refusing to start daemon without journal. \
+                     Pass --no-durable to explicitly opt out of journaling."
+                ));
+            }
+        }
+    }
     let mut make_executor = |session_id: &str, session_dir: &Path| {
         // Fresh connector set per trigger: no state leaks between runs,
         // and the runner puts it in autonomous mode for the run's duration.
