@@ -25,8 +25,8 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 7 files (7,742 LOC) · ported: 13 files (13,078 LOC) · todo: 253 files (124,817 LOC)
-- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
+- Status breakdown: partial: 9 files (11,428 LOC) · ported: 25 files (15,760 LOC) · todo: 239 files (118,449 LOC)
+- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 98 files (44,929 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-client::crypto (KAT tests): 1 files (106 LOC) · Rust: supercli-client::dto (unit tests): 1 files (66 LOC) · Rust: supercli-client::dto, supercli-client::pairing: 1 files (947 LOC) · Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend: 1 files (2,739 LOC) · Rust: supercli-client::pairing: 1 files (138 LOC) · Rust: supercli-client::pairing (e2e tests): 1 files (329 LOC) · Rust: supercli-client::pairing (unit tests): 1 files (82 LOC) · Rust: supercli-client::relay (e2e tests): 1 files (400 LOC) · Rust: supercli-client::relay, supercli-client::crypto: 1 files (608 LOC) · Rust: supercli-client::relay_conn: 1 files (601 LOC) · Rust: supercli-client::relay_conn (e2e tests): 1 files (172 LOC) · Rust: supercli-client::transport: 1 files (64 LOC) · Rust: supercli-client::types, supercli-client::pairing: 1 files (88 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-core::app_runtime: 1 files (172 LOC) · Rust: supercli-core::app_runtime (generated): 1 files (887 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · dropped: SwiftPM manifest, no Rust equivalent: 1 files (28 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
 - Unresolved (`tbd`) destinations: 26 files
 
 ### By worker area
@@ -301,21 +301,21 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift | 148 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift | 716 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/WorktreeGitTests.swift | 134 | dropped: Host does it (crates/supercli-core/src/host_git.rs) | ported |  | 0 |
-| shared/SupercliShared/Package.swift | 28 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/ChromeIcons.swift | 43 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/GeneratedRuntimeCatalog.swift | 887 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/PairedHostRecord.swift | 88 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/RelayProtocol.swift | 608 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift | 2739 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/RemotePairingClient.swift | 138 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/RemoteRelayConnection.swift | 601 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Sources/SupercliShared/ToolIcons.swift | 163 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/PairedHostRecordTests.swift | 82 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/PluginProtocolTests.swift | 66 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RelayCryptoVectorTests.swift | 106 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RelayProtocolTests.swift | 400 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RemoteControlProtocolTests.swift | 947 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RemotePairingClientTests.swift | 329 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RemoteRelayConnectionTests.swift | 172 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RemoteTransportContractTests.swift | 64 | Rust: supercli-client/core | todo |  | 0 |
-| shared/SupercliShared/Tests/SupercliSharedTests/RuntimeCatalogTests.swift | 172 | Rust: supercli-client/core | todo |  | 0 |
+| shared/SupercliShared/Package.swift | 28 | dropped: SwiftPM manifest, no Rust equivalent | ported |  | 0 |
+| shared/SupercliShared/Sources/SupercliShared/ChromeIcons.swift | 43 | Dart: clients/supercli-app | todo |  | 0 |
+| shared/SupercliShared/Sources/SupercliShared/GeneratedRuntimeCatalog.swift | 887 | Rust: supercli-core::app_runtime (generated) | todo |  | 0 |
+| shared/SupercliShared/Sources/SupercliShared/PairedHostRecord.swift | 88 | Rust: supercli-client::types, supercli-client::pairing | ported |  | 5 |
+| shared/SupercliShared/Sources/SupercliShared/RelayProtocol.swift | 608 | Rust: supercli-client::relay, supercli-client::crypto | ported |  | 10 |
+| shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift | 2739 | Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend | partial |  | 34 |
+| shared/SupercliShared/Sources/SupercliShared/RemotePairingClient.swift | 138 | Rust: supercli-client::pairing | ported |  | 14 |
+| shared/SupercliShared/Sources/SupercliShared/RemoteRelayConnection.swift | 601 | Rust: supercli-client::relay_conn | ported |  | 10 |
+| shared/SupercliShared/Sources/SupercliShared/ToolIcons.swift | 163 | Dart: clients/supercli-app | todo |  | 0 |
+| shared/SupercliShared/Tests/SupercliSharedTests/PairedHostRecordTests.swift | 82 | Rust: supercli-client::pairing (unit tests) | ported |  | 2 |
+| shared/SupercliShared/Tests/SupercliSharedTests/PluginProtocolTests.swift | 66 | Rust: supercli-client::dto (unit tests) | ported |  | 1 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RelayCryptoVectorTests.swift | 106 | Rust: supercli-client::crypto (KAT tests) | ported |  | 2 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RelayProtocolTests.swift | 400 | Rust: supercli-client::relay (e2e tests) | ported |  | 8 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RemoteControlProtocolTests.swift | 947 | Rust: supercli-client::dto, supercli-client::pairing | partial |  | 20 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RemotePairingClientTests.swift | 329 | Rust: supercli-client::pairing (e2e tests) | ported |  | 6 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RemoteRelayConnectionTests.swift | 172 | Rust: supercli-client::relay_conn (e2e tests) | ported |  | 8 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RemoteTransportContractTests.swift | 64 | Rust: supercli-client::transport | ported |  | 4 |
+| shared/SupercliShared/Tests/SupercliSharedTests/RuntimeCatalogTests.swift | 172 | Rust: supercli-core::app_runtime | todo |  | 0 |
