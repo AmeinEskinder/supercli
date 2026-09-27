@@ -19,7 +19,7 @@ fn test_dir(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("sched-kill-{}-{}", name, nanos));
+    let dir = std::env::temp_dir().join(format!("sched-kill-{name}-{nanos}"));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -167,7 +167,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
             }
         }
     };
-    println!("run 1: saw run-created marker: {:?}", marker_id);
+    println!("run 1: saw run-created marker: {marker_id:?}");
     // Wait for step-1 to complete (ensures its side effect was written).
     let step1_done = wait_for_marker(&progress, "step-completed step-1", Duration::from_secs(30));
     assert!(step1_done, "step-1 must complete within 30s");
@@ -177,7 +177,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     // Kills land at various points: during step-2, between step-2 and step-3,
     // during step-3, etc.
     let delay = random_delay_ms(800);
-    println!("run 1: killing after {}ms random delay", delay);
+    println!("run 1: killing after {delay}ms random delay");
     std::thread::sleep(Duration::from_millis(delay));
     // Real SIGKILL.
     child1.kill().expect("kill -9 helper");
@@ -187,7 +187,7 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     // Capture the run id from the DB before restart.
     // The DB is at <home>/runs.db; query via rusqlite.
     let run_id_1 = get_run_id(&home);
-    println!("run 1 id: {:?}", run_id_1);
+    println!("run 1 id: {run_id_1:?}");
     assert!(run_id_1.is_some(), "run 1 must have created a run");
     // The marker id and DB id must agree.
     assert_eq!(
@@ -204,10 +204,10 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
     assert!(exited, "helper run 2 must exit within 30s");
     let output = child2.wait_with_output().expect("wait run 2");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("run 2 stdout: {}", stdout);
+    println!("run 2 stdout: {stdout}");
 
     let run_id_2 = get_run_id(&home);
-    println!("run 2 id: {:?}", run_id_2);
+    println!("run 2 id: {run_id_2:?}");
 
     // SAME run id: the restart resumed, not restarted.
     assert_eq!(
@@ -224,19 +224,17 @@ fn scheduled_daemon_sigkill_resumes_same_run() {
             *counts.entry(step).or_insert(0) += 1;
         }
     }
-    println!("side-effect counts: {:?}", counts);
+    println!("side-effect counts: {counts:?}");
     for (step, count) in &counts {
         assert_eq!(
             *count, 1,
-            "step {} executed {} times, expected exactly once (duplicate!)",
-            step, count
+            "step {step} executed {count} times, expected exactly once (duplicate!)"
         );
     }
     // At least step 1 must have run (it completed before the kill).
     assert!(
         counts.contains_key("step-1"),
-        "step-1 must have executed: {:?}",
-        counts
+        "step-1 must have executed: {counts:?}"
     );
 
     let _ = fs::remove_dir_all(&dir);

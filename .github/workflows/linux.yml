@@ -12,12 +12,12 @@ on:
     branches: ['main', 'next', 'feat/**']
     paths:
       - 'crates/**'
-      - 'clients/dioxus/**'
+      - 'clients/legacy/dioxus/**'
       - '.github/workflows/linux.yml'
   pull_request:
     paths:
       - 'crates/**'
-      - 'clients/dioxus/**'
+      - 'clients/legacy/dioxus/**'
       - '.github/workflows/linux.yml'
 
 permissions:
@@ -76,17 +76,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            clients/dioxus
+            clients/legacy/dioxus
       - name: Check formatting
-        run: cargo fmt --manifest-path clients/dioxus/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path clients/legacy/dioxus/Cargo.toml --all -- --check
       - name: Clippy (strict)
-        run: cargo clippy --manifest-path clients/dioxus/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+        run: cargo clippy --manifest-path clients/legacy/dioxus/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
       - name: Dioxus workspace tests
-        run: cargo test --manifest-path clients/dioxus/Cargo.toml --workspace --all-targets --all-features --locked
+        run: cargo test --manifest-path clients/legacy/dioxus/Cargo.toml --workspace --all-targets --all-features --locked
       - name: Full native launcher builds (desktop + mobile)
         # This is the build step this VM cannot do (no GTK/WebKit system
         # libs). A green run here is the real proof the launchers compile.
-        run: cargo build --manifest-path clients/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
+        run: cargo build --manifest-path clients/legacy/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
 
   release-size-budget:
     name: Release size budget (R3)
@@ -109,11 +109,11 @@ jobs:
         with:
           workspaces: |
             crates
-            clients/dioxus
+            clients/legacy/dioxus
       - name: Release build (Host + launchers)
         run: |
           cargo build --release --manifest-path crates/Cargo.toml --locked -p supercli-host
-          cargo build --release --manifest-path clients/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
+          cargo build --release --manifest-path clients/legacy/dioxus/Cargo.toml --locked -p supercli-desktop -p supercli-mobile
       - name: Check size budgets
         run: |
           # R3: release binaries must stay under budget.
@@ -135,8 +135,8 @@ jobs:
             fi
           }
           check_size "crates/target/release/supercli-host" 22020096
-          check_size "clients/dioxus/target/release/supercli-desktop" 12582912
-          check_size "clients/dioxus/target/release/supercli-mobile" 11534336
+          check_size "clients/legacy/dioxus/target/release/supercli-desktop" 12582912
+          check_size "clients/legacy/dioxus/target/release/supercli-mobile" 11534336
           echo "All release binaries within budget."
 
   web:
@@ -149,7 +149,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: clients/dioxus/supercli-web/tests/web/package-lock.json
+          cache-dependency-path: clients/legacy/dioxus/supercli-web/tests/web/package-lock.json
       - name: Install declared Rust MSRV
         uses: dtolnay/rust-toolchain@1.88.0
         with:
@@ -157,7 +157,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            clients/dioxus
+            clients/legacy/dioxus
       - name: Install dioxus-cli
         run: |
           if ! command -v dx >/dev/null; then
@@ -166,17 +166,17 @@ jobs:
           dx --version
       - name: Build the web bundle
         run: |
-          cd clients/dioxus/supercli-web
+          cd clients/legacy/dioxus/supercli-web
           dx build --platform web
       - name: Install Playwright browsers
         run: |
-          cd clients/dioxus/supercli-web/tests/web
+          cd clients/legacy/dioxus/supercli-web/tests/web
           npm ci
           npx playwright install chromium
       - name: Run Playwright suite against the real bundle
         run: |
-          cd clients/dioxus/supercli-web/tests/web
-          # server.js probes clients/dioxus/target/dx/supercli-web/debug/web/public
+          cd clients/legacy/dioxus/supercli-web/tests/web
+          # server.js probes clients/legacy/dioxus/target/dx/supercli-web/debug/web/public
           npx playwright test
 
   rename-guard:
@@ -185,13 +185,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Fail on any remaining 'supercli' references
+      - name: Fail on any remaining 'unpeel' references
         run: |
-          # The rename supercli -> supercli must be complete. Allowlist:
+          # The rename unpeel -> supercli must be complete. Allowlist:
           # - THIRD_PARTY_NOTICES.txt (generated third-party licenses)
           # - docs/internal/ (historical records)
           # - *.lock (cargo lockfiles may reference old names transiently)
-          if grep -ri 'supercli' \
+          if grep -ri 'unpeel' \
             --exclude-dir=target \
             --exclude-dir=.git \
             --exclude-dir=docs/internal \
@@ -199,7 +199,7 @@ jobs:
             --exclude=THIRD_PARTY_NOTICES.txt \
             --exclude='*.lock' \
             . ; then
-            echo "ERROR: found 'supercli' references outside the allowlist"
+            echo "ERROR: found 'unpeel' references outside the allowlist"
             exit 1
           fi
-          echo "Rename guard passed: no 'supercli' remnants."
+          echo "Rename guard passed: no 'unpeel' remnants."

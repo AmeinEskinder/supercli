@@ -940,10 +940,9 @@ fn spawn_server(serial: &DeviceId, scid: &str) -> Result<(), DeviceError> {
         .map(|v| format!(" max_size={}", v.trim()))
         .unwrap_or_default();
     let server_cmd = format!(
-        "CLASSPATH={} app_process / com.genymobile.scrcpy.Server {} \
+        "CLASSPATH={SCRCPY_SERVER_DEVICE_PATH} app_process / com.genymobile.scrcpy.Server {SCRCPY_SERVER_VERSION} \
          tunnel_forward=true audio=false control=true cleanup=false scid={scid} \
-         video_codec=h264 max_fps=60 display_id=0{max_size_arg}",
-        SCRCPY_SERVER_DEVICE_PATH, SCRCPY_SERVER_VERSION
+         video_codec=h264 max_fps=60 display_id=0{max_size_arg}"
     );
     eprintln!("scrcpy: server_cmd={server_cmd}");
     // Capture the server's own stdout/stderr to files: if the server dies

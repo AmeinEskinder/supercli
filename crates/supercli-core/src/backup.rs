@@ -1186,8 +1186,7 @@ mod tests {
                         for (caller, targets) in obj {
                             assert!(
                                 targets.as_array().map(|a| !a.is_empty()).unwrap_or(false),
-                                "grant for {} must have non-empty targets",
-                                caller
+                                "grant for {caller} must have non-empty targets"
                             );
                         }
                     }

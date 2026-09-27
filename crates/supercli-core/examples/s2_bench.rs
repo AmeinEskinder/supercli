@@ -97,12 +97,12 @@ fn main() {
         "mode={} concurrency={} n={} total={}",
         mode, concurrency, n, total as usize
     );
-    println!("throughput={:.1}/s", throughput);
+    println!("throughput={throughput:.1}/s");
     println!("p50={:.1}ms", p50.as_secs_f64() * 1000.0);
     println!("p95={:.1}ms", p95.as_secs_f64() * 1000.0);
     println!("p99={:.1}ms", p99.as_secs_f64() * 1000.0);
     println!("max={:.1}ms", max.as_secs_f64() * 1000.0);
-    println!("errors={}", err_count);
+    println!("errors={err_count}");
 
     // JSON output
     let output = serde_json::json!({

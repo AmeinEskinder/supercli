@@ -2403,10 +2403,7 @@ fn handle_approval_answer(
         crate::approvals::AnswerOutcome::Applied(_) => (200, r#"{"ok":true}"#.into()),
         crate::approvals::AnswerOutcome::AlreadyResolved(decision) => (
             200,
-            format!(
-                r#"{{"ok":true,"already_resolved":true,"approved":{}}}"#,
-                decision
-            ),
+            format!(r#"{{"ok":true,"already_resolved":true,"approved":{decision}}}"#),
         ),
         crate::approvals::AnswerOutcome::NotFound => {
             (409, error_body("approval no longer pending"))

@@ -47,7 +47,7 @@ fn record_side_effect(log_path: &Path, line: &str, expected_after: &[u8]) {
 
 /// Execute one child step with the write-ahead + probe pattern.
 fn execute_child_step(db: &RunsDb, child_id: &str, step_no: u64, log_path: &Path) {
-    let line = format!("executed child-step-{}\n", step_no);
+    let line = format!("executed child-step-{step_no}\n");
     let current = fs::read(log_path).unwrap_or_default();
     let mut expected_after = current.clone();
     expected_after.extend_from_slice(line.as_bytes());
@@ -58,7 +58,7 @@ fn execute_child_step(db: &RunsDb, child_id: &str, step_no: u64, log_path: &Path
         expected_hash: Some(expected_hash),
         idempotency_key: None,
     };
-    let input_hash = step_input_hash(&format!("child-step-{}", step_no));
+    let input_hash = step_input_hash(&format!("child-step-{step_no}"));
     let intent = db
         .begin_step_with_hint(
             child_id,
@@ -79,7 +79,7 @@ fn execute_child_step(db: &RunsDb, child_id: &str, step_no: u64, log_path: &Path
     db.complete_step(
         &intent,
         &AttemptOutcome::Executed { success: true },
-        Some(&format!("{{\"step\":{}}}", step_no)),
+        Some(&format!("{{\"step\":{step_no}}}")),
     )
     .expect("complete child step");
 }
@@ -96,7 +96,7 @@ fn claim_with_retry(db: &RunsDb, run_id: &str) -> bool {
             }
         }
     }
-    panic!("could not claim run {}", run_id);
+    panic!("could not claim run {run_id}");
 }
 
 /// Drive the child run to completion starting from its resume plan.
@@ -105,14 +105,11 @@ fn claim_with_retry(db: &RunsDb, run_id: &str) -> bool {
 fn drive_child(db: &RunsDb, child_id: &str, log_path: &Path) {
     let run = db.get_run(child_id).expect("get child run");
     if run.state == RunState::Done {
-        println!("helper: child {} already DONE, skipping", child_id);
+        println!("helper: child {child_id} already DONE, skipping");
         return;
     }
     let took_over = claim_with_retry(db, child_id);
-    println!(
-        "helper: child {} claimed (took_over={})",
-        child_id, took_over
-    );
+    println!("helper: child {child_id} claimed (took_over={took_over})");
     let plan = db.resume_run(child_id).expect("resume child");
     println!(
         "helper: child resume plan: completed={} first_incomplete={:?} needs_review={:?}",
@@ -133,7 +130,7 @@ fn drive_child(db: &RunsDb, child_id: &str, log_path: &Path) {
         .expect("transition child to DONE");
     assert!(done, "child must transition to DONE");
     db.release_run(child_id).expect("release child lease");
-    println!("helper: child {} DONE", child_id);
+    println!("helper: child {child_id} DONE");
 }
 
 fn main() {
@@ -169,12 +166,9 @@ fn main() {
             .expect("read parent_run_id")
             .trim()
             .to_string();
-        println!("helper: reattaching to parent {}", parent_id);
+        println!("helper: reattaching to parent {parent_id}");
         let took_over = claim_with_retry(&db, &parent_id);
-        println!(
-            "helper: parent {} claimed (took_over={})",
-            parent_id, took_over
-        );
+        println!("helper: parent {parent_id} claimed (took_over={took_over})");
         let kids = db.list_children(&parent_id).expect("list children");
         assert_eq!(
             kids.len(),
@@ -183,7 +177,7 @@ fn main() {
             kids.len()
         );
         let child_id = kids[0].id.clone();
-        println!("helper: reattached to existing child {}", child_id);
+        println!("helper: reattached to existing child {child_id}");
         drive_child(&db, &child_id, &side_effects);
         parent_id
     } else {
@@ -198,7 +192,7 @@ fn main() {
                 .truncate(true)
                 .open(&pointer)
                 .expect("write parent_run_id");
-            writeln!(pf, "{}", parent_id).expect("write parent_run_id");
+            writeln!(pf, "{parent_id}").expect("write parent_run_id");
             pf.sync_all().expect("fsync parent_run_id");
         }
         // Fsync the pointer file's directory entry for crash safety.
@@ -207,13 +201,13 @@ fn main() {
             .open(&home)
             .expect("open home dir");
         dirf.sync_all().expect("fsync home dir");
-        println!("helper: created parent {}", parent_id);
+        println!("helper: created parent {parent_id}");
 
         claim_with_retry(&db, &parent_id);
         let child_id = db
             .create_run(Some(&parent_id), r#"{"task":"child-subagent"}"#, "{}")
             .expect("create child run");
-        println!("helper: spawned child {}", child_id);
+        println!("helper: spawned child {child_id}");
         drive_child(&db, &child_id, &side_effects);
         parent_id
     };
@@ -225,8 +219,8 @@ fn main() {
             .expect("transition parent to DONE");
         assert!(done, "parent must transition to DONE");
     } else {
-        println!("helper: parent {} already DONE", parent_id);
+        println!("helper: parent {parent_id} already DONE");
     }
     db.release_run(&parent_id).expect("release parent lease");
-    println!("helper: parent {} DONE", parent_id);
+    println!("helper: parent {parent_id} DONE");
 }

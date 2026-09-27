@@ -485,8 +485,7 @@ impl HostClient {
         // Query params are part of the path for this simple GET helper;
         // session ids are validated by the Host (`safe_session_id`).
         let path = format!(
-            "/events?session_id={}&after_seq={}&limit={}&wait_ms={}",
-            session_id, after_seq, limit, wait_ms
+            "/events?session_id={session_id}&after_seq={after_seq}&limit={limit}&wait_ms={wait_ms}"
         );
         let text = self.get_text(&path)?;
         serde_json::from_str(&text).map_err(|e| HostClientError::Decode(e.to_string()))

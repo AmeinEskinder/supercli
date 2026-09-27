@@ -25,7 +25,7 @@ fn generate_test_cert() -> (Vec<u8>, Vec<u8>, String) {
     let key_der = certified.key_pair.serialize_der();
     let fingerprint = Sha256::digest(&cert_der)
         .iter()
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect::<String>();
     (cert_der, key_der, fingerprint)
 }

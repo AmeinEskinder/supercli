@@ -449,8 +449,7 @@ pub fn doctor_check_grants_subset() -> Result<(), String> {
 
     if !missing.is_empty() {
         return Err(format!(
-            "grants without audit entries (tamper-evidence violation): {:?}",
-            missing
+            "grants without audit entries (tamper-evidence violation): {missing:?}"
         ));
     }
 
