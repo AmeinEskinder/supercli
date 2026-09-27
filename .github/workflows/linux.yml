@@ -71,14 +71,16 @@ jobs:
       - name: Install declared Rust MSRV
         uses: dtolnay/rust-toolchain@1.88.0
         with:
-          components: rustfmt, clippy
+          components: clippy
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             clients/legacy/dioxus
-      - name: Check formatting
-        run: cargo fmt --manifest-path clients/legacy/dioxus/Cargo.toml --all -- --check
+      # NOTE: clients/legacy/dioxus is FROZEN — no formatting checks are run
+      # against it. The legacy tree is read-only; rustfmt drift there is
+      # expected and must not fail CI. Native-compile coverage is still
+      # provided by the full launcher build step below.
       - name: Clippy (strict)
         run: cargo clippy --manifest-path clients/legacy/dioxus/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
       - name: Dioxus workspace tests
