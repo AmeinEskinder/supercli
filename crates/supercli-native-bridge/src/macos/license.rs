@@ -145,7 +145,7 @@ fn is_valid_url(s: &str) -> bool {
 /// `supercli_core::license` (normalize → split → JSON-decode payload →
 /// Ed25519-verify). Returns the payload on success.
 ///
-/// Legacy `CLRTY-` keys (issued by the old unpeel product) are rejected with
+/// Legacy `CLRTY-` keys (old vendor key format) are rejected with
 /// a clear message; supercli has no legacy customers to migrate.
 pub fn validate_key(raw: &str, public_key_base64: &str) -> Result<LicensePayload, String> {
     supercli_core::license::validate_key_with(raw, public_key_base64)
@@ -386,20 +386,20 @@ mod tests {
 
     #[test]
     fn validate_key_rejects_legacy_clrty_keys() {
-        // CLRTY- keys are from the legacy unpeel product; supercli has no
+        // CLRTY- keys use the legacy key format; supercli has no
         // legacy customers to migrate. They must be rejected with a clear
         // message, not a generic "malformed" error.
         let legacy = "CLRTY-eyJhIjoxfQ.c2ln";
         let err = validate_key(legacy, &"A".repeat(44)).unwrap_err();
         assert!(
-            err.contains("CLRTY- keys are from the legacy unpeel product"),
+            err.contains("CLRTY- keys use the legacy key format"),
             "unexpected error: {err}"
         );
         // Even a well-formed CLRTY- key (valid base64) is rejected.
         let legacy_wellformed = "CLRTY-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let err = validate_key(legacy_wellformed, &"A".repeat(44)).unwrap_err();
         assert!(
-            err.contains("legacy unpeel product"),
+            err.contains("legacy key format"),
             "unexpected error: {err}"
         );
     }

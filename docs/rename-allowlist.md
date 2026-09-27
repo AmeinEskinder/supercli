@@ -67,6 +67,9 @@ names and references. Do not rename.
 
 - `docs/rename-allowlist.md` — this file (documents the word being guarded).
 - `.github/workflows/rename-guard.yml` — the guard workflow (references the word).
+- `.github/workflows/linux.yml` — its rename-guard job's name/step text
+  references the guarded word; the job itself now runs
+  `scripts/fresh-clone-verify.sh --local .` (one source of truth).
 
 ## Deliberately NOT excluded (renamed 2026-09-26)
 

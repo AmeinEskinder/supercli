@@ -82,6 +82,7 @@ matches=$(grep -rli 'unpeel' . \
             -e 'package-lock.json' \
             -e 'docs/rename-allowlist.md' \
             -e '.github/workflows/rename-guard.yml' \
+            -e '.github/workflows/linux.yml' \
             -e 'scripts/sync-main-v2.sh' \
             -e '^\./\.git$' \
   || true)

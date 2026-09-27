@@ -187,50 +187,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fail on any remaining 'unpeel' references
         run: |
-          # The rename unpeel -> supercli must be complete.
-          # Uses the same allowlist as .github/workflows/rename-guard.yml.
-          matches=$(grep -rli 'unpeel' . \
-            --exclude-dir=.git \
-            --exclude-dir=target \
-            --exclude-dir=node_modules \
-            --exclude-dir=__pycache__ \
-            --exclude-dir=gpuidart \
-            --exclude-dir=.dart_tool \
-            --exclude='*.lock' \
-            --exclude='*.pyc' \
-            --exclude='*.a' \
-            | grep -v -e '^./docs/book/' \
-                      -e '^./docs/internal/' \
-                      -e '^./docs/parity/' \
-                      -e '^./clients/gpuidart/' \
-                      -e '^./clients/legacy/' \
-                      -e '^./tests/device/' \
-                      -e '^./scripts/generate-runtime-client-catalog.mjs$' \
-                      -e '^./scripts/release-app.mjs$' \
-                      -e '^./scripts/release-app-state.mjs$' \
-                      -e '^./scripts/publish-cloudflare-release.mjs$' \
-                      -e '^./scripts/release-app-installer.test.mjs$' \
-                      -e '^./scripts/release-app-state.test.mjs$' \
-                      -e '^./generated/GeneratedRuntimeCatalog.swift$' \
-                      -e 'CHANGELOG.md' \
-                      -e 'THIRD_PARTY_NOTICES.txt' \
-                      -e 'THIRD_PARTY_NOTICES.manual.txt' \
-                      -e 'crates/apps/diffs/LICENSE' \
-                      -e 'crates/apps/filetree/LICENSE' \
-                      -e 'crates/supercli-cli/src/import_unpeel_cli.rs' \
-                      -e 'crates/supercli-cli/src/cli.rs' \
-                      -e 'crates/supercli-cli/src/main.rs' \
-                      -e 'crates/supercli-core/fuzz/out/' \
-                      -e 'package-lock.json' \
-                      -e 'docs/rename-allowlist.md' \
-                      -e '.github/workflows/rename-guard.yml' \
-                      -e '.github/workflows/linux.yml' \
-                      -e 'scripts/fresh-clone-verify.sh' \
-                      -e 'scripts/sync-main-v2.sh' \
-            || true)
-          if [ -n "$matches" ]; then
-            echo "ERROR: found 'unpeel' references outside the allowlist:"
-            echo "$matches"
-            exit 1
-          fi
-          echo "Rename guard passed: no 'unpeel' remnants."
+          # One source of truth: the rename guard lives in
+          # scripts/fresh-clone-verify.sh (section 4), shared with
+          # .github/workflows/rename-guard.yml. Do not inline a copy here.
+          bash scripts/fresh-clone-verify.sh --local .

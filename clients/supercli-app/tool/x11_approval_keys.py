@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Send approval key chords to the supercli gpuidart window via raw X11.
 
-Unpeel parity (MCPApprovalPanel.swift:249-266): plain Return = Allow,
+Legacy macOS parity (MCPApprovalPanel.swift:249-266): plain Return = Allow,
 plain Escape = Deny, active only while the approval overlay is showing;
 modified keypresses pass through.
 
@@ -256,7 +256,7 @@ def main():
 
     x.set_input_focus(win)
     time.sleep(0.3)
-    # Plain keypress, NO modifiers: unpeel parity (MCPApprovalPanel.swift).
+    # Plain keypress, NO modifiers: legacy macOS parity (MCPApprovalPanel.swift).
     # Modified keypresses (Cmd/Option/Ctrl held) pass through in the app.
     kc = kc_esc if args.deny else kc_ret
     state = 0

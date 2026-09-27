@@ -33,7 +33,7 @@ final class LicenseSettingsPanel {
   final bool activated;
   final List<LicenseSeat> seats;
 
-  /// License key prefix. Rebranded from the legacy `CLRTY-` (unpeel product);
+  /// License key prefix. Rebranded from the legacy `CLRTY-` key format;
   /// `CLRTY-` keys are not accepted.
   static const String keyPrefix = 'SCLI-';
 
@@ -43,7 +43,7 @@ final class LicenseSettingsPanel {
     return normalized.startsWith(keyPrefix) && normalized.contains('.');
   }
 
-  /// True if the key uses the legacy `CLRTY-` prefix (unpeel product).
+  /// True if the key uses the legacy `CLRTY-` key format.
   /// These are rejected with a clear message.
   static bool isLegacyKey(String key) {
     return key.trim().startsWith('CLRTY-');

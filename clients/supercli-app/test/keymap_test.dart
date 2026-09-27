@@ -140,7 +140,7 @@ void main() {
     test('copyPath is alt+c', () => expect(Keymap.copyPath, 'alt+c'));
   });
 
-  group('approval overlay: plain Return / Escape (unpeel parity)', () {
+  group('approval overlay: plain Return / Escape (legacy macOS parity)', () {
     // MCPApprovalPanel.swift:249-266 — plain Return (keyCode 36/76) =
     // Allow, plain Escape (53) = Deny, only while the panel is shown.
     // Modified keypresses (Cmd/Option/Ctrl held) pass through.

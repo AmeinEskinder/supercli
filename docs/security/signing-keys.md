@@ -85,7 +85,7 @@ Only the two public keys are embedded at release-build time.
 
 | Key | Public key | Status | Notes |
 |-----|-----------|--------|-------|
-| unpeel legacy license key | `6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54=` | **REVOKED** | The ORIGINAL unpeel product's license public key. Whoever holds unpeel's private key can mint keys that verify under it, so it must NEVER be trusted for supercli licenses. Removed from all code and fixtures; if found anywhere, delete it. |
+| Legacy vendor license key (`CLRTY-`) | `6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54=` | **REVOKED** | The ORIGINAL vendor's license public key (legacy key format). Whoever holds the old vendor's private key can mint keys that verify under it, so it must NEVER be trusted for supercli licenses. Removed from all code and fixtures; if found anywhere, delete it. |
 
 ## Fail-closed summary
 
@@ -93,7 +93,7 @@ Only the two public keys are embedded at release-build time.
 |-----|--------|----------|
 | License (v1) | **Set** (`E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=`) | Verifies against bundled key; pinning test fails CI on change |
 | Updater (v1) | **Set** (`VQdQWMuzQg627U+wNV4YL9gX4pLQhI0XZaNKffEkRaM=`) | Verifies downloads against bundled key; pinning test fails CI on change |
-| unpeel legacy | **Revoked** | Must not appear anywhere; grep in CI |
+| Legacy vendor key (`CLRTY-`) | **Revoked** | Must not appear anywhere; grep in CI |
 
 If either bundled key were cleared, that verification path refuses everything
 (fail-closed). Cross-use of license/updater keys is rejected by test.

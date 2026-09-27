@@ -14,7 +14,7 @@ use std::io::{Read, Write};
 const PUBLIC_KEY_B64: &str = "E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=";
 /// License key prefix (`SCLI-<payloadB64url>.<signatureB64url>`).
 pub const KEY_PREFIX: &str = "SCLI-";
-/// Legacy prefix from the unpeel product. Keys with this prefix are rejected;
+/// Legacy key format (`CLRTY-`). Keys with this prefix are rejected;
 /// supercli has no legacy customers to migrate.
 pub const LEGACY_KEY_PREFIX: &str = "CLRTY-";
 
@@ -24,7 +24,7 @@ pub const LEGACY_KEY_PREFIX: &str = "CLRTY-";
 /// delegates here instead of duplicating the crypto).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LicenseKeyError {
-    /// `CLRTY-` legacy unpeel key: rejected outright, never verified.
+    /// `CLRTY-` legacy key format: rejected outright, never verified.
     LegacyRejected,
     /// Bad envelope: prefix, structure, base64, or JSON payload.
     Malformed,
@@ -36,7 +36,7 @@ impl std::fmt::Display for LicenseKeyError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LegacyRejected => formatter.write_str(
-                "CLRTY- keys are from the legacy unpeel product and are not accepted",
+                "CLRTY- keys use the legacy key format and are not accepted",
             ),
             Self::Malformed => formatter.write_str("malformed license key"),
             Self::BadSignature => formatter.write_str("invalid license signature"),
@@ -127,8 +127,8 @@ pub fn validate_key_with(
     public_key_b64: &str,
 ) -> Result<LicensePayload, LicenseKeyError> {
     let key = normalize_key(raw);
-    // Reject legacy unpeel keys explicitly. They use a different prefix and
-    // were signed by the old product's key; they must never verify here.
+    // Reject legacy CLRTY- keys explicitly. They use a different prefix and
+    // were signed by the old vendor's key; they must never verify here.
     if key.starts_with(LEGACY_KEY_PREFIX) {
         return Err(LicenseKeyError::LegacyRejected);
     }
@@ -153,7 +153,7 @@ pub fn verify_with_key(raw: &str, public_key_b64: &str) -> Option<LicensePayload
 }
 
 /// Verify a key offline and return its payload (None = malformed/forged).
-/// Legacy `CLRTY-` keys (unpeel product) are rejected; supercli has no
+/// Legacy `CLRTY-` keys (old vendor format) are rejected; supercli has no
 /// legacy customers to migrate. The `SUPERCLI_LICENSE_PUBLIC_KEY` env
 /// override is honored in dev builds only — release builds always use the
 /// bundled key.
@@ -744,9 +744,9 @@ pub struct ActivationCommit {
 /// response that may have taken seconds to arrive.
 pub fn request_activation(raw_key: &str, device_name: &str) -> Result<PendingActivation, String> {
     let key = normalize_key(raw_key);
-    // Legacy unpeel keys get a clear rejection, not the generic message.
+    // Legacy CLRTY- keys get a clear rejection, not the generic message.
     if key.starts_with(LEGACY_KEY_PREFIX) {
-        return Err("CLRTY- keys are from the legacy unpeel product and are not accepted".into());
+        return Err("CLRTY- keys use the legacy key format and are not accepted".into());
     }
     let payload = verify(&key).ok_or("that doesn't look like a valid Supercli license key")?;
     // Capture suppression before crossing the network. The commit refuses a
@@ -1054,7 +1054,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_legacy_clrty_keys() {
-        // CLRTY- keys are from the legacy unpeel product; supercli has no
+        // CLRTY- keys use the legacy key format; supercli has no
         // legacy customers to migrate. They must never verify.
         assert!(super::verify("CLRTY-abc.def").is_none());
         assert!(super::verify("CLRTY-eyJhIjoxfQ.c2ln").is_none());
