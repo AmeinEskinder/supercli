@@ -66,7 +66,7 @@ jobs:
         # crypto cannot match v2 vectors, and the frozen v1 client cannot talk
         # to a v2 relay anyway — incompatible by design. Workflow-only change;
         # clients/legacy stays frozen.
-        run: swift test --package-path clients/legacy/shared/SupercliShared --skip-testing SupercliSharedTests.RelayCryptoVectorTests
+        run: swift test --package-path clients/legacy/shared/SupercliShared --skip RelayCryptoVectorTests
       - name: Unsigned Mac app (server + bridge built from this tree)
         env:
           CODESIGN_IDENTITY: '-'

@@ -83,6 +83,50 @@ toml = { version = "0.8", optional = true }
 name = "ssh_host_probe"
 required-features = ["native-host"]
 
+[[example]]
+name = "durable_chaos_helper"
+required-features = ["native-host"]
+
+[[example]]
+name = "s2_bench"
+required-features = ["native-host"]
+
+[[example]]
+name = "s4_chaos_worker"
+required-features = ["native-host"]
+
+[[example]]
+name = "s4_verify"
+required-features = ["native-host"]
+
+[[example]]
+name = "s5_fuzz"
+required-features = ["native-host"]
+
+[[example]]
+name = "scheduled_kill_helper"
+required-features = ["native-host"]
+
+[[example]]
+name = "subagent_kill_helper"
+required-features = ["native-host"]
+
+[[test]]
+name = "durable_chaos"
+required-features = ["native-host"]
+
+[[test]]
+name = "fuzz_review_log"
+required-features = ["native-host"]
+
+[[test]]
+name = "scheduled_kill"
+required-features = ["native-host"]
+
+[[test]]
+name = "subagent_kill"
+required-features = ["native-host"]
+
 [[bin]]
 name = "durable_chaos_helper"
 path = "src/bin/durable_chaos_helper.rs"
