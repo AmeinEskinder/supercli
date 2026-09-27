@@ -298,8 +298,8 @@ mod tests {
         // silently accepts. The bundled key is now set (Amein's key v1,
         // pinned by bundled_public_key_is_pinned_license_v1), so the
         // empty-slot path is exercised through the testable helper.
-        let err = LicenseConfig::check_bundled_key("")
-            .expect_err("empty bundled key must fail closed");
+        let err =
+            LicenseConfig::check_bundled_key("").expect_err("empty bundled key must fail closed");
         assert!(
             err.contains("No bundled license public key configured"),
             "unexpected error: {err}"
@@ -398,10 +398,7 @@ mod tests {
         // Even a well-formed CLRTY- key (valid base64) is rejected.
         let legacy_wellformed = "CLRTY-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let err = validate_key(legacy_wellformed, &"A".repeat(44)).unwrap_err();
-        assert!(
-            err.contains("legacy key format"),
-            "unexpected error: {err}"
-        );
+        assert!(err.contains("legacy key format"), "unexpected error: {err}");
     }
 
     #[test]

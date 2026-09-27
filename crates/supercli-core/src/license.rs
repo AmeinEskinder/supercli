@@ -35,9 +35,9 @@ pub enum LicenseKeyError {
 impl std::fmt::Display for LicenseKeyError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::LegacyRejected => formatter.write_str(
-                "CLRTY- keys use the legacy key format and are not accepted",
-            ),
+            Self::LegacyRejected => {
+                formatter.write_str("CLRTY- keys use the legacy key format and are not accepted")
+            }
             Self::Malformed => formatter.write_str("malformed license key"),
             Self::BadSignature => formatter.write_str("invalid license signature"),
         }
