@@ -68,43 +68,51 @@ Future<void> main(List<String> args) async {
       final boot = await client.bootstrap();
       final sessions = HostClient.sessionsFromBootstrap(boot);
       final approvals = HostClient.approvalsFromBootstrap(boot);
+      final projects = HostClient.projectsFromBootstrap(boot);
       final prevApprovalIds = app.pendingApprovals.map((a) => a.id).toSet();
       app.sessions = sessions;
       app.pendingApprovals = approvals;
+      app.projects = projects;
       // Keep the Ctrl-Tab MRU ordering in sync with the live sessions.
       app.syncMru();
       // Toast on newly arrived approvals (drives the ToastCenter).
       for (final a in approvals) {
         if (!prevApprovalIds.contains(a.id)) {
-          app.notifications.add(AppNotification(
-            id: 'approval-${a.id}',
-            title: 'Approval requested',
-            message: '${a.tool}: ${a.summary}',
-            severity: NotificationSeverity.warning,
-            focusTarget: 'mcp-approval-overlay',
-          ));
+          app.notifications.add(
+            AppNotification(
+              id: 'approval-${a.id}',
+              title: 'Approval requested',
+              message: '${a.tool}: ${a.summary}',
+              severity: NotificationSeverity.warning,
+              focusTarget: 'mcp-approval-overlay',
+            ),
+          );
         }
       }
       app.statusLine =
           'Connected — ${sessions.length} sessions, ${approvals.length} pending approval(s).';
     } on HostException catch (e) {
       app.statusLine = 'Host error: $e';
-      app.notifications.add(AppNotification(
-        id: 'host-error',
-        title: 'Host error',
-        message: '$e',
-        severity: NotificationSeverity.error,
-      ));
+      app.notifications.add(
+        AppNotification(
+          id: 'host-error',
+          title: 'Host error',
+          message: '$e',
+          severity: NotificationSeverity.error,
+        ),
+      );
     } catch (e) {
       // Non-HostException failures (connection refused, timeout, TLS, JSON)
       // must not become an uncaught 255; record and continue headless.
       app.statusLine = 'Connection error: $e';
-      app.notifications.add(AppNotification(
-        id: 'connection-error',
-        title: 'Connection error',
-        message: '$e',
-        severity: NotificationSeverity.error,
-      ));
+      app.notifications.add(
+        AppNotification(
+          id: 'connection-error',
+          title: 'Connection error',
+          message: '$e',
+          severity: NotificationSeverity.error,
+        ),
+      );
       stderr.writeln('headless: bootstrap failed: $e');
     }
     final host = gpui;
@@ -116,7 +124,8 @@ Future<void> main(List<String> args) async {
         dataset,
         columns: const ['Title', 'Updated'],
         rows: [
-          for (final s in app.sessions) [s.title, SupercliApp.formatTime(s.updatedAt)],
+          for (final s in app.sessions)
+            [s.title, SupercliApp.formatTime(s.updatedAt)],
         ],
       );
       await host.publish(app.build(), actions: app.actions());
@@ -163,7 +172,9 @@ Future<void> main(List<String> args) async {
     await refresh();
     final approval = app.pendingApproval;
     if (approval != null) {
-      final sent = await client.answerApproval(ApprovalAnswer.approve(approval.id));
+      final sent = await client.answerApproval(
+        ApprovalAnswer.approve(approval.id),
+      );
       stdout.writeln('headless: answered approval ${approval.id} (sent=$sent)');
     } else {
       stdout.writeln('headless: no pending approvals');
@@ -286,8 +297,9 @@ Future<void> _dispatchAction(
     case 'pane.zoom':
       final layout = app.paneLayout;
       if (layout != null) {
-        app.paneLayout =
-            layout.isZoomed ? layout.unzoom() : layout.toggleZoom();
+        app.paneLayout = layout.isZoomed
+            ? layout.unzoom()
+            : layout.toggleZoom();
       }
       await refresh();
     case 'pane.equalize':

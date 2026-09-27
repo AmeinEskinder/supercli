@@ -50,6 +50,20 @@ final class SidebarSession {
   String get id => summary.id;
   String get title => summary.title;
   int get unreadCount => summary.unreadCount;
+
+  /// Build a sidebar session from a live Host [SessionSummary], deriving
+  /// the sidebar-local status signals from the Host's `activity`/`pinned`
+  /// fields (SidebarView.swift: session.status .attention/.starting/.busy).
+  /// Sessions without a Host project land in the default "Sessions" project.
+  factory SidebarSession.fromHostSummary(SessionSummary summary) {
+    return SidebarSession(
+      summary: summary,
+      projectId: summary.projectId.isEmpty ? 'Sessions' : summary.projectId,
+      pinned: summary.pinned,
+      attention: summary.needsAttention,
+      busy: summary.isBusy,
+    );
+  }
 }
 
 /// A named group of sessions inside a project.
@@ -100,9 +114,9 @@ final class SidebarProject {
 
   /// All sessions in this project (grouped + ungrouped).
   List<SidebarSession> get allSessions => [
-        ...sessions,
-        for (final g in groups) ...g.sessions,
-      ];
+    ...sessions,
+    for (final g in groups) ...g.sessions,
+  ];
 }
 
 /// One row of the sidebar. Rendered as a UiRow of UiText cells:
@@ -123,17 +137,17 @@ final class SidebarRow {
   static final _selectedBg = UiColor.hex('#2d4a6f');
   static final _selectedText = UiColor.hex('#ffffff');
 
-  static UiRow sessionRow(
-    SidebarSession session, {
-    required bool selected,
-  }) {
+  static UiRow sessionRow(SidebarSession session, {required bool selected}) {
     final id = session.id;
     return UiRow(
       'session-$id',
       [
         if (session.attention)
-          UiText('attn-$id', '●',
-              style: UiStyle(foreground: _red, fontSize: 11)),
+          UiText(
+            'attn-$id',
+            '●',
+            style: UiStyle(foreground: _red, fontSize: 11),
+          ),
         if (session.pinned)
           UiText('pin-$id', '📌', style: const UiStyle(fontSize: 11)),
         UiText(
@@ -219,7 +233,8 @@ final class SidebarView {
       children.add(const UiText('section-pinned', 'Pinned'));
       for (final s in visiblePinned) {
         children.add(
-            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId));
+          SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+        );
       }
     }
 
@@ -244,12 +259,16 @@ final class SidebarView {
                 : UiColor.hex('#8b8b8b'),
           ),
         ),
-        UiText('project-name-${project.id}', project.name,
-            style: const UiStyle(
-                fontSize: 13, fontWeight: UiFontWeight.semibold)),
-        UiText('project-collapse-${project.id}',
-            project.collapsed ? '▸' : '▾',
-            style: const UiStyle(fontSize: 11)),
+        UiText(
+          'project-name-${project.id}',
+          project.name,
+          style: const UiStyle(fontSize: 13, fontWeight: UiFontWeight.semibold),
+        ),
+        UiText(
+          'project-collapse-${project.id}',
+          project.collapsed ? '▸' : '▾',
+          style: const UiStyle(fontSize: 11),
+        ),
       ]),
     ];
     if (!project.collapsed) {
@@ -258,54 +277,77 @@ final class SidebarView {
         final wtSessions = project.allSessions
             .where((s) => s.worktree == wt && matchesFilter(s))
             .toList();
-        children.add(UiText('worktree-${project.id}-$wt', '  📁 $wt',
-            style: const UiStyle(fontSize: 12)));
+        children.add(
+          UiText(
+            'worktree-${project.id}-$wt',
+            '  📁 $wt',
+            style: const UiStyle(fontSize: 12),
+          ),
+        );
         for (final s in wtSessions) {
-          children.add(SidebarRow.sessionRow(s,
-              selected: s.id == selectedSessionId));
+          children.add(
+            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+          );
         }
       }
       // Groups.
       for (final group in project.groups) {
-        children.add(UiRow('group-${group.id}', [
-          if (group.color != null)
-            UiText('group-color-${group.id}', '■',
+        children.add(
+          UiRow('group-${group.id}', [
+            if (group.color != null)
+              UiText(
+                'group-color-${group.id}',
+                '■',
                 style: UiStyle(
-                    fontSize: 12, foreground: UiColor.hex(group.color!))),
-          UiText('group-title-${group.id}', group.title,
-              style: const UiStyle(fontSize: 12)),
-          UiText('group-collapse-${group.id}',
+                  fontSize: 12,
+                  foreground: UiColor.hex(group.color!),
+                ),
+              ),
+            UiText(
+              'group-title-${group.id}',
+              group.title,
+              style: const UiStyle(fontSize: 12),
+            ),
+            UiText(
+              'group-collapse-${group.id}',
               group.collapsed ? '▸' : '▾',
-              style: const UiStyle(fontSize: 11)),
-        ]));
+              style: const UiStyle(fontSize: 11),
+            ),
+          ]),
+        );
         if (!group.collapsed) {
           for (final s in group.sessions.where(matchesFilter)) {
-            children.add(SidebarRow.sessionRow(s,
-                selected: s.id == selectedSessionId));
+            children.add(
+              SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+            );
           }
         }
       }
       // Ungrouped sessions (excluding those shown under worktree folders).
-      for (final s in project.sessions
-          .where((s) => s.worktree == null && matchesFilter(s))) {
+      for (final s in project.sessions.where(
+        (s) => s.worktree == null && matchesFilter(s),
+      )) {
         children.add(
-            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId));
+          SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+        );
       }
     }
     return UiColumn('project-tree-${project.id}', children);
   }
 
   List<UiAction> actions() => [
-        UiAction(
-            name: 'sidebar.filter',
-            keys: Keymap.find(),
-            context: UiActionContext.node('sidebar')),
-        UiAction(name: 'session.new', keys: Keymap.newSession()),
-        UiAction(
-            name: 'session.select-next',
-            keys: Keymap.switcherNext,
-            context: UiActionContext.node('sidebar')),
-      ];
+    UiAction(
+      name: 'sidebar.filter',
+      keys: Keymap.find(),
+      context: UiActionContext.node('sidebar'),
+    ),
+    UiAction(name: 'session.new', keys: Keymap.newSession()),
+    UiAction(
+      name: 'session.select-next',
+      keys: Keymap.switcherNext,
+      context: UiActionContext.node('sidebar'),
+    ),
+  ];
 }
 
 /// Session context menu (#153).
