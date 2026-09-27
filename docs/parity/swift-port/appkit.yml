@@ -3,9 +3,10 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 #
-# Honest assessment 2026-09-27: 0 of 29 files meet the strict "ported" bar
-# (every Swift behaviour -> Dart function + test). Real Dart code exists for
-# the protocol core and renderer (partial). No row is marked "ported".
+# Honest assessment 2026-09-27: 1 of 29 files meets the strict "ported" bar
+# (every Swift behaviour -> Dart function + test). 15 partial, 13 todo,
+# 0 tbd. UIDelta wire decode + validation ported; incremental application
+# remains GAP-APPKIT-3.
 area: appkit
 files:
   app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift:
@@ -52,8 +53,30 @@ files:
 
   app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift:
     destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Delta application not ported. Dart renderer re-renders full snapshots (GAP-APPKIT-3)."
+    status: partial
+    behaviours:
+      - swift: "UIDeltaOperation decode (all 33 wire op names, nodeId/listId/selectedId keys)"
+        target: "lib/widgets/appkit_delta.dart::AppKitDeltaOperation.fromJson"
+        test: "test/appkit_delta_test.dart::all 33 wire op names dispatch to the right class"
+      - swift: "UIDeltaOperation unknown op throws DecodingError"
+        target: "lib/widgets/appkit_delta.dart::AppKitDeltaOperation.fromJson"
+        test: "test/appkit_delta_test.dart::unknown op throws"
+      - swift: "Gauge/barChart/lineChart/sparkline delta payload validation on decode"
+        target: "lib/widgets/appkit_delta.dart::DeltaGaugeSetData (GaugeSpec.fromJson)"
+        test: "test/appkit_delta_test.dart::gauge payload is validated on decode like Swift"
+      - swift: "UIDelta init validation (baseRevision >= 0, revision > base, 1...4096 ops)"
+        target: "lib/widgets/appkit_delta.dart::AppKitDelta.fromJson"
+        test: "test/appkit_delta_test.dart::AppKitDelta envelope group (6 tests)"
+      - swift: "UIDelta contiguity check (revision == baseRevision)"
+        target: "lib/widgets/appkit_delta.dart::AppKitDelta.isContiguousWith"
+        test: "test/appkit_delta_test.dart::contiguity check mirrors UISnapshot.applying guards"
+      - swift: "UISnapshot.applying(_:) incremental application (33 ops)"
+        target: null
+        test: null
+    tests:
+      - file: clients/supercli-app/test/appkit_delta_test.dart
+        count: 12
+    notes: "Wire decode + envelope validation ported (1336 Swift LOC -> ~700 Dart LOC). Incremental application not ported: Dart renderer re-renders full snapshots (GAP-APPKIT-3)."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift:
     destination: "Dart: appkit_widgets"
@@ -172,12 +195,22 @@ files:
       - swift: "MarkdownEditorView fallback to text input"
         target: "lib/widgets/appkit_renderer.dart::AppKitRenderer.renderMarkdownEditor"
         test: null
+      - swift: "markdownTaskToggleEdit (tap toggles task checkbox)"
+        target: "lib/widgets/markdown_editing.dart::markdownTaskToggleEdit"
+        test: "test/markdown_editing_test.dart::markdownTaskToggleEdit group (5 tests)"
     notes: "UiInput fallback (989 Swift LOC -> stub). Blocked on rich text (P2)."
 
   app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift:
     destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Insert menu widget exists in appkit_widgets.dart but no behaviour audit or tests yet."
+    status: ported
+    behaviours:
+      - swift: "markdownBackspaceEdit (backspace removes list/quote/heading markers)"
+        target: "lib/widgets/markdown_editing.dart::markdownBackspaceEdit"
+        test: "test/markdown_editing_test.dart::markdownBackspaceEdit group (12 tests)"
+    tests:
+      - file: clients/supercli-app/test/markdown_editing_test.dart
+        count: 12
+    notes: "Pure function ported 1:1 (57 Swift LOC -> ~150 Dart LOC incl. docs). UTF-16 semantics preserved."
 
   app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift:
     destination: "Dart: appkit_widgets"

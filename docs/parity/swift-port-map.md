@@ -25,7 +25,7 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 21 files (16,524 LOC) · ported: 13 files (13,078 LOC) · todo: 239 files (116,035 LOC)
+- Status breakdown: partial: 22 files (17,860 LOC) · ported: 14 files (13,135 LOC) · todo: 237 files (114,642 LOC)
 - Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
 - Unresolved (`tbd`) destinations: 26 files
 
@@ -61,7 +61,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | app-kit/swift/Sources/SupercliAppKitUI/FooterActionsView.swift | 118 | Dart: appkit_widgets | partial |  | 1 |
 | app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift | 47 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/MarkdownEditorView.swift | 989 | Dart: appkit_widgets | partial |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift | 57 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift | 57 | Dart: appkit_widgets | ported |  | 12 |
 | app-kit/swift/Sources/SupercliAppKitUI/MediaView.swift | 196 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/PageView.swift | 1231 | Dart: appkit_widgets | partial |  | 1 |
 | app-kit/swift/Sources/SupercliAppKitUI/ReadOnlyContentView.swift | 131 | Dart: appkit_widgets | partial |  | 0 |
@@ -69,7 +69,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | app-kit/swift/Sources/SupercliAppKitUI/SurfaceComponentView.swift | 84 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/TextBoxView.swift | 175 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/TreeView.swift | 370 | Dart: appkit_widgets | partial |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift | 1336 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift | 1336 | Dart: appkit_widgets | partial |  | 12 |
 | app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift | 163 | Dart: appkit_widgets | partial |  | 1 |
 | app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift | 4216 | Dart: appkit_widgets | partial |  | 15 |
 | app-kit/swift/Sources/SupercliAppKitUI/UIUnixSessionClient.swift | 513 | Dart: appkit_widgets | todo |  | 0 |
