@@ -306,7 +306,7 @@ final class HostClient {
   /// POST a mutating git op. The Host gates these through the ApprovalHub
   /// (human approval via the desktop/mobile approval UI); no client-supplied
   /// approval flag is sent.
-  Future<void> _gitPostApproved(
+  Future<void> _gitPost(
     String route,
     String repoPath, {
     Map<String, Object>? extra,
@@ -323,18 +323,18 @@ final class HostClient {
   /// POST /mobile/git/stage — `git add` the given repo-relative paths.
   /// The Host gates this through the ApprovalHub (human approval).
   Future<void> gitStage(String repoPath, List<String> files) =>
-      _gitPostApproved('/mobile/git/stage', repoPath, extra: {'files': files});
+      _gitPost('/mobile/git/stage', repoPath, extra: {'files': files});
 
   /// POST /mobile/git/unstage — `git restore --staged`.
   Future<void> gitUnstage(String repoPath, List<String> files) =>
-      _gitPostApproved(
+      _gitPost(
         '/mobile/git/unstage',
         repoPath,
         extra: {'files': files},
       );
 
   /// POST /mobile/git/commit.
-  Future<void> gitCommit(String repoPath, String message) => _gitPostApproved(
+  Future<void> gitCommit(String repoPath, String message) => _gitPost(
     '/mobile/git/commit',
     repoPath,
     extra: {'message': message},
@@ -342,15 +342,15 @@ final class HostClient {
 
   /// POST /mobile/git/fetch — `git fetch --prune`.
   Future<void> gitFetch(String repoPath) =>
-      _gitPostApproved('/mobile/git/fetch', repoPath);
+      _gitPost('/mobile/git/fetch', repoPath);
 
   /// POST /mobile/git/pull — `git pull --ff-only`.
   Future<void> gitPull(String repoPath) =>
-      _gitPostApproved('/mobile/git/pull', repoPath);
+      _gitPost('/mobile/git/pull', repoPath);
 
   /// POST /mobile/git/push.
   Future<void> gitPush(String repoPath) =>
-      _gitPostApproved('/mobile/git/push', repoPath);
+      _gitPost('/mobile/git/push', repoPath);
 
   // ------------------------------------------------------------------
   // Files routes.
