@@ -17,6 +17,28 @@
 /// `feedURLString(for:)` which pinned the baked-in feed.
 pub const FEED_URL: &str = "https://superc.li/updates/appcast.xml";
 
+/// Bundled Ed25519 public key (base64) used to verify update downloads.
+///
+/// Provided by Amein (generated offline). Verified: 32 bytes, valid Ed25519
+/// point, sha256 prefix `4f71bbbd36495eae`.
+///
+/// CRITICAL: This is a SEPARATE key from the license key. The updater must
+/// NEVER fall back to or accept the license key for update verification.
+pub const UPDATER_PUBLIC_KEY_BASE64: &str = "VQdQWMuzQg627U+wNV4YL9gX4pLQhI0XZaNKffEkRaM=";
+
+/// Returns the bundled updater public key, or fails closed with a clear
+/// error when no key is configured. Never falls back to the license key.
+pub fn updater_public_key() -> Result<&'static str, String> {
+    if UPDATER_PUBLIC_KEY_BASE64.trim().is_empty() {
+        Err("updates disabled: no updater key configured \
+             (TODO: Amein must embed the production Ed25519 updater public key; \
+             the license key must never be reused for updates)"
+            .to_string())
+    } else {
+        Ok(UPDATER_PUBLIC_KEY_BASE64)
+    }
+}
+
 /// An update enclosure parsed from the feed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateEnclosure {
@@ -79,14 +101,17 @@ pub fn verify_download(bytes: &[u8], signature_base64: &str, public_key_base64: 
     verifying_key.verify(bytes, &signature).is_ok()
 }
 
-/// Verifies a download against the BUNDLED public key. Fails closed with a
-/// clear error when no bundled key is configured (TODO for Amein) —
+/// Verifies a download against the BUNDLED UPDATER public key. Fails closed
+/// with a clear error when no updater key is configured (TODO for Amein) —
 /// update installation must be refused, never silently skipped.
+///
+/// CRITICAL: Uses the dedicated updater key, NEVER the license key. The
+/// license key and updater key are completely separate trust roots.
 pub fn verify_download_with_bundled_key(
     bytes: &[u8],
     signature_base64: &str,
 ) -> Result<bool, String> {
-    let key = super::license::LicenseConfig::bundled_public_key()?;
+    let key = updater_public_key()?;
     Ok(verify_download(bytes, signature_base64, key))
 }
 
@@ -342,14 +367,99 @@ mod tests {
     }
 
     #[test]
-    fn verify_download_with_bundled_key_fails_closed_when_empty() {
-        // No bundled key configured yet (TODO for Amein): the updater must
-        // refuse with a clear error, never silently skip verification.
-        let err = verify_download_with_bundled_key(b"bytes", "sig")
-            .expect_err("empty bundled key must fail closed");
+    fn updater_public_key_is_pinned() {
+        // Amein's updater public key v1. Any accidental change fails CI.
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let key_bytes = engine
+            .decode(UPDATER_PUBLIC_KEY_BASE64.trim())
+            .expect("updater key must be valid base64");
+        assert_eq!(key_bytes.len(), 32, "updater key must decode to 32 bytes");
+        let key_array: [u8; 32] = key_bytes.try_into().expect("32 bytes");
+        let _verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&key_array)
+            .expect("updater key must be a valid Ed25519 point");
+        // Fingerprint pin: sha256 of the raw key starts with 4f71bbbd36495eae.
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(key_array);
+        let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
         assert!(
-            err.contains("No bundled license public key configured"),
-            "unexpected: {err}"
+            hex.starts_with("4f71bbbd36495eae"),
+            "updater key fingerprint mismatch: {hex}"
         );
+    }
+
+    #[test]
+    fn updater_public_key_fails_closed_if_emptied() {
+        // The updater_public_key() function still fails closed if someone
+        // empties the slot in the future. (Cannot test the empty path
+        // directly since the constant is now set; this documents the
+        // contract.)
+        let key = updater_public_key().expect("updater key must be configured");
+        assert_eq!(key, UPDATER_PUBLIC_KEY_BASE64);
+        assert!(!key.trim().is_empty());
+    }
+
+    #[test]
+    fn updater_never_accepts_the_license_key() {
+        // Amein's LICENSE public key (Ed25519, base64). The updater must
+        // NEVER accept this key for update verification — the license key
+        // and updater key are completely separate trust roots.
+        const LICENSE_PUBLIC_KEY_B64: &str = "E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=";
+
+        // The updater key slot must never contain the license key.
+        assert_ne!(
+            UPDATER_PUBLIC_KEY_BASE64, LICENSE_PUBLIC_KEY_B64,
+            "updater key slot must never contain the license key"
+        );
+
+        // updater_public_key() returns the updater key, not the license key.
+        let updater_key = updater_public_key().expect("updater key configured");
+        assert_eq!(updater_key, UPDATER_PUBLIC_KEY_BASE64);
+        assert_ne!(updater_key, LICENSE_PUBLIC_KEY_B64);
+    }
+
+    #[test]
+    fn updater_rejects_license_key_signatures_and_vice_versa() {
+        // Cross-rejection: a signature valid under one key must not verify
+        // under the other. Uses fixed-seed test keypairs (never Amein's keys)
+        // to prove the verification logic is key-bound.
+        use ed25519_dalek::{Signer, SigningKey, Verifier};
+
+        // Fixed 32-byte seeds for deterministic test keypairs.
+        let license_seed = [0x11u8; 32];
+        let updater_seed = [0x22u8; 32];
+        let license_signing = SigningKey::from_bytes(&license_seed);
+        let updater_signing = SigningKey::from_bytes(&updater_seed);
+        let license_verifying = license_signing.verifying_key();
+        let updater_verifying = updater_signing.verifying_key();
+
+        let message = b"update payload bytes";
+        let sig_for_license = license_signing.sign(message);
+        let sig_for_updater = updater_signing.sign(message);
+
+        // Sanity: each signature verifies under its own key.
+        assert!(license_verifying.verify(message, &sig_for_license).is_ok());
+        assert!(updater_verifying.verify(message, &sig_for_updater).is_ok());
+
+        // Cross-rejection: license signature rejected by updater key.
+        assert!(updater_verifying.verify(message, &sig_for_license).is_err());
+        // Updater signature rejected by license key.
+        assert!(license_verifying.verify(message, &sig_for_updater).is_err());
+
+        // And via the verify_download() helper with base64 keys.
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let updater_b64 = engine.encode(updater_verifying.to_bytes());
+        let license_b64 = engine.encode(license_verifying.to_bytes());
+        let sig_license_b64 = engine.encode(sig_for_license.to_bytes());
+        let sig_updater_b64 = engine.encode(sig_for_updater.to_bytes());
+
+        // Updater key rejects the license-key signature.
+        assert!(!verify_download(message, &sig_license_b64, &updater_b64));
+        // License key rejects the updater-key signature.
+        assert!(!verify_download(message, &sig_updater_b64, &license_b64));
+        // Each accepts its own.
+        assert!(verify_download(message, &sig_license_b64, &license_b64));
+        assert!(verify_download(message, &sig_updater_b64, &updater_b64));
     }
 }
