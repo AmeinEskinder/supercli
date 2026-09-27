@@ -35,8 +35,16 @@ fields present (including explicit `null`s).
 
 ## Notes
 
-- `project_summary.json` uses `isFolder`: Swift encodes the group flag as
-  `isGroup`, which the Rust DTO accepts on decode (alias) but canonically
-  serializes as `isFolder`. Byte-stability is defined against Rust's output.
+- `project_summary.json` uses `isGroup`: the Host's sidebar (`sessions.rs`)
+  and Swift's `RemoteControlProtocol` both use `isGroup`. The legacy macOS
+  native client reads snake_case `is_folder` from a different store format
+  (frozen, untouched).
+- `terminal_write_request.json` uses `wid` for the idempotency key: the Host
+  (`controller_api.rs` `write_session`, `remote_server.rs`) reads `wid`, and
+  Swift's `writeID` property encodes as `wid` on the wire.
+- `terminal_resize_request.json` uses `columns`: the Host's `resize_session`
+  reads `columns`, and Swift uses `columns`.
+- `viewport_patch.json` uses `column` for cell runs, matching Swift's
+  `RemoteTerminalCellRun` (the Host does not emit viewport patches).
 - Fixtures never contain secrets or real user data; all ids/timestamps are
   taken from the Swift tests.

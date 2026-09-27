@@ -192,7 +192,7 @@ final class ProjectSummary {
     this.path = '',
     this.parentProjectID,
     this.sortOrder,
-    this.isFolder,
+    this.isGroup,
     this.worktreeBranch,
   });
 
@@ -201,7 +201,9 @@ final class ProjectSummary {
   final String path;
   final String? parentProjectID;
   final int? sortOrder;
-  final bool? isFolder;
+
+  /// Wire key is `isGroup`, matching the Host's sidebar and Swift.
+  final bool? isGroup;
   final String? worktreeBranch;
 
   factory ProjectSummary.fromJson(Map<String, dynamic> json) {
@@ -211,9 +213,7 @@ final class ProjectSummary {
       path: (json['path'] as String?) ?? '',
       parentProjectID: json['parentProjectID'] as String?,
       sortOrder: (json['sortOrder'] as num?)?.toInt(),
-      // The Host's bootstrap names plain child groups `isGroup`; the wire
-      // DTO accepts both spellings, canonical is `isFolder`.
-      isFolder: (json['isFolder'] as bool?) ?? (json['isGroup'] as bool?),
+      isGroup: json['isGroup'] as bool?,
       worktreeBranch: json['worktreeBranch'] as String?,
     );
   }
@@ -571,40 +571,43 @@ final class TerminalWriteRequest {
   const TerminalWriteRequest({
     required this.sessionID,
     required this.data,
-    this.idempotencyKey,
+    this.wid,
   });
 
   final String sessionID;
 
   /// Base64-encoded terminal input data.
   final String data;
-  final String? idempotencyKey;
+
+  /// Optional idempotency key. Wire key is `wid`, matching the Host and Swift.
+  final String? wid;
 
   factory TerminalWriteRequest.fromJson(Map<String, dynamic> json) {
     return TerminalWriteRequest(
       sessionID: json['sessionID'] as String,
       data: json['data'] as String,
-      idempotencyKey: json['idempotencyKey'] as String?,
+      wid: json['wid'] as String?,
     );
   }
 }
 
 /// A terminal resize request. Mirrors `TerminalResizeRequest`.
+/// Wire field is `columns`, matching the Host and Swift.
 final class TerminalResizeRequest {
   const TerminalResizeRequest({
     required this.sessionID,
-    required this.cols,
+    required this.columns,
     required this.rows,
   });
 
   final String sessionID;
-  final int cols;
+  final int columns;
   final int rows;
 
   factory TerminalResizeRequest.fromJson(Map<String, dynamic> json) {
     return TerminalResizeRequest(
       sessionID: json['sessionID'] as String,
-      cols: (json['cols'] as num).toInt(),
+      columns: (json['columns'] as num).toInt(),
       rows: (json['rows'] as num).toInt(),
     );
   }
@@ -790,19 +793,21 @@ final class ViewportSubscription {
 final class TerminalCellRun {
   const TerminalCellRun({
     required this.row,
-    required this.startColumn,
+    required this.column,
     required this.cells,
   });
 
   final int row;
-  final int startColumn;
+
+  /// Wire field is `column`, matching Swift's `RemoteTerminalCellRun`.
+  final int column;
   final List<TerminalCell> cells;
 
   factory TerminalCellRun.fromJson(Map<String, dynamic> json) {
     final cells = (json['cells'] as List?) ?? const [];
     return TerminalCellRun(
       row: (json['row'] as num).toInt(),
-      startColumn: (json['startColumn'] as num).toInt(),
+      column: (json['column'] as num).toInt(),
       cells: cells
           .map((c) => TerminalCell.fromJson(c as Map<String, dynamic>))
           .toList(),

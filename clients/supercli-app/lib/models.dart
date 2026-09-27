@@ -19,12 +19,31 @@ final class SessionSummary {
   final int unreadCount;
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
+    // Wire format (camelCase) takes precedence; older snake_case spellings
+    // are kept for backward compat.
+    DateTime updatedAt;
+    final updatedAtUnixMs = (json['updatedAtUnixMs'] as num?)?.toInt();
+    if (updatedAtUnixMs != null) {
+      updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedAtUnixMs);
+    } else {
+      updatedAt =
+          DateTime.tryParse(json['updated_at'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    int unreadCount;
+    final unread = json['unread'];
+    if (unread is bool) {
+      unreadCount = unread ? 1 : 0;
+    } else if (unread is num) {
+      unreadCount = unread.toInt();
+    } else {
+      unreadCount = (json['unread_count'] as num?)?.toInt() ?? 0;
+    }
     return SessionSummary(
       id: json['id'] as String,
       title: (json['title'] as String?) ?? 'Untitled',
-      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
-      unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
+      updatedAt: updatedAt,
+      unreadCount: unreadCount,
     );
   }
 
