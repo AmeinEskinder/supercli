@@ -25,7 +25,7 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 7 files (7,742 LOC) · ported: 13 files (13,078 LOC) · todo: 253 files (124,817 LOC)
+- Status breakdown: partial: 21 files (16,524 LOC) · ported: 13 files (13,078 LOC) · todo: 239 files (116,035 LOC)
 - Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
 - Unresolved (`tbd`) destinations: 26 files
 
@@ -57,24 +57,24 @@ Behaviour-level detail lives in the per-area sidecars under
 | app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/TerminalPane.swift | 273 | Dart: appkit_widgets | todo |  | 0 |
 | app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/WebComponentPane.swift | 151 | Dart: appkit_widgets | todo |  | 0 |
 | app-kit/swift/Package.swift | 17 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/CanvasPageView.swift | 106 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/FooterActionsView.swift | 118 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift | 47 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/MarkdownEditorView.swift | 989 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/CanvasPageView.swift | 106 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/FooterActionsView.swift | 118 | Dart: appkit_widgets | partial |  | 1 |
+| app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift | 47 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/MarkdownEditorView.swift | 989 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift | 57 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/MediaView.swift | 196 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/PageView.swift | 1231 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/ReadOnlyContentView.swift | 131 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/SemanticMenuView.swift | 129 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/SurfaceComponentView.swift | 84 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/TextBoxView.swift | 175 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/TreeView.swift | 370 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/MediaView.swift | 196 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/PageView.swift | 1231 | Dart: appkit_widgets | partial |  | 1 |
+| app-kit/swift/Sources/SupercliAppKitUI/ReadOnlyContentView.swift | 131 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/SemanticMenuView.swift | 129 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/SurfaceComponentView.swift | 84 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/TextBoxView.swift | 175 | Dart: appkit_widgets | partial |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/TreeView.swift | 370 | Dart: appkit_widgets | partial |  | 0 |
 | app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift | 1336 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift | 163 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift | 4216 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift | 163 | Dart: appkit_widgets | partial |  | 1 |
+| app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift | 4216 | Dart: appkit_widgets | partial |  | 15 |
 | app-kit/swift/Sources/SupercliAppKitUI/UIUnixSessionClient.swift | 513 | Dart: appkit_widgets | todo |  | 0 |
 | app-kit/swift/Tests/SupercliAppKitUITests/MarkdownInsertMenuTests.swift | 155 | Dart: appkit_widgets | todo |  | 0 |
-| app-kit/swift/Tests/SupercliAppKitUITests/ProtocolTests.swift | 827 | Dart: appkit_widgets | todo |  | 0 |
+| app-kit/swift/Tests/SupercliAppKitUITests/ProtocolTests.swift | 827 | Dart: appkit_widgets | partial |  | 15 |
 | ios/SupercliIOS/App/UnpeelIOSApp.swift | 14 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Package.swift | 35 | tbd | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/AppLock.swift | 180 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
