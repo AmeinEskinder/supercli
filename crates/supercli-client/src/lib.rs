@@ -67,7 +67,10 @@ pub use credentials::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use host_store::{HostStoreError, MemoryHostCredentialStore, RemoteHostStore, SshHostRecord};
+pub use host_store::{
+    HostCredentialStore, HostStoreError, MemoryHostCredentialStore, OsKeychainCredentialStore,
+    RemoteHostStore, SshHostRecord,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use hosts::{HostRegistry, LiveHost};
 #[cfg(not(target_arch = "wasm32"))]

@@ -196,3 +196,27 @@ files:
     behaviours: []
     tests: []
     notes: "Dart re-exports RemoteHostWorkspaceView from workspaceopenmenu.dart (623 Swift LOC vs re-export). Needs behaviour audit against the Swift view."
+  # Security requirement (Claude review 2026-09-27): paired-host credentials
+  # (relay secrets, cert pins) MUST use the OS native secure store, never
+  # plaintext config files. This row tracks the Rust implementation.
+  secure-credential-store (Rust, no Swift source — new security requirement):
+    destination: "Rust: supercli-client (crates/supercli-client/src/host_store.rs)"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "LicenseKeychain.save/load/delete (Security.framework SecItemAdd/SecItemCopyMatching/SecItemUpdate/SecItemDelete, kSecClassGenericPassword)"
+        target: "crates/supercli-client/src/host_store.rs::OsKeychainCredentialStore::save/load/delete (via keyring crate)"
+        test: "crates/supercli-client/src/host_store.rs::tests::os_keychain_store_implements_trait"
+      - swift: "MobileE2EKeychainStore (scoped Keychain accounts, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)"
+        target: "crates/supercli-client/src/host_store.rs::OsKeychainCredentialStore (service li.superc.controller, account host:{host_id})"
+        test: "crates/supercli-client/src/host_store.rs::tests::os_keychain_store_handles_not_found"
+      - swift: "Keychain-only credential storage (never in UserDefaults / app-state.json)"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::with_os_keychain"
+        test: "crates/supercli-client/src/host_store.rs::tests::with_os_keychain_uses_os_store_not_memory"
+      - swift: "Memory store is test-only (never for production secrets)"
+        target: "crates/supercli-client/src/host_store.rs::MemoryHostCredentialStore (documented test-only)"
+        test: "crates/supercli-client/src/host_store.rs::tests::memory_store_is_not_the_default"
+    tests:
+      - file: crates/supercli-client/src/host_store.rs
+        count: 4
+    notes: "SECURITY: OsKeychainCredentialStore uses the OS native store via the keyring crate (macOS Keychain/Security.framework, Linux Secret Service/libsecret, Windows Credential Manager). MemoryHostCredentialStore is explicitly documented as test-only. RemoteHostStore::with_os_keychain() is the production constructor. Credentials are NEVER written to plaintext config files."
