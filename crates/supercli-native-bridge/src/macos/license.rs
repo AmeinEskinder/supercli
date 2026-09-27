@@ -102,15 +102,19 @@ impl LicenseConfig {
     ///
     /// Activation and update verification MUST call this and refuse on
     /// error. Fails closed: an empty/missing bundled key is never silently
-    /// accepted. The key slot is a TODO for Amein — never generate or
-    /// commit a private key.
+    /// accepted.
     pub fn bundled_public_key() -> Result<&'static str, String> {
-        if BUNDLED_PUBLIC_KEY_BASE64.trim().is_empty() {
-            Err("No bundled license public key configured — refusing. \
-                 (TODO: Amein must embed the production Ed25519 public key.)"
-                .to_string())
+        Self::check_bundled_key(BUNDLED_PUBLIC_KEY_BASE64)
+    }
+
+    /// Testable fail-closed core: an empty key slot is an error, never a
+    /// silent accept. `bundled_public_key()` above is this with the real
+    /// bundled constant.
+    fn check_bundled_key(key_b64: &'static str) -> Result<&'static str, String> {
+        if key_b64.trim().is_empty() {
+            Err("No bundled license public key configured — refusing.".to_string())
         } else {
-            Ok(BUNDLED_PUBLIC_KEY_BASE64)
+            Ok(key_b64)
         }
     }
 
@@ -290,15 +294,19 @@ mod tests {
 
     #[test]
     fn bundled_public_key_fails_closed_when_empty() {
-        // BUNDLED_PUBLIC_KEY_BASE64 is currently "" (TODO for Amein):
-        // activation and update verification must refuse, not proceed.
-        let err =
-            LicenseConfig::bundled_public_key().expect_err("empty bundled key must fail closed");
+        // The fail-closed contract: an empty key slot refuses, never
+        // silently accepts. The bundled key is now set (Amein's key v1,
+        // pinned by bundled_public_key_is_pinned_license_v1), so the
+        // empty-slot path is exercised through the testable helper.
+        let err = LicenseConfig::check_bundled_key("")
+            .expect_err("empty bundled key must fail closed");
         assert!(
             err.contains("No bundled license public key configured"),
             "unexpected error: {err}"
         );
         assert!(err.contains("refusing"), "unexpected error: {err}");
+        // The real bundled key is populated and accepted.
+        assert!(LicenseConfig::bundled_public_key().is_ok());
     }
 
     #[test]
