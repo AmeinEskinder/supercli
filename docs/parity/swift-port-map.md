@@ -25,8 +25,8 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 7 files (7,742 LOC) · ported: 13 files (13,078 LOC) · todo: 253 files (124,817 LOC)
-- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
+- Status breakdown: partial: 11 files (10,667 LOC) · ported: 18 files (14,000 LOC) · todo: 244 files (120,970 LOC)
+- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client (iOS non-UI): 9 files (3,847 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 16 files (7,103 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 17 files (15,492 LOC) · tbd: 26 files (4,704 LOC)
 - Unresolved (`tbd`) destinations: 26 files
 
 ### By worker area
@@ -86,22 +86,22 @@ Behaviour-level detail lives in the per-area sidecars under
 | ios/SupercliIOS/Sources/SupercliIOS/MascotView.swift | 195 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/PairingView.swift | 674 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/ProjectOrganizeSheet.swift | 213 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/PushManager.swift | 200 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
+| ios/SupercliIOS/Sources/SupercliIOS/PushManager.swift | 200 | Rust: supercli-client (iOS non-UI) | partial |  | 3 |
 | ios/SupercliIOS/Sources/SupercliIOS/RemoteConnectionStore.swift | 1995 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift | 264 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
+| ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift | 264 | Rust: supercli-client (iOS non-UI) | partial |  | 12 |
 | ios/SupercliIOS/Sources/SupercliIOS/RemoteGhosttyTerminalView.swift | 5326 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/RemoteMacClient.swift | 879 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/RemotePreviewStore.swift | 2143 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalPrediction.swift | 207 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalScrollPrediction.swift | 248 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift | 263 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
+| ios/SupercliIOS/Sources/SupercliIOS/RemotePreviewStore.swift | 2143 | Rust: supercli-client (iOS non-UI) | partial |  | 7 |
+| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalPrediction.swift | 207 | Rust: supercli-client (iOS non-UI) | ported |  | 10 |
+| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalScrollPrediction.swift | 248 | Rust: supercli-client (iOS non-UI) | ported |  | 19 |
+| ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift | 263 | Rust: supercli-client (iOS non-UI) | ported |  | 27 |
 | ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalWebSocket.swift | 304 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/SessionOrganizeSheet.swift | 508 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/SharedIconViews.swift | 705 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/StreamFrameReconciler.swift | 46 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
+| ios/SupercliIOS/Sources/SupercliIOS/StreamFrameReconciler.swift | 46 | Rust: supercli-client (iOS non-UI) | ported |  | 6 |
 | ios/SupercliIOS/Sources/SupercliIOS/TerminalDetailView.swift | 971 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/TerminalQueryFilter.swift | 158 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| ios/SupercliIOS/Sources/SupercliIOS/TerminalSessionCache.swift | 318 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
+| ios/SupercliIOS/Sources/SupercliIOS/TerminalQueryFilter.swift | 158 | Rust: supercli-client (iOS non-UI) | ported |  | 11 |
+| ios/SupercliIOS/Sources/SupercliIOS/TerminalSessionCache.swift | 318 | Rust: supercli-client (iOS non-UI) | partial |  | 7 |
 | ios/SupercliIOS/Sources/SupercliIOS/TerminalTextSelectionSheet.swift | 150 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/UnpeelIOSRootView.swift | 2338 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | ios/SupercliIOS/Sources/SupercliIOS/VoiceDictationController.swift | 475 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |

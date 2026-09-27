@@ -30,19 +30,50 @@
 pub mod credentials;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
+/// Pure decisions behind the phone's Direct (LAN) `/mobile` transport:
+/// scheme selection, bootstrap deadlines, push-token routes
+/// (port of `RemoteDirectTransport.swift`).
+pub mod direct_transport;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
+/// Mosh-style predictive local echo for high-latency terminal transports
+/// (port of `RemoteTerminalPredictionEngine`).
+pub mod prediction;
+/// UI-agnostic state logic from the iOS preview store: capability gates,
+/// MCP approval bookkeeping, workspace resolution
+/// (port of the portable parts of `RemotePreviewStore.swift`).
+pub mod preview;
 pub mod protocol;
+/// APNs push registration state machine (port of `PushRegistrationState`
+/// from `PushManager.swift`).
+pub mod push;
+/// Stateful VT-query filter that strips terminal interrogations before they
+/// can reach the surface (port of `TerminalQueryFilter`).
+pub mod query_filter;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
+/// Mosh-style predictive scrolling for remote-rendered TUIs
+/// (port of `RemoteTerminalScrollPredictionEngine`).
+pub mod scroll_prediction;
+/// Pure per-session terminal cache bookkeeping: LRU index and the
+/// visibility/stream lease trackers (port of the UI-agnostic structs in
+/// `TerminalSessionCache.swift`).
+pub mod session_lru;
+/// Offset-based terminal output stream reconciliation: binary frame offset
+/// parsing, feed/skip/fill-gap decisions (port of `StreamFrameReconciler`).
+pub mod stream_frame;
+/// Pure protocol/selection logic for the terminal output WebSocket:
+/// hello/error decoding, fingerprint normalization, transport selection,
+/// input framing, reconnect backoff (port of `RemoteTerminalStreamTransport`).
+pub mod stream_transport;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
