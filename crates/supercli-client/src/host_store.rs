@@ -10,6 +10,7 @@
 //! this: it owns the [`crate::transport::HostClient`] per Host, while this
 //! module owns the persisted records those clients are built from.
 
+#[cfg(any(test, feature = "test-util"))]
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -57,11 +58,17 @@ pub trait HostCredentialStore {
 /// only. NEVER use it for real pairing secrets in production — use
 /// [`OsKeychainCredentialStore`] instead, which stores credentials in the
 /// OS-native secure store (Keychain / Secret Service / Credential Manager).
+///
+/// This type is gated behind `#[cfg(any(test, feature = "test-util"))]` so
+/// production code cannot wire it by mistake. Production code must use
+/// [`OsKeychainCredentialStore`] via `RemoteHostStore::with_os_keychain()`.
+#[cfg(any(test, feature = "test-util"))]
 #[derive(Default)]
 pub struct MemoryHostCredentialStore {
     secrets: HashMap<String, String>,
 }
 
+#[cfg(any(test, feature = "test-util"))]
 impl HostCredentialStore for MemoryHostCredentialStore {
     fn save(&mut self, account: &str, secret: &str) -> Result<(), String> {
         self.secrets.insert(account.to_string(), secret.to_string());
