@@ -7,6 +7,7 @@
 library;
 
 import 'package:gpuidart/gpuidart.dart';
+import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/screens/mcpapprovalpanel.dart';
 import 'package:supercli_app/screens/toastcenter.dart';
@@ -112,9 +113,9 @@ void main() {
       final panel = McpApprovalPanel(approval: makeApproval());
       final actions = panel.actions();
       final byName = {for (final a in actions) a.name: a};
-      expect(byName['mcp.approve']!.keys, 'ctrl+enter');
-      expect(byName['mcp.deny']!.keys, 'ctrl+shift+enter');
-      expect(byName['mcp.edit']!.keys, 'ctrl+e');
+      expect(byName['mcp.approve']!.keys, Keymap.submit);
+      expect(byName['mcp.deny']!.keys, Keymap.deny);
+      expect(byName['mcp.edit']!.keys, Keymap.editDetail());
       // All scoped to the overlay node.
       for (final a in actions) {
         expect(a.context, isA<UiNodeActionContext>());

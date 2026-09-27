@@ -8,8 +8,8 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/keybindings.dart';
+import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/models.dart';
-import 'package:supercli_app/platform_keys.dart';
 import 'package:supercli_app/screens/commandpaletteview.dart';
 import 'package:supercli_app/widgets/list_navigation.dart';
 import 'package:test/test.dart';
@@ -186,10 +186,10 @@ void main() {
       expect(ds.row(0)[0], 'New Session');
     });
 
-    test('actions declare meta+k open and node-scoped nav keys', () {
+    test('actions declare commandPalette open and node-scoped nav keys', () {
       final actions = CommandPaletteView(commands: sampleCommands()).actions();
       final byName = {for (final a in actions) a.name: a};
-      expect(byName['palette.open']!.keys, 'meta+k');
+      expect(byName['palette.open']!.keys, Keymap.commandPalette());
       expect(byName['palette.down']!.keys, 'down');
       expect(byName['palette.up']!.keys, 'up');
       expect(byName['palette.confirm']!.keys, 'enter');
@@ -316,8 +316,8 @@ void main() {
       expect(byName['switcher.previous']!.keys, 'ctrl+shift+tab');
     });
 
-    test('palette open uses the platform meta key', () {
-      expect(AppKeybindings.paletteOpen, 'meta+k');
+    test('palette open uses the platform primary modifier', () {
+      expect(AppKeybindings.paletteOpen, Keymap.commandPalette());
     });
   });
   group('SupercliApp palette mounting', () {
@@ -335,8 +335,8 @@ void main() {
       // Shortcuts match the registered UiAction chords (platform primary
       // modifier: meta on macOS, ctrl on Linux/Windows).
       final byId = {for (final c in commands) c.id: c};
-      expect(byId['action:sidebar.toggle']!.shortcut, '$currentPrimaryModifier+b');
-      expect(byId['action:pane.splitRight']!.shortcut, '$currentPrimaryModifier+d');
+      expect(byId['action:sidebar.toggle']!.shortcut, Keymap.sidebarToggle());
+      expect(byId['action:pane.splitRight']!.shortcut, Keymap.splitRight());
     });
 
     test('paletteCommands includes live sessions as session entries', () {
@@ -565,7 +565,7 @@ void main() {
       expect(byId['action:pane.focusNext']!.shortcut, isEmpty);
       expect(byId['action:pane.focusPrev']!.shortcut, isEmpty);
       // Other actions still advertise their real chords.
-      expect(byId['action:sidebar.toggle']!.shortcut, '$currentPrimaryModifier+b');
+      expect(byId['action:sidebar.toggle']!.shortcut, Keymap.sidebarToggle());
     });
   });
 

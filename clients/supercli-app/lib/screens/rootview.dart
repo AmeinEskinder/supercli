@@ -11,6 +11,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 import 'sidebarview.dart';
 import 'terminalarea.dart';
 
@@ -43,7 +44,7 @@ final class RootView {
     ]);
   }
 
-  List<UiAction> actions() => const [
-        UiAction(name: 'sidebar.toggle', keys: 'ctrl+b'),
+  List<UiAction> actions() => [
+        UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
       ];
 }

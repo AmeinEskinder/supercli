@@ -19,6 +19,8 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import 'keymap.dart';
+
 /// Maximum leaf panes per window (upstream limit).
 const int maxPanes = 8;
 
@@ -496,58 +498,58 @@ final class PaneLayout {
   }
 
   /// Key bindings for pane management, scoped to the terminal area node.
-  List<UiAction> actions() => const [
+  List<UiAction> actions() => [
         UiAction(
             name: 'pane.splitRight',
-            keys: 'ctrl+d',
+            keys: Keymap.splitRight(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.splitDown',
-            keys: 'shift+ctrl+d',
+            keys: Keymap.splitDown(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.zoom',
-            keys: 'shift+ctrl+enter',
+            keys: Keymap.zoomPane(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.equalize',
-            keys: 'ctrl+shift+e',
+            keys: Keymap.equalizeSplits(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.close',
-            keys: 'ctrl+w',
+            keys: Keymap.closeWindow(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.detach',
-            keys: 'ctrl+shift+o',
+            keys: Keymap.detachPane(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusLeft',
-            keys: 'alt+ctrl+left',
+            keys: Keymap.focusPaneLeft(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusRight',
-            keys: 'alt+ctrl+right',
+            keys: Keymap.focusPaneRight(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusUp',
-            keys: 'alt+ctrl+up',
+            keys: Keymap.focusPaneUp(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusDown',
-            keys: 'alt+ctrl+down',
+            keys: Keymap.focusPaneDown(),
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusNext',
-            keys: 'ctrl+tab',
+            keys: Keymap.switcherNext,
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'pane.focusPrev',
-            keys: 'ctrl+shift+tab',
+            keys: Keymap.switcherPrevious,
             context: UiActionContext.node('pane-layout')),
         UiAction(
             name: 'find.show',
-            keys: 'ctrl+f',
+            keys: Keymap.find(),
             context: UiActionContext.node('pane-layout')),
       ];
 

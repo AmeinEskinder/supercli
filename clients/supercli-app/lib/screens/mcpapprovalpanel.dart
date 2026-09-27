@@ -26,6 +26,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 import '../models.dart';
 
 /// Which answer the user gave for an approval.
@@ -91,23 +92,23 @@ final class McpApprovalPanel {
     return false;
   }
 
-  List<UiAction> actions() => const [
+  List<UiAction> actions() => [
         // Ctrl+Enter approves (matches the e2e key injector).
         UiAction(
           name: 'mcp.approve',
-          keys: 'ctrl+enter',
+          keys: Keymap.submit,
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
         // Ctrl+Shift+Enter denies.
         UiAction(
           name: 'mcp.deny',
-          keys: 'ctrl+shift+enter',
+          keys: Keymap.deny,
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
-        // Ctrl+E opens the edit/detail view before answering.
+        // Primary+E opens the edit/detail view before answering.
         UiAction(
           name: 'mcp.edit',
-          keys: 'ctrl+e',
+          keys: Keymap.editDetail(),
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
       ];

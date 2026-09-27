@@ -16,6 +16,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 import '../models.dart';
 
 /// A session as the sidebar sees it: the host summary plus sidebar-local
@@ -295,14 +296,14 @@ final class SidebarView {
   }
 
   List<UiAction> actions() => [
-        const UiAction(
+        UiAction(
             name: 'sidebar.filter',
-            keys: 'ctrl+f',
+            keys: Keymap.find(),
             context: UiActionContext.node('sidebar')),
-        const UiAction(name: 'session.new', keys: 'ctrl+n'),
-        const UiAction(
+        UiAction(name: 'session.new', keys: Keymap.newSession()),
+        UiAction(
             name: 'session.select-next',
-            keys: 'ctrl+tab',
+            keys: Keymap.switcherNext,
             context: UiActionContext.node('sidebar')),
       ];
 }
