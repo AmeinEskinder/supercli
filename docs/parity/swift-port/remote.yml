@@ -22,13 +22,6 @@ files:
       - file: native/SupercliNative/Tests/SupercliNativeTests/LocalHostClientFeatureTests.swift
         count: 0
     notes: "Local client feature flags. Verify against Rust; port if missing."
-  native/SupercliNative/Sources/SupercliNative/LocalHostControl.swift:
-    destination: "Rust: supercli-core"
-    status: todo
-    checklist: ""
-    behaviours: []
-    tests: []
-    notes: "Same-user admin client over mode-0600 host.sock. Rust has remote_server.rs/remote_stdio.rs; verify behaviour coverage before marking dropped."
   native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift:
     destination: "dropped: Host does it (crates/supercli-serve/src/pairing.rs)"
     status: ported
@@ -182,13 +175,6 @@ files:
       - file: clients/supercli-app/test/screens_test.dart
         count: 7
     notes: "Dart pairing sheet now covers: countdown, scan hint, Generate/Refresh + Copy buttons, completed state with Add Another, error display, footer. Shell contract documented in file header (lifecycle + timer owned by shell; button IDs dispatched by shell). Remaining gaps: QR is P0-11 gpuidart gap; onAppear/onDisappear/timer auto-refresh are shell responsibilities (no shell wiring yet); AddWorkspaceSheet method picker only (no name/tint/SSH form fields)."
-  native/SupercliNative/Sources/SupercliNative/Views/RemoteFolderPicker.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
-    checklist: ""
-    behaviours: []
-    tests: []
-    notes: "Dart re-exports from workspaceopenmenu.dart. Verify folder-picker behaviours are covered there."
   native/SupercliNative/Sources/SupercliNative/Views/RemoteHostWorkspaceView.swift:
     destination: "Dart: clients/supercli-app"
     status: partial
