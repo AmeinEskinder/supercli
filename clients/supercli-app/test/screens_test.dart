@@ -22,7 +22,10 @@ void main() {
       final sidebar = SidebarView(projects: const []);
       final content = TerminalArea(panes: []);
       final root = RootView(
-          sidebar: sidebar, content: content, sidebarCollapsed: true);
+        sidebar: sidebar,
+        content: content,
+        sidebarCollapsed: true,
+      );
       final node = root.build() as UiRow;
       expect(node.children.first, isA<UiColumn>());
     });
@@ -30,26 +33,33 @@ void main() {
 
   group('SidebarView', () {
     test('builds dots + filter + new session + archived', () {
-      final sidebar = SidebarView(projects: [
-        SidebarProject(
-          id: 'pr1',
-          name: 'supercli',
-          sessions: [
-            SidebarSession(
+      final sidebar = SidebarView(
+        projects: [
+          SidebarProject(
+            id: 'pr1',
+            name: 'supercli',
+            sessions: [
+              SidebarSession(
                 summary: SessionSummary(
-                    id: 's1',
-                    title: 'api-server',
-                    updatedAt: DateTime.now())),
-          ],
-        ),
-      ]);
+                  id: 's1',
+                  title: 'api-server',
+                  updatedAt: DateTime.now(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
       final node = sidebar.build() as UiColumn;
       // workspace dots + filter input + new session button +
-      // project tree + archived button
-      expect(node.children.length, 5);
+      // project tree + archived button + settings menu button
+      expect(node.children.length, 6);
       expect(node.children[0], isA<UiRow>());
       expect(node.children[1], isA<UiInput>());
       expect(node.children[2], isA<UiButton>());
+      // The last child is the Settings menu entry.
+      final settingsBtn = node.children[5] as UiButton;
+      expect(settingsBtn.id, 'open-settings');
     });
   });
 
@@ -91,8 +101,10 @@ void main() {
       );
       final panel = McpApprovalPanel(approval: approval);
       final actions = panel.actions();
-      expect(actions.map((a) => a.name),
-          containsAll(['mcp.approve', 'mcp.deny']));
+      expect(
+        actions.map((a) => a.name),
+        containsAll(['mcp.approve', 'mcp.deny']),
+      );
     });
   });
 
@@ -150,15 +162,17 @@ void main() {
       final node = picker.build() as UiColumn;
       // Last child is the pairing sheet.
       final sheet = node.children.last as UiColumn;
-      final codeText =
-          sheet.children.whereType<UiText>().map((t) => t.text).join(' ');
+      final codeText = sheet.children
+          .whereType<UiText>()
+          .map((t) => t.text)
+          .join(' ');
       expect(codeText, contains('ABC123'));
     });
 
     test('nearby dataset has host rows', () {
-      final picker = HostPickerView(hosts: const [
-        HostEntry(id: 'h1', name: 'mbp', address: '192.168.1.2'),
-      ]);
+      final picker = HostPickerView(
+        hosts: const [HostEntry(id: 'h1', name: 'mbp', address: '192.168.1.2')],
+      );
       final ds = picker.nearbyDataset();
       expect(ds.rowCount, 1);
       expect(ds.row(0)[0], 'mbp');
@@ -182,26 +196,23 @@ void main() {
 
   group('app-kit widgets', () {
     test('TreeView renders nested nodes', () {
-      final tree = TreeView(nodes: const [
-        TreeNode(
-          id: 'src',
-          label: 'src',
-          expanded: true,
-          children: [
-            TreeNode(id: 'src/main.rs', label: 'main.rs'),
-          ],
-        ),
-      ]);
+      final tree = TreeView(
+        nodes: const [
+          TreeNode(
+            id: 'src',
+            label: 'src',
+            expanded: true,
+            children: [TreeNode(id: 'src/main.rs', label: 'main.rs')],
+          ),
+        ],
+      );
       final node = tree.build() as UiColumn;
       expect(node.children.length, 1);
     });
 
     test('PageView shows current page with nav', () {
       final page = PageView(
-        pages: const [
-          UiText('p1', 'Page 1'),
-          UiText('p2', 'Page 2'),
-        ],
+        pages: const [UiText('p1', 'Page 1'), UiText('p2', 'Page 2')],
         currentPage: 1,
       );
       final node = page.build() as UiColumn;
@@ -211,9 +222,11 @@ void main() {
     });
 
     test('SemanticMenuView groups actions', () {
-      final menu = SemanticMenuView(groups: const [
-        SemanticMenuGroup(title: 'File', items: ['Open', 'Save']),
-      ]);
+      final menu = SemanticMenuView(
+        groups: const [
+          SemanticMenuGroup(title: 'File', items: ['Open', 'Save']),
+        ],
+      );
       final node = menu.build() as UiColumn;
       expect(node.children.length, 3); // title + 2 buttons
     });
@@ -221,8 +234,7 @@ void main() {
     test('ListNavigation has keyboard actions', () {
       final list = ListNavigation(items: const ['a', 'b']);
       final actions = list.actions();
-      expect(actions.map((a) => a.name),
-          containsAll(['list.up', 'list.down']));
+      expect(actions.map((a) => a.name), containsAll(['list.up', 'list.down']));
     });
   });
 }

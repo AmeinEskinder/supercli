@@ -63,17 +63,14 @@ final class Keymap {
   // ------------------------------------------------------------------
 
   /// Settings… — Cmd-, (AppDelegate.swift:313)
+  ///
+  /// NOTE (gpuidart gap, see docs/gpuidart-gaps-keys.md): the native key
+  /// parser rejects punctuation keys, so this chord is NOT registered
+  /// natively (no UiAction for settings.open). The canonical chord stays
+  /// documented here and in the command palette; Settings is reachable
+  /// from the palette ("Open settings").
   static String settings({bool? isMacOS}) =>
       _onPrimary(',', isMacOS ?? _isMacOS);
-
-  /// Settings… — native-safe chord for UiAction registration.
-  ///
-  /// gpuidart's native key parser does not support punctuation keys, so the
-  /// canonical [settings] chord (Cmd-,/Ctrl-,) makes the native host reject
-  /// the entire window. This chord is used for the `settings.open` UiAction;
-  /// [settings] remains the canonical chord shown in the palette and docs.
-  static String settingsNative({bool? isMacOS}) =>
-      _onPrimary('shift+p', isMacOS ?? _isMacOS);
 
   /// Hide Supercli — Cmd-H (AppDelegate.swift:327)
   static String hide({bool? isMacOS}) => _onPrimary('h', isMacOS ?? _isMacOS);

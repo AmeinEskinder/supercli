@@ -310,5 +310,21 @@ void main() {
       expect(store.snapshot['accentColor'], 3);
       controller.dispose();
     });
+
+    test('toLocalJson never contains secret-like keys', () {
+      final settings = AppSettings();
+      final json = settings.toLocalJson();
+      final secretPattern = RegExp(
+        r'token|password|credential|secret|api[_-]?key|private[_-]?key|auth',
+        caseSensitive: false,
+      );
+      for (final key in json.keys) {
+        expect(
+          secretPattern.hasMatch(key),
+          isFalse,
+          reason: 'local store key "$key" looks like a secret',
+        );
+      }
+    });
   });
 }

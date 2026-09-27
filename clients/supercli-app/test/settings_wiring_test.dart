@@ -18,6 +18,7 @@ import 'package:http/testing.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/keymap.dart';
+import 'package:supercli_app/screens/sidebarview.dart';
 import 'package:supercli_app/screens/settings_controller.dart';
 import 'package:supercli_app/screens/settingsview.dart';
 import 'package:test/test.dart';
@@ -226,18 +227,35 @@ void main() {
   });
 
   group('Settings actions', () {
-    test('settings.open is registered with the native-safe Keymap chord', () {
+    test('settings.open is NOT registered natively (punctuation gap)', () {
       final app = appWithController(FakeSettingsHost());
       final open = app
           .actions()
           .where((a) => a.name == 'settings.open')
           .toList();
-      expect(open, hasLength(1));
-      // The canonical chord is Cmd-,/Ctrl-, (Keymap.settings), but gpuidart's
-      // native parser rejects punctuation keys, so the UiAction uses the
-      // native-safe variant.
-      expect(open.single.keys, Keymap.settingsNative());
+      // gpuidart's native key parser rejects punctuation keys (see
+      // docs/gpuidart-gaps-keys.md), so the canonical Cmd-,/Ctrl-, chord
+      // (Keymap.settings) is NOT registered natively. Settings stays
+      // reachable from the command palette, which dispatches the action
+      // name directly through handleAction.
+      expect(open, isEmpty);
       expect(Keymap.settings(), contains(','));
+    });
+
+    test('settings.open is reachable from the command palette', () {
+      final app = appWithController(FakeSettingsHost());
+      final entry = app
+          .paletteCommands()
+          .where((c) => c.id == 'action:settings.open')
+          .toList();
+      expect(entry, hasLength(1));
+      expect(entry.single.title, 'Open settings');
+      // The palette shows the canonical chord for documentation.
+      expect(entry.single.shortcut, Keymap.settings());
+      // And the palette selection dispatches straight to handleAction.
+      expect(app.executePaletteCommand(entry.single), 'settings.open');
+      expect(app.handleAction('settings.open'), isTrue);
+      expect(app.settingsOpen, isTrue);
     });
 
     test('settings.close appears only while the overlay is open', () {
@@ -250,6 +268,34 @@ void main() {
           .toList();
       expect(close, hasLength(1));
       expect(close.single.keys, 'escape');
+    });
+
+    test('settings is reachable from the sidebar menu button', () {
+      final app = appWithController(FakeSettingsHost());
+      // The menu button is mounted in the sidebar.
+      final sidebarIds = collectIds(
+        SidebarView(
+          workspaces: const ['local'],
+          activeWorkspaceId: 'local',
+          projects: const [],
+          selectedSessionId: null,
+        ).build().toJson().cast<String, Object?>(),
+      );
+      expect(sidebarIds.contains('open-settings'), isTrue);
+      // Clicking it opens Settings through the menu path.
+      expect(app.settingsOpen, isFalse);
+      expect(app.handleClick('open-settings'), isTrue);
+      expect(app.settingsOpen, isTrue);
+      // And the settings overlay mounts with the controller.
+      final appIds = collectIds(app.build().toJson().cast<String, Object?>());
+      expect(appIds.contains('settings'), isTrue);
+    });
+
+    test('menu settings button is a no-op without a controller', () {
+      final app = SupercliApp();
+      expect(app.settingsController, isNull);
+      expect(app.handleClick('open-settings'), isFalse);
+      expect(app.settingsOpen, isFalse);
     });
   });
 }
