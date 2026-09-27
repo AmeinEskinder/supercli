@@ -250,7 +250,7 @@ final class CommandPaletteView {
   }
 
   List<UiAction> actions() => [
-        const UiAction(name: 'palette.open', keys: AppKeybindings.paletteOpen),
+        UiAction(name: 'palette.open', keys: AppKeybindings.paletteOpen),
         ...const AppKeybindings().paletteActions('command-palette'),
       ];
 }

@@ -14,6 +14,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 /// One vault note.
 final class MarkdownNote {
   const MarkdownNote({
@@ -473,7 +474,7 @@ final class MarkdownPaneView {
     ),
     UiAction(
       name: 'notes.save',
-      keys: 'ctrl+s',
+      keys: Keymap.saveNote(),
       context: UiActionContext.node('mdpane-$paneId'),
     ),
   ];

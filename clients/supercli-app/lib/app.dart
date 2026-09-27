@@ -12,8 +12,8 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 
 import 'keybindings.dart';
+import 'keymap.dart';
 import 'models.dart';
-import 'platform_keys.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
 import 'screens/sidebarview.dart';
@@ -67,36 +67,38 @@ final class SupercliApp {
   /// shortcuts) plus the live sessions. This is what the palette lists,
   /// filters, and executes — not a hardcoded list.
   List<PaletteCommand> paletteCommands() {
-    final mod = currentPrimaryModifier;
     final actionDefs = [
       // (action name, human title, shortcut)
-      // NOTE: `mod` is the platform primary modifier: `meta` (Cmd) on macOS,
-      // `ctrl` on Linux/Windows. Platform-neutral chords (ctrl+enter,
-      // ctrl+tab, ...) stay as `ctrl+` on all platforms by design.
-      ('approval.approve', 'Approve pending request', 'ctrl+enter'),
-      ('approval.deny', 'Deny pending request', 'ctrl+shift+enter'),
-      ('mcp.approve', 'Approve pending MCP request', 'ctrl+enter'),
-      ('mcp.deny', 'Deny pending MCP request', 'ctrl+shift+enter'),
-      ('mcp.edit', 'Edit pending MCP request before answering', 'ctrl+e'),
-      ('sidebar.toggle', 'Toggle sidebar', '$mod+b'),
+      // NOTE: shortcuts come from Keymap (lib/keymap.dart), the single
+      // source of truth. The primary modifier is `meta` (Cmd) on macOS,
+      // `ctrl` on Linux/Windows. Platform-neutral chords (ctrl+tab, ...)
+      // stay as `ctrl+` on all platforms by design. The approval overlay
+      // uses plain Return / Escape (MCPApprovalPanel.swift:249-266).
+      ('approval.approve', 'Approve pending request', Keymap.approvalAllow),
+      ('approval.deny', 'Deny pending request', Keymap.approvalDeny),
+      ('mcp.approve', 'Approve pending MCP request', Keymap.approvalAllow),
+      ('mcp.deny', 'Deny pending MCP request', Keymap.approvalDeny),
+      ('mcp.edit', 'Edit pending MCP request before answering',
+          Keymap.editDetail()),
+      ('sidebar.toggle', 'Toggle sidebar', Keymap.sidebarToggle()),
       ('sessions.up', 'Select previous session', 'up'),
       ('sessions.down', 'Select next session', 'down'),
-      ('composer.focus', 'Focus message composer', 'ctrl+l'),
-      ('pane.splitRight', 'Split pane right', '$mod+d'),
-      ('pane.splitDown', 'Split pane down', 'shift+$mod+d'),
-      ('pane.zoom', 'Zoom focused pane', 'shift+$mod+enter'),
-      ('pane.equalize', 'Equalize pane sizes', '$mod+shift+e'),
-      ('pane.close', 'Close focused pane', '$mod+w'),
-      ('pane.detach', 'Detach focused pane', '$mod+shift+o'),
+      ('composer.focus', 'Focus message composer', Keymap.composerFocus()),
+      ('pane.splitRight', 'Split pane right', Keymap.splitRight()),
+      ('pane.splitDown', 'Split pane down', Keymap.splitDown()),
+      ('pane.zoom', 'Zoom focused pane', Keymap.zoomPane()),
+      ('pane.equalize', 'Equalize pane sizes', Keymap.equalizeSplits()),
+      ('pane.close', 'Close focused pane', Keymap.closeWindow()),
+      ('pane.detach', 'Detach focused pane', Keymap.detachPane()),
       // NOTE: no shortcut is claimed for pane.focusNext/focusPrev: Ctrl-Tab
       // is the MRU switcher's chord (see switcher.next), so labeling these
       // with it would be misleading. They are reachable from the palette.
       ('pane.focusNext', 'Focus next pane', ''),
       ('pane.focusPrev', 'Focus previous pane', ''),
-      ('find.show', 'Find in terminal', '$mod+f'),
-      ('switcher.next', 'Switch to next recent session', 'ctrl+tab'),
+      ('find.show', 'Find in terminal', Keymap.find()),
+      ('switcher.next', 'Switch to next recent session', Keymap.switcherNext),
       ('switcher.previous', 'Switch to previous recent session',
-          'ctrl+shift+tab'),
+          Keymap.switcherPrevious),
     ];
     final commands = <PaletteCommand>[
       for (final (name, title, shortcut) in actionDefs)
@@ -280,7 +282,7 @@ final class SupercliApp {
             .actions(),
         // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
         // ctrl on Linux/Windows).
-        UiAction(name: 'sidebar.toggle', keys: '$currentPrimaryModifier+b'),
+        UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
         // Session list navigation (scoped to the sidebar node, which is
         // the rendered UiColumn('sidebar'); the old 'session-list' scope
         // matched no node and was dead).
@@ -295,9 +297,9 @@ final class SupercliApp {
           context: UiActionContext.node('sidebar'),
         ),
         // Focus the composer.
-        const UiAction(name: 'composer.focus', keys: 'ctrl+l'),
+        UiAction(name: 'composer.focus', keys: Keymap.composerFocus()),
         // Command palette (Cmd-K) + MRU switcher (Ctrl-Tab): global chords.
-        ...const AppKeybindings().globalActions(),
+        ...AppKeybindings().globalActions(),
         // Palette-scoped navigation while the overlay is open.
         if (paletteOpen)
           ...const AppKeybindings().paletteActions('command-palette'),

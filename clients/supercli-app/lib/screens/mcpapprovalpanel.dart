@@ -10,14 +10,14 @@
 /// (RLE fallback pattern) until the framework ships a dedicated approval
 /// card widget.
 ///
-/// Keyboard (matches the rendered proof screenshots approve-before.png /
-/// deny-before.png and the e2e harness in supercli-serve/src/mobile.rs):
-/// - Ctrl+Enter: approve the focused approval
-/// - Ctrl+Shift+Enter: deny the focused approval
-/// - Ctrl+E: edit the request before answering (opens the detail editor)
+/// Keyboard (MCPApprovalPanel.swift:249-266):
+/// - Plain Return: approve the focused approval (only while the overlay
+///   is showing; Cmd/Option/Ctrl+Return passes through)
+/// - Plain Escape: deny the focused approval (same scoping rule)
+/// - Primary+E: edit the request before answering (opens the detail editor)
 ///
 /// Note: gpuidart rejects bare-letter bindings (native text input owns
-/// them), so edit uses Ctrl+E rather than the Swift version's bare E.
+/// them), so edit uses primary+E rather than the Swift version's bare E.
 ///
 /// GAP (P0-1): No UiApprovalCard widget. Missing: severity styling,
 /// timeout countdown, structured diff view, glass effect. Using primitives.
@@ -26,6 +26,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 import '../models.dart';
 
 /// Which answer the user gave for an approval.
@@ -38,7 +39,7 @@ enum ApprovalDecision {
 ///
 /// Renders: attention dot, "Approval requested" title, tool line,
 /// summary, detail, "N more waiting" count, and the
-/// Allow (Ctrl+Enter) / Don't Allow buttons plus an Edit action.
+/// Allow (Return) / Don't Allow (Escape) buttons plus an Edit action.
 final class McpApprovalPanel {
   const McpApprovalPanel({
     required this.approval,
@@ -65,8 +66,8 @@ final class McpApprovalPanel {
       if (moreWaiting > 0)
         UiText('mcp-approval-more', '$moreWaiting more waiting'),
       UiRow('mcp-approval-buttons', [
-        const UiButton('mcp-allow', 'Allow (Ctrl+Enter)'),
-        const UiButton('mcp-deny', "Don't Allow"),
+        const UiButton('mcp-allow', 'Allow (Return)'),
+        const UiButton('mcp-deny', "Don't Allow (Esc)"),
         const UiButton('mcp-edit', 'Edit (Ctrl+E)'),
       ]),
     ]);
@@ -91,23 +92,25 @@ final class McpApprovalPanel {
     return false;
   }
 
-  List<UiAction> actions() => const [
-        // Ctrl+Enter approves (matches the e2e key injector).
+  List<UiAction> actions() => [
+        // Plain Return approves while the overlay is showing
+        // (MCPApprovalPanel.swift:256-258; modified keys pass through).
         UiAction(
           name: 'mcp.approve',
-          keys: 'ctrl+enter',
+          keys: Keymap.approvalAllow,
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
-        // Ctrl+Shift+Enter denies.
+        // Plain Escape denies while the overlay is showing
+        // (MCPApprovalPanel.swift:259-261).
         UiAction(
           name: 'mcp.deny',
-          keys: 'ctrl+shift+enter',
+          keys: Keymap.approvalDeny,
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
-        // Ctrl+E opens the edit/detail view before answering.
+        // Primary+E opens the edit/detail view before answering.
         UiAction(
           name: 'mcp.edit',
-          keys: 'ctrl+e',
+          keys: Keymap.editDetail(),
           context: UiActionContext.node('mcp-approval-overlay'),
         ),
       ];

@@ -12,6 +12,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 /// One node of the file tree.
 final class FileNode {
   const FileNode({
@@ -318,12 +319,12 @@ final class FilesPaneView {
     ),
     UiAction(
       name: 'files.send-to-agent',
-      keys: 'ctrl+enter',
+      keys: Keymap.submit,
       context: UiActionContext.node('filespane-$paneId'),
     ),
     UiAction(
       name: 'files.copy-path',
-      keys: 'alt+c',
+      keys: Keymap.copyPath,
       context: UiActionContext.node('filespane-$paneId'),
     ),
   ];

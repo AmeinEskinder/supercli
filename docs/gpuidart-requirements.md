@@ -83,7 +83,8 @@ await host.setComposerText('composer', '');   // controlled clear
 ### P0-4. Keyboard focus navigation + scoped keymap
 ~~No focus API and no keybindings exist.~~ **Shipped in gpuidart 135d300**
 (the `UiAction` API) and used by `clients/supercli-app`: `approval.approve`
-(`ctrl+enter`), `approval.deny` (`ctrl+shift+enter`), list navigation
+(plain `enter` while the overlay is showing, per MCPApprovalPanel.swift),
+`approval.deny` (plain `escape`), list navigation
 (`arrowup`/`arrowdown` scoped to `session-list`), `composer.focus`
 (`ctrl+l`). supercli must be fully keyboard
 operable (the accessibility pass requirement): tab order, arrow-key list
@@ -93,7 +94,7 @@ designs "actions and scoped keymaps" — implement that design.
 ```dart
 // Sketch
 await host.registerActions([
-  UiAction(name: 'approval.approve', keys: 'ctrl+enter', context: 'global'),
+  UiAction(name: 'approval.approve', keys: 'enter', context: 'global'),
   UiAction(name: 'list.down', keys: 'arrowdown', context: 'sessions'),
 ]);
 await host.focus('composer');   // programmatic focus

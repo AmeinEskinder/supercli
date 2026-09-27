@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Send Ctrl+Enter to the supercli gpuidart window via raw X11.
+"""Send approval key chords to the supercli gpuidart window via raw X11.
+
+Unpeel parity (MCPApprovalPanel.swift:249-266): plain Return = Allow,
+plain Escape = Deny, active only while the approval overlay is showing;
+modified keypresses pass through.
 
 No xdotool/XTest available in this environment, so this speaks the X11
 protocol directly over the Unix socket:
   1. Finds the top-level window titled `supercli` (via _NET_WM_NAME/WM_NAME).
   2. Sets input focus to it.
-  3. Sends KeyPress/KeyRelease for Control_L + Return (state=ControlMask)
-     with SendEvent, which is how a window manager-less Xvfb delivers keys.
+  3. Sends KeyPress/KeyRelease for Return (no modifiers) — or Escape with
+     --deny — with SendEvent, which is how a window manager-less Xvfb
+     delivers keys.
 
 Usage:
-  python3 x11_ctrl_enter.py --display :99 --title supercli [--deny]
-  --deny sends Ctrl+Shift+Enter instead.
+  python3 x11_approval_keys.py --display :99 --title supercli [--deny]
+  --deny sends plain Escape instead of plain Return.
 """
 import argparse
 import os
@@ -225,7 +230,7 @@ def main():
     ap.add_argument("--display", default=os.environ.get("DISPLAY", ":99"))
     ap.add_argument("--title", default="supercli")
     ap.add_argument("--deny", action="store_true",
-                    help="send Ctrl+Shift+Enter instead of Ctrl+Enter")
+                    help="send plain Escape instead of plain Return")
     ap.add_argument("--probe", action="store_true",
                     help="only check that the window exists; exit 0 if found")
     ap.add_argument("--timeout", type=int, default=60)
@@ -242,40 +247,23 @@ def main():
         x.close()
         sys.exit(0)
 
-    kc_ctrl = x.keycode_for_keysym(0xFFE3)  # Control_L
-    kc_shift = x.keycode_for_keysym(0xFFE1)  # Shift_L
     kc_ret = x.keycode_for_keysym(0xFF0D)  # Return
-    if kc_ctrl is None or kc_ret is None or (args.deny and kc_shift is None):
+    kc_esc = x.keycode_for_keysym(0xFF1B)  # Escape
+    if kc_ret is None or (args.deny and kc_esc is None):
         print("ERROR: could not resolve keycodes", flush=True)
         sys.exit(3)
-    print(f"keycodes: ctrl={kc_ctrl} shift={kc_shift} return={kc_ret}", flush=True)
+    print(f"keycodes: return={kc_ret} escape={kc_esc}", flush=True)
 
     x.set_input_focus(win)
     time.sleep(0.3)
-    mods = []
-    if args.deny:
-        mods.append((kc_shift, SHIFT_MASK))
-    # press modifiers
+    # Plain keypress, NO modifiers: unpeel parity (MCPApprovalPanel.swift).
+    # Modified keypresses (Cmd/Option/Ctrl held) pass through in the app.
+    kc = kc_esc if args.deny else kc_ret
     state = 0
-    for kc, mask in mods:
-        x.send_key(win, kc, True, state)
-        state |= mask
-        time.sleep(0.05)
-    x.send_key(win, kc_ctrl, True, state)
-    state |= CONTROL_MASK
-    time.sleep(0.05)
-    # Return with full modifier state
-    x.send_key(win, kc_ret, True, state)
+    x.send_key(win, kc, True, state)
     time.sleep(0.15)
-    x.send_key(win, kc_ret, False, state)
-    time.sleep(0.05)
-    # release modifiers
-    x.send_key(win, kc_ctrl, False, state)
-    state &= ~CONTROL_MASK
-    for kc, mask in reversed(mods):
-        x.send_key(win, kc, False, state)
-        state &= ~mask
-    print("sent " + ("Ctrl+Shift+Enter" if args.deny else "Ctrl+Enter"), flush=True)
+    x.send_key(win, kc, False, state)
+    print("sent " + ("Escape" if args.deny else "Return"), flush=True)
     x.close()
 
 

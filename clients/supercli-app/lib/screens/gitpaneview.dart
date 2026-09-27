@@ -12,6 +12,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../keymap.dart';
 import '../widgets/git_widgets.dart';
 
 /// Which tab of the Git pane is visible.
@@ -253,7 +254,7 @@ final class GitPaneView {
     ),
     UiAction(
       name: 'git.commit',
-      keys: 'ctrl+enter',
+      keys: Keymap.submit,
       context: UiActionContext.node('gitpane-$paneId'),
     ),
     UiAction(
@@ -263,12 +264,12 @@ final class GitPaneView {
     ),
     UiAction(
       name: 'git.pull',
-      keys: 'ctrl+l',
+      keys: Keymap.gitPull(),
       context: UiActionContext.node('gitpane-$paneId'),
     ),
     UiAction(
       name: 'git.push',
-      keys: 'ctrl+p',
+      keys: Keymap.gitPush(),
       context: UiActionContext.node('gitpane-$paneId'),
     ),
   ];

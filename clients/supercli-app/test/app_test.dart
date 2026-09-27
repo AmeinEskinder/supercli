@@ -2,8 +2,8 @@ import 'package:gpuidart/gpuidart.dart';
 import 'package:test/test.dart';
 
 import 'package:supercli_app/app.dart';
+import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/models.dart';
-import 'package:supercli_app/platform_keys.dart';
 
 void main() {
   group('SupercliApp shell tree', () {
@@ -62,13 +62,13 @@ void main() {
       final actions = app.actions();
       final byName = {for (final a in actions) a.name: a};
 
-      expect(byName['mcp.approve']!.keys, 'ctrl+enter');
-      expect(byName['mcp.deny']!.keys, 'ctrl+shift+enter');
+      expect(byName['mcp.approve']!.keys, Keymap.approvalAllow);
+      expect(byName['mcp.deny']!.keys, Keymap.approvalDeny);
       expect(byName['sessions.up']!.keys, 'up');
       expect(byName['sessions.down']!.keys, 'down');
-      expect(byName['composer.focus']!.keys, 'ctrl+l');
+      expect(byName['composer.focus']!.keys, Keymap.composerFocus());
       // Platform primary modifier: meta (Cmd) on macOS, ctrl on Linux/Windows.
-      expect(byName['sidebar.toggle']!.keys, '$currentPrimaryModifier+b');
+      expect(byName['sidebar.toggle']!.keys, Keymap.sidebarToggle());
     });
 
     test('list navigation is scoped to the sidebar node', () {
