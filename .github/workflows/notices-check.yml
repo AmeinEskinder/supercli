@@ -66,6 +66,8 @@ jobs:
             --output /tmp/THIRD_PARTY_NOTICES.txt
       - name: Snapshot matches the committed THIRD_PARTY_NOTICES.txt
         run: |
+          # THIRD_PARTY_NOTICES.txt is the generated snapshot; manual notices
+          # for runtime-downloaded binaries live in THIRD_PARTY_NOTICES.manual.txt
           if ! diff -u THIRD_PARTY_NOTICES.txt /tmp/THIRD_PARTY_NOTICES.txt; then
             echo "::error::THIRD_PARTY_NOTICES.txt is stale — regenerate it with the command in NOTICE.md and commit"
             exit 1
