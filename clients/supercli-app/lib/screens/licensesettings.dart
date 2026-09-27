@@ -33,12 +33,28 @@ final class LicenseSettingsPanel {
   final bool activated;
   final List<LicenseSeat> seats;
 
+  /// License key prefix. Rebranded from the legacy `CLRTY-` (unpeel product);
+  /// `CLRTY-` keys are not accepted.
+  static const String keyPrefix = 'SCLI-';
+
+  /// True if the key has the expected `SCLI-` prefix format.
+  static bool isValidKeyFormat(String key) {
+    final normalized = key.trim();
+    return normalized.startsWith(keyPrefix) && normalized.contains('.');
+  }
+
+  /// True if the key uses the legacy `CLRTY-` prefix (unpeel product).
+  /// These are rejected with a clear message.
+  static bool isLegacyKey(String key) {
+    return key.trim().startsWith('CLRTY-');
+  }
+
   UiNode build() {
     return UiColumn('license-settings', [
       const UiText('license-title', 'License'),
       UiText('license-status', 'Status: $status'),
       if (!activated) ...[
-        const UiInput('license-key', placeholder: 'License key…'),
+        const UiInput('license-key', placeholder: 'SCLI-…'),
         const UiButton('license-activate', 'Activate'),
         const UiButton('license-get-link', 'Get Supercli Link'),
       ] else

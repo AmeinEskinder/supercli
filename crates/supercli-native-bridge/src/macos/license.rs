@@ -1,6 +1,6 @@
 //! Port of `Licensing/LicenseManager.swift` — license verification.
 //!
-//! Offline Ed25519 verification of `CLRTY-<payload>.<signature>` keys,
+//! Offline Ed25519 verification of `SCLI-<payload>.<signature>` keys,
 //! key normalization (smart dashes, whitespace), activation/validation
 //! against `https://superc.li`, revocation persistence, and the 7-day
 //! validation / 30-day offline-grace policy.
@@ -15,9 +15,11 @@ use std::collections::HashMap;
 
 /// Production Link API base. Swift: `https://superc.li`.
 pub const PRODUCTION_API_BASE_URL: &str = "https://superc.li";
-/// Bundled production Ed25519 public key (base64). Replaced at build time
-/// from the real embedded key; the placeholder fails closed.
-pub const BUNDLED_PUBLIC_KEY_BASE64: &str = "";
+/// Bundled production Ed25519 public key (base64). This is the license key
+/// v1, provided by Amein (offline-generated). Fingerprint (sha256):
+/// `bff14084e409b8f0…`. Any change to this value must be intentional and
+/// reviewed — the pinning test below fails CI on accidental modification.
+pub const BUNDLED_PUBLIC_KEY_BASE64: &str = "E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=";
 /// Env override for the public key (dev).
 pub const PUBLIC_KEY_ENV_VAR: &str = "SUPERCLI_LICENSE_PUBLIC_KEY";
 /// Env override for the API base URL (dev).
@@ -25,8 +27,13 @@ pub const API_BASE_URL_ENV_VAR: &str = "SUPERCLI_LICENSE_API_BASE_URL";
 /// Info.plist marker enabling the dev license bypass.
 pub const DEVELOPMENT_BUILD_INFO_PLIST_KEY: &str = "SupercliDevelopmentBuild";
 
-/// License key prefix. Swift: `CLRTY-`.
-pub const KEY_PREFIX: &str = "CLRTY-";
+/// License key prefix. Rebranded from the Swift `CLRTY-` to `SCLI-`;
+/// `CLRTY-` keys (legacy unpeel product) are explicitly rejected.
+pub const KEY_PREFIX: &str = "SCLI-";
+
+/// Legacy prefix from the unpeel product. Keys with this prefix are rejected
+/// with a clear message; supercli has no legacy customers to migrate.
+pub const LEGACY_KEY_PREFIX: &str = "CLRTY-";
 
 /// Validation cadence: re-validate at most every 7 days.
 pub const VALIDATION_INTERVAL_SECS: u64 = 7 * 24 * 60 * 60;
@@ -104,7 +111,7 @@ pub fn normalize_license_key(raw: &str) -> String {
         .collect()
 }
 
-/// Splits `CLRTY-<payload_b64>.<sig_b64>` into (payload_bytes, signature).
+/// Splits `SCLI-<payload_b64>.<sig_b64>` into (payload_bytes, signature).
 /// Returns `None` for malformed keys.
 pub fn split_key(normalized: &str) -> Option<(Vec<u8>, Vec<u8>)> {
     let rest = normalized.strip_prefix(KEY_PREFIX)?;
@@ -137,8 +144,16 @@ pub fn verify_signature(payload: &[u8], signature: &[u8], public_key_base64: &st
 
 /// Fully validates a license key: normalize → split → JSON-decode payload
 /// → Ed25519-verify. Returns the payload on success.
+///
+/// Legacy `CLRTY-` keys (issued by the old unpeel product) are rejected with
+/// a clear message; supercli has no legacy customers to migrate.
 pub fn validate_key(raw: &str, public_key_base64: &str) -> Result<LicensePayload, String> {
     let normalized = normalize_license_key(raw);
+    if normalized.starts_with(LEGACY_KEY_PREFIX) {
+        return Err(
+            "CLRTY- keys are from the legacy unpeel product and are not accepted".to_string(),
+        );
+    }
     let (payload_bytes, sig_bytes) =
         split_key(&normalized).ok_or_else(|| "malformed license key".to_string())?;
     if !verify_signature(&payload_bytes, &sig_bytes, public_key_base64) {
@@ -207,17 +222,17 @@ mod tests {
 
     #[test]
     fn normalize_license_key_repairs_smart_dashes_and_whitespace() {
-        let clean = "CLRTY-eyJhIjoxfQ.c2ln-Zm9v_YmFy";
+        let clean = "SCLI-eyJhIjoxfQ.c2ln-Zm9v_YmFy";
         // macOS smart-dash substitution turns every hyphen into an en-dash;
         // paste can also inject wrapping newlines / stray spaces.
-        let mangled = "CLRTY\u{2013}eyJhIjoxfQ.c2ln\u{2013}Zm9v_YmFy";
+        let mangled = "SCLI\u{2013}eyJhIjoxfQ.c2ln\u{2013}Zm9v_YmFy";
         assert_eq!(normalize_license_key(mangled), clean);
 
-        let with_whitespace = "  CLRTY-eyJhIjoxfQ.\nc2ln-Zm9v_YmFy  ";
+        let with_whitespace = "  SCLI-eyJhIjoxfQ.\nc2ln-Zm9v_YmFy  ";
         assert_eq!(normalize_license_key(with_whitespace), clean);
 
         // Em-dash, NBSP, fullwidth hyphen, zero-width space.
-        let exotic = "CLRTY\u{2014}eyJhIjoxfQ.\u{00A0}c2ln\u{FF0D}Zm9v_YmF\u{200B}y";
+        let exotic = "SCLI\u{2014}eyJhIjoxfQ.\u{00A0}c2ln\u{FF0D}Zm9v_YmF\u{200B}y";
         assert_eq!(normalize_license_key(exotic), clean);
 
         // A well-formed key is unchanged (idempotent).
@@ -277,10 +292,10 @@ mod tests {
 
     #[test]
     fn split_key_rejects_malformed_keys() {
-        assert!(split_key("CLRTY-").is_none());
-        assert!(split_key("CLRTY-nodot").is_none());
+        assert!(split_key("SCLI-").is_none());
+        assert!(split_key("SCLI-nodot").is_none());
         assert!(split_key("WRONG-eyJhIjoxfQ.c2ln").is_none());
-        assert!(split_key("CLRTY-!!!.@@@").is_none());
+        assert!(split_key("SCLI-!!!.@@@").is_none());
     }
 
     #[test]
@@ -294,8 +309,28 @@ mod tests {
     #[test]
     fn validate_key_rejects_bad_signature() {
         // Well-formed envelope, invalid signature.
-        let key = "CLRTY-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let key = "SCLI-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         assert!(validate_key(key, &"A".repeat(44)).is_err());
+    }
+
+    #[test]
+    fn validate_key_rejects_legacy_clrty_keys() {
+        // CLRTY- keys are from the legacy unpeel product; supercli has no
+        // legacy customers to migrate. They must be rejected with a clear
+        // message, not a generic "malformed" error.
+        let legacy = "CLRTY-eyJhIjoxfQ.c2ln";
+        let err = validate_key(legacy, &"A".repeat(44)).unwrap_err();
+        assert!(
+            err.contains("CLRTY- keys are from the legacy unpeel product"),
+            "unexpected error: {err}"
+        );
+        // Even a well-formed CLRTY- key (valid base64) is rejected.
+        let legacy_wellformed = "CLRTY-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let err = validate_key(legacy_wellformed, &"A".repeat(44)).unwrap_err();
+        assert!(
+            err.contains("legacy unpeel product"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -327,5 +362,28 @@ mod tests {
         let json = serde_json::to_vec(&p).unwrap();
         let back: LicensePayload = serde_json::from_slice(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn bundled_public_key_is_pinned_license_v1() {
+        // The bundled license public key (v1, provided by Amein) is pinned.
+        // Any accidental change must fail CI. This is the LICENSE key only;
+        // it must NOT be reused for the updater.
+        let engine = base64::engine::general_purpose::STANDARD;
+        let key_bytes = engine
+            .decode(BUNDLED_PUBLIC_KEY_BASE64.trim())
+            .expect("bundled key must be valid base64");
+        assert_eq!(key_bytes.len(), 32, "Ed25519 public key must be 32 bytes");
+        let key_array: [u8; 32] = key_bytes.try_into().unwrap();
+        // Must be a valid Ed25519 point.
+        VerifyingKey::from_bytes(&key_array).expect("bundled key must be a valid Ed25519 point");
+        // Fingerprint pinning: sha256 of the raw key starts with bff14084e409b8f0.
+        let mut hasher = Sha256::new();
+        hasher.update(key_array);
+        let fingerprint = hex::encode(hasher.finalize());
+        assert!(
+            fingerprint.starts_with("bff14084e409b8f0"),
+            "bundled key fingerprint mismatch: {fingerprint}"
+        );
     }
 }
