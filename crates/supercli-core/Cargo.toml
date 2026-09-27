@@ -68,6 +68,9 @@ tar = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+# Pin test for the bundled license public key: validates it is a real
+# Ed25519 point (test-only use; production verification goes through ring).
+ed25519-dalek = "3"
 # rusqlite for integration tests that read runs.db directly (replaces the
 # sqlite3 CLI, which is an undeclared external dependency).
 rusqlite = { version = "0.37", features = ["bundled"] }

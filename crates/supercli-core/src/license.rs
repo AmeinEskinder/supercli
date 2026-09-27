@@ -9,7 +9,9 @@
 use base64::Engine;
 use std::io::{Read, Write};
 
-const PUBLIC_KEY_B64: &str = "6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54=";
+/// Bundled license public key v1 (Ed25519, provided by Amein).
+/// This is the LICENSE key only; it must NOT be reused for the updater.
+const PUBLIC_KEY_B64: &str = "E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=";
 const KEY_PREFIX: &str = "SCLI-";
 /// Legacy prefix from the unpeel product. Keys with this prefix are rejected;
 /// supercli has no legacy customers to migrate.
@@ -974,6 +976,8 @@ pub fn known_mac_id() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine as _;
+
     #[test]
     fn normalize_repairs_smart_dashes_and_whitespace() {
         assert_eq!(super::normalize_key("SCLI\u{2013}a b\nc"), "SCLI-abc");
@@ -991,6 +995,32 @@ mod tests {
         // legacy customers to migrate. They must never verify.
         assert!(super::verify("CLRTY-abc.def").is_none());
         assert!(super::verify("CLRTY-eyJhIjoxfQ.c2ln").is_none());
+    }
+
+    #[test]
+    fn bundled_public_key_is_pinned_license_v1() {
+        // The bundled license public key (v1, provided by Amein) is pinned.
+        // Any accidental change must fail CI. This is the LICENSE key only;
+        // it must NOT be reused for the updater.
+        let engine = base64::engine::general_purpose::STANDARD;
+        let key_bytes = engine
+            .decode(super::PUBLIC_KEY_B64.trim())
+            .expect("bundled key must be valid base64");
+        assert_eq!(key_bytes.len(), 32, "Ed25519 public key must be 32 bytes");
+        let key_array: [u8; 32] = key_bytes.try_into().unwrap();
+        // Must be a valid Ed25519 point.
+        ed25519_dalek::VerifyingKey::from_bytes(&key_array)
+            .expect("bundled key must be a valid Ed25519 point");
+        // Fingerprint pinning: sha256 of the raw key starts with bff14084e409b8f0.
+        use sha2::Digest as _;
+        let fingerprint: String = sha2::Sha256::digest(key_array)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert!(
+            fingerprint.starts_with("bff14084e409b8f0"),
+            "bundled key fingerprint mismatch: {fingerprint}"
+        );
     }
 
     #[test]

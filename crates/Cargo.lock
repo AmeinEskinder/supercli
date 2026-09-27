@@ -2306,6 +2306,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "dirs",
+ "ed25519-dalek",
  "libc",
  "libmimalloc-sys",
  "log",
