@@ -18,8 +18,9 @@
 ///
 /// Platform policy: the primary modifier is `meta` (Cmd) on macOS and
 /// `ctrl` on Linux/Windows. Chords that are genuinely Ctrl on every
-/// platform (Ctrl-Tab / Ctrl-Shift-Tab session switcher, Ctrl-Enter
-/// approvals) are declared explicitly as `ctrl+…` constants.
+/// platform (Ctrl-Tab / Ctrl-Shift-Tab session switcher) are declared
+/// explicitly as `ctrl+…` constants. The approval overlay uses PLAIN
+/// Return / Escape (no modifiers) per MCPApprovalPanel.swift:249-266.
 ///
 /// Modifier order inside each chord is preserved verbatim from the
 /// pre-keymap code: the key parser is treated as order-sensitive, so
@@ -240,15 +241,29 @@ final class Keymap {
   static const String copyPath = 'alt+c';
 
   // ------------------------------------------------------------------
+  // Approval overlay (MCPApprovalPanel.swift:249-266)
+  // ------------------------------------------------------------------
+
+  /// Allow the pending approval — PLAIN Return, no modifiers, active only
+  /// while the approval overlay is showing (Swift keyCode 36/76).
+  /// Modified keypresses (Cmd/Option/Ctrl held) pass through: the bare
+  /// 'enter' chord only matches an unmodified Return.
+  static const String approvalAllow = 'enter';
+
+  /// Deny the pending approval — PLAIN Escape, no modifiers, active only
+  /// while the approval overlay is showing (Swift keyCode 53).
+  /// Modified keypresses (Cmd/Option/Ctrl held) pass through: the bare
+  /// 'escape' chord only matches an unmodified Escape.
+  static const String approvalDeny = 'escape';
+
+  // ------------------------------------------------------------------
   // Platform-neutral: genuinely Ctrl on every platform
   // ------------------------------------------------------------------
 
-  /// Submit / approve — Ctrl+Enter on all platforms by design
-  /// (see `lib/platform_keys.dart`).
+  /// Submit a form / commit staged input — Ctrl+Enter on all platforms
+  /// by design (see `lib/platform_keys.dart`). NOT the approval overlay
+  /// (which uses plain Return per MCPApprovalPanel.swift).
   static const String submit = 'ctrl+enter';
-
-  /// Deny — Ctrl+Shift+Enter on all platforms by design.
-  static const String deny = 'ctrl+shift+enter';
 
   /// MRU session switcher forward — Ctrl-Tab on all platforms.
   static const String switcherNext = 'ctrl+tab';

@@ -71,12 +71,13 @@ final class SupercliApp {
       // (action name, human title, shortcut)
       // NOTE: shortcuts come from Keymap (lib/keymap.dart), the single
       // source of truth. The primary modifier is `meta` (Cmd) on macOS,
-      // `ctrl` on Linux/Windows. Platform-neutral chords (ctrl+enter,
-      // ctrl+tab, ...) stay as `ctrl+` on all platforms by design.
-      ('approval.approve', 'Approve pending request', Keymap.submit),
-      ('approval.deny', 'Deny pending request', Keymap.deny),
-      ('mcp.approve', 'Approve pending MCP request', Keymap.submit),
-      ('mcp.deny', 'Deny pending MCP request', Keymap.deny),
+      // `ctrl` on Linux/Windows. Platform-neutral chords (ctrl+tab, ...)
+      // stay as `ctrl+` on all platforms by design. The approval overlay
+      // uses plain Return / Escape (MCPApprovalPanel.swift:249-266).
+      ('approval.approve', 'Approve pending request', Keymap.approvalAllow),
+      ('approval.deny', 'Deny pending request', Keymap.approvalDeny),
+      ('mcp.approve', 'Approve pending MCP request', Keymap.approvalAllow),
+      ('mcp.deny', 'Deny pending MCP request', Keymap.approvalDeny),
       ('mcp.edit', 'Edit pending MCP request before answering',
           Keymap.editDetail()),
       ('sidebar.toggle', 'Toggle sidebar', Keymap.sidebarToggle()),

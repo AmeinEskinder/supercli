@@ -4,8 +4,9 @@
 /// Source: `clients/legacy/native/SupercliNative/Sources/SupercliNative/`
 /// `AppDelegate.swift` (`buildMenus`, ~lines 313-571) and
 /// `Views/RootView.swift` (:335 Cmd-B sidebar, :357 Cmd-Shift-R recent
-/// activity). Platform-neutral chords (Ctrl-Tab switcher, Ctrl-Enter
-/// approvals) stay `ctrl+` on every platform by design.
+/// activity). Platform-neutral chords (Ctrl-Tab switcher) stay `ctrl+` on
+/// every platform by design. The approval overlay uses plain Return /
+/// Escape (MCPApprovalPanel.swift:249-266).
 library;
 
 import 'dart:io' show Platform;
@@ -132,13 +133,25 @@ void main() {
 
   group('platform-neutral chords stay Ctrl on every platform', () {
     test('submit is ctrl+enter', () => expect(Keymap.submit, 'ctrl+enter'));
-    test('deny is ctrl+shift+enter',
-        () => expect(Keymap.deny, 'ctrl+shift+enter'));
     test('switcherNext is ctrl+tab',
         () => expect(Keymap.switcherNext, 'ctrl+tab'));
     test('switcherPrevious is ctrl+shift+tab',
         () => expect(Keymap.switcherPrevious, 'ctrl+shift+tab'));
     test('copyPath is alt+c', () => expect(Keymap.copyPath, 'alt+c'));
+  });
+
+  group('approval overlay: plain Return / Escape (unpeel parity)', () {
+    // MCPApprovalPanel.swift:249-266 — plain Return (keyCode 36/76) =
+    // Allow, plain Escape (53) = Deny, only while the panel is shown.
+    // Modified keypresses (Cmd/Option/Ctrl held) pass through.
+    test('approvalAllow is bare enter (no modifiers)',
+        () => expect(Keymap.approvalAllow, 'enter'));
+    test('approvalDeny is bare escape (no modifiers)',
+        () => expect(Keymap.approvalDeny, 'escape'));
+    test('approval chords carry no modifier prefix', () {
+      expect(Keymap.approvalAllow, isNot(contains('+')));
+      expect(Keymap.approvalDeny, isNot(contains('+')));
+    });
   });
 
   group('default resolves to the running platform', () {

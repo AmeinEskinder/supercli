@@ -5803,11 +5803,13 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         );
     }
 
-    /// Rendered-window E2E (Ctrl+Enter): the real gpuidart window (under
-    /// Xvfb) shows the pending approval card, and a real X11 Ctrl+Enter key
+    /// Rendered-window E2E (Return): the real gpuidart window (under
+    /// Xvfb) shows the pending approval card, and a real X11 plain-Return key
     /// event delivered to that window follows the rendered `UiAction` path
     /// (`approval.approve` -> `_handleAction` -> `answerApproval`) against
     /// the real Host HTTP stack (`handle_connection` + `ApprovalHub`).
+    /// Unpeel parity: MCPApprovalPanel.swift:249-266 (plain Return = Allow,
+    /// plain Escape = Deny; modified keypresses pass through).
     ///
     /// The approval is queued before the app starts so the app's initial
     /// `refresh()` (via `/mobile/bootstrap`) picks it up: the app's
@@ -5819,15 +5821,15 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
     /// before/after screenshots; their paths are printed with the
     /// `RENDERED_PROOF` marker.
     #[test]
-    fn dart_rendered_ctrl_enter_approves_real_approval_e2e() {
+    fn dart_rendered_return_approves_real_approval_e2e() {
         dart_rendered_key_chord_answers_real_approval_e2e(false);
     }
 
-    /// Rendered-window E2E (Ctrl+Shift+Enter): same harness as
-    /// [`dart_rendered_ctrl_enter_approves_real_approval_e2e`], but the deny
+    /// Rendered-window E2E (Escape): same harness as
+    /// [`dart_rendered_return_approves_real_approval_e2e`], but the deny
     /// chord follows `approval.deny`; the Host observes `approved == false`.
     #[test]
-    fn dart_rendered_ctrl_shift_enter_denies_real_approval_e2e() {
+    fn dart_rendered_escape_denies_real_approval_e2e() {
         dart_rendered_key_chord_answers_real_approval_e2e(true);
     }
 
@@ -5877,8 +5879,8 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
     }
 
     /// Shared body for the rendered-window key-chord approval proofs.
-    /// `deny == true` injects Ctrl+Shift+Enter and expects the Host to
-    /// observe a denial; otherwise Ctrl+Enter and expects approval.
+    /// `deny == true` injects plain Escape and expects the Host to
+    /// observe a denial; otherwise plain Return and expects approval.
     fn dart_rendered_key_chord_answers_real_approval_e2e(deny: bool) {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
@@ -5897,9 +5899,9 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
             eprintln!("SKIP rendered key-chord e2e: no supercli-app");
             return;
         }
-        let injector = app_dir.join("tool/x11_ctrl_enter.py");
+        let injector = app_dir.join("tool/x11_approval_keys.py");
         if !injector.exists() {
-            eprintln!("SKIP rendered key-chord e2e: no x11_ctrl_enter.py");
+            eprintln!("SKIP rendered key-chord e2e: no x11_approval_keys.py");
             return;
         }
         let lib = std::env::var("GPUIDART_LIBRARY").unwrap_or_else(|_| {
@@ -6179,12 +6181,9 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         };
         let before = screenshot("before.png");
 
-        // The real key event: Ctrl+Enter approves, Ctrl+Shift+Enter denies.
-        let chord = if deny {
-            "Ctrl+Shift+Enter"
-        } else {
-            "Ctrl+Enter"
-        };
+        // The real key event: plain Return approves, plain Escape denies
+        // (unpeel parity, MCPApprovalPanel.swift:249-266).
+        let chord = if deny { "Escape" } else { "Return" };
         let injected = if deny {
             run_injector(&["--deny"])
         } else {

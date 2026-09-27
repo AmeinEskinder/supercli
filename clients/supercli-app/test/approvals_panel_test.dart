@@ -7,6 +7,7 @@
 library;
 
 import 'package:gpuidart/gpuidart.dart';
+import 'package:supercli_app/app.dart';
 import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/screens/mcpapprovalpanel.dart';
@@ -63,14 +64,14 @@ void main() {
       );
     });
 
-    test('buttons: Allow (Ctrl+Enter), Don\'t Allow, Edit', () {
+    test('buttons: Allow (Return), Don\'t Allow (Esc), Edit', () {
       final panel = McpApprovalPanel(approval: makeApproval());
       final node = panel.build() as UiColumn;
       final buttons = node.children.last as UiRow;
       final labels =
           buttons.children.whereType<UiButton>().map((b) => b.label).toList();
-      expect(labels, contains('Allow (Ctrl+Enter)'));
-      expect(labels, contains("Don't Allow"));
+      expect(labels, contains('Allow (Return)'));
+      expect(labels, contains("Don't Allow (Esc)"));
       expect(labels, contains('Edit (Ctrl+E)'));
     });
 
@@ -109,12 +110,12 @@ void main() {
       expect(panel.handleAction('bogus.action'), false);
     });
 
-    test('actions declare ctrl+enter / ctrl+shift+enter / ctrl+e', () {
+    test('actions declare return / escape / primary+e (unpeel parity)', () {
       final panel = McpApprovalPanel(approval: makeApproval());
       final actions = panel.actions();
       final byName = {for (final a in actions) a.name: a};
-      expect(byName['mcp.approve']!.keys, Keymap.submit);
-      expect(byName['mcp.deny']!.keys, Keymap.deny);
+      expect(byName['mcp.approve']!.keys, Keymap.approvalAllow);
+      expect(byName['mcp.deny']!.keys, Keymap.approvalDeny);
       expect(byName['mcp.edit']!.keys, Keymap.editDetail());
       // All scoped to the overlay node.
       for (final a in actions) {
@@ -124,6 +125,73 @@ void main() {
           'mcp-approval-overlay',
         );
       }
+    });
+
+    group('unpeel parity: Return = Allow, Escape = Deny (MCPApprovalPanel.swift:249-266)', () {
+      McpApprovalPanel panelWithDecision(void Function(ApprovalDecision) cb) =>
+          McpApprovalPanel(approval: makeApproval(), onDecision: cb);
+
+      test('plain Return triggers Allow while the overlay is showing', () {
+        ApprovalDecision? got;
+        final panel = panelWithDecision((d) => got = d);
+        final actions = panel.actions();
+        final approve = actions.firstWhere((a) => a.name == 'mcp.approve');
+        // Bare 'enter' = plain Return, no modifiers.
+        expect(approve.keys, 'enter');
+        expect(panel.handleAction('mcp.approve'), isTrue);
+        expect(got, ApprovalDecision.approve);
+      });
+
+      test('plain Escape triggers Deny while the overlay is showing', () {
+        ApprovalDecision? got;
+        final panel = panelWithDecision((d) => got = d);
+        final actions = panel.actions();
+        final deny = actions.firstWhere((a) => a.name == 'mcp.deny');
+        // Bare 'escape' = plain Escape, no modifiers.
+        expect(deny.keys, 'escape');
+        expect(panel.handleAction('mcp.deny'), isTrue);
+        expect(got, ApprovalDecision.deny);
+      });
+
+      test('modified Return/Escape do not match the approval chords (pass through)', () {
+        // The Swift monitor ignores the key when Cmd, Option, or Ctrl is
+        // held. The bare chords below only match UNMODIFIED keypresses —
+        // any modified variant is a different chord and passes through.
+        for (final modified in [
+          'meta+enter',
+          'ctrl+enter',
+          'alt+enter',
+          'shift+enter',
+          'meta+escape',
+          'ctrl+escape',
+          'alt+escape',
+        ]) {
+          expect(modified, isNot(Keymap.approvalAllow));
+          expect(modified, isNot(Keymap.approvalDeny));
+        }
+      });
+
+      test('Return/Escape do nothing when the overlay is not showing', () {
+        // No pending approvals -> the overlay is not mounted, so the
+        // approval actions are not registered at all.
+        final app = SupercliApp();
+        expect(app.pendingApprovals, isEmpty);
+        final names = app.actions().map((a) => a.name);
+        expect(names, isNot(contains('mcp.approve')));
+        expect(names, isNot(contains('mcp.deny')));
+        expect(names, isNot(contains('approval.approve')));
+        expect(names, isNot(contains('approval.deny')));
+      });
+
+      test('Edit stays on the primary modifier (unchanged)', () {
+        final panel = panelWithDecision((_) {});
+        final edit =
+            panel.actions().firstWhere((a) => a.name == 'mcp.edit');
+        expect(edit.keys, Keymap.editDetail());
+        // meta (Cmd) on macOS, ctrl elsewhere — never bare.
+        expect(Keymap.editDetail(isMacOS: true), 'meta+e');
+        expect(Keymap.editDetail(isMacOS: false), 'ctrl+e');
+      });
     });
   });
 

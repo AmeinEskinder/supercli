@@ -5,8 +5,9 @@
 /// key (Cmd on macOS, Super/Win on Linux/Windows), so `meta+k` is Cmd-K on
 /// macOS and Ctrl-K on Linux/Windows.
 ///
-/// Platform-neutral chords (e.g. `ctrl+enter` for approvals, `ctrl+tab` for
-/// the MRU switcher) stay as `ctrl+` on all platforms by design.
+/// Platform-neutral chords (e.g. `ctrl+tab` for the MRU switcher) stay as
+/// `ctrl+` on all platforms by design. The approval overlay uses plain
+/// Return / Escape (MCPApprovalPanel.swift:249-266).
 library;
 
 import 'dart:io' show Platform;

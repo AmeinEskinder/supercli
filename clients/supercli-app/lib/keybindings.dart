@@ -8,8 +8,8 @@
 /// All chord values come from [Keymap] (`lib/keymap.dart`), the single
 /// source of truth ported from the native macOS menu. The primary modifier
 /// is `meta` (Cmd) on macOS and `ctrl` on Linux/Windows; platform-neutral
-/// chords (Ctrl-Tab switcher, Ctrl-Enter approvals) stay `ctrl+` everywhere
-/// by design.
+/// chords (Ctrl-Tab switcher) stay `ctrl+` everywhere by design. The
+/// approval overlay uses plain Return / Escape (MCPApprovalPanel.swift).
 ///
 /// NOTE (gap): gpuidart has no programmatic focus API, so opening the
 /// palette cannot move keyboard focus into the filter input. Key routing

@@ -62,8 +62,8 @@ void main() {
       final actions = app.actions();
       final byName = {for (final a in actions) a.name: a};
 
-      expect(byName['mcp.approve']!.keys, Keymap.submit);
-      expect(byName['mcp.deny']!.keys, Keymap.deny);
+      expect(byName['mcp.approve']!.keys, Keymap.approvalAllow);
+      expect(byName['mcp.deny']!.keys, Keymap.approvalDeny);
       expect(byName['sessions.up']!.keys, 'up');
       expect(byName['sessions.down']!.keys, 'down');
       expect(byName['composer.focus']!.keys, Keymap.composerFocus());
