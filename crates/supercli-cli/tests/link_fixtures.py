@@ -14,12 +14,21 @@ import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
-PUBLIC_KEY = "zt52Q3kzJSkUNuU8jrYCKlTDHycltUBp+siGzZ6ovDw="
+# TEST ONLY - test-only Ed25519 keypair for Link license fixtures.
+# Generated offline with `openssl genpkey -algorithm ed25519` solely for
+# these Python e2e tests. NEVER use for production. NEVER replace with
+# Amein's production license key. The private key is NOT committed.
+# The test CLI binary picks this up via the SUPERCLI_LICENSE_PUBLIC_KEY
+# env override (dev builds only).
+PUBLIC_KEY = "mI/3hw0RAXr/epF22TcH7///NqLD8teD7mSOQ2ut0R0="
+# TEST ONLY - SCLI- license signed with the test-only keypair above.
+# Payload: {"v":1,"id":"link-test-license","email":"link-test@example.com",
+#           "plan":"pro","seats":1,"iat":1755129600}
 LICENSE_KEY = (
-    "CLRTY-eyJ2IjoxLCJpZCI6ImxpbmstdGVzdC1saWNlbnNlIiwiZW1haWwiOiJsaW5r"
+    "SCLI-eyJ2IjoxLCJpZCI6ImxpbmstdGVzdC1saWNlbnNlIiwiZW1haWwiOiJsaW5r"
     "LXRlc3RAZXhhbXBsZS5jb20iLCJwbGFuIjoicHJvIiwic2VhdHMiOjEsImlhdCI6"
-    "MTc1NTEyOTYwMH0.iVrzCnPH8MSEvjIq1qVUnoQ7BLSCCd3AqVvwZ2IHfvTt6FHn"
-    "l6Beo7aMKDW2AqbLb55_76YY3hMzftqFbd0kCQ"
+    "MTc1NTEyOTYwMH0.Osh-XZaTZPYYdsh1ImfSB6N28kPEtpIgGXADyGhlCdVWVYfX"
+    "IEIXh_uzzzvcEwuGSVPYWQPAlWVqmUb7J9DIAQ"
 )
 
 

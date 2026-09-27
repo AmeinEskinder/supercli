@@ -581,7 +581,7 @@ def body(case):
     # activation to snapshot and commit on the next attempt.
     clear_tombstone(home)
     with open(key_path, "w") as handle:
-        json.dump({"key": "CLRTY-malformed"}, handle)
+        json.dump({"key": "SCLI-malformed"}, handle)
     os.chmod(key_path, 0o600)
     malformed_bearer = "UNPRE-malformed-key-cache"
     write_entitlement(
