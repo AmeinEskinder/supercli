@@ -45,22 +45,70 @@ pub struct LicensePayload {
 }
 
 /// License configuration: bundled defaults with environment overrides.
+///
+/// SECURITY: environment overrides are honored ONLY in dev builds
+/// (`cfg(debug_assertions)`). In release builds the env vars are ignored
+/// so an attacker cannot bypass license verification by setting
+/// `SUPERCLI_LICENSE_PUBLIC_KEY` to their own key.
 pub struct LicenseConfig;
 
 impl LicenseConfig {
-    /// Public key base64: env override wins, else the bundled key.
+    /// Public key base64: in dev builds the env override wins, else the
+    /// bundled key. Release builds ALWAYS use the bundled key.
     pub fn public_key_base64(environment: &HashMap<String, String>) -> &str {
-        environment
-            .get(PUBLIC_KEY_ENV_VAR)
-            .map(|s| s.as_str())
-            .unwrap_or(BUNDLED_PUBLIC_KEY_BASE64)
+        Self::public_key_base64_with_dev_override(environment, cfg!(debug_assertions))
     }
 
-    /// API base URL: env override wins when it parses, else production.
+    /// Testable core: `allow_env_override` simulates dev (`true`) vs
+    /// release (`false`) builds.
+    pub fn public_key_base64_with_dev_override(
+        environment: &HashMap<String, String>,
+        allow_env_override: bool,
+    ) -> &str {
+        if allow_env_override {
+            if let Some(key) = environment.get(PUBLIC_KEY_ENV_VAR) {
+                return key.as_str();
+            }
+        }
+        BUNDLED_PUBLIC_KEY_BASE64
+    }
+
+    /// API base URL: in dev builds the env override wins when it parses,
+    /// else production. Release builds ALWAYS use the production URL —
+    /// the activation endpoint is a trust decision, so it cannot be
+    /// redirected by an environment variable in release builds.
     pub fn api_base_url(environment: &HashMap<String, String>) -> &str {
-        match environment.get(API_BASE_URL_ENV_VAR) {
-            Some(url) if is_valid_url(url) => url.as_str(),
-            _ => PRODUCTION_API_BASE_URL,
+        Self::api_base_url_with_dev_override(environment, cfg!(debug_assertions))
+    }
+
+    /// Testable core: `allow_env_override` simulates dev (`true`) vs
+    /// release (`false`) builds.
+    pub fn api_base_url_with_dev_override(
+        environment: &HashMap<String, String>,
+        allow_env_override: bool,
+    ) -> &str {
+        if allow_env_override {
+            match environment.get(API_BASE_URL_ENV_VAR) {
+                Some(url) if is_valid_url(url) => return url.as_str(),
+                _ => {}
+            }
+        }
+        PRODUCTION_API_BASE_URL
+    }
+
+    /// Returns the bundled public key, or an error if none is configured.
+    ///
+    /// Activation and update verification MUST call this and refuse on
+    /// error. Fails closed: an empty/missing bundled key is never silently
+    /// accepted. The key slot is a TODO for Amein — never generate or
+    /// commit a private key.
+    pub fn bundled_public_key() -> Result<&'static str, String> {
+        if BUNDLED_PUBLIC_KEY_BASE64.trim().is_empty() {
+            Err("No bundled license public key configured — refusing. \
+                 (TODO: Amein must embed the production Ed25519 public key.)"
+                .to_string())
+        } else {
+            Ok(BUNDLED_PUBLIC_KEY_BASE64)
         }
     }
 
@@ -233,6 +281,16 @@ mod tests {
             "http://localhost:5173".to_string(),
         );
 
+        // Dev builds (debug_assertions on in tests): overrides honored.
+        assert_eq!(
+            LicenseConfig::public_key_base64_with_dev_override(&environment, true),
+            "dev-public-key"
+        );
+        assert_eq!(
+            LicenseConfig::api_base_url_with_dev_override(&environment, true),
+            "http://localhost:5173"
+        );
+        // The convenience wrappers agree in this dev/test build.
         assert_eq!(
             LicenseConfig::public_key_base64(&environment),
             "dev-public-key"
@@ -241,6 +299,51 @@ mod tests {
             LicenseConfig::api_base_url(&environment),
             "http://localhost:5173"
         );
+    }
+
+    #[test]
+    fn release_builds_ignore_env_key_override() {
+        let mut environment = HashMap::new();
+        environment.insert(
+            PUBLIC_KEY_ENV_VAR.to_string(),
+            "attacker-controlled-key".to_string(),
+        );
+        // Simulate release: the env var MUST be ignored.
+        assert_eq!(
+            LicenseConfig::public_key_base64_with_dev_override(&environment, false),
+            BUNDLED_PUBLIC_KEY_BASE64
+        );
+        assert_ne!(
+            LicenseConfig::public_key_base64_with_dev_override(&environment, false),
+            "attacker-controlled-key"
+        );
+    }
+
+    #[test]
+    fn release_builds_ignore_env_api_url_override() {
+        let mut environment = HashMap::new();
+        environment.insert(
+            API_BASE_URL_ENV_VAR.to_string(),
+            "https://evil.example.com".to_string(),
+        );
+        // Simulate release: activation endpoint cannot be redirected.
+        assert_eq!(
+            LicenseConfig::api_base_url_with_dev_override(&environment, false),
+            PRODUCTION_API_BASE_URL
+        );
+    }
+
+    #[test]
+    fn bundled_public_key_fails_closed_when_empty() {
+        // BUNDLED_PUBLIC_KEY_BASE64 is currently "" (TODO for Amein):
+        // activation and update verification must refuse, not proceed.
+        let err =
+            LicenseConfig::bundled_public_key().expect_err("empty bundled key must fail closed");
+        assert!(
+            err.contains("No bundled license public key configured"),
+            "unexpected error: {err}"
+        );
+        assert!(err.contains("refusing"), "unexpected error: {err}");
     }
 
     #[test]
