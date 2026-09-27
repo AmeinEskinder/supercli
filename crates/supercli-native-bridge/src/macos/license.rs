@@ -5,13 +5,21 @@
 //! against `https://superc.li`, revocation persistence, and the 7-day
 //! validation / 30-day offline-grace policy.
 //!
-//! Pure crypto and normalization are cross-platform and tested. Network
-//! activation and Keychain persistence compose them.
+//! The key parsing and signature verification are the single canonical
+//! implementation in `supercli_core::license`; this module delegates to it
+//! and keeps only the macOS-side configuration/policy surface (bundled key
+//! constant, env plumbing, validation cadence, device id).
 
-use base64::Engine;
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+
+/// Canonical key parsing/verification, normalization, prefix constants and
+/// the shared `LicensePayload` type all live in `supercli-core`; this
+/// module re-exports them so there is exactly one implementation.
+pub use supercli_core::license::{
+    normalize_key as normalize_license_key, LicenseKeyError, LicensePayload, KEY_PREFIX,
+    LEGACY_KEY_PREFIX,
+};
 
 /// Production Link API base. Swift: `https://superc.li`.
 pub const PRODUCTION_API_BASE_URL: &str = "https://superc.li";
@@ -27,57 +35,44 @@ pub const API_BASE_URL_ENV_VAR: &str = "SUPERCLI_LICENSE_API_BASE_URL";
 /// Info.plist marker enabling the dev license bypass.
 pub const DEVELOPMENT_BUILD_INFO_PLIST_KEY: &str = "SupercliDevelopmentBuild";
 
-/// License key prefix. Rebranded from the Swift `CLRTY-` to `SCLI-`;
-/// `CLRTY-` keys (legacy unpeel product) are explicitly rejected.
-pub const KEY_PREFIX: &str = "SCLI-";
-
-/// Legacy prefix from the unpeel product. Keys with this prefix are rejected
-/// with a clear message; supercli has no legacy customers to migrate.
-pub const LEGACY_KEY_PREFIX: &str = "CLRTY-";
-
+/// License key prefix and legacy prefix are defined once in
+/// `supercli_core::license` and re-exported above (`KEY_PREFIX`,
+/// `LEGACY_KEY_PREFIX`).
 /// Validation cadence: re-validate at most every 7 days.
 pub const VALIDATION_INTERVAL_SECS: u64 = 7 * 24 * 60 * 60;
 /// Offline grace: a license stays valid 30 days without re-validation.
 pub const OFFLINE_GRACE_SECS: u64 = 30 * 24 * 60 * 60;
 
-/// License payload carried inside the signed key.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct LicensePayload {
-    pub v: u32,
-    pub id: String,
-    pub email: String,
-    pub plan: String,
-    pub seats: u32,
-    pub iat: u64,
-}
-
 /// License configuration: bundled defaults with environment overrides.
-///
-/// SECURITY: environment overrides are honored ONLY in dev builds
-/// (`cfg(debug_assertions)`). In release builds the env vars are ignored
-/// so an attacker cannot bypass license verification by setting
-/// `SUPERCLI_LICENSE_PUBLIC_KEY` to their own key.
+/// The public-key env override is honored in dev builds only; release
+/// builds always use the bundled key (the dev-only policy is implemented
+/// once in `supercli_core::license`).
 pub struct LicenseConfig;
 
 impl LicenseConfig {
-    /// Public key base64: in dev builds the env override wins, else the
-    /// bundled key. Release builds ALWAYS use the bundled key.
+    /// Public key base64: dev-only env override wins when permitted, else
+    /// the bundled key.
     pub fn public_key_base64(environment: &HashMap<String, String>) -> &str {
-        Self::public_key_base64_with_dev_override(environment, cfg!(debug_assertions))
+        supercli_core::license::resolve_public_key_b64_with(
+            environment.get(PUBLIC_KEY_ENV_VAR).map(|s| s.as_str()),
+            cfg!(debug_assertions),
+            BUNDLED_PUBLIC_KEY_BASE64,
+        )
     }
 
     /// Testable core: `allow_env_override` simulates dev (`true`) vs
-    /// release (`false`) builds.
+    /// release (`false`) builds. Thin shim over the single core
+    /// implementation; the override policy itself lives in
+    /// `supercli_core::license`.
     pub fn public_key_base64_with_dev_override(
         environment: &HashMap<String, String>,
         allow_env_override: bool,
     ) -> &str {
-        if allow_env_override {
-            if let Some(key) = environment.get(PUBLIC_KEY_ENV_VAR) {
-                return key.as_str();
-            }
-        }
-        BUNDLED_PUBLIC_KEY_BASE64
+        supercli_core::license::resolve_public_key_b64_with(
+            environment.get(PUBLIC_KEY_ENV_VAR).map(|s| s.as_str()),
+            allow_env_override,
+            BUNDLED_PUBLIC_KEY_BASE64,
+        )
     }
 
     /// API base URL: in dev builds the env override wins when it parses,
@@ -137,77 +132,20 @@ fn is_valid_url(s: &str) -> bool {
     // Minimal check: scheme + host. The real client uses URL(string:).
     let s = s.trim();
     (s.starts_with("http://") || s.starts_with("https://")) && {
-        let after_scheme = s.splitn(2, "://").nth(1).unwrap_or("");
+        let after_scheme = s.split_once("://").map(|x| x.1).unwrap_or("");
         !after_scheme.is_empty() && !after_scheme.contains(' ')
     }
 }
 
-/// Normalizes a pasted license key: trims whitespace (including NBSP and
-/// zero-width space), repairs macOS smart-dash substitutions (en/em dash,
-/// figure dash, fullwidth hyphen → `-`). Idempotent.
-pub fn normalize_license_key(raw: &str) -> String {
-    raw.chars()
-        .filter_map(|c| match c {
-            // Whitespace to strip (incl. exotic).
-            ' ' | '\t' | '\n' | '\r' | '\u{00A0}' | '\u{200B}' | '\u{FEFF}' => None,
-            // Unicode dash variants → ASCII hyphen.
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{FF0D}' => {
-                Some('-')
-            }
-            _ => Some(c),
-        })
-        .collect()
-}
-
-/// Splits `SCLI-<payload_b64>.<sig_b64>` into (payload_bytes, signature).
-/// Returns `None` for malformed keys.
-pub fn split_key(normalized: &str) -> Option<(Vec<u8>, Vec<u8>)> {
-    let rest = normalized.strip_prefix(KEY_PREFIX)?;
-    let (payload_b64, sig_b64) = rest.split_once('.')?;
-    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    let payload = engine.decode(payload_b64).ok()?;
-    let sig = engine.decode(sig_b64).ok()?;
-    Some((payload, sig))
-}
-
-/// Verifies the Ed25519 signature over the payload bytes. Fails closed on
-/// any decode or verification error.
-pub fn verify_signature(payload: &[u8], signature: &[u8], public_key_base64: &str) -> bool {
-    let engine = base64::engine::general_purpose::STANDARD;
-    let Ok(key_bytes) = engine.decode(public_key_base64.trim()) else {
-        return false;
-    };
-    let Ok(key_array): Result<[u8; 32], _> = key_bytes.try_into() else {
-        return false;
-    };
-    let Ok(verifying_key) = VerifyingKey::from_bytes(&key_array) else {
-        return false;
-    };
-    let Ok(sig_array): Result<[u8; 64], _> = signature.try_into() else {
-        return false;
-    };
-    let signature = Signature::from_bytes(&sig_array);
-    verifying_key.verify(payload, &signature).is_ok()
-}
-
-/// Fully validates a license key: normalize → split → JSON-decode payload
-/// → Ed25519-verify. Returns the payload on success.
+/// Fully validates a license key via the single canonical implementation in
+/// `supercli_core::license` (normalize → split → JSON-decode payload →
+/// Ed25519-verify). Returns the payload on success.
 ///
 /// Legacy `CLRTY-` keys (issued by the old unpeel product) are rejected with
 /// a clear message; supercli has no legacy customers to migrate.
 pub fn validate_key(raw: &str, public_key_base64: &str) -> Result<LicensePayload, String> {
-    let normalized = normalize_license_key(raw);
-    if normalized.starts_with(LEGACY_KEY_PREFIX) {
-        return Err(
-            "CLRTY- keys are from the legacy unpeel product and are not accepted".to_string(),
-        );
-    }
-    let (payload_bytes, sig_bytes) =
-        split_key(&normalized).ok_or_else(|| "malformed license key".to_string())?;
-    if !verify_signature(&payload_bytes, &sig_bytes, public_key_base64) {
-        return Err("invalid license signature".to_string());
-    }
-    serde_json::from_slice(&payload_bytes).map_err(|e| format!("invalid license payload: {e}"))
+    supercli_core::license::validate_key_with(raw, public_key_base64)
+        .map_err(|error| error.to_string())
 }
 
 /// Device ID: SHA-256 of the hardware UUID, hex-encoded.
@@ -244,6 +182,8 @@ mod hex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
+    use ed25519_dalek::VerifyingKey;
 
     fn payload() -> LicensePayload {
         LicensePayload {
@@ -394,19 +334,39 @@ mod tests {
     }
 
     #[test]
-    fn split_key_rejects_malformed_keys() {
-        assert!(split_key("SCLI-").is_none());
-        assert!(split_key("SCLI-nodot").is_none());
-        assert!(split_key("WRONG-eyJhIjoxfQ.c2ln").is_none());
-        assert!(split_key("SCLI-!!!.@@@").is_none());
+    fn license_config_public_key_override_is_dev_only() {
+        // Release builds must ignore SUPERCLI_LICENSE_PUBLIC_KEY even when
+        // set: pin the dev-only policy (implemented once in supercli-core)
+        // with an explicit release flag, using this crate's bundled key.
+        assert_eq!(
+            supercli_core::license::resolve_public_key_b64_with(
+                Some("attacker-key"),
+                false,
+                BUNDLED_PUBLIC_KEY_BASE64,
+            ),
+            BUNDLED_PUBLIC_KEY_BASE64
+        );
+        // Empty override falls back to bundled in any build.
+        assert_eq!(
+            supercli_core::license::resolve_public_key_b64_with(
+                Some("  "),
+                true,
+                BUNDLED_PUBLIC_KEY_BASE64,
+            ),
+            BUNDLED_PUBLIC_KEY_BASE64
+        );
     }
 
     #[test]
-    fn verify_signature_fails_closed() {
-        // Empty key, wrong length, garbage signature: all false, never panic.
-        assert!(!verify_signature(b"payload", &[0u8; 64], ""));
-        assert!(!verify_signature(b"payload", &[0u8; 64], "not-base64!!!"));
-        assert!(!verify_signature(b"payload", &[0u8; 32], &"A".repeat(44)));
+    fn validate_key_rejects_malformed_keys() {
+        // Malformed envelopes fail closed via the unified core implementation.
+        assert!(validate_key("SCLI-", "irrelevant").is_err());
+        assert!(validate_key("SCLI-nodot", "irrelevant").is_err());
+        assert!(validate_key("WRONG-eyJhIjoxfQ.c2ln", "irrelevant").is_err());
+        assert!(validate_key("SCLI-!!!.@@@", "irrelevant").is_err());
+        // Garbage public key: fails closed, never panics.
+        assert!(validate_key("SCLI-eyJhIjoxfQ.c2ln", "").is_err());
+        assert!(validate_key("SCLI-eyJhIjoxfQ.c2ln", "not-base64!!!").is_err());
     }
 
     #[test]
