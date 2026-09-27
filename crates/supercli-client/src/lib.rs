@@ -33,6 +33,8 @@ pub mod crypto;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod host_store;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
@@ -45,6 +47,8 @@ pub mod relay;
 pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
 #[cfg(not(target_arch = "wasm32"))]
@@ -63,6 +67,8 @@ pub use credentials::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
+pub use host_store::{HostStoreError, MemoryHostCredentialStore, RemoteHostStore, SshHostRecord};
+#[cfg(not(target_arch = "wasm32"))]
 pub use hosts::{HostRegistry, LiveHost};
 #[cfg(not(target_arch = "wasm32"))]
 pub use pairing::{
@@ -74,6 +80,10 @@ pub use pairing::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use relay_conn::{
     DeliveryState, PerformParams, RelayConnection, RelayError, RelayTransportResponse,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_runtime::{
+    PairedHostConnectionPlan, PairedTransport, RemoteHostConnectionRoute, RemoteHostConnectionState,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use transport::{
