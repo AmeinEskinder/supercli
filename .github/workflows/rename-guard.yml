@@ -152,14 +152,16 @@ jobs:
           fi
           echo "PASS: 0 com.supercli bundle IDs outside clients/legacy."
 
-      - name: Check for CLRTY license prefix (must be SCLI-, legacy unpeel keys rejected)
+      - name: Check for CLRTY license prefix (must be SCLI-, legacy key-format keys rejected)
         run: |
           set -euo pipefail
-          echo "Scanning for 'CLRTY' (legacy unpeel license prefix, must be SCLI-)..."
+          echo "Scanning for 'CLRTY' (legacy key-format license prefix, must be SCLI-)..."
           # Intentional CLRTY references (rejection logic, not acceptance):
           # - crates/supercli-native-bridge/src/macos/license.rs: LEGACY_KEY_PREFIX + rejection
           # - crates/supercli-core/src/license.rs: LEGACY_KEY_PREFIX + rejection
           # - clients/supercli-app/lib/screens/licensesettings.dart: isLegacyKey helper
+          # - clients/supercli-app/test/settings_test.dart: rejection tests
+          # - docs/parity/: sidecar notes on the legacy format
           # - docs/security/signing-keys.md: documentation
           matches=$(grep -rl 'CLRTY' . \
             --exclude-dir=.git \
@@ -175,6 +177,8 @@ jobs:
                       -e '^./crates/supercli-native-bridge/src/macos/license.rs$' \
                       -e '^./crates/supercli-core/src/license.rs$' \
                       -e '^./clients/supercli-app/lib/screens/licensesettings.dart$' \
+                      -e '^./clients/supercli-app/test/settings_test.dart$' \
+                      -e '^./docs/parity/' \
                       -e '^./docs/security/signing-keys.md$' \
             || true)
           if [ -n "$matches" ]; then

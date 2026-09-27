@@ -42,7 +42,7 @@ files:
     status: ported
     checklist: ""
     behaviours:
-      - swift: "load() — read generic-password item (service com.supercli.license, account license-key)"
+      - swift: "load() — read generic-password item (service li.superc.license, account license-key)"
         target: "crates/supercli-native-bridge/src/macos/keychain.rs::LicenseKeychain::load"
         test: "keychain::tests::keychain_names_match_swift (names); keyring crate covers the platform impl"
       - swift: "save(_:) — update-first then add"

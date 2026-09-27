@@ -13,11 +13,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Release label for the app's LaunchAgent.
-pub const RELEASE_LABEL: &str = "com.supercli.native.serve";
+pub const RELEASE_LABEL: &str = "li.superc.native.serve";
 /// Dev builds share the release bundle id but get their own label.
-pub const DEVELOPMENT_LABEL: &str = "com.supercli.native.dev.serve";
+pub const DEVELOPMENT_LABEL: &str = "li.superc.native.dev.serve";
 /// Bundle identifier for AssociatedBundleIdentifiers.
-pub const BUNDLE_IDENTIFIER: &str = "com.supercli.native";
+pub const BUNDLE_IDENTIFIER: &str = "li.superc.native";
 /// `SUPERCLI_NATIVE_SERVICE_LAUNCHER=direct` restores the fork for diagnostics.
 pub const LAUNCHER_OVERRIDE_ENV_VAR: &str = "SUPERCLI_NATIVE_SERVICE_LAUNCHER";
 
@@ -252,10 +252,10 @@ mod tests {
 
     #[test]
     fn labels_keep_dev_builds_off_the_release_unit() {
-        assert_eq!(label(false), "com.supercli.native.serve");
-        assert_eq!(label(true), "com.supercli.native.dev.serve");
+        assert_eq!(label(false), "li.superc.native.serve");
+        assert_eq!(label(true), "li.superc.native.dev.serve");
         assert_ne!(
-            RELEASE_LABEL, "com.supercli.serve",
+            RELEASE_LABEL, "li.superc.serve",
             "the CLI's unit label is reserved"
         );
     }
@@ -276,14 +276,14 @@ mod tests {
     #[test]
     fn rendered_unit_runs_the_machine_service_without_keep_alive() {
         let data = render_plist(
-            "com.supercli.native.serve",
+            "li.superc.native.serve",
             "/Applications/Supercli.app/Contents/MacOS/supercli-host",
         )
         .unwrap();
         let plist = plist::from_bytes::<plist::Dictionary>(&data).unwrap();
         assert_eq!(
             plist.get("Label").and_then(|v| v.as_string()),
-            Some("com.supercli.native.serve")
+            Some("li.superc.native.serve")
         );
         let args: Vec<String> = plist
             .get("ProgramArguments")
@@ -320,7 +320,7 @@ mod tests {
             .iter()
             .filter_map(|v| v.as_string().map(|s| s.to_string()))
             .collect();
-        assert_eq!(bundles, vec!["com.supercli.native".to_string()]);
+        assert_eq!(bundles, vec!["li.superc.native".to_string()]);
         assert!(
             plist.get("EnvironmentVariables").is_none(),
             "the machine service resolves its own homes"
@@ -351,7 +351,7 @@ mod tests {
             vec![
                 vec![
                     "bootout".to_string(),
-                    "gui/501/com.supercli.native.serve".to_string()
+                    "gui/501/li.superc.native.serve".to_string()
                 ],
                 vec![
                     "bootstrap".to_string(),
@@ -360,7 +360,7 @@ mod tests {
                 ],
                 vec![
                     "kickstart".to_string(),
-                    "gui/501/com.supercli.native.serve".to_string()
+                    "gui/501/li.superc.native.serve".to_string()
                 ],
             ]
         );
@@ -506,7 +506,7 @@ mod tests {
                 rewrote: true
             }
         );
-        assert!(agents.join("com.supercli.native.dev.serve.plist").exists());
-        assert!(!agents.join("com.supercli.native.serve.plist").exists());
+        assert!(agents.join("li.superc.native.dev.serve.plist").exists());
+        assert!(!agents.join("li.superc.native.serve.plist").exists());
     }
 }

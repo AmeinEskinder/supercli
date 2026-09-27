@@ -1,14 +1,15 @@
 //! Port of `Licensing/LicenseKeychain.swift` — Keychain license storage.
 //!
-//! Generic-password item: service `com.supercli.license`, account
+//! Generic-password item: service `li.superc.license`, account
 //! `license-key`. Save is update-first then add; delete treats not-found
 //! as success. Uses `kSecAttrAccessibleAfterFirstUnlock` semantics.
 //!
 //! Implemented on the cross-platform `keyring` crate (macOS Keychain on
-//! macOS), with the exact service/account names from Swift.
+//! macOS). The service name is rebranded to the Amein-approved `li.superc.*`
+//! reverse-DNS; the account name matches Swift exactly.
 
-/// Keychain service name. Swift: `com.supercli.license`.
-pub const SERVICE: &str = "com.supercli.license";
+/// Keychain service name (Amein-approved reverse-DNS).
+pub const SERVICE: &str = "li.superc.license";
 /// Keychain account name. Swift: `license-key`.
 pub const ACCOUNT: &str = "license-key";
 
@@ -55,7 +56,7 @@ mod tests {
 
     #[test]
     fn keychain_names_match_swift() {
-        assert_eq!(SERVICE, "com.supercli.license");
+        assert_eq!(SERVICE, "li.superc.license");
         assert_eq!(ACCOUNT, "license-key");
     }
 

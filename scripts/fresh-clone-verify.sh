@@ -168,11 +168,13 @@ if [ -n "$bundle_matches" ]; then
 fi
 echo "bundle ID guard PASS"
 
-echo "--- 4e. CLRTY license prefix guard (must be SCLI-, legacy unpeel keys rejected) ---"
+echo "--- 4e. CLRTY license prefix guard (must be SCLI-, legacy key-format keys rejected) ---"
 # Intentional CLRTY references (rejection logic, not acceptance):
 # - crates/supercli-native-bridge/src/macos/license.rs: LEGACY_KEY_PREFIX + rejection
 # - crates/supercli-core/src/license.rs: LEGACY_KEY_PREFIX + rejection
 # - clients/supercli-app/lib/screens/licensesettings.dart: isLegacyKey helper
+# - clients/supercli-app/test/settings_test.dart: rejection tests
+# - docs/parity/: sidecar notes on the legacy format
 # - docs/security/signing-keys.md: documentation
 clrty_matches=$(grep -rl 'CLRTY' . \
   --exclude-dir=.git \
@@ -189,6 +191,8 @@ clrty_matches=$(grep -rl 'CLRTY' . \
                         -e '^./crates/supercli-native-bridge/src/macos/license.rs$' \
                         -e '^./crates/supercli-core/src/license.rs$' \
                         -e '^./clients/supercli-app/lib/screens/licensesettings.dart$' \
+                        -e '^./clients/supercli-app/test/settings_test.dart$' \
+                        -e '^./docs/parity/' \
                         -e '^./docs/security/signing-keys.md$' \
   || true)
 if [ -n "$clrty_matches" ]; then
