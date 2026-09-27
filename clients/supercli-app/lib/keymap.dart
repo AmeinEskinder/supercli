@@ -66,6 +66,15 @@ final class Keymap {
   static String settings({bool? isMacOS}) =>
       _onPrimary(',', isMacOS ?? _isMacOS);
 
+  /// Settings… — native-safe chord for UiAction registration.
+  ///
+  /// gpuidart's native key parser does not support punctuation keys, so the
+  /// canonical [settings] chord (Cmd-,/Ctrl-,) makes the native host reject
+  /// the entire window. This chord is used for the `settings.open` UiAction;
+  /// [settings] remains the canonical chord shown in the palette and docs.
+  static String settingsNative({bool? isMacOS}) =>
+      _onPrimary('shift+p', isMacOS ?? _isMacOS);
+
   /// Hide Supercli — Cmd-H (AppDelegate.swift:327)
   static String hide({bool? isMacOS}) => _onPrimary('h', isMacOS ?? _isMacOS);
 
@@ -224,10 +233,12 @@ final class Keymap {
       _onPrimary('shift+o', isMacOS ?? _isMacOS);
 
   /// Git pull — primary+L.
-  static String gitPull({bool? isMacOS}) => _onPrimary('l', isMacOS ?? _isMacOS);
+  static String gitPull({bool? isMacOS}) =>
+      _onPrimary('l', isMacOS ?? _isMacOS);
 
   /// Git push — primary+P.
-  static String gitPush({bool? isMacOS}) => _onPrimary('p', isMacOS ?? _isMacOS);
+  static String gitPush({bool? isMacOS}) =>
+      _onPrimary('p', isMacOS ?? _isMacOS);
 
   /// Save the current note — primary+S.
   static String saveNote({bool? isMacOS}) =>

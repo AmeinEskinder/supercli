@@ -46,9 +46,9 @@ enum ThemeMode {
   final String label;
 
   static ThemeMode fromWire(String s) => ThemeMode.values.firstWhere(
-        (m) => m.name == s,
-        orElse: () => ThemeMode.system,
-      );
+    (m) => m.name == s,
+    orElse: () => ThemeMode.system,
+  );
 }
 
 /// Session write policy (mcp_nonchild_write_access).
@@ -61,9 +61,9 @@ enum WritePolicy {
   final String label;
 
   static WritePolicy fromWire(String s) => WritePolicy.values.firstWhere(
-        (m) => m.name == s,
-        orElse: () => WritePolicy.ask,
-      );
+    (m) => m.name == s,
+    orElse: () => WritePolicy.ask,
+  );
 }
 
 /// Browser default access (browser_default_access).
@@ -75,11 +75,8 @@ enum BrowserDefaultAccess {
   const BrowserDefaultAccess(this.label);
   final String label;
 
-  static BrowserDefaultAccess fromWire(String s) =>
-      BrowserDefaultAccess.values.firstWhere(
-        (m) => m.name == s,
-        orElse: () => BrowserDefaultAccess.ask,
-      );
+  static BrowserDefaultAccess fromWire(String s) => BrowserDefaultAccess.values
+      .firstWhere((m) => m.name == s, orElse: () => BrowserDefaultAccess.ask);
 }
 
 /// The editable settings model.
@@ -143,20 +140,22 @@ final class AppSettings {
   /// `crates/supercli-core/src/controller_host.rs`. The GET route returns
   /// the same shape, so this round-trips.
   Map<String, Object> toHostJson() => {
-        'experimentalSettings': {
-          'sessionsMcp': sessionsMcp,
-          'browserMcp': browserMcp,
-        },
-        'browserDefaultAccess': browserDefaultAccess.name,
-        'mcpNonchildWriteAccess': writePolicy.name,
-        'mcpWorktreeAccess': worktreeAccess,
-        'mcpAutoAddBrowserScreenshots': autoAddBrowserScreenshots,
-        'autoStopArchiveMinutes': autoStopArchiveMinutes,
-        'sidebarStoppedLimit': sidebarStoppedLimit,
-        'appearanceSettings': {
-          'theme': theme.name,
-        },
-      };
+    'experimentalSettings': {
+      'sessionsMcp': sessionsMcp,
+      'browserMcp': browserMcp,
+    },
+    'browserDefaultAccess': browserDefaultAccess.name,
+    'mcpNonchildWriteAccess': writePolicy.name,
+    'mcpWorktreeAccess': worktreeAccess,
+    'mcpAutoAddBrowserScreenshots': autoAddBrowserScreenshots,
+    'autoStopArchiveMinutes': autoStopArchiveMinutes,
+    'sidebarStoppedLimit': sidebarStoppedLimit,
+  };
+
+  /// Local-only fields (theme, appearance, notifications, advanced prefs)
+  /// persist through [SettingsLocalStore] — the app's own config — never
+  /// through the Host. They are intentionally absent from [toHostJson] and
+  /// are not overridden by Host responses.
 
   /// Parse the `GET /mobile/workspace-settings` response body (same
   /// camelCase wire format as [toHostJson]). Missing keys fall back to
@@ -172,8 +171,8 @@ final class AppSettings {
       return v is Map<String, dynamic>
           ? v
           : v is Map
-              ? Map<String, dynamic>.from(v)
-              : <String, dynamic>{};
+          ? Map<String, dynamic>.from(v)
+          : <String, dynamic>{};
     }
 
     final experimental = nested('experimentalSettings');
@@ -188,24 +187,118 @@ final class AppSettings {
       sessionsMcp: nget<bool>(experimental, 'sessionsMcp', true),
       browserMcp: nget<bool>(experimental, 'browserMcp', false),
       browserDefaultAccess: BrowserDefaultAccess.fromWire(
-          get<String>('browserDefaultAccess', 'ask')),
+        get<String>('browserDefaultAccess', 'ask'),
+      ),
       writePolicy: WritePolicy.fromWire(
-          get<String>('mcpNonchildWriteAccess', 'ask')),
+        get<String>('mcpNonchildWriteAccess', 'ask'),
+      ),
       worktreeAccess: get<bool>('mcpWorktreeAccess', false),
-      autoAddBrowserScreenshots:
-          get<bool>('mcpAutoAddBrowserScreenshots', false),
+      autoAddBrowserScreenshots: get<bool>(
+        'mcpAutoAddBrowserScreenshots',
+        false,
+      ),
       autoStopArchiveMinutes: get<int>('autoStopArchiveMinutes', 60),
       sidebarStoppedLimit: get<int>('sidebarStoppedLimit', 10),
       theme: ThemeMode.fromWire(
-          nget<String>(appearance, 'theme', get<String>('theme', 'system'))),
+        nget<String>(appearance, 'theme', get<String>('theme', 'system')),
+      ),
     );
   }
 
   /// One `settings.workspace.set` call payload for a single key.
   Map<String, Object> setCall(String key, Object value) => {
-        'key': key,
-        'value': value,
-      };
+    'key': key,
+    'value': value,
+  };
+
+  /// Full local snapshot for [SettingsLocalStore]: every field, including
+  /// desktop-only preferences that never go to the Host. Flat keys; enums
+  /// serialize by `name` so [applyLocalJson] can round-trip them.
+  Map<String, Object> toLocalJson() => {
+    'scope': scope.name,
+    'theme': theme.name,
+    'accentColor': accentColor,
+    'terminalFont': terminalFont,
+    'terminalFontSize': terminalFontSize,
+    'lineHeight': lineHeight,
+    'writePolicy': writePolicy.name,
+    'worktreeAccess': worktreeAccess,
+    'autoGallery': autoGallery,
+    'autoStopArchiveMinutes': autoStopArchiveMinutes,
+    'sidebarStoppedLimit': sidebarStoppedLimit,
+    'browserDefaultAccess': browserDefaultAccess.name,
+    'browserMcp': browserMcp,
+    'sessionsMcp': sessionsMcp,
+    'autoAddBrowserScreenshots': autoAddBrowserScreenshots,
+    'remoteWorkspaces': remoteWorkspaces,
+    'gitWorktrees': gitWorktrees,
+    'notifyOnCompletion': notifyOnCompletion,
+    'notifyFlags': notifyFlags,
+    'transcriptContentEnabled': transcriptContentEnabled,
+    'showAgentWorktrees': showAgentWorktrees,
+    'sessionsFolder': sessionsFolder,
+    'traceLog': traceLog,
+  };
+
+  /// Apply a snapshot previously produced by [toLocalJson]. Unknown or
+  /// mistyped values fall back to the field's current value, so a corrupt
+  /// or older snapshot can never break the in-memory model.
+  void applyLocalJson(Map<String, Object?> json) {
+    T get<T>(String key, T current) {
+      final v = json[key];
+      return v is T ? v : current;
+    }
+
+    E enumByName<E extends Enum>(List<E> values, String key, E current) {
+      final v = json[key];
+      if (v is String) {
+        for (final e in values) {
+          if (e.name == v) return e;
+        }
+      }
+      return current;
+    }
+
+    scope = enumByName(SettingsScope.values, 'scope', scope);
+    theme = enumByName(ThemeMode.values, 'theme', theme);
+    accentColor = get<int>('accentColor', accentColor);
+    terminalFont = get<String>('terminalFont', terminalFont);
+    // JSON numbers decode as int when they have no fraction; accept num.
+    final fontSize = json['terminalFontSize'];
+    if (fontSize is num) terminalFontSize = fontSize.toDouble();
+    final lh = json['lineHeight'];
+    if (lh is num) lineHeight = lh.toDouble();
+    writePolicy = enumByName(WritePolicy.values, 'writePolicy', writePolicy);
+    worktreeAccess = get<bool>('worktreeAccess', worktreeAccess);
+    autoGallery = get<bool>('autoGallery', autoGallery);
+    autoStopArchiveMinutes = get<int>(
+      'autoStopArchiveMinutes',
+      autoStopArchiveMinutes,
+    );
+    sidebarStoppedLimit = get<int>('sidebarStoppedLimit', sidebarStoppedLimit);
+    browserDefaultAccess = enumByName(
+      BrowserDefaultAccess.values,
+      'browserDefaultAccess',
+      browserDefaultAccess,
+    );
+    browserMcp = get<bool>('browserMcp', browserMcp);
+    sessionsMcp = get<bool>('sessionsMcp', sessionsMcp);
+    autoAddBrowserScreenshots = get<bool>(
+      'autoAddBrowserScreenshots',
+      autoAddBrowserScreenshots,
+    );
+    remoteWorkspaces = get<bool>('remoteWorkspaces', remoteWorkspaces);
+    gitWorktrees = get<bool>('gitWorktrees', gitWorktrees);
+    notifyOnCompletion = get<bool>('notifyOnCompletion', notifyOnCompletion);
+    notifyFlags = get<bool>('notifyFlags', notifyFlags);
+    transcriptContentEnabled = get<bool>(
+      'transcriptContentEnabled',
+      transcriptContentEnabled,
+    );
+    showAgentWorktrees = get<bool>('showAgentWorktrees', showAgentWorktrees);
+    sessionsFolder = get<String>('sessionsFolder', sessionsFolder);
+    traceLog = get<bool>('traceLog', traceLog);
+  }
 }
 
 /// A toggle row: label + on/off button.
@@ -222,17 +315,17 @@ final class SettingsToggle {
   final bool value;
 
   Map<String, Object> toJson() => {
-        'kind': 'settings-toggle',
-        'id': id,
-        'label': label,
-        'value': value,
-      };
+    'kind': 'settings-toggle',
+    'id': id,
+    'label': label,
+    'value': value,
+  };
 
   /// Render through the RLE fallback: a row with label + state button.
   UiNode fallback() => UiRow('$id-row', [
-        UiText('$id-label', label),
-        UiButton('$id-toggle', value ? 'On' : 'Off'),
-      ]);
+    UiText('$id-label', label),
+    UiButton('$id-toggle', value ? 'On' : 'Off'),
+  ]);
 }
 
 /// A select row: label + one button per option, the active one marked.
@@ -251,21 +344,21 @@ final class SettingsSelect {
   final String selected;
 
   Map<String, Object> toJson() => {
-        'kind': 'settings-select',
-        'id': id,
-        'label': label,
-        'options': options,
-        'selected': selected,
-      };
+    'kind': 'settings-select',
+    'id': id,
+    'label': label,
+    'options': options,
+    'selected': selected,
+  };
 
   /// Render through the RLE fallback.
   UiNode fallback() => UiColumn('$id-col', [
-        UiText('$id-label', label),
-        UiRow('$id-options', [
-          for (final o in options)
-            UiButton('$id-opt-$o', o == selected ? '● $o' : o),
-        ]),
-      ]);
+    UiText('$id-label', label),
+    UiRow('$id-options', [
+      for (final o in options)
+        UiButton('$id-opt-$o', o == selected ? '● $o' : o),
+    ]),
+  ]);
 }
 
 /// General settings panel: scope picker + appearance.
@@ -285,8 +378,10 @@ final class GeneralSettingsPanel {
       ).fallback(),
       if (settings.scope != SettingsScope.thisMac)
         UiRow('scope-inherit-row', [
-          const UiText('scope-inherit-label',
-              'Inherits from This Mac unless overridden.'),
+          const UiText(
+            'scope-inherit-label',
+            'Inherits from This Mac unless overridden.',
+          ),
           const UiButton('scope-reset', 'Reset to inherited'),
         ]),
       const UiText('appearance-title', 'Appearance'),
@@ -307,7 +402,7 @@ final class GeneralSettingsPanel {
           'Orange',
           'Yellow',
           'Green',
-          'Graphite'
+          'Graphite',
         ],
         selected: const [
           'Blue',
@@ -317,7 +412,7 @@ final class GeneralSettingsPanel {
           'Orange',
           'Yellow',
           'Green',
-          'Graphite'
+          'Graphite',
         ][settings.accentColor.clamp(0, 7)],
       ).fallback(),
       SettingsSelect(
@@ -327,8 +422,10 @@ final class GeneralSettingsPanel {
         selected: settings.terminalFont,
       ).fallback(),
       UiRow('terminal-size-row', [
-        UiText('terminal-size-label',
-            'Terminal font size: ${settings.terminalFontSize.toStringAsFixed(1)}'),
+        UiText(
+          'terminal-size-label',
+          'Terminal font size: ${settings.terminalFontSize.toStringAsFixed(1)}',
+        ),
         const UiButton('terminal-size-dec', '−'),
         const UiButton('terminal-size-inc', '+'),
       ]),
@@ -376,7 +473,7 @@ final class SessionsSettingsPanel {
           '2 hours',
           '4 hours',
           '8 hours',
-          '24 hours'
+          '24 hours',
         ],
         selected: _minutesLabel(settings.autoStopArchiveMinutes),
       ).fallback(),
@@ -440,8 +537,10 @@ final class TranscriptsSettingsPanel {
   UiNode build() {
     return UiColumn('transcripts-settings', [
       const UiText('transcripts-title', 'Transcripts'),
-      const UiText('transcripts-info',
-          'Control what session content is stored in transcripts.'),
+      const UiText(
+        'transcripts-info',
+        'Control what session content is stored in transcripts.',
+      ),
       SettingsToggle(
         id: 'transcript-content',
         label: 'Store message content',
@@ -494,8 +593,10 @@ final class AdvancedSettingsPanel {
         value: settings.showAgentWorktrees,
       ).fallback(),
       UiRow('sessions-folder-row', [
-        UiText('sessions-folder-label',
-            'Sessions folder: ${settings.sessionsFolder.isEmpty ? '(default)' : settings.sessionsFolder}'),
+        UiText(
+          'sessions-folder-label',
+          'Sessions folder: ${settings.sessionsFolder.isEmpty ? '(default)' : settings.sessionsFolder}',
+        ),
         const UiButton('sessions-folder-choose', 'Choose…'),
       ]),
       SettingsToggle(
@@ -544,6 +645,8 @@ final class PluginListDrag {
 
   UiNode build() {
     return const UiText(
-        'plugin-drag', '(plugin drag — needs gpuidart drag-and-drop, P0-13)');
+      'plugin-drag',
+      '(plugin drag — needs gpuidart drag-and-drop, P0-13)',
+    );
   }
 }

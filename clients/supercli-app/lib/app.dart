@@ -16,6 +16,8 @@ import 'keymap.dart';
 import 'models.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
+import 'screens/settings_controller.dart';
+import 'screens/settingsview.dart';
 import 'screens/sidebarview.dart';
 import 'screens/terminalarea.dart';
 import 'screens/toastcenter.dart';
@@ -52,6 +54,126 @@ final class SupercliApp {
   /// True while the MRU switcher overlay is visible.
   bool switcherOpen = false;
 
+  /// Settings persistence controller. Set by the app entry point on startup
+  /// (after the Host handshake); null until then. Owns the [AppSettings]
+  /// model and syncs it with the Host via GET/POST /mobile/workspace-settings.
+  SettingsController? settingsController;
+
+  /// True while the settings overlay is visible.
+  bool settingsOpen = false;
+
+  /// The currently selected settings tab.
+  SettingsTab activeSettingsTab = SettingsTab.general;
+
+  /// Open the settings overlay. No-op until [settingsController] is set.
+  void openSettings() {
+    if (settingsController != null) {
+      settingsOpen = true;
+    }
+  }
+
+  /// Close the settings overlay.
+  void closeSettings() {
+    settingsOpen = false;
+  }
+
+  /// Handle a UI action by name. Returns true if the action was consumed.
+  ///
+  /// The app entry point routes `host.events` action events here (the same
+  /// pattern as [McpApprovalPanel.handleAction]).
+  bool handleAction(String actionName) {
+    switch (actionName) {
+      case 'settings.open':
+        openSettings();
+        return true;
+      case 'settings.close':
+        closeSettings();
+        return true;
+    }
+    if (actionName.startsWith('settings.tab.')) {
+      final tabName = actionName.substring('settings.tab.'.length);
+      for (final tab in SettingsTab.values) {
+        if (tab.name == tabName) {
+          activeSettingsTab = tab;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Handle a click on a node by id. Returns true if consumed.
+  ///
+  /// Tab buttons are rendered with ids `settings-tab-<name>` (see
+  /// [SettingsView.build]); clicking one switches the active tab.
+  /// Toggle buttons render as `<toggle-id>-toggle` (see [SettingsToggle]);
+  /// clicking one flips the setting and persists via the controller.
+  bool handleClick(String nodeId) {
+    const tabPrefix = 'settings-tab-';
+    if (nodeId.startsWith(tabPrefix)) {
+      final tabName = nodeId.substring(tabPrefix.length);
+      for (final tab in SettingsTab.values) {
+        if (tab.name == tabName) {
+          activeSettingsTab = tab;
+          return true;
+        }
+      }
+    }
+    const toggleSuffix = '-toggle';
+    if (nodeId.endsWith(toggleSuffix)) {
+      return toggleSetting(
+        nodeId.substring(0, nodeId.length - toggleSuffix.length),
+      );
+    }
+    return false;
+  }
+
+  /// Flip the [AppSettings] field bound to [toggleId] and schedule a
+  /// debounced Host save via the settings controller. Returns true if the
+  /// toggle id is known. Toggle ids are defined by [SettingsToggle] usages
+  /// in settingspanels.dart / sessionsaccesssections.dart /
+  /// worktreessettingspanel.dart.
+  bool toggleSetting(String toggleId) {
+    final settings = settingsController?.settings;
+    if (settings == null) return false;
+    switch (toggleId) {
+      case 'worktree-access':
+      case 'agent-worktree-permission':
+        settings.worktreeAccess = !settings.worktreeAccess;
+      case 'auto-gallery':
+      case 'agent-auto-gallery':
+        settings.autoGallery = !settings.autoGallery;
+      case 'sessions-mcp':
+        settings.sessionsMcp = !settings.sessionsMcp;
+      case 'feat-remote-ws':
+        settings.remoteWorkspaces = !settings.remoteWorkspaces;
+      case 'feat-git-worktrees':
+        settings.gitWorktrees = !settings.gitWorktrees;
+      case 'feat-browser-mcp':
+      case 'browser-mcp':
+        settings.browserMcp = !settings.browserMcp;
+      case 'feat-auto-screenshots':
+      case 'browser-auto-screenshots':
+        settings.autoAddBrowserScreenshots =
+            !settings.autoAddBrowserScreenshots;
+      case 'transcript-content':
+        settings.transcriptContentEnabled = !settings.transcriptContentEnabled;
+      case 'notify-completion':
+        settings.notifyOnCompletion = !settings.notifyOnCompletion;
+      case 'notify-flags':
+        settings.notifyFlags = !settings.notifyFlags;
+      case 'adv-show-worktrees':
+      case 'show-agent-worktrees':
+        settings.showAgentWorktrees = !settings.showAgentWorktrees;
+      case 'adv-trace-log':
+        settings.traceLog = !settings.traceLog;
+      default:
+        return false;
+    }
+    settingsController?.edited();
+    return true;
+  }
+
   /// Open the palette, building its command list from the real app state:
   /// every registered action plus every live session. No fixtures.
   void openPalette() {
@@ -78,8 +200,11 @@ final class SupercliApp {
       ('approval.deny', 'Deny pending request', Keymap.approvalDeny),
       ('mcp.approve', 'Approve pending MCP request', Keymap.approvalAllow),
       ('mcp.deny', 'Deny pending MCP request', Keymap.approvalDeny),
-      ('mcp.edit', 'Edit pending MCP request before answering',
-          Keymap.editDetail()),
+      (
+        'mcp.edit',
+        'Edit pending MCP request before answering',
+        Keymap.editDetail(),
+      ),
       ('sidebar.toggle', 'Toggle sidebar', Keymap.sidebarToggle()),
       ('sessions.up', 'Select previous session', 'up'),
       ('sessions.down', 'Select next session', 'down'),
@@ -97,8 +222,11 @@ final class SupercliApp {
       ('pane.focusPrev', 'Focus previous pane', ''),
       ('find.show', 'Find in terminal', Keymap.find()),
       ('switcher.next', 'Switch to next recent session', Keymap.switcherNext),
-      ('switcher.previous', 'Switch to previous recent session',
-          Keymap.switcherPrevious),
+      (
+        'switcher.previous',
+        'Switch to previous recent session',
+        Keymap.switcherPrevious,
+      ),
     ];
     final commands = <PaletteCommand>[
       for (final (name, title, shortcut) in actionDefs)
@@ -172,9 +300,7 @@ final class SupercliApp {
     final created = TableDataset(
       'sessions',
       columns: const ['Title', 'Updated'],
-      rows: sessions
-          .map((s) => [s.title, formatTime(s.updatedAt)])
-          .toList(),
+      rows: sessions.map((s) => [s.title, formatTime(s.updatedAt)]).toList(),
     );
     _sessionDataset = created;
     return created;
@@ -182,12 +308,9 @@ final class SupercliApp {
 
   /// Sidebar sessions derived from the Host bootstrap.
   List<SidebarSession> get _sidebarSessions => [
-        for (final s in sessions)
-          SidebarSession(
-            summary: s,
-            projectId: _projectIdFor(s),
-          ),
-      ];
+    for (final s in sessions)
+      SidebarSession(summary: s, projectId: _projectIdFor(s)),
+  ];
 
   /// Group sessions by project for the sidebar tree. Sessions without an
   /// explicit project land in a single "Sessions" project.
@@ -198,11 +321,7 @@ final class SupercliApp {
     }
     return [
       for (final entry in byProject.entries)
-        SidebarProject(
-          id: entry.key,
-          name: entry.key,
-          sessions: entry.value,
-        ),
+        SidebarProject(id: entry.key, name: entry.key, sessions: entry.value),
     ];
   }
 
@@ -221,7 +340,8 @@ final class SupercliApp {
   /// toasts). This is the mounted DESKTOP shell — not a scaffold.
   UiNode build() {
     final approval = pendingApproval;
-    final layout = paneLayout ??
+    final layout =
+        paneLayout ??
         PaneLayout.single(
           paneId: 'pane-1',
           title: sessions.isEmpty
@@ -239,9 +359,7 @@ final class SupercliApp {
               : sessions[selectedSession.clamp(0, sessions.length - 1)].id,
         ).build()
       else
-        UiColumn('sidebar-collapsed', [
-          const UiButton('expand-sidebar', '+'),
-        ]),
+        UiColumn('sidebar-collapsed', [const UiButton('expand-sidebar', '+')]),
       UiColumn('content-area', [
         TerminalArea(layout: layout, statusText: statusLine).build(),
         if (approval != null)
@@ -252,7 +370,10 @@ final class SupercliApp {
         else
           const UiText('no-approval', 'No pending approvals.'),
         ToastCenter(queue: notifications).build(),
-        const UiInput('composer', placeholder: 'Type a message… (Enter to send)'),
+        const UiInput(
+          'composer',
+          placeholder: 'Type a message… (Enter to send)',
+        ),
       ]),
       // Command palette overlay (Cmd-K): mounted when open, fed by the
       // live action registry + live sessions.
@@ -264,6 +385,14 @@ final class SupercliApp {
         ).build(),
       // MRU session switcher overlay (Ctrl-Tab): live MRU ordering.
       if (switcherOpen) MruSwitcherView(switcher: mruSwitcher).build(),
+      // Settings overlay (Cmd-,): mounted when open, fed by the live
+      // SettingsController (Host-backed settings via GET/POST
+      // /mobile/workspace-settings; desktop-only fields persist locally).
+      if (settingsOpen && settingsController != null)
+        SettingsView(
+          settings: settingsController!.settings,
+          activeTab: activeSettingsTab,
+        ).build(),
     ]);
   }
 
@@ -271,42 +400,52 @@ final class SupercliApp {
   List<UiAction> actions() {
     final approval = pendingApproval;
     return [
-        // Approval overlay actions — only when the panel is actually mounted
-        // (gpuidart rejects action contexts that aren't nodes in the tree).
-        if (approval != null)
-          ...McpApprovalPanel(
-            approval: approval,
-          ).actions(),
-        // Pane management (mounted PaneLayout).
-        ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
-            .actions(),
-        // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
-        // ctrl on Linux/Windows).
-        UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
-        // Session list navigation (scoped to the sidebar node, which is
-        // the rendered UiColumn('sidebar'); the old 'session-list' scope
-        // matched no node and was dead).
+      // Approval overlay actions — only when the panel is actually mounted
+      // (gpuidart rejects action contexts that aren't nodes in the tree).
+      if (approval != null) ...McpApprovalPanel(approval: approval).actions(),
+      // Pane management (mounted PaneLayout).
+      ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
+          .actions(),
+      // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
+      // ctrl on Linux/Windows).
+      UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
+      // Session list navigation (scoped to the sidebar node, which is
+      // the rendered UiColumn('sidebar'); the old 'session-list' scope
+      // matched no node and was dead).
+      const UiAction(
+        name: 'sessions.up',
+        keys: 'up',
+        context: UiActionContext.node('sidebar'),
+      ),
+      const UiAction(
+        name: 'sessions.down',
+        keys: 'down',
+        context: UiActionContext.node('sidebar'),
+      ),
+      // Focus the composer.
+      UiAction(name: 'composer.focus', keys: Keymap.composerFocus()),
+      // Command palette (Cmd-K) + MRU switcher (Ctrl-Tab): global chords.
+      ...AppKeybindings().globalActions(),
+      // Palette-scoped navigation while the overlay is open.
+      if (paletteOpen)
+        ...const AppKeybindings().paletteActions('command-palette'),
+      // Switcher-scoped dismiss while the overlay is open.
+      if (switcherOpen)
+        ...const AppKeybindings().switcherActions('mru-switcher'),
+      // Settings overlay: the canonical chord is Cmd-,/Ctrl-, per
+      // Keymap.settings, but gpuidart's native parser rejects punctuation
+      // keys, so the UiAction uses the native-safe Keymap.settingsNative.
+      UiAction(name: 'settings.open', keys: Keymap.settingsNative()),
+      // Escape closes the settings overlay — scoped to the 'settings'
+      // node so it is only active while the overlay is actually mounted
+      // (gpuidart rejects action contexts that aren't nodes in the tree).
+      if (settingsOpen)
         const UiAction(
-          name: 'sessions.up',
-          keys: 'up',
-          context: UiActionContext.node('sidebar'),
+          name: 'settings.close',
+          keys: 'escape',
+          context: UiActionContext.node('settings'),
         ),
-        const UiAction(
-          name: 'sessions.down',
-          keys: 'down',
-          context: UiActionContext.node('sidebar'),
-        ),
-        // Focus the composer.
-        UiAction(name: 'composer.focus', keys: Keymap.composerFocus()),
-        // Command palette (Cmd-K) + MRU switcher (Ctrl-Tab): global chords.
-        ...AppKeybindings().globalActions(),
-        // Palette-scoped navigation while the overlay is open.
-        if (paletteOpen)
-          ...const AppKeybindings().paletteActions('command-palette'),
-        // Switcher-scoped dismiss while the overlay is open.
-        if (switcherOpen)
-          ...const AppKeybindings().switcherActions('mru-switcher'),
-      ];
+    ];
   }
 
   static String formatTime(DateTime t) {

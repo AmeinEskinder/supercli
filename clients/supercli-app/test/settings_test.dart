@@ -35,17 +35,20 @@ void main() {
       expect(json['mcpWorktreeAccess'], true);
       expect(json['autoStopArchiveMinutes'], 120);
       expect(json['sidebarStoppedLimit'], 5);
-      final appearance = json['appearanceSettings'] as Map<String, Object>;
-      expect(appearance['theme'], 'dark');
+      // Theme is local-only: never sent to the Host.
+      expect(json.containsKey('appearanceSettings'), isFalse);
+      expect(json.containsKey('theme'), isFalse);
     });
 
     test('fromHostJson round-trips', () {
       final s = AppSettings(writePolicy: WritePolicy.allow);
       final json = s.toHostJson();
       final back = AppSettings.fromHostJson(
-          Map<String, dynamic>.from(json.map((k, v) => MapEntry(k, v))));
+        Map<String, dynamic>.from(json.map((k, v) => MapEntry(k, v))),
+      );
       expect(back.writePolicy, WritePolicy.allow);
-      expect(back.theme, s.theme);
+      // Theme is local-only, so it does not round-trip through Host JSON.
+      expect(back.theme, ThemeMode.system);
       expect(back.autoStopArchiveMinutes, s.autoStopArchiveMinutes);
     });
 
@@ -62,10 +65,7 @@ void main() {
 
     test('fromHostJson reads nested experimental settings', () {
       final back = AppSettings.fromHostJson({
-        'experimentalSettings': {
-          'sessionsMcp': false,
-          'browserMcp': true,
-        },
+        'experimentalSettings': {'sessionsMcp': false, 'browserMcp': true},
       });
       expect(back.sessionsMcp, false);
       expect(back.browserMcp, true);
@@ -106,8 +106,11 @@ void main() {
         final view = SettingsView(settings: AppSettings(), activeTab: tab);
         final node = view.build() as UiRow;
         final content = node.children[1] as UiColumn;
-        expect(content.children.length, 2,
-            reason: 'tab $tab should render title + panel');
+        expect(
+          content.children.length,
+          2,
+          reason: 'tab $tab should render title + panel',
+        );
       }
     });
 
@@ -159,9 +162,7 @@ void main() {
         scopes: const [
           AccessScope(id: 'files', title: 'Files', detail: 'Read/write'),
         ],
-        approvedPairs: const [
-          ApprovedPair(id: 'p1', name: 'CLI ↔ Desktop'),
-        ],
+        approvedPairs: const [ApprovedPair(id: 'p1', name: 'CLI ↔ Desktop')],
       );
       final node = panel.build() as UiColumn;
       // title, sessions title, write policy, worktree, gallery,
@@ -192,9 +193,7 @@ void main() {
       final sections = BrowserAccessSections(
         settings: AppSettings(),
         engineStatus: 'Ready',
-        siteRules: const [
-          BrowserSiteRule(id: 'r1', pattern: '*.example.com'),
-        ],
+        siteRules: const [BrowserSiteRule(id: 'r1', pattern: '*.example.com')],
       );
       final node = sections.build() as UiColumn;
       expect(node.children.length, 11);
@@ -247,11 +246,12 @@ void main() {
         plugins: [
           PluginEntry(id: 'p1', name: 'Git', version: '1.0', enabled: true),
           PluginEntry(
-              id: 'p2',
-              name: 'Files',
-              version: '2.0',
-              enabled: false,
-              updateAvailable: true),
+            id: 'p2',
+            name: 'Files',
+            version: '2.0',
+            enabled: false,
+            updateAvailable: true,
+          ),
         ],
       );
       final node = panel.build() as UiColumn;
@@ -274,9 +274,7 @@ void main() {
   group('PresetsSettingsPanel', () {
     test('renders table and CRUD buttons', () {
       const panel = PresetsSettingsPanel(
-        presets: [
-          PresetEntry(id: 'pr1', name: 'Rust', model: 'opus'),
-        ],
+        presets: [PresetEntry(id: 'pr1', name: 'Rust', model: 'opus')],
       );
       final node = panel.build() as UiColumn;
       expect(node.children.length, 4);
@@ -304,7 +302,12 @@ void main() {
     test('renders add and edit rows', () {
       const panel = WorkspacesSettingsPanel(
         workspaces: [
-          WorkspaceEntry(id: 'w1', name: 'supercli', kind: 'local', path: '/src'),
+          WorkspaceEntry(
+            id: 'w1',
+            name: 'supercli',
+            kind: 'local',
+            path: '/src',
+          ),
         ],
       );
       final node = panel.build() as UiColumn;
@@ -381,28 +384,35 @@ void main() {
 
   group('SettingsToggle/SettingsSelect', () {
     test('toggle fallback shows On/Off', () {
-      final on = const SettingsToggle(id: 't', label: 'L', value: true)
-          .fallback() as UiRow;
-      final off = const SettingsToggle(id: 't', label: 'L', value: false)
-          .fallback() as UiRow;
+      final on =
+          const SettingsToggle(id: 't', label: 'L', value: true).fallback()
+              as UiRow;
+      final off =
+          const SettingsToggle(id: 't', label: 'L', value: false).fallback()
+              as UiRow;
       expect((on.children[1] as UiButton).label, 'On');
       expect((off.children[1] as UiButton).label, 'Off');
     });
 
     test('select fallback marks selected', () {
-      final sel = const SettingsSelect(
-        id: 's',
-        label: 'L',
-        options: ['A', 'B'],
-        selected: 'B',
-      ).fallback() as UiColumn;
+      final sel =
+          const SettingsSelect(
+                id: 's',
+                label: 'L',
+                options: ['A', 'B'],
+                selected: 'B',
+              ).fallback()
+              as UiColumn;
       final row = sel.children[1] as UiRow;
       expect((row.children[1] as UiButton).label, '● B');
     });
 
     test('toggle serializes to JSON', () {
-      final json =
-          const SettingsToggle(id: 't', label: 'L', value: true).toJson();
+      final json = const SettingsToggle(
+        id: 't',
+        label: 'L',
+        value: true,
+      ).toJson();
       expect(json['kind'], 'settings-toggle');
       expect(json['value'], true);
     });
