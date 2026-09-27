@@ -21,6 +21,13 @@ drop-to-split), but there is no `onDragStart`/`onDragOver`/`onDrop` event
 in `native_event.dart` and no drag-image node. Proposed: `dragstart`,
 `dragover` (with target node id + drop position), `drop` native events.
 
+Wired 2026-09-27 (feat/wire-drag): the *commit* half is done — the state
+machine, overlay, and drop application are mounted in the running app and
+go through the authenticated Host API (`SidebarSessionDrag.commitDrop` →
+`POST /mobile/session-order`, `POST /mobile/session-organization`;
+`sidebar.drag.commit`/`sidebar.drag.cancel` dispatched in `bin/main.dart`).
+Only drag *initiation* still needs the native events above.
+
 ## G-2: Popup context menus (blocks #153/#154 — popup behavior)
 
 `SessionContextMenu` (11 items) and `ProjectContextMenu` (9 items) render
