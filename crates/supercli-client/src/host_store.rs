@@ -671,6 +671,55 @@ mod tests {
     }
 
     #[test]
+    fn production_constructor_uses_os_store_at_runtime() {
+        // Build the host store exactly the way production code does:
+        // `with_os_keychain` is the only non-test constructor. Every other
+        // path goes through `new` with an explicitly injected store (the
+        // memory store in tests).
+        let store = RemoteHostStore::with_os_keychain("controller-1".to_string(), None);
+        // Runtime check on the constructed value — not just a type
+        // annotation: the credential backend inside must be the OS native
+        // keychain store. If the production constructor is ever rewired to
+        // the in-memory test store, this fails.
+        let backend = std::any::type_name_of_val(&store.credential_store);
+        assert!(
+            backend.contains("OsKeychainCredentialStore"),
+            "production host store backend is not the OS keychain store: {backend}"
+        );
+        assert!(
+            !backend.contains("MemoryHostCredentialStore"),
+            "production host store leaked the in-memory test backend: {backend}"
+        );
+    }
+
+    #[test]
+    fn os_store_save_failure_is_explicit_never_silent() {
+        // HostSecrets saved through the production backend must land in the
+        // OS keychain. Where no keyring exists (headless CI), the save must
+        // fail loudly — it must never silently land in an in-memory store.
+        let mut backend = OsKeychainCredentialStore::with_service("li.superc.test.nosilent");
+        let account = format!("__nosilent_{}__", std::process::id());
+        match backend.save(&account, "s3cr3t") {
+            Ok(()) => {
+                // Keyring available: the secret round-trips through the OS
+                // store, and cleanup removes it again.
+                assert_eq!(backend.load(&account), Some("s3cr3t".to_string()));
+                backend.delete(&account);
+                assert_eq!(backend.load(&account), None);
+            }
+            Err(e) => {
+                // Headless: the failure is explicit, and the secret is not
+                // retrievable — nothing was silently stashed in memory.
+                assert!(
+                    e.contains("OS keychain store failed"),
+                    "unexpected error shape: {e}"
+                );
+                assert_eq!(backend.load(&account), None);
+            }
+        }
+    }
+
+    #[test]
     fn memory_store_is_not_the_default() {
         // Explicitly document that MemoryHostCredentialStore is test-only.
         // Production code must use OsKeychainCredentialStore via
