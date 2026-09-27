@@ -5,6 +5,7 @@ export 'appkit_widgets.dart';
 export 'canvaspageview.dart';
 export 'footeractionsview.dart';
 export 'list_navigation.dart';
+export 'markdown_editing.dart';
 export 'markdowneditorview.dart';
 export 'markdowninsertmenu.dart';
 export 'mediaview.dart';
