@@ -3,4 +3,261 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: ios
-files: {}
+files:
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalPrediction.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: ported
+    behaviours:
+      - swift: "keystroke(_:cursor:columns:at:) — register printable keystroke with chaining/wrapping"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::keystroke"
+        test: "prediction.rs::keystroke_chains_off_previous_prediction"
+      - swift: "backspace() — drop last pending prediction"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::backspace"
+        test: "prediction.rs::backspace_drops_last_pending"
+      - swift: "clearPending() — keep confidence, drop pending"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::clear_pending"
+        test: "prediction.rs::clear_pending_keeps_confidence"
+      - swift: "reset() — full reset for replays/teardown"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::reset"
+        test: "prediction.rs::reset_clears_confidence"
+      - swift: "reconcile(rows:at:) — confirm/contradict/expire against authoritative viewport"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::reconcile"
+        test: "prediction.rs::reconcile_confirms_and_earns_gate"
+      - swift: "displayedText — provisional chars only while gate open"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::displayed_text"
+        test: "prediction.rs::displayed_text_hidden_until_confident"
+      - swift: "cellCharacter(in:column:) — column mapping with wide-glyph caveat"
+        target: "crates/supercli-client/src/prediction.rs::RemoteTerminalPredictionEngine::cell_character"
+        test: "prediction.rs::cell_character_bounds"
+      - swift: "expiry=2s / maximumPending=24 constants"
+        target: "crates/supercli-client/src/prediction.rs::EXPIRY_SECS / MAXIMUM_PENDING"
+        test: "prediction.rs::expiry_drops_gate"
+    tests:
+      - file: crates/supercli-client/src/prediction.rs
+        count: 10
+    notes: "Engine fully ported. SwiftUI overlay views (RemoteTerminalPredictionOverlayView, OverlayState, OverlayModel) are UI, not engine behaviours — out of scope for Rust."
+
+  ios/SupercliIOS/Sources/SupercliIOS/TerminalQueryFilter.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: ported
+    behaviours:
+      - swift: "stripRequests(_:) — strip CSI DA/DSR/XTVERSION/DECRQM and DCS XTGETTCAP/DECRQSS"
+        target: "crates/supercli-client/src/query_filter.rs::TerminalQueryFilter::strip_requests"
+        test: "query_filter.rs::strips_device_attribute_queries"
+      - swift: "reset() — clear carry state on stream restart"
+        target: "crates/supercli-client/src/query_filter.rs::TerminalQueryFilter::reset"
+        test: "query_filter.rs::reset_clears_carry"
+      - swift: "stateful chunk-boundary carry (withhold incomplete queries)"
+        target: "crates/supercli-client/src/query_filter.rs::TerminalQueryFilter::strip_requests"
+        test: "query_filter.rs::split_query_across_chunks_withheld"
+      - swift: "maximumCarryBytes=96 cap; DCS discard flag"
+        target: "crates/supercli-client/src/query_filter.rs"
+        test: "query_filter.rs::oversized_carry_dropped"
+      - swift: "preserve ESC c (RIS) and DECSCUSR"
+        target: "crates/supercli-client/src/query_filter.rs::TerminalQueryFilter::strip_requests"
+        test: "query_filter.rs::preserves_ris_and_decscusr"
+    tests:
+      - file: crates/supercli-client/src/query_filter.rs
+        count: 11
+    notes: "Single-class file; all behaviours ported."
+
+  ios/SupercliIOS/Sources/SupercliIOS/StreamFrameReconciler.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: ported
+    behaviours:
+      - swift: "StreamFrameReconciler.action(held:frameOffset:frameLength:) — feed/feedSuffix/skip/fillGap"
+        target: "crates/supercli-client/src/stream_frame.rs::reconcile_action"
+        test: "stream_frame.rs::forward_gaps_fill_instead_of_restart"
+      - swift: "StreamFrameAction cases (feed, feedSuffix, skip, fillGap)"
+        target: "crates/supercli-client/src/stream_frame.rs::StreamFrameAction"
+        test: "stream_frame.rs::stale_duplicate_frame_is_skipped"
+    tests:
+      - file: crates/supercli-client/src/stream_frame.rs
+        count: 6
+    notes: "46-line pure enum; fully ported."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalScrollPrediction.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: ported
+    behaviours:
+      - swift: "beginGesture() — latch display decision"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollPredictionEngine::begin_gesture"
+        test: "scroll_prediction.rs::begin_gesture_latches_display"
+      - swift: "wheelSent(rows:at:) — queue batch with probe flag and cap"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollPredictionEngine::wheel_sent"
+        test: "scroll_prediction.rs::wheel_sent_caps_pending_rows"
+      - swift: "contentShifted(rows:at:) — drain by observed shift, EWMA latency"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollPredictionEngine::content_shifted"
+        test: "scroll_prediction.rs::content_shifted_drains_oldest_first"
+      - swift: "expireIfUnanswered(at:) — ease home on timeout"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollPredictionEngine::expire_if_unanswered"
+        test: "scroll_prediction.rs::expire_if_unanswered_closes_gate"
+      - swift: "cancel() / resetConfidence()"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollPredictionEngine::cancel"
+        test: "scroll_prediction.rs::cancel_keeps_confidence"
+      - swift: "RemoteTerminalScrollShiftDetector.shift(before:after:maxShift:)"
+        target: "crates/supercli-client/src/scroll_prediction.rs::RemoteTerminalScrollShiftDetector::shift"
+        test: "scroll_prediction.rs::shift_detector_finds_true_shift"
+      - swift: "responseTimeout=0.45 / maximumPendingRows=20 / displayLatencyThreshold=0.18"
+        target: "crates/supercli-client/src/scroll_prediction.rs constants"
+        test: "scroll_prediction.rs::display_gated_by_latency"
+    tests:
+      - file: crates/supercli-client/src/scroll_prediction.rs
+        count: 19
+    notes: "Engine + shift detector fully ported. SwiftUI state/modifier (RemoteTerminalScrollPredictionState, OffsetModifier) are UI glue — out of scope."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: ported
+    behaviours:
+      - swift: "RemoteTerminalTransportSelector.normalizedFingerprint(_:)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalTransportSelector::normalized_fingerprint"
+        test: "stream_transport.rs::fingerprint_normalization"
+      - swift: "fingerprintsMatch(_:_:)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalTransportSelector::fingerprints_match"
+        test: "stream_transport.rs::fingerprints_match"
+      - swift: "endpoint(port:fingerprint:) — discovery"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalTransportSelector::endpoint"
+        test: "stream_transport.rs::endpoint_requires_port_and_fingerprint"
+      - swift: "candidate(endpoint:baseURL:authToken:) — WS vs long-poll decision"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalTransportSelector::candidate"
+        test: "stream_transport.rs::candidate_selects_ws_or_long_poll"
+      - swift: "webSocketOutputURL(host:port:sessionID:token:offset:)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalTransportSelector::web_socket_output_url"
+        test: "stream_transport.rs::websocket_output_url"
+      - swift: "RemoteTerminalWSHello.modePreamble (base64 DEC restore)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalWsHello::mode_preamble"
+        test: "stream_transport.rs::hello_carries_optional_mode_preamble"
+      - swift: "RemoteTerminalWSServerMessage.parse(text:)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalWsServerMessage::parse"
+        test: "stream_transport.rs::server_message_parses_hello_and_error"
+      - swift: "RemoteTerminalWSBinaryFrame.parse(_:) — 8-byte BE offset prefix"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalWsBinaryFrame::parse"
+        test: "stream_transport.rs::binary_frame_parses_offset"
+      - swift: "RemoteTerminalWSClientMessage.inputFrames(for:writeID:maxBytes:)"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalWsClientMessage::input_frames"
+        test: "stream_transport.rs::input_frames_chunk_on_char_boundaries"
+      - swift: "RemoteTerminalReconnectBackoff — exponential backoff"
+        target: "crates/supercli-client/src/stream_transport.rs::RemoteTerminalReconnectBackoff::delay_after_failure"
+        test: "stream_transport.rs::reconnect_backoff_resets_after_a_frame_paints"
+    tests:
+      - file: crates/supercli-client/src/stream_transport.rs
+        count: 27
+    notes: "All socket-free protocol logic ported. The live connection (RemoteTerminalWebSocket.swift, separate file) is transport execution — todo."
+
+  ios/SupercliIOS/Sources/SupercliIOS/TerminalSessionCache.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: partial
+    behaviours:
+      - swift: "SessionLRUIndex — capacity-bounded LRU with eviction"
+        target: "crates/supercli-client/src/session_lru.rs::SessionLruIndex"
+        test: "session_lru.rs::lru_lookup_marks_most_recently_used"
+      - swift: "SessionLRUIndex.retain(only:keeping:) / removeAll(except:)"
+        target: "crates/supercli-client/src/session_lru.rs::SessionLruIndex::retain_only"
+        test: "session_lru.rs::retain_only_spares_visible"
+      - swift: "TerminalVisibilityLeaseTracker — token-gated on-screen ownership"
+        target: "crates/supercli-client/src/session_lru.rs::TerminalVisibilityLeaseTracker"
+        test: "session_lru.rs::visibility_lease_token_gating"
+      - swift: "TerminalStreamLeaseTracker — refcounted streaming"
+        target: "crates/supercli-client/src/session_lru.rs::TerminalStreamLeaseTracker"
+        test: "session_lru.rs::stream_lease_refcount"
+      - swift: "TerminalSessionCache (@MainActor, ghostty surfaces, epoch scoping)"
+        target: null
+        test: null
+      - swift: "TerminalSessionCacheEntry (renderer lifecycle, platform views)"
+        target: null
+        test: null
+    tests:
+      - file: crates/supercli-client/src/session_lru.rs
+        count: 7
+    notes: "The 3 UI-agnostic structs are ported. The @MainActor cache + entry (ghostty surfaces, UIKit views, memory-warning observer) are platform-bound — not portable to Rust."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: partial
+    behaviours:
+      - swift: "RemoteServerVersion parsing + ordering"
+        target: "crates/supercli-client/src/direct_transport.rs::RemoteServerVersion::parse"
+        test: "direct_transport.rs::server_version_parsing_and_ordering"
+      - swift: "RemoteDirectTransportPolicy.decision(for:) — capability/version → TLS/plaintext/unknown"
+        target: "crates/supercli-client/src/direct_transport.rs::transport_decision"
+        test: "direct_transport.rs::capability_flag_selects_tls"
+      - swift: "isPlaintextRefusal(statusCode:serverMessage:) — 426 / 401+https"
+        target: "crates/supercli-client/src/direct_transport.rs::is_plaintext_refusal"
+        test: "direct_transport.rs::plaintext_refusal_recognized_from_426_and_401_naming_https"
+      - swift: "canonicalStoredEndpoint(_:) — https:// → http:// normalization"
+        target: "crates/supercli-client/src/direct_transport.rs::canonical_stored_endpoint"
+        test: "direct_transport.rs::https_endpoints_stored_canonically_as_http"
+      - swift: "RemoteBootstrapDeadline.seconds(isRelay:measuredRoundTrip:)"
+        target: "crates/supercli-client/src/direct_transport.rs::RemoteBootstrapDeadline::seconds"
+        test: "direct_transport.rs::relay_bootstrap_deadline_scales_with_round_trip_within_bounds"
+      - swift: "PushTokenRegistrationRoute.plan(isActiveMac:usingRelay:hasRelayCredentials:)"
+        target: "crates/supercli-client/src/direct_transport.rs::PushTokenRegistrationRoute::plan"
+        test: "direct_transport.rs::direct_macs_try_lan_then_link_connection"
+      - swift: "RemoteDirectTransportPolicy.applying(_:to:authenticated:) — fold into PairedMacRecord"
+        target: null
+        test: null
+      - swift: "RemotePinnedURLSessionCache — per-fingerprint URLSession"
+        target: null
+        test: null
+    tests:
+      - file: crates/supercli-client/src/direct_transport.rs
+        count: 12
+    notes: "Pure policy logic ported. `applying` needs PairedMacRecord (no Rust equivalent yet). URLSession cache is Foundation-bound — not portable."
+
+  ios/SupercliIOS/Sources/SupercliIOS/PushManager.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: partial
+    behaviours:
+      - swift: "PushRegistrationState.diagnosticLabel"
+        target: "crates/supercli-client/src/push.rs::PushRegistrationState::diagnostic_label"
+        test: "push.rs::registration_diagnostics_name_permission_and_environment_states"
+      - swift: "PushRegistrationState.sidebarWarning / canRetry / permissionWasDenied"
+        target: "crates/supercli-client/src/push.rs::PushRegistrationState::sidebar_warning"
+        test: "push.rs::sidebar_warning_only_for_broken_delivery"
+      - swift: "didRegister device-token hex encoding"
+        target: "crates/supercli-client/src/push.rs::hex_encode_device_token"
+        test: "push.rs::device_token_hex_encoding"
+      - swift: "PushManager (@MainActor, UNUserNotificationCenter, UIApplication)"
+        target: null
+        test: null
+      - swift: "PushAppDelegate (UIKit app lifecycle)"
+        target: null
+        test: null
+    tests:
+      - file: crates/supercli-client/src/push.rs
+        count: 3
+    notes: "State machine ported. The manager + app delegate are UIKit/UserNotifications-bound — not portable."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemotePreviewStore.swift:
+    destination: "Rust: supercli-client (iOS non-UI)"
+    status: partial
+    behaviours:
+      - swift: "supportsResumableArtifactUpload — capability gate"
+        target: "crates/supercli-client/src/preview.rs::supports_resumable_artifact_upload"
+        test: "preview.rs::presentation_session_prefers_known_target_falls_back_to_caller"
+      - swift: "supportsSessionReorder — capability gate"
+        target: "crates/supercli-client/src/preview.rs::supports_session_reorder"
+        test: null
+      - swift: "pendingApprovals — filter answered IDs"
+        target: "crates/supercli-client/src/preview.rs::ApprovalTracker::pending"
+        test: "preview.rs::pending_hides_answered_approvals"
+      - swift: "answeredApprovalIDs pruning when Mac stops reporting"
+        target: "crates/supercli-client/src/preview.rs::ApprovalTracker::prune_answered"
+        test: "preview.rs::prune_answered_drops_ids_the_mac_stopped_reporting"
+      - swift: "presentationSessionID(knownIDs:) resolution"
+        target: "crates/supercli-client/src/preview.rs::presentation_session_id"
+        test: "preview.rs::presentation_session_prefers_known_target_falls_back_to_caller"
+      - swift: "sessionNeedsMcpApprovalAttention / pendingApproval(for:) / count"
+        target: "crates/supercli-client/src/preview.rs::ApprovalTracker::session_needs_attention"
+        test: "preview.rs::session_attention_and_lookup_use_presentation_session"
+      - swift: "currentWorkspace / hasMultipleWorkspaces resolution"
+        target: "crates/supercli-client/src/preview.rs::current_workspace"
+        test: "preview.rs::current_workspace_prefers_is_current_falls_back_to_first"
+      - swift: "2,143-line @Observable UI state (selection, sheets, connection flows)"
+        target: null
+        test: null
+    tests:
+      - file: crates/supercli-client/src/preview.rs
+        count: 7
+    notes: "Pure gates + approval bookkeeping + workspace resolution ported (~150 lines of logic). The @MainActor @Observable UI state machine (sessions drawer, sheets, connection status flows, deep links) is SwiftUI-bound — not portable. supportsSessionCreation already in protocol.rs."
