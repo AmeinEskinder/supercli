@@ -9,12 +9,12 @@ on:
   push:
     branches: ['main', 'next', 'feat/**']
     paths:
-      - 'protocol/relay-kat-vectors-v1.json'
+      - 'protocol/relay-kat-vectors-v2.json'
       - 'crates/**'
       - '.github/workflows/relay-conformance.yml'
   pull_request:
     paths:
-      - 'protocol/relay-kat-vectors-v1.json'
+      - 'protocol/relay-kat-vectors-v2.json'
       - 'crates/**'
       - '.github/workflows/relay-conformance.yml'
 
