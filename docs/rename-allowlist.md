@@ -39,6 +39,17 @@ names and references. Do not rename.
   - `scripts/release-app-installer.test.mjs`
   - `scripts/release-app-state.test.mjs`
 
+### Relay protocol version (frozen legacy speaks v1 by design)
+
+- Frozen legacy clients speak relay protocol **v1** (`supercli-relay-v1:*`
+  KDF labels, `RelayProtocol.version = 1` in the frozen Swift code). They
+  are incompatible with the current supercli relay **v2** by design: v2
+  renamed the KDF labels to `supercli-relay-v2:*` (test vectors
+  `protocol/relay-kat-vectors-v2.json`), so a v1 peer and a v2 peer cannot
+  open each other's frames. This is intentional — the legacy tree is frozen
+  and will never be updated to v2; the relay conformance harness and the
+  Rust KAT tests target v2 only.
+
 ## 3. Historical attribution (do not rewrite)
 
 - `THIRD_PARTY_NOTICES.txt` — third-party license notices with historical names.
