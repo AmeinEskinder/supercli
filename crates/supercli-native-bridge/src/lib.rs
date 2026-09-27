@@ -47,6 +47,11 @@ pub const ERROR_SERIALIZATION: i32 = -3;
 pub const ERROR_INVALID_HANDLE: i32 = -4;
 pub const ERROR_REMOTE: i32 = -5;
 
+/// macOS services ported from `clients/legacy/native/SupercliNative`:
+/// launchd, service identity, keychain licensing, notifications, menu bar,
+/// hook server, updater, and local host control.
+pub mod macos;
+
 type RemoteHandle = u64;
 type RemoteOutputPageHandle = u64;
 type PlatformAdapterHandle = u64;

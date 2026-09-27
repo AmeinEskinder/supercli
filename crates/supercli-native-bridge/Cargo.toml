@@ -14,6 +14,17 @@ crate-type = ["rlib", "staticlib"]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 supercli-core = { version = "0.9.0", path = "../supercli-core" }
+keyring = "3"
+ed25519-dalek = "3"
+sha2 = "0.10"
+base64 = "0.22"
+plist = "1"
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
 
 [dev-dependencies]
 supercli-serve = { version = "0.9.0", path = "../supercli-serve" }
+tempfile = "3"

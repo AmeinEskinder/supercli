@@ -25,9 +25,9 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 7 files (7,742 LOC) · ported: 13 files (13,078 LOC) · todo: 253 files (124,817 LOC)
-- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge: 14 files (4,082 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 26 files (4,704 LOC)
-- Unresolved (`tbd`) destinations: 26 files
+- Status breakdown: partial: 13 files (10,354 LOC) · ported: 22 files (14,718 LOC) · todo: 238 files (120,565 LOC)
+- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::hook_server::tests: 1 files (278 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::launchd::tests: 1 files (149 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::license::tests: 1 files (167 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::notifications::tests: 1 files (308 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_identity::tests: 1 files (182 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · Rust: supercli-native-bridge::macos::service_manager::tests: 1 files (33 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 25 files (4,534 LOC)
+- Unresolved (`tbd`) destinations: 25 files
 
 ### By worker area
 
@@ -126,24 +126,24 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/ChromeIcons.swift | 406 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ClickablePath.swift | 209 | tbd | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ControllerPairingProxy.swift | 445 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/DesktopNotifier.swift | 269 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/DesktopNotifier.swift | 269 | Rust: supercli-native-bridge::macos::notifications | ported |  | 8 |
 | native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift | 273 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift | 2618 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/GlobalActivityMenu.swift | 281 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/HookServer.swift | 961 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/HookServer.swift | 961 | Rust: supercli-native-bridge::macos::hook_server | partial |  | 4 |
 | native/SupercliNative/Sources/SupercliNative/HostHardware.swift | 70 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/HostManagementState.swift | 33 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/HostServiceAgent.swift | 190 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift | 221 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/HostServiceManager.swift | 342 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/HostServiceAgent.swift | 190 | Rust: supercli-native-bridge::macos::launchd | ported |  | 9 |
+| native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift | 221 | Rust: supercli-native-bridge::macos::service_identity | partial |  | 9 |
+| native/SupercliNative/Sources/SupercliNative/HostServiceManager.swift | 342 | Rust: supercli-native-bridge::macos::service_manager | partial |  | 6 |
 | native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift | 207 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Licensing/LicenseKeychain.swift | 64 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Licensing/LicenseManager.swift | 599 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/Licensing/LicenseKeychain.swift | 64 | Rust: supercli-native-bridge::macos::keychain | ported |  | 1 |
+| native/SupercliNative/Sources/SupercliNative/Licensing/LicenseManager.swift | 599 | Rust: supercli-native-bridge::macos::license | partial |  | 11 |
 | native/SupercliNative/Sources/SupercliNative/LocalHostClientFeature.swift | 118 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/LocalHostControl.swift | 170 | tbd | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/LocalHostControl.swift | 170 | Rust: supercli-native-bridge::macos::local_host_control | partial |  | 6 |
 | native/SupercliNative/Sources/SupercliNative/MCPApprovalCenter.swift | 358 | tbd | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/MCPApprovalPanel.swift | 277 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/MenuBarController.swift | 319 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/MenuBarController.swift | 319 | Rust: supercli-native-bridge::macos::menu_bar | partial |  | 6 |
 | native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift | 1298 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/MobileSessionControl.swift | 289 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Models.swift | 1263 | Rust: supercli-core/client | todo |  | 0 |
@@ -233,13 +233,13 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Tests/SupercliNativeTests/ControllerPairingProxyTests.swift | 115 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/GhosttySurfaceKeybindTests.swift | 34 | tbd | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/GlobalActivityMenuProjectionTests.swift | 79 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/HookServerParsingTests.swift | 278 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift | 149 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/HostServiceIdentityTests.swift | 182 | Rust: supercli-native-bridge | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/HostServiceManagerTests.swift | 33 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Tests/SupercliNativeTests/HookServerParsingTests.swift | 278 | Rust: supercli-native-bridge::macos::hook_server::tests | ported |  | 4 |
+| native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift | 149 | Rust: supercli-native-bridge::macos::launchd::tests | ported |  | 9 |
+| native/SupercliNative/Tests/SupercliNativeTests/HostServiceIdentityTests.swift | 182 | Rust: supercli-native-bridge::macos::service_identity::tests | ported |  | 9 |
+| native/SupercliNative/Tests/SupercliNativeTests/HostServiceManagerTests.swift | 33 | Rust: supercli-native-bridge::macos::service_manager::tests | ported |  | 6 |
 | native/SupercliNative/Tests/SupercliNativeTests/HostedSessionManifestTests.swift | 429 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/LaunchConfigAttachCommandTests.swift | 31 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/LicenseManagerTests.swift | 167 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Tests/SupercliNativeTests/LicenseManagerTests.swift | 167 | Rust: supercli-native-bridge::macos::license::tests | ported |  | 11 |
 | native/SupercliNative/Tests/SupercliNativeTests/LocalHostClientFeatureTests.swift | 158 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/MCPApprovalPresentationTests.swift | 140 | tbd | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/MobilePairingStoreTests.swift | 825 | Rust: supercli-core/client | todo |  | 0 |
@@ -250,7 +250,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Tests/SupercliNativeTests/NativeRelayBridgeTests.swift | 31 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/NativeRemoteBackendTests.swift | 228 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/NearbyHostBrowserTests.swift | 40 | tbd | todo |  | 0 |
-| native/SupercliNative/Tests/SupercliNativeTests/NotificationDeliveryTests.swift | 308 | Rust: supercli-native-bridge | todo |  | 0 |
+| native/SupercliNative/Tests/SupercliNativeTests/NotificationDeliveryTests.swift | 308 | Rust: supercli-native-bridge::macos::notifications::tests | ported |  | 8 |
 | native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift | 220 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/OpenURLSanitizerTests.swift | 138 | tbd | todo |  | 0 |
 | native/SupercliNative/Tests/SupercliNativeTests/PaneLayoutControllerTests.swift | 411 | Dart: clients/supercli-app | todo |  | 0 |
