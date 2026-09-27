@@ -240,9 +240,9 @@ pub fn reconcile_at_launch(
     }
 }
 
-/// Test hook: forget the once-per-launch guard.
-/// Note: the real guard lives in `reconcile_at_launch`'s static; tests
-/// drive `decide` directly with explicit `restarted_this_launch` flags.
+// Test hook: forget the once-per-launch guard.
+// Note: the real guard lives in `reconcile_at_launch`'s static; tests
+// drive `decide` directly with explicit `restarted_this_launch` flags.
 
 #[cfg(test)]
 mod tests {

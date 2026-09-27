@@ -55,7 +55,7 @@ pub struct UpdateEnclosure {
 /// metadata is ignored for the update decision.
 pub fn compare_versions(current: &str, candidate: &str) -> i32 {
     fn parts(v: &str) -> Vec<u64> {
-        v.split(|c| c == '.' || c == '-')
+        v.split(['.', '-'])
             .filter_map(|p| p.parse::<u64>().ok())
             .collect()
     }
