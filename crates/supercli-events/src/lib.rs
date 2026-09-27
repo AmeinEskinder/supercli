@@ -365,7 +365,7 @@ pub const DEFAULT_PRIORITY: u32 = 100;
 
 /// Idempotency-key format: `<Entity>:<doc_id>:<event>:<seq>`.
 pub fn event_id(entity: DocType, doc_id: &str, event: DocEvent, seq: u64) -> String {
-    format!("{}:{}:{}:{}", entity, doc_id, event, seq)
+    format!("{entity}:{doc_id}:{event}:{seq}")
 }
 
 /// Non-invasive emission helper for integrating doc events into existing

@@ -1295,7 +1295,7 @@ impl SessionConnectors {
             .open(&path)
         {
             use std::io::Write;
-            let _ = writeln!(file, "{}", entry);
+            let _ = writeln!(file, "{entry}");
         } else {
             trace(&format!(
                 "session {}: cannot append audit log {}",

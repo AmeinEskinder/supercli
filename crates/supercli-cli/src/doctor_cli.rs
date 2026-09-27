@@ -303,7 +303,7 @@ fn check_grants_file(home: &Path) -> (&'static str, bool, String) {
 /// Every grant in grants.json must have a corresponding grant_created entry
 /// in the tamper-evident audit log. A grant without an audit entry is a
 /// security violation (quarantined on startup).
-fn check_grant_audit(_home: &PathBuf) -> (&'static str, bool, String) {
+fn check_grant_audit(_home: &Path) -> (&'static str, bool, String) {
     // Verify the audit chain integrity.
     match supercli_core::grant_audit::verify_grant_audit() {
         Ok(count) => {

@@ -87,7 +87,7 @@ fn list(args: &[String]) -> Result<i32, String> {
         );
     } else {
         let (h1, h2, h3, h4, h5) = ("NAME", "ENTITY", "EVENT", "PRIO", "TARGET");
-        println!("{:<24} {:<12} {:<16} {:<8} {}", h1, h2, h3, h4, h5);
+        println!("{h1:<24} {h2:<12} {h3:<16} {h4:<8} {h5}");
         for r in &rows {
             if r.disabled {
                 println!(
@@ -233,10 +233,7 @@ fn trace(args: &[String]) -> Result<i32, String> {
             "DECISION",
             "AUDIT HASH",
         );
-        println!(
-            "{:<10} {:<18} {:<14} {:<10} {:<12} {}",
-            a1, a2, a3, a4, a5, a6
-        );
+        println!("{a1:<10} {a2:<18} {a3:<14} {a4:<10} {a5:<12} {a6}");
         for r in &audit_rows {
             // Decision marker: ✓ allow/escalate (Approved), ✗ reject (Denied).
             let marker = if r.decision.eq_ignore_ascii_case("denied") {

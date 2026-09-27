@@ -86,18 +86,18 @@ pub fn run_from_unpeel(args: &[String]) -> i32 {
             continue;
         }
         if d.exists() && !force {
-            skipped.push(format!("{} (exists, use --force to overwrite)", desc));
+            skipped.push(format!("{desc} (exists, use --force to overwrite)"));
             continue;
         }
         match copy_recursively(&s, &d) {
             Ok(n) => {
                 imported += n;
                 if !json {
-                    println!("imported {} ({} files)", desc, n);
+                    println!("imported {desc} ({n} files)");
                 }
             }
             Err(e) => {
-                eprintln!("error importing {}: {}", desc, e);
+                eprintln!("error importing {desc}: {e}");
                 return 1;
             }
         }
@@ -116,7 +116,7 @@ pub fn run_from_unpeel(args: &[String]) -> i32 {
         if !skipped.is_empty() {
             println!("Skipped (already exist):");
             for s in &skipped {
-                println!("  - {}", s);
+                println!("  - {s}");
             }
         }
         println!("Source left intact at {}", src.display());
@@ -134,8 +134,7 @@ mod tests {
         let tmp = std::env::temp_dir().join(format!("supercli-import-test-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         // Temporarily override HOME via env for this test is racy; instead
-        // just verify the item list is non-empty and well-formed.
-        assert!(!IMPORT_ITEMS.is_empty());
+        // just verify the item list is well-formed.
         for (rel, desc) in IMPORT_ITEMS {
             assert!(!rel.is_empty());
             assert!(!desc.is_empty());

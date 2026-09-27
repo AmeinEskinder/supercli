@@ -22,7 +22,7 @@ fn test_dir(name: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let pid = std::process::id();
-    let dir = std::env::temp_dir().join(format!("subagent-kill-{}-{}-{}", name, pid, nanos));
+    let dir = std::env::temp_dir().join(format!("subagent-kill-{name}-{pid}-{nanos}"));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -128,15 +128,15 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
         .expect("parent_run_id pointer must exist")
         .trim()
         .to_string();
-    println!("run 1 parent id: {}", parent_id_1);
+    println!("run 1 parent id: {parent_id_1}");
 
     // The child run id, from the DB.
     let child_id_1 = db_query(
         &home,
-        &format!("SELECT id FROM runs WHERE parent_run='{}';", parent_id_1),
+        &format!("SELECT id FROM runs WHERE parent_run='{parent_id_1}';"),
     )
     .expect("db query");
-    println!("run 1 child id: {}", child_id_1);
+    println!("run 1 child id: {child_id_1}");
     assert!(
         !child_id_1.is_empty(),
         "run 1 must have spawned exactly one child"
@@ -153,8 +153,8 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     let output = child2.wait_with_output().expect("wait run 2");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    println!("run 2 stdout:\n{}", stdout);
-    println!("run 2 stderr:\n{}", stderr);
+    println!("run 2 stdout:\n{stdout}");
+    println!("run 2 stderr:\n{stderr}");
     assert!(output.status.success(), "helper run 2 must exit 0");
 
     // SAME parent id: the pointer file is only written on the fresh path.
@@ -170,13 +170,10 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     // SAME child id: exactly one child row for the parent, unchanged.
     let child_rows = db_query(
         &home,
-        &format!(
-            "SELECT COUNT(*), GROUP_CONCAT(id) FROM runs WHERE parent_run='{}';",
-            parent_id_1
-        ),
+        &format!("SELECT COUNT(*), GROUP_CONCAT(id) FROM runs WHERE parent_run='{parent_id_1}';"),
     )
     .expect("db query");
-    println!("child rows after restart: {}", child_rows);
+    println!("child rows after restart: {child_rows}");
     let parts: Vec<&str> = child_rows.split('|').collect();
     assert_eq!(
         parts[0], "1",
@@ -195,22 +192,20 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     // Zero duplicates: each child step appears exactly once in the external
     // log (the ground truth, not the journal).
     let log = fs::read_to_string(&side_effects).expect("read side-effects log");
-    println!("side-effects log:\n{}", log);
+    println!("side-effects log:\n{log}");
     let mut counts: HashMap<&str, usize> = HashMap::new();
     for line in log.lines() {
         if let Some(step) = line.strip_prefix("executed ") {
             *counts.entry(step).or_insert(0) += 1;
         }
     }
-    println!("side-effect counts: {:?}", counts);
+    println!("side-effect counts: {counts:?}");
     for n in 0..3 {
-        let step = format!("child-step-{}", n);
+        let step = format!("child-step-{n}");
         assert_eq!(
             counts.get(step.as_str()),
             Some(&1),
-            "step {} must have executed exactly once: {:?}",
-            step,
-            counts
+            "step {step} must have executed exactly once: {counts:?}"
         );
     }
 
@@ -218,14 +213,13 @@ fn parent_child_sigkill_case(name: &str, kill_after: Duration) {
     let states = db_query(
         &home,
         &format!(
-            "SELECT state FROM runs WHERE id IN ('{}','{}') ORDER BY id;",
-            parent_id_1, child_id_1
+            "SELECT state FROM runs WHERE id IN ('{parent_id_1}','{child_id_1}') ORDER BY id;"
         ),
     )
     .expect("db query");
-    println!("run states: {}", states);
+    println!("run states: {states}");
     for state in states.lines() {
-        assert_eq!(state, "DONE", "every run must be DONE, got {}", state);
+        assert_eq!(state, "DONE", "every run must be DONE, got {state}");
     }
 
     let _ = fs::remove_dir_all(&dir);

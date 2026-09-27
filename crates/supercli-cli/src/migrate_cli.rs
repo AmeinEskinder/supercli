@@ -367,15 +367,14 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
     let state_content = match std::fs::read(&state_path) {
         Ok(c) => c,
         Err(e) => {
-            step.lines
-                .push(format!("cannot read app-state.json: {}", e));
+            step.lines.push(format!("cannot read app-state.json: {e}"));
             return step;
         }
     };
     let mut state: serde_json::Value = match serde_json::from_slice(&state_content) {
         Ok(v) => v,
         Err(e) => {
-            step.error = Some(format!("parse app-state.json: {}", e));
+            step.error = Some(format!("parse app-state.json: {e}"));
             return step;
         }
     };
@@ -430,11 +429,10 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
             // grants.json taking precedence (it's the new location).
             if !grants_map.contains_key(key) {
                 grants_map.insert(key.to_string(), value);
-                step.lines.push(format!("migrated {}", key));
+                step.lines.push(format!("migrated {key}"));
             } else {
                 step.lines.push(format!(
-                    "{} already in grants.json, removing from app-state.json",
-                    key
+                    "{key} already in grants.json, removing from app-state.json"
                 ));
             }
             step.changed = true;
@@ -451,11 +449,11 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
         // Use temp + rename for atomicity
         let tmp = grants_path.with_extension("json.migrate-tmp");
         if let Err(e) = std::fs::write(&tmp, &body) {
-            step.error = Some(format!("write grants.json tmp: {}", e));
+            step.error = Some(format!("write grants.json tmp: {e}"));
             return step;
         }
         if let Err(e) = std::fs::rename(&tmp, &grants_path) {
-            step.error = Some(format!("rename grants.json: {}", e));
+            step.error = Some(format!("rename grants.json: {e}"));
             return step;
         }
 
@@ -463,11 +461,11 @@ fn step_grant_shard(apply: bool) -> StepOutcome {
         let state_body = serde_json::to_vec_pretty(&state).unwrap();
         let state_tmp = state_path.with_extension("json.migrate-tmp");
         if let Err(e) = std::fs::write(&state_tmp, &state_body) {
-            step.error = Some(format!("write app-state.json tmp: {}", e));
+            step.error = Some(format!("write app-state.json tmp: {e}"));
             return step;
         }
         if let Err(e) = std::fs::rename(&state_tmp, &state_path) {
-            step.error = Some(format!("rename app-state.json: {}", e));
+            step.error = Some(format!("rename app-state.json: {e}"));
             return step;
         }
 

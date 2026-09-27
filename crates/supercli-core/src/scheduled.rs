@@ -2478,8 +2478,7 @@ mod tests {
             assert_ne!(
                 record.outcome,
                 RunOutcome::NeedsReview,
-                "never_ran must not escalate: {:?}",
-                record
+                "never_ran must not escalate: {record:?}"
             );
         }
         assert!(

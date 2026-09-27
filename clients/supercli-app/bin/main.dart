@@ -95,6 +95,17 @@ Future<void> main(List<String> args) async {
         message: '$e',
         severity: NotificationSeverity.error,
       ));
+    } catch (e) {
+      // Non-HostException failures (connection refused, timeout, TLS, JSON)
+      // must not become an uncaught 255; record and continue headless.
+      app.statusLine = 'Connection error: $e';
+      app.notifications.add(AppNotification(
+        id: 'connection-error',
+        title: 'Connection error',
+        message: '$e',
+        severity: NotificationSeverity.error,
+      ));
+      stderr.writeln('headless: bootstrap failed: $e');
     }
     final host = gpui;
     if (host != null) {

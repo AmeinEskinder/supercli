@@ -31,7 +31,7 @@ use supercli_core::scheduled::{
 fn mark(progress: Option<&Path>, line: &str) {
     if let Some(p) = progress {
         if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(p) {
-            let _ = writeln!(f, "{}", line);
+            let _ = writeln!(f, "{line}");
             let _ = f.sync_all();
         }
     }
@@ -59,7 +59,7 @@ impl FileExecutor {
             .append(true)
             .open(&self.side_effects)
             .expect("open side-effects log");
-        writeln!(f, "executed {}", tool).expect("write side effect");
+        writeln!(f, "executed {tool}").expect("write side effect");
         f.sync_all().expect("fsync side-effects log");
     }
 }
@@ -81,18 +81,15 @@ impl ScheduledToolExecutor for FileExecutor {
         tool: &str,
         _arguments: &serde_json::Value,
     ) -> Result<String, supercli_core::session_connectors::ToolCallFailure> {
-        mark(self.progress.as_deref(), &format!("step-started {}", tool));
+        mark(self.progress.as_deref(), &format!("step-started {tool}"));
         // Widen the kill window: sleep before the side effect.
         std::thread::sleep(Duration::from_millis(400));
         self.record(tool);
         // Sleep after too, so a kill can land between side effect and
         // the outcome journal write.
         std::thread::sleep(Duration::from_millis(200));
-        mark(
-            self.progress.as_deref(),
-            &format!("step-completed {}", tool),
-        );
-        Ok(format!("ok:{}", tool))
+        mark(self.progress.as_deref(), &format!("step-completed {tool}"));
+        Ok(format!("ok:{tool}"))
     }
 }
 
@@ -133,10 +130,7 @@ fn main() {
     let runner = ScheduledRunner::new(SystemClock)
         .with_durable_runs(db)
         .on_run_created(move |run_id| {
-            mark(
-                progress_clone.as_deref(),
-                &format!("run-created {}", run_id),
-            );
+            mark(progress_clone.as_deref(), &format!("run-created {run_id}"));
         });
 
     // Fixed schedule id so restarts find the orphaned run.
@@ -174,7 +168,7 @@ fn main() {
             );
         }
         Err(e) => {
-            eprintln!("audit failed: {:?}", e);
+            eprintln!("audit failed: {e:?}");
             std::process::exit(1);
         }
     }

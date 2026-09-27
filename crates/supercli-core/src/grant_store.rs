@@ -423,8 +423,8 @@ mod tests {
             let b = barrier.clone();
             handles.push(thread::spawn(move || {
                 b.wait();
-                let caller = format!("session-{}", i);
-                let target = format!("target-{}", i);
+                let caller = format!("session-{i}");
+                let target = format!("target-{i}");
                 persist_test_grant(&caller, &target);
             }));
         }
@@ -434,13 +434,11 @@ mod tests {
         }
 
         for i in 0..n_threads {
-            let caller = format!("session-{}", i);
-            let target = format!("target-{}", i);
+            let caller = format!("session-{i}");
+            let target = format!("target-{i}");
             assert!(
                 grant_exists("mcp_write_approvals", &caller, Some(&target)),
-                "Grant missing for {} -> {}",
-                caller,
-                target
+                "Grant missing for {caller} -> {target}"
             );
         }
 

@@ -205,18 +205,11 @@ async fn main() -> anyhow::Result<()> {
     let pending = offered.saturating_sub(completed + errors);
 
     println!("\n=== Results ===");
-    println!(
-        "Offered: {}, Completed: {}, Errors: {}, Pending: {}",
-        offered, completed, errors, pending
-    );
+    println!("Offered: {offered}, Completed: {completed}, Errors: {errors}, Pending: {pending}");
     assert_eq!(
         completed + errors + pending,
         offered,
-        "accounting bug: completed({}) + errors({}) + pending({}) != offered({})",
-        completed,
-        errors,
-        pending,
-        offered
+        "accounting bug: completed({completed}) + errors({errors}) + pending({pending}) != offered({offered})"
     );
     let (p50_ms, p95_ms, p99_ms, max_ms, throughput) = if completed > 0 {
         let tput = completed as f64 / test_elapsed;
@@ -225,14 +218,11 @@ async fn main() -> anyhow::Result<()> {
             let p95 = h.value_at_quantile(0.95) as f64 / 1000.0;
             let p99 = h.value_at_quantile(0.99) as f64 / 1000.0;
             let max = h.max() as f64 / 1000.0;
-            println!(
-                "Throughput: {:.1}/s ({} completed in {:.1}s)",
-                tput, completed, test_elapsed
-            );
-            println!("p50: {:.1}ms", p50);
-            println!("p95: {:.1}ms", p95);
-            println!("p99: {:.1}ms", p99);
-            println!("max: {:.1}ms", max);
+            println!("Throughput: {tput:.1}/s ({completed} completed in {test_elapsed:.1}s)");
+            println!("p50: {p50:.1}ms");
+            println!("p95: {p95:.1}ms");
+            println!("p99: {p99:.1}ms");
+            println!("max: {max:.1}ms");
             (p50, p95, p99, max, tput)
         } else {
             (0.0, 0.0, 0.0, 0.0, 0.0)
@@ -257,7 +247,7 @@ async fn main() -> anyhow::Result<()> {
             "n": args.n,
         });
         std::fs::write(json_path, serde_json::to_string_pretty(&output).unwrap())?;
-        println!("Wrote JSON results to {}", json_path);
+        println!("Wrote JSON results to {json_path}");
     }
 
     Ok(())
@@ -352,7 +342,7 @@ async fn run_load(
                     if measure {
                         stats.error();
                     }
-                    eprintln!("Semaphore acquire failed: {}", e);
+                    eprintln!("Semaphore acquire failed: {e}");
                     return;
                 }
             };
@@ -376,7 +366,7 @@ async fn run_load(
                         stats.error();
                         // Debug: print first few errors
                         if stats.errors.load(Ordering::Relaxed) < 5 {
-                            eprintln!("Request {} failed: {}", id, e);
+                            eprintln!("Request {id} failed: {e}");
                         }
                     }
                 }
@@ -407,8 +397,7 @@ async fn run_load(
         }
         if drain_start.elapsed() > drain_timeout {
             eprintln!(
-                "WARNING: drain timeout after {:?}; {} requests still in-flight (will report as pending)",
-                drain_timeout, in_flight
+                "WARNING: drain timeout after {drain_timeout:?}; {in_flight} requests still in-flight (will report as pending)"
             );
             break;
         }
@@ -429,7 +418,7 @@ async fn do_approve_cycle(
     id: u64,
 ) -> anyhow::Result<Duration> {
     let t0 = Instant::now();
-    let caller = format!("load-{}", id);
+    let caller = format!("load-{id}");
 
     // Spawn MCP request (blocks until answered)
     // Note: MCP endpoint is HTTP (not HTTPS) with x-supercli-auth header
@@ -439,18 +428,18 @@ async fn do_approve_cycle(
     let mcp_caller = caller.clone();
     let mcp_handle = tokio::spawn(async move {
         let resp = mcp_client
-            .post(format!("{}/mcp/approve-write", mcp_hook))
+            .post(format!("{mcp_hook}/mcp/approve-write"))
             .header("x-supercli-auth", mcp_tok)
             .json(&ApproveRequest {
                 caller_session_id: mcp_caller.clone(),
-                target_session_id: format!("{}-t", mcp_caller),
+                target_session_id: format!("{mcp_caller}-t"),
             })
             .send()
             .await?;
         // Check status
         if !resp.status().is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("MCP failed: {}", body));
+            return Err(anyhow::anyhow!("MCP failed: {body}"));
         }
         Ok(())
     });
@@ -477,20 +466,19 @@ async fn do_approve_cycle(
                     return Ok(t0.elapsed());
                 }
                 Ok(Err(e)) => {
-                    return Err(anyhow::anyhow!("MCP failed fast: {}", e));
+                    return Err(anyhow::anyhow!("MCP failed fast: {e}"));
                 }
                 Err(e) => {
-                    return Err(anyhow::anyhow!("MCP join failed: {}", e));
+                    return Err(anyhow::anyhow!("MCP join failed: {e}"));
                 }
             }
         }
         // Long-poll: wait up to 5s for the approval generation to change.
         let resp = client
             .get(format!(
-                "{}/mobile/bootstrap?wait_ms=5000&after_approval_generation={}",
-                phone_base, after_gen
+                "{phone_base}/mobile/bootstrap?wait_ms=5000&after_approval_generation={after_gen}"
             ))
-            .header("Authorization", format!("Bearer {}", mobile_token))
+            .header("Authorization", format!("Bearer {mobile_token}"))
             .send()
             .await?;
         // Validate status before parsing
@@ -545,8 +533,8 @@ async fn do_approve_cycle(
         let answer_nonce = answer_nonce.clone();
         async move {
             client
-                .post(format!("{}/mobile/approvals/answer", phone_base))
-                .header("Authorization", format!("Bearer {}", mobile_token))
+                .post(format!("{phone_base}/mobile/approvals/answer"))
+                .header("Authorization", format!("Bearer {mobile_token}"))
                 .json(&AnswerRequest {
                     id: pid.clone(),
                     approved: true,
@@ -561,10 +549,7 @@ async fn do_approve_cycle(
         Err(e) => {
             // Transport error on first attempt: outcome unknown. Retry once
             // with the same nonce; idempotency makes this safe.
-            eprintln!(
-                "answer transport error (unknown outcome), retrying with same nonce: {}",
-                e
-            );
+            eprintln!("answer transport error (unknown outcome), retrying with same nonce: {e}");
             send_answer().await?
         }
     };
@@ -617,7 +602,7 @@ async fn do_approve_cycle(
     // Wait for MCP to complete
     mcp_handle
         .await?
-        .map_err(|e| anyhow::anyhow!("MCP task failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("MCP task failed: {e}"))?;
 
     Ok(t0.elapsed())
 }
