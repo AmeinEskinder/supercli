@@ -56,7 +56,7 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: "Dart: clients/supercli-app"
-    status: wired
+    status: ported
     checklist: "#152"
     behaviours:
       - swift: "Detached drag state machine: targets reorder/group/project/split, canDrop validation"
