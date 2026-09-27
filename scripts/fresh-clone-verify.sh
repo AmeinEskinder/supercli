@@ -167,6 +167,36 @@ if [ -n "$bundle_matches" ]; then
 fi
 echo "bundle ID guard PASS"
 
+echo "--- 4e. CLRTY license prefix guard (must be SCLI-, legacy unpeel keys rejected) ---"
+# Intentional CLRTY references (rejection logic, not acceptance):
+# - crates/supercli-native-bridge/src/macos/license.rs: LEGACY_KEY_PREFIX + rejection
+# - crates/supercli-core/src/license.rs: LEGACY_KEY_PREFIX + rejection
+# - clients/supercli-app/lib/screens/licensesettings.dart: isLegacyKey helper
+# - docs/security/signing-keys.md: documentation
+clrty_matches=$(grep -rl 'CLRTY' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=gpuidart \
+  --exclude-dir=.dart_tool \
+  --exclude='*.lock' \
+  --exclude='rename-guard.yml' \
+  --exclude='fresh-clone-verify.sh' \
+  --exclude='sync-main-v2.sh' \
+  2>/dev/null | grep -v -e '^./clients/legacy/' \
+                        -e '^./crates/supercli-native-bridge/src/macos/license.rs$' \
+                        -e '^./crates/supercli-core/src/license.rs$' \
+                        -e '^./clients/supercli-app/lib/screens/licensesettings.dart$' \
+                        -e '^./docs/security/signing-keys.md$' \
+  || true)
+if [ -n "$clrty_matches" ]; then
+  echo "FAIL: CLRTY references found outside clients/legacy and rejection-logic files (license keys are SCLI-):"
+  echo "$clrty_matches"
+  exit 1
+fi
+echo "CLRTY guard PASS"
+
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
 # Read exclusions from the markdown table
 if [ -f docs/internal/EXCLUSIONS.md ]; then

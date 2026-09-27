@@ -239,6 +239,35 @@ void main() {
       expect(ds.rowCount, 1);
       expect(ds.cell(0, 0), 'Mac');
     });
+
+    test('isValidKeyFormat accepts SCLI- keys', () {
+      expect(
+        LicenseSettingsPanel.isValidKeyFormat(
+            'SCLI-eyJhIjoxfQ.c2ln'),
+        isTrue,
+      );
+      expect(
+        LicenseSettingsPanel.isValidKeyFormat('  SCLI-abc.def  '),
+        isTrue,
+      );
+    });
+
+    test('isValidKeyFormat rejects non-SCLI keys', () {
+      expect(LicenseSettingsPanel.isValidKeyFormat('CLRTY-abc.def'), isFalse);
+      expect(LicenseSettingsPanel.isValidKeyFormat('nope'), isFalse);
+      expect(LicenseSettingsPanel.isValidKeyFormat(''), isFalse);
+      expect(LicenseSettingsPanel.isValidKeyFormat('SCLI-nodot'), isFalse);
+    });
+
+    test('isLegacyKey detects CLRTY- keys', () {
+      expect(LicenseSettingsPanel.isLegacyKey('CLRTY-abc.def'), isTrue);
+      expect(
+        LicenseSettingsPanel.isLegacyKey('  CLRTY-eyJhIjoxfQ.c2ln  '),
+        isTrue,
+      );
+      expect(LicenseSettingsPanel.isLegacyKey('SCLI-abc.def'), isFalse);
+      expect(LicenseSettingsPanel.isLegacyKey(''), isFalse);
+    });
   });
 
   group('PluginSettingsPanel', () {

@@ -1,5 +1,5 @@
 //! Rust side of the Supercli Link license flow, for the TUI / headless hosts.
-//! Mirrors `LicenseManager.swift`: same key format (`CLRTY-<b64>.<b64>`,
+//! Mirrors `LicenseManager.swift`: same key format (`SCLI-<b64>.<b64>`,
 //! Ed25519 over the encoded-payload string), same endpoints
 //! (`/api/activate`, `/api/deactivate`, `/api/remote/entitlement`), same
 //! entitlement cache file the relay uplink already reads. The key is stored
@@ -10,7 +10,10 @@ use base64::Engine;
 use std::io::{Read, Write};
 
 const PUBLIC_KEY_B64: &str = "6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54=";
-const KEY_PREFIX: &str = "CLRTY-";
+const KEY_PREFIX: &str = "SCLI-";
+/// Legacy prefix from the unpeel product. Keys with this prefix are rejected;
+/// supercli has no legacy customers to migrate.
+const LEGACY_KEY_PREFIX: &str = "CLRTY-";
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct LicensePayload {
@@ -66,8 +69,15 @@ fn b64url(s: &str) -> Option<Vec<u8>> {
 }
 
 /// Verify a key offline and return its payload (None = malformed/forged).
+/// Legacy `CLRTY-` keys (unpeel product) are rejected; supercli has no
+/// legacy customers to migrate.
 pub fn verify(raw: &str) -> Option<LicensePayload> {
     let key = normalize_key(raw);
+    // Reject legacy unpeel keys explicitly. They use a different prefix and
+    // were signed by the old product's key; they must never verify here.
+    if key.starts_with(LEGACY_KEY_PREFIX) {
+        return None;
+    }
     let body = key.strip_prefix(KEY_PREFIX)?;
     let (payload_b64, sig_b64) = body.split_once('.')?;
     let sig = b64url(sig_b64)?;
@@ -669,6 +679,10 @@ pub struct ActivationCommit {
 /// response that may have taken seconds to arrive.
 pub fn request_activation(raw_key: &str, device_name: &str) -> Result<PendingActivation, String> {
     let key = normalize_key(raw_key);
+    // Legacy unpeel keys get a clear rejection, not the generic message.
+    if key.starts_with(LEGACY_KEY_PREFIX) {
+        return Err("CLRTY- keys are from the legacy unpeel product and are not accepted".into());
+    }
     let payload = verify(&key).ok_or("that doesn't look like a valid Supercli license key")?;
     // Capture suppression before crossing the network. The commit refuses a
     // response if another frontend deactivated/rejected Link meanwhile.
@@ -962,13 +976,21 @@ pub fn known_mac_id() -> Option<String> {
 mod tests {
     #[test]
     fn normalize_repairs_smart_dashes_and_whitespace() {
-        assert_eq!(super::normalize_key("CLRTY\u{2013}a b\nc"), "CLRTY-abc");
+        assert_eq!(super::normalize_key("SCLI\u{2013}a b\nc"), "SCLI-abc");
     }
 
     #[test]
     fn verify_rejects_garbage() {
-        assert!(super::verify("CLRTY-abc.def").is_none());
+        assert!(super::verify("SCLI-abc.def").is_none());
         assert!(super::verify("nope").is_none());
+    }
+
+    #[test]
+    fn verify_rejects_legacy_clrty_keys() {
+        // CLRTY- keys are from the legacy unpeel product; supercli has no
+        // legacy customers to migrate. They must never verify.
+        assert!(super::verify("CLRTY-abc.def").is_none());
+        assert!(super::verify("CLRTY-eyJhIjoxfQ.c2ln").is_none());
     }
 
     #[test]
