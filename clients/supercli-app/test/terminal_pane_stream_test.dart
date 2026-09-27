@@ -117,6 +117,15 @@ void main() {
       expect((s.grid[0][0].fg as PaletteColor).index, 196);
     });
 
+    test('256-color bg: 48;5;196 is palette 196', () {
+      final s = makeState();
+      final p = AnsiParser();
+      p.parse('\x1b[48;5;196mX', s);
+      expect((s.grid[0][0].bg as PaletteColor).index, 196);
+      // fg stays default: only the background changed.
+      expect((s.grid[0][0].fg as PaletteColor).index, 7);
+    });
+
     test('truecolor fg: 38;2;18;52;86', () {
       final s = makeState();
       final p = AnsiParser();
@@ -127,6 +136,35 @@ void main() {
       expect(rgb.r, 18);
       expect(rgb.g, 52);
       expect(rgb.b, 86);
+    });
+
+    test('truecolor bg: 48;2;255;0;0 keeps the RGB triple on the cell', () {
+      final s = makeState();
+      final p = AnsiParser();
+      p.parse('\x1b[48;2;255;0;0mX', s);
+      final bg = s.grid[0][0].bg;
+      expect(bg, isA<RgbColor>());
+      final rgb = bg as RgbColor;
+      expect(rgb.r, 255);
+      expect(rgb.g, 0);
+      expect(rgb.b, 0);
+      // fg stays default: only the background changed.
+      expect((s.grid[0][0].fg as PaletteColor).index, 7);
+    });
+
+    test('256-color attribute persists across a run, then 0 resets', () {
+      final s = makeState();
+      final p = AnsiParser();
+      // Agent TUI style: red word, then plain text — the red must survive
+      // on every char of the run, not be stripped to plaintext.
+      p.parse('\x1b[38;5;196mERR\x1b[0mok', s);
+      for (var c = 0; c < 3; c++) {
+        expect(s.grid[0][c].char, 'ERR'[c]);
+        expect((s.grid[0][c].fg as PaletteColor).index, 196);
+      }
+      for (var c = 3; c < 5; c++) {
+        expect((s.grid[0][c].fg as PaletteColor).index, 7);
+      }
     });
   });
 
