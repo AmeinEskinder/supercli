@@ -79,6 +79,75 @@ pub fn verify_download(bytes: &[u8], signature_base64: &str, public_key_base64: 
     verifying_key.verify(bytes, &signature).is_ok()
 }
 
+/// Verifies a download against the BUNDLED public key. Fails closed with a
+/// clear error when no bundled key is configured (TODO for Amein) —
+/// update installation must be refused, never silently skipped.
+pub fn verify_download_with_bundled_key(
+    bytes: &[u8],
+    signature_base64: &str,
+) -> Result<bool, String> {
+    let key = super::license::LicenseConfig::bundled_public_key()?;
+    Ok(verify_download(bytes, signature_base64, key))
+}
+
+/// True only for `https://` URLs whose host is `superc.li` or a subdomain.
+/// Rejects `http://`, other domains, and malformed URLs — the updater must
+/// never fetch binaries from an attacker-controlled origin.
+pub fn is_allowed_download_url(url: &str) -> bool {
+    let url = url.trim();
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    // Host is up to the first '/', '?', or '#'; strip any port.
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .split('@')
+        .next_back()
+        .unwrap_or("");
+    let host = host.split(':').next().unwrap_or("").to_lowercase();
+    host == "superc.li" || host.ends_with(".superc.li")
+}
+
+/// Validates an update enclosure before download/install. Fails closed:
+/// - candidate version must be strictly NEWER than current (no downgrades,
+///   no reinstalls of the same version);
+/// - download URL must be https under superc.li;
+/// - the enclosure must declare a non-zero length and the downloaded bytes
+///   must match it exactly.
+pub fn validate_update(
+    current_version: &str,
+    enclosure: &UpdateEnclosure,
+    downloaded_len: u64,
+) -> Result<(), String> {
+    if compare_versions(current_version, &enclosure.version) >= 0 {
+        return Err(format!(
+            "refusing update: candidate version {} is not newer than current {} (downgrade/reinstall blocked)",
+            enclosure.version, current_version
+        ));
+    }
+    if !is_allowed_download_url(&enclosure.download_url) {
+        return Err(format!(
+            "refusing update: download URL not allowed (must be https under superc.li): {}",
+            enclosure.download_url
+        ));
+    }
+    if enclosure.file_size == 0 {
+        return Err(
+            "refusing update: enclosure declares no file length — cannot verify download integrity"
+                .to_string(),
+        );
+    }
+    if downloaded_len != enclosure.file_size {
+        return Err(format!(
+            "refusing update: downloaded {downloaded_len} bytes but enclosure declares {}",
+            enclosure.file_size
+        ));
+    }
+    Ok(())
+}
+
 /// Minimal appcast parser: extracts enclosures with version/build/url/
 /// signature. Real feed XML uses the Sparkle namespace; this parses the
 /// fields the updater needs without a full XML stack.
@@ -189,5 +258,98 @@ mod tests {
     fn appcast_parser_ignores_items_without_enclosure() {
         let xml = "<rss><channel><item><title>no enclosure</title></item></channel></rss>";
         assert!(parse_appcast(xml).is_empty());
+    }
+
+    fn test_enclosure() -> UpdateEnclosure {
+        UpdateEnclosure {
+            version: "1.2.3".to_string(),
+            build: "123".to_string(),
+            download_url: "https://superc.li/updates/Supercli-1.2.3.dmg".to_string(),
+            signature_base64: "sig".to_string(),
+            file_size: 456789,
+        }
+    }
+
+    #[test]
+    fn download_url_allowlist() {
+        // Allowed: https under superc.li.
+        assert!(is_allowed_download_url(
+            "https://superc.li/updates/Supercli-1.2.3.dmg"
+        ));
+        assert!(is_allowed_download_url(
+            "https://dl.superc.li/updates/a.dmg"
+        ));
+        assert!(is_allowed_download_url(
+            "https://superc.li:443/updates/a.dmg"
+        ));
+        // Rejected: http, other domains, lookalikes, malformed.
+        assert!(!is_allowed_download_url("http://superc.li/updates/a.dmg"));
+        assert!(!is_allowed_download_url("https://evil.com/updates/a.dmg"));
+        assert!(!is_allowed_download_url("https://superc.li.evil.com/a.dmg"));
+        assert!(!is_allowed_download_url("https://notsuperc.li/a.dmg"));
+        assert!(!is_allowed_download_url("not a url"));
+        assert!(!is_allowed_download_url(""));
+        assert!(!is_allowed_download_url("ftp://superc.li/a.dmg"));
+    }
+
+    #[test]
+    fn validate_update_accepts_good_update() {
+        let enc = test_enclosure();
+        assert!(validate_update("1.2.2", &enc, 456789).is_ok());
+    }
+
+    #[test]
+    fn validate_update_refuses_downgrade_and_same_version() {
+        let enc = test_enclosure();
+        // Older candidate: downgrade attack.
+        let err = validate_update("1.2.4", &enc, 456789).expect_err("downgrade must be refused");
+        assert!(err.contains("not newer"), "unexpected: {err}");
+        // Same version: reinstall blocked.
+        let err = validate_update("1.2.3", &enc, 456789).expect_err("same version must be refused");
+        assert!(err.contains("not newer"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn validate_update_refuses_bad_download_url() {
+        let mut enc = test_enclosure();
+        enc.download_url = "http://superc.li/updates/a.dmg".to_string();
+        let err = validate_update("1.0.0", &enc, 456789).expect_err("http URL must be refused");
+        assert!(err.contains("not allowed"), "unexpected: {err}");
+
+        enc.download_url = "https://evil.com/a.dmg".to_string();
+        let err = validate_update("1.0.0", &enc, 456789).expect_err("wrong domain must be refused");
+        assert!(err.contains("not allowed"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn validate_update_refuses_length_mismatch() {
+        let enc = test_enclosure();
+        // Too short / too long: possible truncation or padding attack.
+        let err =
+            validate_update("1.0.0", &enc, 456788).expect_err("short download must be refused");
+        assert!(err.contains("456788"), "unexpected: {err}");
+        let err =
+            validate_update("1.0.0", &enc, 456790).expect_err("long download must be refused");
+        assert!(err.contains("456790"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn validate_update_refuses_missing_length() {
+        let mut enc = test_enclosure();
+        enc.file_size = 0; // Manifest omitted the length.
+        let err = validate_update("1.0.0", &enc, 0).expect_err("missing length must be refused");
+        assert!(err.contains("no file length"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn verify_download_with_bundled_key_fails_closed_when_empty() {
+        // No bundled key configured yet (TODO for Amein): the updater must
+        // refuse with a clear error, never silently skip verification.
+        let err = verify_download_with_bundled_key(b"bytes", "sig")
+            .expect_err("empty bundled key must fail closed");
+        assert!(
+            err.contains("No bundled license public key configured"),
+            "unexpected: {err}"
+        );
     }
 }
