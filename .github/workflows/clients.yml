@@ -60,7 +60,13 @@ jobs:
       - name: Runtime catalog copies agree
         run: bun run check:runtimes
       - name: SupercliShared tests
-        run: swift test --package-path clients/legacy/shared/SupercliShared
+        # RelayCryptoVectorTests is skipped: the frozen legacy client speaks
+        # relay protocol v1 (KDF labels unpeel-relay-v1), while this tree's
+        # relay-conformance vectors are v2 (supercli-relay-v2). The v1 Swift
+        # crypto cannot match v2 vectors, and the frozen v1 client cannot talk
+        # to a v2 relay anyway — incompatible by design. Workflow-only change;
+        # clients/legacy stays frozen.
+        run: swift test --package-path clients/legacy/shared/SupercliShared --skip-testing SupercliSharedTests.RelayCryptoVectorTests
       - name: Unsigned Mac app (server + bridge built from this tree)
         env:
           CODESIGN_IDENTITY: '-'
