@@ -1,4 +1,6 @@
 [workspace]
+# MSRV 1.88.0 pinned in ../rust-toolchain.toml; CI uses the pin via
+# dtolnay/rust-toolchain (no `toolchain:` input = read rust-toolchain.toml).
 resolver = "2"
 members = [
     "license-notices",
