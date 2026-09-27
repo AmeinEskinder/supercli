@@ -202,7 +202,7 @@ def body(case):
         retried.stdout[:300] + retried.stderr[:200],
     )
 
-    garbage = link_cli(home, env, ["enroll", "CLRTY-not-a-key"])
+    garbage = link_cli(home, env, ["enroll", "SCLI-not-a-key"])
     case.check(
         "a malformed key is rejected offline with exit 1",
         garbage.returncode == 1 and "valid Supercli license key" in garbage.stderr,
