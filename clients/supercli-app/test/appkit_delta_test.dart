@@ -223,7 +223,7 @@ final Map<String, Type> opTypes = {
 Map<String, dynamic> deltaEnvelope(List<Map<String, dynamic>> ops,
         {int baseRevision = 7, int revision = 8}) =>
     {
-      'protocol': 'unpeel.ui',
+      'protocol': 'supercli.ui',
       'protocolVersion': 1,
       'appInstanceId': 'app',
       'clientId': 'client',
@@ -300,7 +300,7 @@ void main() {
     test('valid delta decodes with route fields', () {
       final delta = AppKitDelta.fromJson(
           deltaEnvelope([opFixtures['toggleSetValue']!]));
-      expect(delta.protocolName, 'unpeel.ui');
+      expect(delta.protocolName, 'supercli.ui');
       expect(delta.appInstanceId, 'app');
       expect(delta.clientId, 'client');
       expect(delta.viewId, 'view');

@@ -27,9 +27,9 @@ library;
 
 import 'dart:convert';
 
-/// Protocol identity. Mirrors `UnpeelUIProtocol`.
+/// Protocol identity. Mirrors `SupercliUIProtocol`.
 abstract final class AppKitProtocol {
-  static const name = 'unpeel.ui';
+  static const name = 'supercli.ui';
   static const version = 1;
   static const minimumVersion = 1;
   static const maximumVersion = 1;
@@ -54,7 +54,7 @@ abstract final class AppKitProtocol {
   static bool supports(int version) =>
       version >= minimumVersion && version <= maximumVersion;
 
-  /// Mirrors `UnpeelUIProtocol.negotiate(minimum:maximum:)`.
+  /// Mirrors `SupercliUIProtocol.negotiate(minimum:maximum:)`.
   static int? negotiate({required int minimum, required int maximum}) {
     if (minimum <= 0 || minimum > maximum) return null;
     final lo = minimum > minimumVersion ? minimum : minimumVersion;

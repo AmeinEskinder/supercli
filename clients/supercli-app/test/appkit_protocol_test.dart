@@ -34,7 +34,7 @@ List<String> allTexts(UiNode node) {
 }
 
 void main() {
-  group('protocol negotiation (UnpeelUIProtocol)', () {
+  group('protocol negotiation (SupercliUIProtocol)', () {
     test('supports version 1, rejects others', () {
       // Port of Swift `unsupportedProtocolVersionIsRejected`.
       expect(AppKitProtocol.supports(1), isTrue);
