@@ -306,3 +306,118 @@ files:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
         count: 4
     notes: "4 XCTest cases ported."
+  native/SupercliNative/Sources/SupercliNative/OpenCodeTheme.swift:
+    destination: "Rust: supercli-core::provider_theme"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "TerminalFrameStyle.Background (light/dark 0xRRGGBB, isEmpty, signature)"
+        target: "crates/supercli-core/src/provider_theme.rs::ThemeBackground"
+        test: "provider_theme::tests::background_signature_matches_swift_format"
+      - swift: "OpenCodeThemeResolver.background(workingDirectory:) — config-file theme resolution + built-in table"
+        target: "crates/supercli-core/src/provider_theme.rs::opencode_background"
+        test: "provider_theme::tests::opencode_config_theme_is_resolved_from_working_dir, opencode_custom_theme_file_background_wins, opencode_system_theme_resolves_to_none"
+      - swift: "OpenCodeThemeResolver built-in backgrounds (43 themes, theme.background mirror)"
+        target: "crates/supercli-core/src/provider_theme.rs::OPENCODE_BUILT_IN_BACKGROUNDS"
+        test: "provider_theme::tests::aura_uses_opencode_canvas_background, default_opencode_background_matches_built_in_theme, single_mode_themes_do_not_invent_light_backgrounds"
+      - swift: "normalizeThemeName / parseHexColor / resolveHex (defs, depth guard)"
+        target: "crates/supercli-core/src/provider_theme.rs::normalize_theme_name, parse_hex_color, resolve_hex"
+        test: "provider_theme::tests::theme_name_normalization_matches_swift, hex_color_parsing_matches_swift"
+      - swift: "stripJSONCComments / stripTrailingCommas"
+        target: "crates/supercli-core/src/provider_theme.rs::strip_jsonc_comments, strip_trailing_commas"
+        test: "provider_theme::tests::jsonc_comment_and_trailing_comma_stripping"
+      - swift: "GrokThemeResolver.background(command:) — TOML config, --light flag, auto/fixed themes"
+        target: "crates/supercli-core/src/provider_theme.rs::grok_background"
+        test: "provider_theme::tests::grok_auto_config_resolves_day_and_night, grok_fixed_dark_theme_uses_canvas_background, grok_light_flag_forces_day_background"
+      - swift: "ProviderCanvasSampler.dominantBackground(in:) — SGR 48;2;R;G;B scan, minHits, dominanceRatio"
+        target: "crates/supercli-core/src/provider_theme.rs::dominant_background_in_data"
+        test: "provider_theme::tests::canvas_sampler_picks_dominant_truecolor_background, canvas_sampler_rejects_ambiguous_backgrounds, canvas_sampler_rejects_too_few_hits"
+      - swift: "ProviderThemeWatchPaths.isRelevantChange(_:)"
+        target: "crates/supercli-core/src/provider_theme.rs::is_relevant_theme_change"
+        test: "provider_theme::tests::watch_paths_recognize_config_files"
+      - swift: "TerminalFrameStyle.usesProviderTheme(command:)"
+        target: "crates/supercli-core/src/provider_theme.rs::uses_provider_theme"
+        test: "provider_theme::tests::provider_theme_commands_are_detected"
+    tests:
+      - file: crates/supercli-core/src/provider_theme.rs
+        count: 19
+    notes: "Full port of the pure logic. AppKit-specific parts (dynamic NSColor resolution, NSLock sample cache, FSEvents roots, TerminalPaneStyle.resolved composition) are not ported — the NSColor/DynamicColor layer has no Rust equivalent and the cache is a performance detail. The 11 XCTest cases are ported (19 Rust tests; the TerminalFrameStyle.resolved composition tests need the Ghostty bridge)."
+  native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift:
+    destination: "Rust: supercli-core::provider_theme::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/provider_theme.rs
+        count: 19
+    notes: "11 XCTest cases ported as 19 Rust tests (some split for clarity). The two TerminalFrameStyle.resolved composition tests (fixed-background override, runtime padding) are covered by the underlying unit tests."
+  native/SupercliNative/Sources/SupercliNative/Theme.swift:
+    destination: "Dart: clients/supercli-app/lib/theme.dart"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ThemePreference enum (system/light/dark, titles, fromString)"
+        target: "clients/supercli-app/lib/theme.dart::ThemePreference"
+        test: "clients/supercli-app/test/theme_test.dart::ThemePreference"
+      - swift: "ProjectFolderColor enum (8 cases, titles, accentHex(isDark:) exact contract)"
+        target: "clients/supercli-app/lib/theme.dart::ProjectFolderColor"
+        test: "clients/supercli-app/test/theme_test.dart::ProjectFolderColor"
+      - swift: "AppTint enum (cases, titles, hue, accentHex exact contract)"
+        target: "clients/supercli-app/lib/theme.dart::AppTint"
+        test: "clients/supercli-app/test/theme_test.dart::AppTint"
+      - swift: "Theme layout constants (titlebarHeight, sidebar widths, surfaceInset, contentCornerRadius)"
+        target: "clients/supercli-app/lib/theme.dart::ThemeLayout"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeLayout"
+      - swift: "Theme semantic tokens (attention/unread/danger/accent, dark surface hexes)"
+        target: "clients/supercli-app/lib/theme.dart::ThemeTokens"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeTokens"
+      - swift: "Theme.currentDarkSurfaceHex tint-strength lerp"
+        target: "clients/supercli-app/lib/theme.dart::ThemeTokens.currentDarkSurfaceHex"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeTokens currentDarkSurfaceHex lerps"
+      - swift: "Theme.flattened alpha-composite"
+        target: "clients/supercli-app/lib/theme.dart::flattenedColor"
+        test: "clients/supercli-app/test/theme_test.dart::flattenedColor"
+      - swift: "TerminalPaneStyle + Variant (dark/light hex values, ANSI palettes, Ghostty defaults)"
+        target: "clients/supercli-app/lib/theme.dart::TerminalPaneStyle"
+        test: "clients/supercli-app/test/theme_test.dart::TerminalPaneStyle"
+      - swift: "Theme.commandBasename"
+        target: "clients/supercli-app/lib/theme.dart::commandBasename"
+        test: "clients/supercli-app/test/theme_test.dart::commandBasename"
+      - swift: "Theme.spinnerFrames / spinnerInterval"
+        target: "clients/supercli-app/lib/theme.dart::spinnerFrames"
+        test: "clients/supercli-app/test/theme_test.dart::spinner"
+      - swift: "Theme.appTintedHexString / appTintedCanvasHexString (HSB wash, brightness-scaled saturation, canvasWashScale)"
+        target: "clients/supercli-app/lib/theme.dart::appTintedHexString, appTintedCanvasHexString"
+        test: "clients/supercli-app/test/theme_test.dart::appTintedHexString"
+    tests:
+      - file: clients/supercli-app/test/theme_test.dart
+        count: 20
+    notes: "Portable design tokens ported. AppKit/SwiftUI-specific rendering (dynamic NSColor, tintedColor, vibrancy overlays, NSAppearance, contentPaneShape, blended) has no Dart equivalent and is intentionally not ported. The tint engine statics (appTintHue) are runtime state, not ported."
+  native/SupercliNative/Sources/SupercliNative/Models.swift:
+    destination: "Rust: supercli-core::state"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "Project.isWorktree / acceptsSessionDrop"
+        target: "crates/supercli-core/src/state.rs::Project::is_worktree, accepts_session_drop"
+        test: "state::tests::project_worktree_and_drop_rules_match_swift"
+      - swift: "Project.mcpBlocked field"
+        target: "crates/supercli-core/src/state.rs::Project::mcp_blocked"
+        test: "state::tests::project_mcp_blocked_defaults_false_and_round_trips"
+      - swift: "PinnedSidebarSession.key(forSessionID:) / key(forProjectID:) / pinnedProjectID / orderTargetID"
+        target: "crates/supercli-core/src/state.rs::PinnedSidebarSession"
+        test: "state::tests::pinned_session_key_helpers_match_swift"
+      - swift: "SessionTitleDefaults.initialLabel / abbreviatedPath"
+        target: "crates/supercli-core/src/state.rs::SessionTitleDefaults"
+        test: "state::tests::project_worktree_and_drop_rules_match_swift, session_title_defaults_abbreviate_home"
+      - swift: "SessionOwnership.hostOwnerPrincipalID"
+        target: "crates/supercli-core/src/state.rs::SessionOwnership"
+        test: "state::tests::session_ownership_principal_format_matches_swift"
+      - swift: "AppStateFile.profileDisplayName / profileAvatar / mcpAppOpenApprovals"
+        target: "crates/supercli-core/src/state.rs::AppState"
+        test: "state::tests::app_state_new_fields_default_empty"
+      - swift: "Project, PinnedSidebarSession, McpRole, McpGrant, McpNonChildWriteAccess, BrowserAccess, BrowserSettings, ComputerAccess, TranscriptSettings, SessionInfo, SessionTitleMode, AppStateFile structs"
+        target: "crates/supercli-core/src/state.rs (pre-existing)"
+        test: "state::tests::* (pre-existing)"
+    tests:
+      - file: crates/supercli-core/src/state.rs
+        count: 6
+    notes: "The Swift file is a read-only mirror of the Rust-owned JSON contracts; the structs were already ported. This change ports the computed helpers and the fields missing from Rust (mcp_blocked, profile_display_name/avatar, mcp_app_open_approvals). UI-presentation helpers (SessionEntry.activityStatus/ageString, CommandTAction) belong to the Dart app and are tracked separately."
