@@ -11,7 +11,7 @@ import 'package:supercli_app/widgets/appkit_delta_apply.dart';
 import 'package:supercli_app/widgets/appkit_protocol.dart';
 
 AppKitSnapshot _snapshot({
-  String protocolName = 'unpeel-ui-v1',
+  String protocolName = 'supercli-ui-v1',
   int protocolVersion = 1,
   String appInstanceId = 'app',
   String clientId = 'client',
@@ -30,7 +30,7 @@ AppKitSnapshot _snapshot({
     );
 
 AppKitDelta _delta({
-  String protocolName = 'unpeel-ui-v1',
+  String protocolName = 'supercli-ui-v1',
   int protocolVersion = 1,
   String appInstanceId = 'app',
   String clientId = 'client',
