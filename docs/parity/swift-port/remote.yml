@@ -3,4 +3,182 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: remote
-files: {}
+files:
+  native/SupercliNative/Sources/SupercliNative/ControllerPairingProxy.swift:
+    destination: "Rust: supercli-client"
+    status: todo
+    checklist: ""
+    behaviours: []
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/ControllerPairingProxyTests.swift
+        count: 0
+    notes: "Controller-side ephemeral LAN listener for pairing-proxy (adds a phone to an already-selected remote Host). BSD-socket transport; portable to Rust std::net::TcpListener. Not yet ported."
+  native/SupercliNative/Sources/SupercliNative/LocalHostClientFeature.swift:
+    destination: "Rust: supercli-core/client"
+    status: todo
+    checklist: ""
+    behaviours: []
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/LocalHostClientFeatureTests.swift
+        count: 0
+    notes: "Local client feature flags. Verify against Rust; port if missing."
+  native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift:
+    destination: "dropped: Host does it (crates/supercli-serve/src/pairing.rs)"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "MobilePairingStore device record persistence (devices.json)"
+        target: "crates/supercli-serve/src/pairing.rs::PairedDeviceStore"
+        test: "crates/supercli-serve/src/pairing.rs::tests::device_record_roundtrip"
+      - swift: "Sealed pairing exchange (beginPairing/pair/decryptPairingRequest)"
+        target: "crates/supercli-serve/src/pairing.rs::pair"
+        test: "crates/supercli-serve/src/pairing.rs::tests::sealed_pairing_roundtrip"
+      - swift: "Relay token registration and relayAllowed gating"
+        target: "crates/supercli-serve/src/pairing.rs::relay_token_registrations"
+        test: "crates/supercli-serve/src/pairing.rs::tests::relay_token_hash_only"
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/MobilePairingStoreTests.swift
+        count: 12
+    notes: "Host-side pairing store. Rust implementation is byte-compatible with the native MobilePairingStore (per module docs). Swift file frozen; behaviour lives in Rust."
+  native/SupercliNative/Sources/SupercliNative/NativeRelayBridge.swift:
+    destination: "Rust: supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "callbackWaitMilliseconds watchdog (20s connect + 5s scheduling headroom, saturating)"
+        target: "crates/supercli-client/src/relay.rs::callback_watchdog::callback_wait_milliseconds"
+        test: "crates/supercli-client/src/relay.rs::tests::watchdog_saturates_on_overflow"
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/NativeRelayBridgeTests.swift
+        count: 2
+    notes: "Watchdog ported by worker F (2af9778). The C-callback adapter (nativeRelayRequestCallback etc.) is Swift/Rust-bridge-specific and not portable; stays Swift-side."
+  native/SupercliNative/Sources/SupercliNative/NearbyHostBrowser.swift:
+    destination: "Rust: supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "NearbyHostCatalog::candidate (Bonjour TXT parsing, macid requirement, fallback name)"
+        target: "crates/supercli-client/src/nearby.rs::NearbyHostCatalog::candidate"
+        test: "crates/supercli-client/src/nearby.rs::tests::candidate_requires_macid"
+      - swift: "NearbyHostCatalog::merging (first-wins dedup, case-insensitive exclusion, picker sort)"
+        target: "crates/supercli-client/src/nearby.rs::NearbyHostCatalog::merging"
+        test: "crates/supercli-client/src/nearby.rs::tests::merging_dedups_first_wins"
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/NearbyHostBrowserTests.swift
+        count: 4
+    notes: "Catalog logic ported by worker F (2af9778). NWBrowser itself is AppKit-specific and stays Swift-side."
+  native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift:
+    destination: "Rust: supercli-client"
+    status: todo
+    checklist: ""
+    behaviours: []
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/RelayUplinkManagerTests.swift
+        count: 0
+    notes: "App-side Link authority record, entitlement fetch, APNs push. Heavily AppKit/Keychain-dependent; portable core (authority record, entitlement cache) to be extracted to Rust."
+  native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift:
+    destination: "Rust: supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "RemoteHostConnectionState enum (idle/connecting/connected/reconnecting/repairRequired/incompatible/failed)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostConnectionState"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::connection_state_variants"
+      - swift: "RemoteHostConnectionRoute enum + shortLabel (ssh/localGateway/direct/link)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostConnectionRoute::short_label"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::route_short_labels"
+      - swift: "PairedHostConnectionPlan Direct->Link fallback (link disabled => no relay; cert pin validation)"
+        target: "crates/supercli-client/src/remote_runtime.rs::PairedHostConnectionPlan::build"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::direct_first_then_link_fallback"
+    tests:
+      - file: crates/supercli-client/src/remote_runtime.rs
+        count: 6
+    notes: "Porting connection-state enums and Direct->Link fallback plan. The @MainActor ObservableObject UI runtime (session verbs, pane state) stays Swift/Dart-side; verbs ride HostClient which is already Rust."
+  native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
+    destination: "Rust: supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "RemoteHostStore::pair (adopt paired host record)"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::pair"
+        test: "crates/supercli-client/src/host_store.rs::tests::pair_adopts_record"
+      - swift: "RemoteHostStore::forget (remove host + credentials)"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::forget"
+        test: "crates/supercli-client/src/host_store.rs::tests::forget_removes_host"
+      - swift: "RemoteHostStore::renameHost (validate + rename)"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::rename_host"
+        test: "crates/supercli-client/src/host_store.rs::tests::rename_validates_name"
+      - swift: "RemoteHostStore::selectHost / setLinkEnabled"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::select_host"
+        test: "crates/supercli-client/src/host_store.rs::tests::select_host_requires_credentials"
+      - swift: "RemoteHostStore::adoptSSH (upsert by target)"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::adopt_ssh"
+        test: "crates/supercli-client/src/host_store.rs::tests::adopt_ssh_upserts_by_target"
+    tests:
+      - file: crates/supercli-client/src/host_store.rs
+        count: 9
+    notes: "Porting record management (pair/adopt/forget/rename/select/setLinkEnabled). Keychain credential storage is platform-specific; Rust uses the credential store abstraction."
+  native/SupercliNative/Sources/SupercliNative/SelectedHostScope.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "permits_local_execution"
+        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::permits_local_execution"
+        test: "crates/supercli-client/src/scope.rs::tests::only_local_permits_execution"
+      - swift: "is_local_machine"
+        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::is_local_machine"
+        test: "crates/supercli-client/src/scope.rs::tests::local_workspace_is_local_machine"
+      - swift: "supports_session_panes"
+        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::supports_session_panes"
+        test: "crates/supercli-client/src/scope.rs::tests::all_scopes_support_panes"
+      - swift: "pane_scope_id"
+        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::pane_scope_id"
+        test: "crates/supercli-client/src/scope.rs::tests::pane_scope_id_stable"
+      - swift: "scoped_local_home / remote_host_id / local_workspace_home / local_workspace_name / session_launch_wire_value"
+        target: "crates/supercli-client/src/scope.rs::SelectedHostScope"
+        test: "crates/supercli-client/src/scope.rs::tests::wire_values"
+    tests:
+      - file: crates/supercli-client/src/scope.rs
+        count: 5
+    notes: "Ported by worker F (2af9778). 9/9 behaviours mapped, 5 tests."
+  native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift:
+    destination: "Dart: clients/supercli-app"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "RemoteHostPairingSheet title + description"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::_pairingSheet"
+        test: "clients/supercli-app/test/screens_test.dart::HostPickerView shows pairing code as text"
+      - swift: "expiry countdown (expiresInText M:SS)"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::expiresInText"
+        test: "clients/supercli-app/test/screens_test.dart::HostPickerView expiresInText formats M:SS and clamps at zero"
+      - swift: "completed state (checkmark, Device added, Add Another button)"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::_completedState"
+        test: "clients/supercli-app/test/screens_test.dart::HostPickerView completed sheet shows Add Another button"
+      - swift: "pending state (scan hint, Generate/Refresh + Copy buttons)"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::_pendingState"
+        test: "clients/supercli-app/test/screens_test.dart::HostPickerView pending sheet shows countdown, refresh and copy buttons"
+      - swift: "error display"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::_pairingSheet"
+        test: "clients/supercli-app/test/screens_test.dart::HostPickerView error is shown in the sheet"
+      - swift: "onAppear auto-begin / onDisappear cancel / 1s timer auto-refresh on expiry"
+        target: null
+        test: null
+      - swift: "PairingQRCodeView (QR rendering)"
+        target: null
+        test: null
+      - swift: "AddWorkspaceSheet method picker (thisMac/nearby/ssh)"
+        target: "clients/supercli-app/lib/screens/hostpickerview.dart::HostPickerView::build"
+        test: null
+    tests:
+      - file: clients/supercli-app/test/screens_test.dart
+        count: 7
+    notes: "Dart pairing sheet now covers: countdown, scan hint, Generate/Refresh + Copy buttons, completed state with Add Another, error display, footer. Shell contract documented in file header (lifecycle + timer owned by shell; button IDs dispatched by shell). Remaining gaps: QR is P0-11 gpuidart gap; onAppear/onDisappear/timer auto-refresh are shell responsibilities (no shell wiring yet); AddWorkspaceSheet method picker only (no name/tint/SSH form fields)."
+  native/SupercliNative/Sources/SupercliNative/Views/RemoteHostWorkspaceView.swift:
+    destination: "Dart: clients/supercli-app"
+    status: partial
+    checklist: ""
+    behaviours: []
+    tests: []
+    notes: "Dart re-exports RemoteHostWorkspaceView from workspaceopenmenu.dart (623 Swift LOC vs re-export). Needs behaviour audit against the Swift view."

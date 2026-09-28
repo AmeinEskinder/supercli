@@ -7,6 +7,46 @@ import 'package:supercli_app/screens/screens.dart';
 import 'package:supercli_app/widgets/widgets.dart';
 import 'package:test/test.dart';
 
+/// Recursively collects all UiText nodes under [node].
+List<UiText> _allText(UiNode node) {
+  final out = <UiText>[];
+  void visit(UiNode n) {
+    if (n is UiText) out.add(n);
+    if (n is UiColumn) {
+      for (final c in n.children) {
+        visit(c);
+      }
+    } else if (n is UiRow) {
+      for (final c in n.children) {
+        visit(c);
+      }
+    }
+  }
+
+  visit(node);
+  return out;
+}
+
+/// Recursively collects all UiButton nodes under [node].
+List<UiButton> _allButtons(UiNode node) {
+  final out = <UiButton>[];
+  void visit(UiNode n) {
+    if (n is UiButton) out.add(n);
+    if (n is UiColumn) {
+      for (final c in n.children) {
+        visit(c);
+      }
+    } else if (n is UiRow) {
+      for (final c in n.children) {
+        visit(c);
+      }
+    }
+  }
+
+  visit(node);
+  return out;
+}
+
 void main() {
   group('RootView', () {
     test('builds sidebar + content layout', () {
@@ -162,10 +202,7 @@ void main() {
       final node = picker.build() as UiColumn;
       // Last child is the pairing sheet.
       final sheet = node.children.last as UiColumn;
-      final codeText = sheet.children
-          .whereType<UiText>()
-          .map((t) => t.text)
-          .join(' ');
+      final codeText = _allText(sheet).map((t) => t.text).join(' ');
       expect(codeText, contains('ABC123'));
     });
 
@@ -176,6 +213,63 @@ void main() {
       final ds = picker.nearbyDataset();
       expect(ds.rowCount, 1);
       expect(ds.row(0)[0], 'mbp');
+    });
+
+    test('expiresInText formats M:SS and clamps at zero', () {
+      expect(HostPickerView.expiresInText(65_000, 0), 'Expires in 1:05');
+      expect(HostPickerView.expiresInText(5_000, 0), 'Expires in 0:05');
+      expect(HostPickerView.expiresInText(0, 10_000), 'Expires in 0:00');
+      expect(HostPickerView.expiresInText(null, 0), '');
+      expect(HostPickerView.expiresInText(60_000, null), '');
+    });
+
+    test('pending sheet shows countdown, refresh and copy buttons', () {
+      final picker = HostPickerView(
+        pairingCode: 'ABC123',
+        pairingExpiresAtUnixMs: 125_000,
+        nowUnixMs: 0,
+        selectedHostName: 'mbp',
+      );
+      final sheet = (picker.build() as UiColumn).children.last as UiColumn;
+      final text = _allText(sheet).map((t) => t.text).join(' ');
+      expect(text, contains('Expires in 2:05'));
+      expect(text, contains('Scan this code in Supercli on the phone.'));
+      final buttonIds = _allButtons(sheet).map((b) => b.id).toSet();
+      expect(buttonIds, contains('pairing-refresh'));
+      expect(buttonIds, contains('pairing-copy-code'));
+      expect(buttonIds, isNot(contains('pairing-generate')));
+    });
+
+    test('pending sheet without code shows creating state and generate', () {
+      final picker = HostPickerView(selectedHostName: 'mbp');
+      // No code and not completed: sheet is hidden until an invitation exists.
+      final node = picker.build() as UiColumn;
+      expect(
+        node.children.whereType<UiColumn>().where((c) => c.id == 'pairing-sheet'),
+        isEmpty,
+      );
+    });
+
+    test('completed sheet shows Add Another button', () {
+      final picker = HostPickerView(
+        pairingCompleted: true,
+        selectedHostName: 'mbp',
+      );
+      final sheet = (picker.build() as UiColumn).children.last as UiColumn;
+      final text = _allText(sheet).map((t) => t.text).join(' ');
+      expect(text, contains('Device added'));
+      final buttonIds = _allButtons(sheet).map((b) => b.id).toSet();
+      expect(buttonIds, contains('pairing-add-another'));
+    });
+
+    test('error is shown in the sheet', () {
+      final picker = HostPickerView(
+        pairingCode: 'ABC123',
+        pairingError: 'boom',
+        selectedHostName: 'mbp',
+      );
+      final sheet = (picker.build() as UiColumn).children.last as UiColumn;
+      expect(_allText(sheet).map((t) => t.text).join(' '), contains('boom'));
     });
   });
 
