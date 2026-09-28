@@ -81,6 +81,64 @@ files:
         count: 8
     notes: "Full logic port. Actual UNUserNotificationCenter delivery is a thin objc2 wrapper (macOS-only, not unit-tested by design)."
 
+  native/SupercliNative/Sources/SupercliNative/NearbyHostBrowser.swift:
+    destination: "Dart: supercli_app::nearby_hosts"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "NearbyHostCandidate — hostID from TXT macid, service name with 'Supercli Host' fallback"
+        target: "clients/supercli-app/lib/nearby_hosts.dart::NearbyHostCandidate, NearbyHostCatalog.candidate"
+        test: "nearby_hosts_test.dart: parses macid and service name, returns null when macid missing/blank, trims whitespace, falls back to Supercli Host when name blank"
+      - swift: "NearbyHostCatalog.merging — dedup by hostID (case-insensitive), exclude own host, sort by name then ID"
+        target: "clients/supercli-app/lib/nearby_hosts.dart::NearbyHostCatalog.merging"
+        test: "nearby_hosts_test.dart: deduplicates case-insensitively, excludes given host, sorts by name then id"
+      - swift: "serviceType _supercli-remote._tcp"
+        target: "clients/supercli-app/lib/nearby_hosts.dart::NearbyHostCatalog.serviceType"
+        test: "nearby_hosts_test.dart: service type matches the Swift constant"
+      - swift: "NearbyHostBrowser.State — idle/searching/unavailable"
+        target: "clients/supercli-app/lib/nearby_hosts.dart::NearbyDiscoveryState, NearbyHostDiscovery"
+        test: null
+      - swift: "NWBrowser bonjourWithTXTRecord browsing + browseResultsChangedHandler"
+        target: null
+        test: null
+    tests:
+      - file: clients/supercli-app/test/nearby_hosts_test.dart
+        count: 11
+    notes: "Pure catalog logic fully ported with tests. The NWBrowser itself is Apple Network.framework (not portable); the platform layer feeds discoveries through NearbyHostDiscovery. Backs the Nearby Hosts table in the Add Workspace sheet."
+
+  native/SupercliNative/Sources/SupercliNative/GlobalActivityMenu.swift:
+    destination: "Dart: supercli_app::activity_menu"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "WorkspaceActivityMenuSession — session row (id, title, command, projectPath, status, alertBody)"
+        target: "clients/supercli-app/lib/activity_menu.dart::WorkspaceActivityMenuSession"
+        test: "activity_menu_test.dart (via slice builder)"
+      - swift: "WorkspaceActivityMenuSlice.init(snapshot:) — O(projects) path build, O(sessions) classification, archived skip, dup IDs dropped"
+        target: "clients/supercli-app/lib/activity_menu.dart::WorkspaceActivityMenuSlice.build"
+        test: "activity_menu_test.dart: classifies blocked/working/unread, skips archived and dupes"
+      - swift: "projectPath — 'Parent › Child' breadcrumb, 'Unknown project' fallback, cycle protection (32 ancestors)"
+        target: "clients/supercli-app/lib/activity_menu.dart::WorkspaceActivityMenuSlice.build (projectPath)"
+        test: "activity_menu_test.dart: resolves nested paths, unknown placeholder, cyclic ancestry terminates"
+      - swift: "title(_:fallback:) — trim, fall back to command, then 'Untitled session'"
+        target: "clients/supercli-app/lib/activity_menu.dart::WorkspaceActivityMenuSlice._title"
+        test: "activity_menu_test.dart: title falls back to command then Untitled session"
+      - swift: "statusLabel — Starting/Working/Blocked/Done/Idle/Exited"
+        target: "clients/supercli-app/lib/activity_menu.dart::WorkspaceActivityMenuSlice._statusLabel"
+        test: "activity_menu_test.dart: status labels match Swift"
+      - swift: "GlobalActivityMenuItem — workspaceKey + U+001F + sessionID identity"
+        target: "clients/supercli-app/lib/activity_menu.dart::GlobalActivityMenuItem"
+        test: "activity_menu_test.dart: menu item id joins with unit separator"
+      - swift: "GlobalActivityMenuSessions — foreground slice wins, cached fallback, sectionCount/rowCount"
+        target: "clients/supercli-app/lib/activity_menu.dart::buildGlobalActivityMenu, GlobalActivityMenuSessions"
+        test: "activity_menu_test.dart: foreground wins, cached fallback, skip missing, section/row counts"
+      - swift: "GlobalActivityMenuModel — Combine rebuild coalescing, SupercliStore/WorkspacePool bindings"
+        target: null
+        test: null
+    tests:
+      - file: clients/supercli-app/test/activity_menu_test.dart
+        count: 12
+    notes: "Pure projection logic fully ported with tests. The reactive GlobalActivityMenuModel (Combine, SupercliStore/WorkspacePool) is not ported — the Dart app drives rebuilds through its own state layer. The existing screens/globalactivitymenu.dart renderer stays as the view."
   # --- Partial: core logic ported, some behaviours remain ---
   native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift:
     destination: "Rust: supercli-native-bridge::macos::service_identity"
