@@ -270,7 +270,21 @@ files:
     status: ported
     checklist: ''
     behaviours:
-      - 'Session move rules: home/worktree/root filing, drag accept, checkout crossing'
+      - swift: 'SessionMoveRules: home is the worktree or the root'
+        target: lib/screens/session_move_rules.dart::filingTarget
+        test: test/session_move_rules_test.dart::home is the worktree or the root
+      - swift: 'SessionMoveRules: worktree session files only inside its worktree'
+        target: lib/screens/session_move_rules.dart::filingTarget
+        test: test/session_move_rules_test.dart::worktree session files only inside its worktree
+      - swift: 'SessionMoveRules: root session never enters a worktree'
+        target: lib/screens/session_move_rules.dart::filingTarget
+        test: test/session_move_rules_test.dart::root session never enters a worktree
+      - swift: 'SessionMoveRules: move menu offers exactly what the drag accepts'
+        target: lib/screens/session_move_rules.dart::moveMenuTargets
+        test: test/session_move_rules_test.dart::move menu offers exactly what the drag accepts
+      - swift: 'SessionMoveRules: crossing a checkout is refused while sibling reorder is not'
+        target: lib/screens/session_move_rules.dart::canCrossCheckout
+        test: test/session_move_rules_test.dart::crossing a checkout is refused while sibling reorder is not
     tests:
       - 'test/session_move_rules_test.dart (6 tests, covers all 5 XCTest cases)'
     notes: 'Porter P: verified existing Dart tests cover all 5 XCTest cases 1:1 (plus 1 extra). Heuristic said Rust supercli-core/client; worker D corrected to Dart app.'
@@ -286,8 +300,12 @@ files:
     status: ported
     checklist: ''
     behaviours:
-      - 'SessionTitleDefaults.abbreviatedPath: home prefix → ~, boundary-safe'
-      - 'SessionTitleDefaults.initialLabel: command wins, else folder, else Terminal'
+      - swift: 'SessionTitleDefaults.abbreviatedPath: home prefix → ~, boundary-safe'
+        target: lib/session_title_defaults.dart::SessionTitleDefaults.abbreviatedPath
+        test: test/session_title_defaults_test.dart::home prefix must end at a path boundary
+      - swift: 'SessionTitleDefaults.initialLabel: command wins, else folder, else Terminal'
+        target: lib/session_title_defaults.dart::SessionTitleDefaults.initialLabel
+        test: test/session_title_defaults_test.dart::agent command remains the initial label
     tests:
       - 'test/session_title_defaults_test.dart (4 tests)'
     notes: 'Porter P: ported Models.swift SessionTitleDefaults enum to lib/session_title_defaults.dart. All 4 XCTest cases covered.'
@@ -296,7 +314,9 @@ files:
     status: partial
     checklist: ''
     behaviours:
-      - 'Workspace registry codec (profiles key, slugify, create/rename/remove)'
+      - swift: 'WorkspaceRegistry codec: profiles key, slugify, create/rename/remove'
+        target: lib/screens/workspace_registry.dart::WorkspaceRegistry
+        test: test/workspace_registry_test.dart::encode/decode round-trips with "profiles" key
     tests:
       - 'test/workspace_registry_test.dart (10 tests, covers codec)'
     notes: 'Porter P: codec behaviours covered by Porter K Dart tests. 3 UI/settings tests (deep link, worktrees tab, unified tabs) not portable — belong to settings UI.'
