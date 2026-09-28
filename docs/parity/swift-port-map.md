@@ -25,9 +25,9 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 13 files (10,354 LOC) · ported: 22 files (14,718 LOC) · todo: 238 files (120,565 LOC)
-- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::hook_server::tests: 1 files (278 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::launchd::tests: 1 files (149 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::license::tests: 1 files (167 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::notifications::tests: 1 files (308 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_identity::tests: 1 files (182 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · Rust: supercli-native-bridge::macos::service_manager::tests: 1 files (33 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 25 files (4,534 LOC)
-- Unresolved (`tbd`) destinations: 25 files
+- Status breakdown: partial: 20 files (16,981 LOC) · ported: 24 files (16,117 LOC) · todo: 229 files (112,539 LOC)
+- Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 95 files (44,278 LOC) · Rust: supercli-client: 7 files (6,588 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 39 files (35,431 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::hook_server::tests: 1 files (278 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::launchd::tests: 1 files (149 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::license::tests: 1 files (167 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::notifications::tests: 1 files (308 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_identity::tests: 1 files (182 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · Rust: supercli-native-bridge::macos::service_manager::tests: 1 files (33 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · dropped: Host does it (crates/supercli-serve/src/pairing.rs): 1 files (1,298 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 23 files (3,767 LOC)
+- Unresolved (`tbd`) destinations: 23 files
 
 ### By worker area
 
@@ -125,7 +125,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/AppDelegate.swift | 1048 | tbd | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ChromeIcons.swift | 406 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ClickablePath.swift | 209 | tbd | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/ControllerPairingProxy.swift | 445 | Dart: clients/supercli-app | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/ControllerPairingProxy.swift | 445 | Rust: supercli-client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/DesktopNotifier.swift | 269 | Rust: supercli-native-bridge::macos::notifications | ported |  | 8 |
 | native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift | 273 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift | 2618 | Rust: supercli-core/client | todo |  | 0 |
@@ -144,15 +144,15 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/MCPApprovalCenter.swift | 358 | tbd | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/MCPApprovalPanel.swift | 277 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/MenuBarController.swift | 319 | Rust: supercli-native-bridge::macos::menu_bar | partial |  | 6 |
-| native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift | 1298 | Rust: supercli-core/client | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift | 1298 | dropped: Host does it (crates/supercli-serve/src/pairing.rs) | ported |  | 12 |
 | native/SupercliNative/Sources/SupercliNative/MobileSessionControl.swift | 289 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Models.swift | 1263 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ModuleResources.swift | 32 | tbd | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/NativeControllerRouter.swift | 162 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/NativeOverlaySnapshotAdapter.swift | 66 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/NativeRelayBridge.swift | 308 | Rust: supercli-core/client | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/NativeRelayBridge.swift | 308 | Rust: supercli-client | partial |  | 2 |
 | native/SupercliNative/Sources/SupercliNative/NativeRemoteBackend.swift | 2195 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/NearbyHostBrowser.swift | 140 | tbd | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/NearbyHostBrowser.swift | 140 | Rust: supercli-client | partial |  | 4 |
 | native/SupercliNative/Sources/SupercliNative/OpenCodeTheme.swift | 1093 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/PaneLayoutController.swift | 408 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/PaneLayoutState.swift | 1394 | Dart: clients/supercli-app | todo |  | 0 |
@@ -162,13 +162,13 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/ProjectWorkspaceMove.swift | 635 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ProviderCapabilities.swift | 94 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift | 30 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift | 769 | Rust: supercli-core/client | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift | 769 | Rust: supercli-client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift | 247 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift | 4198 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift | 627 | tbd | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift | 4198 | Rust: supercli-client | partial |  | 6 |
+| native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift | 627 | Rust: supercli-client | partial |  | 9 |
 | native/SupercliNative/Sources/SupercliNative/RemoteUnpeelClient.swift | 172 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ResumeCommand.swift | 68 | Rust: supercli-core/client | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/SelectedHostScope.swift | 101 | Rust: supercli-core/client | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/SelectedHostScope.swift | 101 | Rust: supercli-client | ported |  | 5 |
 | native/SupercliNative/Sources/SupercliNative/SessionActivity.swift | 495 | dropped: Host does it (crates/supercli-serve/src/activity.rs) | ported |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/SessionArtifacts.swift | 159 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/SessionMoveRules.swift | 97 | Dart: clients/supercli-app | todo |  | 0 |
@@ -190,7 +190,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/Views/BrowserAccessSections.swift | 390 | Dart: clients/supercli-app | partial | 204, 205 | 2 |
 | native/SupercliNative/Sources/SupercliNative/Views/Chrome.swift | 257 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/CommandPaletteView.swift | 781 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift | 622 | Dart: clients/supercli-app | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift | 622 | Dart: clients/supercli-app | partial |  | 7 |
 | native/SupercliNative/Sources/SupercliNative/Views/LicenseSettingsPanel.swift | 353 | Dart: clients/supercli-app | partial | 209 | 3 |
 | native/SupercliNative/Sources/SupercliNative/Views/LocalSiteMenu.swift | 261 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/PluginListDrag.swift | 324 | Dart: clients/supercli-app | todo | 203 | 0 |
@@ -198,8 +198,8 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/Views/PresetsSettingsPanel.swift | 39 | Dart: clients/supercli-app | ported | 216 | 3 |
 | native/SupercliNative/Sources/SupercliNative/Views/ProjectSidebarView.swift | 356 | Dart: clients/supercli-app | ported |  | 1 |
 | native/SupercliNative/Sources/SupercliNative/Views/RecentActivityView.swift | 294 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Views/RemoteFolderPicker.swift | 109 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Views/RemoteHostWorkspaceView.swift | 623 | Dart: clients/supercli-app | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/Views/RemoteFolderPicker.swift | 109 | Dart: clients/supercli-app | partial |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/Views/RemoteHostWorkspaceView.swift | 623 | Dart: clients/supercli-app | partial |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/RootView.swift | 1097 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryMarkup.swift | 246 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryPanel.swift | 770 | Dart: clients/supercli-app | todo |  | 0 |
