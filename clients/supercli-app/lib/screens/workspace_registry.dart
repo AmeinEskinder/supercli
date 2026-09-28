@@ -1,7 +1,7 @@
 /// Workspace registry: multiple isolated app instances on one machine.
 ///
-/// Port of `UnpeelWorkspaceRegistry.swift` (file) /
-/// `SupercliWorkspaceRegistry` (type)
+/// Port of the legacy Swift workspace registry module
+/// (`SupercliWorkspaceRegistry` type)
 /// (`clients/legacy/native/SupercliNative/Sources/SupercliNative/`).
 ///
 /// Workspaces: multiple isolated instances of the app on one Mac. A workspace is
