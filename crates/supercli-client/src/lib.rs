@@ -39,6 +39,8 @@ pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod paired_macs;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
 pub mod protocol;
 #[cfg(not(target_arch = "wasm32"))]

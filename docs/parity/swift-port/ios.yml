@@ -3,4 +3,66 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: ios
-files: {}
+files:
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteConnectionStore.swift:
+    destination: "Rust: supercli-client::paired_macs (+ supercli-client-ffi)"
+    status: ported
+    behaviours:
+      - swift: "PairedMacRecord (macID/name/endpoint/deviceID/pairedAt/tintHue/fingerprints)"
+        target: "crates/supercli-client/src/paired_macs.rs::PairedMacRecord"
+        test: "paired_macs::tests::record_array_round_trips"
+      - swift: "PairedMacCollection.upserting (replace in place, append new)"
+        target: "crates/supercli-client/src/paired_macs.rs::paired_mac_collection::upserting"
+        test: "paired_macs::tests::upserting_appends_new_mac"
+      - swift: "PairedMacCollection.removing"
+        target: "crates/supercli-client/src/paired_macs.rs::paired_mac_collection::removing"
+        test: "paired_macs::tests::removing_drops_only_that_mac"
+      - swift: "PairedMacHydration.resolve (prune only explicit not-found; retain on locked/empty)"
+        target: "crates/supercli-client/src/paired_macs.rs::paired_mac_hydration::resolve"
+        test: "paired_macs::tests::hydration_prunes_only_explicitly_missing_token"
+      - swift: "PairedMacHydration.directActivation (unlock-time adoption, epoch bump)"
+        target: "crates/supercli-client/src/paired_macs.rs::paired_mac_hydration::direct_activation"
+        test: "paired_macs::tests::direct_activation_bumps_epoch"
+      - swift: "KeychainReadResult (found/notFound/temporarilyUnavailable + map)"
+        target: "crates/supercli-client/src/paired_macs.rs::KeychainReadResult"
+        test: "paired_macs::tests::keychain_read_result_map"
+      - swift: "RemoteConnectionStore.switchTo (token-gated, epoch bump, relay reset)"
+        target: "crates/supercli-client/src/paired_macs.rs::RemoteConnectionStore::switch_to"
+        test: "paired_macs::tests::store_switch_to_changes_active_and_bumps_epoch"
+      - swift: "RemoteConnectionStore pairing commit (fail-closed token save)"
+        target: "crates/supercli-client/src/paired_macs.rs::RemoteConnectionStore::commit_pairing"
+        test: "paired_macs::tests::store_commit_pairing_fail_closed_on_token_write_failure"
+      - swift: "RemoteConnectionStore.unpair (record + token removal, repoint)"
+        target: "crates/supercli-client/src/paired_macs.rs::RemoteConnectionStore::unpair"
+        test: "paired_macs::tests::store_unpair_removes_record_token_and_repoints"
+      - swift: "RelayFallbackRetryPolicy (12s cooldown)"
+        target: "crates/supercli-client/src/paired_macs.rs::relay_fallback_retry_policy"
+        test: "paired_macs::tests::relay_fallback_retry_policy"
+      - swift: "RelayCredentialRepair.evaluate (404/other/invalid/persist-fail/success)"
+        target: "crates/supercli-client/src/paired_macs.rs::relay_credential_repair::evaluate"
+        test: "paired_macs::tests::repair_evaluate_success"
+      - swift: "RelayCredentialRefreshMarker.needsRefresh"
+        target: "crates/supercli-client/src/paired_macs.rs::RelayCredentialRefreshMarker"
+        test: "paired_macs::tests::refresh_marker_needs_refresh"
+      - swift: "RemotePairingPresentationPolicy.needsPairing"
+        target: "crates/supercli-client/src/paired_macs.rs::remote_pairing_presentation_policy::needs_pairing"
+        test: "paired_macs::tests::needs_pairing_policy"
+      - swift: "FFI: stateful store handle + stateless JSON API for Dart"
+        target: "crates/supercli-client-ffi/src/lib.rs"
+        test: null
+    tests:
+      - file: crates/supercli-client/src/paired_macs.rs
+        count: 33
+    notes: "Ported 2026-09-29: storage/state logic to Rust with abstract TokenStore/RecordStore; 33 tests. FFI crate exposes store via C ABI for Dart. Network/client parts (RemoteMacClient, relay) already in supercli-client transport/relay."
+
+  ios/SupercliIOS/Tests/SupercliIOSTests/PairedMacStorageTests.swift:
+    destination: "Rust: supercli-client::paired_macs::tests"
+    status: ported
+    behaviours:
+      - swift: "36 XCTest storage invariant tests"
+        target: "crates/supercli-client/src/paired_macs.rs::tests"
+        test: "cargo test -p supercli-client --lib paired_macs (33 tests)"
+    tests:
+      - file: crates/supercli-client/src/paired_macs.rs
+        count: 33
+    notes: "All portable XCTest behaviours ported; iOS Keychain/UserDefaults replaced by TokenStore/RecordStore traits with mocks."

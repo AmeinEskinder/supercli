@@ -2280,6 +2280,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercli-client-ffi"
+version = "0.9.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "supercli-client",
+]
+
+[[package]]
 name = "supercli-connector"
 version = "0.9.0"
 dependencies = [

@@ -1,0 +1,15 @@
+[package]
+name = "supercli-client-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "C ABI for supercli-client: the Dart (and other native) clients drive the portable Rust logic — here the iOS multi-Mac pairing store — through this crate"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+supercli-client = { path = "../supercli-client", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
