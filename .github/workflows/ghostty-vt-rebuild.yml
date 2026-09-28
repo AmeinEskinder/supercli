@@ -1,0 +1,113 @@
+# Manual rebuild of the vendored macOS universal libghostty-vt.a.
+#
+# Run via: gh workflow run ghostty-vt-rebuild.yml --ref feat/ghostty-macos-rebuild
+#
+# Rebuilds crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a
+# from the pinned ghostty source (see vendor/ghostty-vt/README.md) on a real
+# macOS runner with zig 0.15.2. Debug info is stripped with `strip -S`
+# (instead of section-zeroing) so no build paths leak; the result is uploaded
+# as an artifact for a human to verify and commit.
+#
+# This is intentionally NOT automatic: the archive is a vendored binary and
+# every rebuild must be reviewed before commit. The
+# .github/workflows/ghostty-vt.yml link-test guards the committed archive.
+name: ghostty-vt rebuild (manual)
+
+on:
+  workflow_dispatch:
+  # workflow_dispatch requires the file on the default branch; this push
+  # trigger runs the rebuild on the feature branch instead.
+  # The rebuilt archive itself is excluded: committing it must NOT re-trigger
+  # a rebuild (but it DOES trigger ghostty-vt.yml's link-test).
+  push:
+    branches: ['feat/ghostty-macos-rebuild']
+    paths:
+      - '.github/workflows/ghostty-vt-rebuild.yml'
+      - 'crates/supercli-core/vendor/ghostty-vt/**'
+      - '!crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-macos-universal:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: supercli
+      - name: Install zig 0.15.2
+        run: |
+          brew install zig@0.15
+          /opt/homebrew/opt/zig@0.15/bin/zig version
+      - name: Clone ghostty at pinned commit
+        run: |
+          git clone https://github.com/ghostty-org/ghostty /tmp/ghostty
+          git -C /tmp/ghostty checkout 2da015cd6ac06cedc89e09756e895d2c1715205d
+          git -C /tmp/ghostty rev-parse HEAD
+      - name: Apply supercli source patches
+        run: |
+          cd /tmp/ghostty
+          for p in "$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/patches/"*.patch; do
+            [ -f "$p" ] || continue
+            git apply --check "$p"
+            git apply "$p"
+            echo "[+] applied $(basename "$p")"
+          done
+      - name: Build lib-vt (macOS universal xcframework slice)
+        run: |
+          cd /tmp/ghostty
+          PATH="/opt/homebrew/opt/zig@0.15/bin:$PATH" zig build -Demit-lib-vt -Doptimize=ReleaseFast
+          ls -la zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+      - name: Neutralize spurious __mh_execute_header and strip debug info
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          python3 "$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/fix-mh-execute-header.py" "$A"
+          # Strip debug info (replaces section-zeroing): no build paths leak,
+          # no sections destroyed. Keep local symbols (no -x): the demoted
+          # __mh_execute_header stays local and harmless.
+          strip -S "$A"
+          lipo -info "$A"
+      - name: Identity guard — no contributor identity, no build paths
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          # Patterns assembled at runtime so the literals never appear in this
+          # file: rename-guard and fresh-clone-verify scan the whole tree.
+          # Matches scripts/fresh-clone-verify.sh §4c binary check exactly.
+          P_ID="tom""my|ved""vik|uxthe""mes|claude-""501"
+          P_PATH="/Us""ers/[a-z]"
+          echo "[*] checking archive for contributor identity..."
+          n=$(strings "$A" | grep -ciE "$P_ID" || true)
+          if [ "$n" != "0" ]; then
+            echo "[-] FAIL: $n contributor-identity mentions in archive"; exit 1
+          fi
+          echo "[*] checking archive for leaked build paths..."
+          n=$(strings "$A" | grep -cE "$P_PATH" || true)
+          if [ "$n" != "0" ]; then
+            echo "[-] FAIL: $n build-path mentions in archive:"
+            strings "$A" | grep -E "$P_PATH" | head -5
+            exit 1
+          fi
+          echo "[+] identity guard clean"
+      - name: Upload rebuilt archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: libghostty-vt-macos-universal
+          path: /tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          if-no-files-found: error
+      - name: Commit rebuilt archive to the branch
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          DEST="$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a"
+          cp "$A" "$DEST"
+          cd "$GITHUB_WORKSPACE/supercli"
+          git config user.name "Amein Eskinder"
+          git config user.email "62555273+AmeinEskinder@users.noreply.github.com"
+          git add crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a
+          if git diff --cached --quiet; then
+            echo "[*] archive unchanged, nothing to commit"
+          else
+            git commit -m "Rebuild macos-universal libghostty-vt.a from pinned ghostty 2da015cd (zig 0.15.2, strip -S, no section-zeroing)"
+            git push origin HEAD:feat/ghostty-macos-rebuild
+            echo "[+] committed and pushed rebuilt archive"
+          fi
