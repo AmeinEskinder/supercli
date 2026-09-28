@@ -68,43 +68,57 @@ void main() {
   group('SidebarRow session rows (#151)', () {
     test('attention dot renders only when attention is true', () {
       final attn = SidebarSession(
-          summary: summary('a', 'Fix bug'), attention: true);
-      final calm =
-          SidebarSession(summary: summary('b', 'Refactor'));
-      expect(textsOf(SidebarRow.sessionRow(attn, selected: false)),
-          contains('●'));
-      expect(textsOf(SidebarRow.sessionRow(calm, selected: false)),
-          isNot(contains('●')));
+        summary: summary('a', 'Fix bug'),
+        attention: true,
+      );
+      final calm = SidebarSession(summary: summary('b', 'Refactor'));
+      expect(
+        textsOf(SidebarRow.sessionRow(attn, selected: false)),
+        contains('●'),
+      );
+      expect(
+        textsOf(SidebarRow.sessionRow(calm, selected: false)),
+        isNot(contains('●')),
+      );
     });
 
     test('busy spinner renders only when busy is true', () {
-      final busy =
-          SidebarSession(summary: summary('a', 'Agent run'), busy: true);
+      final busy = SidebarSession(
+        summary: summary('a', 'Agent run'),
+        busy: true,
+      );
       final idle = SidebarSession(summary: summary('b', 'Idle'));
-      expect(textsOf(SidebarRow.sessionRow(busy, selected: false)),
-          contains(' ◌'));
-      expect(textsOf(SidebarRow.sessionRow(idle, selected: false)),
-          isNot(contains(' ◌')));
+      expect(
+        textsOf(SidebarRow.sessionRow(busy, selected: false)),
+        contains(' ◌'),
+      );
+      expect(
+        textsOf(SidebarRow.sessionRow(idle, selected: false)),
+        isNot(contains(' ◌')),
+      );
     });
 
     test('unread badge shows the count', () {
-      final s =
-          SidebarSession(summary: summary('a', 'Chat', unread: 3));
-      expect(textsOf(SidebarRow.sessionRow(s, selected: false)),
-          contains(' 3'));
+      final s = SidebarSession(summary: summary('a', 'Chat', unread: 3));
+      expect(
+        textsOf(SidebarRow.sessionRow(s, selected: false)),
+        contains(' 3'),
+      );
     });
 
     test('pin glyph renders for pinned sessions', () {
-      final s =
-          SidebarSession(summary: summary('a', 'Pinned'), pinned: true);
-      expect(textsOf(SidebarRow.sessionRow(s, selected: false)),
-          contains('📌'));
+      final s = SidebarSession(summary: summary('a', 'Pinned'), pinned: true);
+      expect(
+        textsOf(SidebarRow.sessionRow(s, selected: false)),
+        contains('📌'),
+      );
     });
 
     test('presence viewers render initials', () {
       final s = SidebarSession(
-          summary: summary('a', 'Shared'),
-          viewers: const ['Amein', 'Osman']);
+        summary: summary('a', 'Shared'),
+        viewers: const ['Amein', 'Osman'],
+      );
       final texts = textsOf(SidebarRow.sessionRow(s, selected: false));
       expect(texts.any((t) => t.contains('A') && t.contains('O')), isTrue);
     });
@@ -112,40 +126,41 @@ void main() {
 
   group('SidebarView tree (#151)', () {
     SidebarView sample() => SidebarView(
-          workspaces: const ['main', 'side'],
-          activeWorkspaceId: 'main',
-          pinned: [
-            SidebarSession(
-                summary: summary('p1', 'Pinned task'), pinned: true),
-          ],
-          projects: [
-            SidebarProject(
-              id: 'pr1',
-              name: 'supercli',
-              folderColor: '#3465a4',
-              groups: [
-                SidebarGroup(
-                  id: 'g1',
-                  title: 'Backend',
-                  sessions: [
-                    SidebarSession(
-                        summary: summary('s1', 'API work'),
-                        groupId: 'g1',
-                        attention: true),
-                  ],
-                ),
-              ],
-              worktrees: const ['feature-x'],
+      workspaces: const ['main', 'side'],
+      activeWorkspaceId: 'main',
+      pinned: [
+        SidebarSession(summary: summary('p1', 'Pinned task'), pinned: true),
+      ],
+      projects: [
+        SidebarProject(
+          id: 'pr1',
+          name: 'supercli',
+          folderColor: '#3465a4',
+          groups: [
+            SidebarGroup(
+              id: 'g1',
+              title: 'Backend',
               sessions: [
                 SidebarSession(
-                    summary: summary('s2', 'Docs'),
-                    worktree: 'feature-x',
-                    busy: true),
+                  summary: summary('s1', 'API work'),
+                  groupId: 'g1',
+                  attention: true,
+                ),
               ],
             ),
           ],
-          selectedSessionId: 's1',
-        );
+          worktrees: const ['feature-x'],
+          sessions: [
+            SidebarSession(
+              summary: summary('s2', 'Docs'),
+              worktree: 'feature-x',
+              busy: true,
+            ),
+          ],
+        ),
+      ],
+      selectedSessionId: 's1',
+    );
 
     test('pinned section renders before projects', () {
       final texts = textsOf(sample().build());
@@ -185,8 +200,7 @@ void main() {
       final collapsed = SidebarView(
         workspaces: v.workspaces,
         projects: [
-          SidebarProject(
-              id: 'pr1', name: 'supercli', collapsed: true),
+          SidebarProject(id: 'pr1', name: 'supercli', collapsed: true),
         ],
         pinned: v.pinned,
       );
@@ -204,8 +218,9 @@ void main() {
             worktrees: const ['wt1'],
             sessions: [
               SidebarSession(
-                  summary: summary('s1', 'Worktree task'),
-                  worktree: 'wt1'),
+                summary: summary('s1', 'Worktree task'),
+                worktree: 'wt1',
+              ),
               SidebarSession(summary: summary('s2', 'Plain task')),
             ],
           ),
@@ -217,8 +232,7 @@ void main() {
     });
 
     test('sidebar actions include filter and new-session', () {
-      final names =
-          sample().actions().map((a) => a.name).toList();
+      final names = sample().actions().map((a) => a.name).toList();
       expect(names, contains('sidebar.filter'));
       expect(names, contains('session.new'));
     });
@@ -226,8 +240,7 @@ void main() {
 
   group('SessionContextMenu (#153)', () {
     test('has all 12 required items in order', () {
-      final labels =
-          SessionContextMenu.items.map((i) => i.$2).toList();
+      final labels = SessionContextMenu.items.map((i) => i.$2).toList();
       expect(labels, [
         'Rename…',
         'Copy Session ID',
@@ -244,31 +257,27 @@ void main() {
     });
 
     test('action names are unique', () {
-      final names =
-          SessionContextMenu.items.map((i) => i.$1).toSet();
+      final names = SessionContextMenu.items.map((i) => i.$1).toSet();
       expect(names.length, SessionContextMenu.items.length);
     });
 
     test('renders one button per item', () {
       final menu = SessionContextMenu(sessionId: 's1');
-      expect(buttonsOf(menu.build()).length,
-          SessionContextMenu.items.length);
+      expect(buttonsOf(menu.build()).length, SessionContextMenu.items.length);
     });
 
     test('button id decodes back to the action name', () {
       expect(
-          SessionContextMenu.actionForButtonId(
-              'menu-s1-session.copy-id'),
-          'session.copy-id');
-      expect(
-          SessionContextMenu.actionForButtonId('bogus'), isEmpty);
+        SessionContextMenu.actionForButtonId('menu-s1-session.copy-id'),
+        'session.copy-id',
+      );
+      expect(SessionContextMenu.actionForButtonId('bogus'), isEmpty);
     });
   });
 
   group('ProjectContextMenu (#154)', () {
     test('has all 9 required items', () {
-      final labels =
-          ProjectContextMenu.items.map((i) => i.$2).toList();
+      final labels = ProjectContextMenu.items.map((i) => i.$2).toList();
       expect(labels, [
         'New Worktree…',
         'New Group',
@@ -284,8 +293,7 @@ void main() {
 
     test('renders one button per item', () {
       final menu = ProjectContextMenu(projectId: 'pr1');
-      expect(buttonsOf(menu.build()).length,
-          ProjectContextMenu.items.length);
+      expect(buttonsOf(menu.build()).length, ProjectContextMenu.items.length);
     });
   });
 
@@ -297,11 +305,11 @@ void main() {
 
     test('cannot drop a session onto itself', () {
       const drag = SidebarSessionDrag(
-          draggedSessionId: 's1', target: SidebarDropTarget.reorder);
-      expect(drag.canDrop(sessionId: 's1', currentGroupId: null),
-          isFalse);
-      expect(drag.canDrop(sessionId: 's2', currentGroupId: null),
-          isTrue);
+        draggedSessionId: 's1',
+        target: SidebarDropTarget.reorder,
+      );
+      expect(drag.canDrop(sessionId: 's1', currentGroupId: null), isFalse);
+      expect(drag.canDrop(sessionId: 's2', currentGroupId: null), isTrue);
     });
 
     test('cannot move into the same group (no-op)', () {
@@ -310,10 +318,8 @@ void main() {
         target: SidebarDropTarget.group,
         targetId: 'g1',
       );
-      expect(drag.canDrop(sessionId: 's1', currentGroupId: 'g1'),
-          isFalse);
-      expect(drag.canDrop(sessionId: 's2', currentGroupId: 'g2'),
-          isTrue);
+      expect(drag.canDrop(sessionId: 's1', currentGroupId: 'g1'), isFalse);
+      expect(drag.canDrop(sessionId: 's2', currentGroupId: 'g2'), isTrue);
     });
 
     test('drop-to-split requires a pane target', () {
@@ -322,18 +328,14 @@ void main() {
         target: SidebarDropTarget.split,
         dropToSplit: true,
       );
-      expect(
-          noTarget.canDrop(sessionId: 's2', currentGroupId: null),
-          isFalse);
+      expect(noTarget.canDrop(sessionId: 's2', currentGroupId: null), isFalse);
       const withTarget = SidebarSessionDrag(
         draggedSessionId: 's1',
         target: SidebarDropTarget.split,
         targetId: 'pane-1',
         dropToSplit: true,
       );
-      expect(
-          withTarget.canDrop(sessionId: 's2', currentGroupId: null),
-          isTrue);
+      expect(withTarget.canDrop(sessionId: 's2', currentGroupId: null), isTrue);
     });
 
     test('drag overlay names the target', () {
@@ -363,14 +365,15 @@ void main() {
     });
 
     test('workspace dots mark the active workspace', () {
-      const dots = SidebarWorkspaceDots(
-          workspaces: ['a', 'b'], activeId: 'b');
+      const dots = SidebarWorkspaceDots(workspaces: ['a', 'b'], activeId: 'b');
       expect(buttonsOf(dots.build()), ['○ a', '● b']);
     });
 
     test('workspace selector checks the selected workspace', () {
       const sel = SidebarWorkspaceSelector(
-          workspaces: ['a', 'b'], selected: 'a');
+        workspaces: ['a', 'b'],
+        selected: 'a',
+      );
       expect(buttonsOf(sel.build()), ['✓ a', '  b']);
     });
 
@@ -387,11 +390,10 @@ void main() {
           folderColor: '#3465a4',
           groups: [
             SidebarGroup(
-                id: 'g1',
-                title: 'Backend',
-                sessions: [
-                  SidebarSession(summary: summary('s1', 'API'))
-                ]),
+              id: 'g1',
+              title: 'Backend',
+              sessions: [SidebarSession(summary: summary('s1', 'API'))],
+            ),
           ],
         ),
       );
@@ -405,38 +407,147 @@ void main() {
     test('relativeTime formats durations', () {
       final now = DateTime.utc(2026, 9, 26, 12);
       expect(
-          ActivityItem.relativeTime(
-              now.subtract(const Duration(seconds: 30)),
-              now: now),
-          'just now');
+        ActivityItem.relativeTime(
+          now.subtract(const Duration(seconds: 30)),
+          now: now,
+        ),
+        'just now',
+      );
       expect(
-          ActivityItem.relativeTime(
-              now.subtract(const Duration(minutes: 5)),
-              now: now),
-          '5m');
+        ActivityItem.relativeTime(
+          now.subtract(const Duration(minutes: 5)),
+          now: now,
+        ),
+        '5m',
+      );
       expect(
-          ActivityItem.relativeTime(
-              now.subtract(const Duration(hours: 2)),
-              now: now),
-          '2h');
+        ActivityItem.relativeTime(
+          now.subtract(const Duration(hours: 2)),
+          now: now,
+        ),
+        '2h',
+      );
       expect(
-          ActivityItem.relativeTime(
-              now.subtract(const Duration(days: 3)),
-              now: now),
-          '3d');
+        ActivityItem.relativeTime(
+          now.subtract(const Duration(days: 3)),
+          now: now,
+        ),
+        '3d',
+      );
     });
 
     test('global activity menu shows only busy/attention sessions', () {
-      final menu = GlobalActivityMenu(sessions: [
-        SidebarSession(summary: summary('a', 'Busy'), busy: true),
-        SidebarSession(
-            summary: summary('b', 'Attention'), attention: true),
-        SidebarSession(summary: summary('c', 'Idle')),
-      ]);
+      final menu = GlobalActivityMenu(
+        sessions: [
+          SidebarSession(summary: summary('a', 'Busy'), busy: true),
+          SidebarSession(summary: summary('b', 'Attention'), attention: true),
+          SidebarSession(summary: summary('c', 'Idle')),
+        ],
+      );
       final buttons = buttonsOf(menu.build());
       expect(buttons, contains('Busy'));
       expect(buttons, contains('Attention'));
       expect(buttons, isNot(contains('Idle')));
+    });
+  });
+
+  group('Host wire format (#151 wiring)', () {
+    /// A session JSON exactly as the real Host sends it
+    /// (supercli-serve/src/sessions.rs `session_json`).
+    Map<String, dynamic> hostSessionJson({
+      String id = 's1',
+      String activity = 'idle',
+      bool unread = false,
+      bool pinned = false,
+      String projectID = 'p1',
+    }) => {
+      'id': id,
+      'projectID': projectID,
+      'title': 'Fix bug',
+      'command': 'unpeel',
+      'createdAtUnixMs': 1758931200000,
+      'updatedAtUnixMs': 1758934800000,
+      'status': 'running',
+      'activity': activity,
+      'unread': unread,
+      'pinned': pinned,
+    };
+
+    test('SessionSummary decodes the real Host wire format', () {
+      final s = SessionSummary.fromJson(
+        hostSessionJson(activity: 'working', unread: true, pinned: true),
+      );
+      expect(s.id, 's1');
+      expect(s.title, 'Fix bug');
+      expect(
+        s.updatedAt,
+        DateTime.fromMillisecondsSinceEpoch(1758934800000, isUtc: true),
+      );
+      expect(s.unreadCount, 1);
+      expect(s.unread, isTrue);
+      expect(s.projectId, 'p1');
+      expect(s.status, 'running');
+      expect(s.activity, 'working');
+      expect(s.pinned, isTrue);
+      expect(s.isBusy, isTrue);
+      expect(s.needsAttention, isFalse);
+    });
+
+    test('activity blocked maps to attention, working/starting to busy', () {
+      final blocked = SessionSummary.fromJson(
+        hostSessionJson(activity: 'blocked'),
+      );
+      expect(blocked.needsAttention, isTrue);
+      expect(blocked.isBusy, isFalse);
+
+      final working = SessionSummary.fromJson(
+        hostSessionJson(activity: 'working'),
+      );
+      expect(working.isBusy, isTrue);
+      expect(working.needsAttention, isFalse);
+
+      final starting = SessionSummary.fromJson(
+        hostSessionJson(activity: 'starting'),
+      );
+      expect(starting.isBusy, isTrue);
+
+      final idle = SessionSummary.fromJson(hostSessionJson(activity: 'idle'));
+      expect(idle.isBusy, isFalse);
+      expect(idle.needsAttention, isFalse);
+    });
+
+    test('SidebarSession.fromHostSummary derives sidebar state from Host', () {
+      final s = SidebarSession.fromHostSummary(
+        SessionSummary.fromJson(
+          hostSessionJson(activity: 'blocked', pinned: true),
+        ),
+      );
+      expect(s.attention, isTrue);
+      expect(s.busy, isFalse);
+      expect(s.pinned, isTrue);
+      expect(s.projectId, 'p1');
+    });
+
+    test('legacy snake_case wire format still decodes', () {
+      final s = SessionSummary.fromJson({
+        'id': 'old',
+        'title': 'Old',
+        'updated_at': '2026-09-26T12:00:00.000Z',
+        'unread_count': 3,
+      });
+      expect(s.unreadCount, 3);
+      expect(s.updatedAt, DateTime.utc(2026, 9, 26, 12));
+    });
+
+    test('HostProject decodes the bootstrap projects array', () {
+      final p = HostProject.fromJson({
+        'id': 'p1',
+        'name': 'supercli',
+        'path': '/home/u/supercli',
+      });
+      expect(p.id, 'p1');
+      expect(p.name, 'supercli');
+      expect(p.path, '/home/u/supercli');
     });
   });
 }

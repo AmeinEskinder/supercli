@@ -41,13 +41,18 @@ files:
   # --- Ported (worker D triage; under D2 behaviour audit) ---
   native/SupercliNative/Sources/SupercliNative/Views/SidebarView.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: "#151"
-    behaviours: []
+    behaviours:
+      - "Sidebar mounted in SupercliApp.build() (app.dart), fed by live Host bootstrap sessions"
+      - "SessionSummary decodes real Host wire format (updatedAtUnixMs, unread bool, projectID, status, activity, pinned)"
+      - "SidebarSession.fromHostSummary: attention from activity=blocked, busy from activity=working/starting, pinned + projectId from Host"
+      - "Project tree uses real Host project names from bootstrap projects array"
+      - "Selection wired via app.selectedSessionId; verified headless against live Host (2 real sessions)"
     tests:
       - file: clients/supercli-app/test/sidebar_test.dart
-        count: 11
-    notes: "Worker D: 11 tests. D2 auditing behaviour coverage."
+        count: 36
+    notes: "Partial 2026-09-27 (feat/wire-sidebar): Host wiring done for session list, status signals and project tree (headless e2e against live Host, 2 real sessions). SidebarView.swift is 4,406 lines / ~151 funcs with no full behaviour mapping yet (D2 audit); remaining behaviours still todo. Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM); not verified."
 
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: "Dart: clients/supercli-app"
