@@ -19,10 +19,10 @@
 /// NOT ported (documented gaps):
 /// - `UIUnixSessionClient` transport: Dart uses [HostClient] (HTTP) instead of
 ///   the Unix-domain socket. See `docs/gpuidart-gaps-appkit.md` GAP-APPKIT-1.
-/// - Capability negotiation (`requiredCapabilities`): the Dart renderer assumes
-///   the Host only sends supported components. GAP-APPKIT-2.
-/// - `UIDelta` incremental application: the Dart renderer re-renders full
-///   snapshots. GAP-APPKIT-3.
+/// - Capability negotiation (`requiredCapabilities`): ported for `MenuSpec`;
+///   the Dart renderer assumes the Host only sends supported components for
+///   other types. GAP-APPKIT-2 (partial).
+/// - `UIDelta` incremental application: ported in `appkit_delta_apply.dart`.
 library;
 
 import 'dart:convert';
@@ -298,6 +298,7 @@ final class PageSpec {
     this.tabs = const [],
     this.toolbar,
     this.back,
+    this.header = const PageHeaderUnsupported('none'),
     this.body = const PageBodyList(ListSpec(id: '', items: [])),
     this.footer = const FooterActionsSpec(),
   });
@@ -306,6 +307,7 @@ final class PageSpec {
   final List<PageTab> tabs;
   final PageToolbar? toolbar;
   final String? back;
+  final PageHeader header;
   final PageBody body;
   final FooterActionsSpec footer;
 
@@ -319,6 +321,7 @@ final class PageSpec {
           ? null
           : PageToolbar.fromJson(json['toolbar'] as Map<String, dynamic>),
       back: json['back'] as String?,
+      header: PageHeader.fromJson(json['header'] as Map<String, dynamic>?),
       body: PageBody.fromJson(json['body'] as Map<String, dynamic>? ?? {}),
       footer: json['footer'] == null
           ? const FooterActionsSpec()
@@ -332,6 +335,7 @@ final class PageSpec {
         'tabs': tabs.map((t) => t.toJson()).toList(),
         if (toolbar != null) 'toolbar': toolbar!.toJson(),
         if (back != null) 'back': back,
+        'header': header.toJson(),
         'body': body.toJson(),
         'footer': footer.toJson(),
       };
@@ -342,11 +346,12 @@ final class PageSpec {
       other.title == title &&
       _listEq(other.tabs, tabs) &&
       other.back == back &&
+      other.header == header &&
       other.body == body &&
       other.footer == footer;
 
   @override
-  int get hashCode => Object.hash(title, back, body, footer);
+  int get hashCode => Object.hash(title, back, header, body, footer);
 }
 
 /// Page body slot. Mirrors Swift `UIPageBodySlot`.
@@ -364,9 +369,16 @@ sealed class PageBody {
             json['content'] as Map<String, dynamic>? ?? json));
       case 'gauge':
         return PageBodyGauge(GaugeSpec.fromJson(json));
+      case 'sparkline':
+        return PageBodySparkline(SparklineSpec.fromJson(
+            json['sparkline'] as Map<String, dynamic>? ?? json));
+      case 'barChart':
+        return PageBodyBarChart(BarChartSpec.fromJson(
+            json['barChart'] as Map<String, dynamic>? ?? json));
+      case 'lineChart':
+        return PageBodyLineChart(LineChartSpec.fromJson(
+            json['lineChart'] as Map<String, dynamic>? ?? json));
       default:
-        // The Swift body also supports sparkline/barChart/lineChart; the Dart
-        // renderer falls back to unsupported for chart bodies (GAP-APPKIT-4).
         if (type == null && json.containsKey('items')) {
           return PageBodyList(ListSpec.fromJson(json));
         }
@@ -413,6 +425,45 @@ final class PageBodyGauge extends PageBody {
       other is PageBodyGauge && other.gauge == gauge;
   @override
   int get hashCode => gauge.hashCode;
+}
+
+final class PageBodySparkline extends PageBody {
+  const PageBodySparkline(this.sparkline);
+  final SparklineSpec sparkline;
+  @override
+  Map<String, dynamic> toJson() =>
+      {'type': 'sparkline', 'sparkline': sparkline.toJson()};
+  @override
+  bool operator ==(Object other) =>
+      other is PageBodySparkline && other.sparkline == sparkline;
+  @override
+  int get hashCode => sparkline.hashCode;
+}
+
+final class PageBodyBarChart extends PageBody {
+  const PageBodyBarChart(this.chart);
+  final BarChartSpec chart;
+  @override
+  Map<String, dynamic> toJson() =>
+      {'type': 'barChart', 'barChart': chart.toJson()};
+  @override
+  bool operator ==(Object other) =>
+      other is PageBodyBarChart && other.chart == chart;
+  @override
+  int get hashCode => chart.hashCode;
+}
+
+final class PageBodyLineChart extends PageBody {
+  const PageBodyLineChart(this.chart);
+  final LineChartSpec chart;
+  @override
+  Map<String, dynamic> toJson() =>
+      {'type': 'lineChart', 'lineChart': chart.toJson()};
+  @override
+  bool operator ==(Object other) =>
+      other is PageBodyLineChart && other.chart == chart;
+  @override
+  int get hashCode => chart.hashCode;
 }
 
 final class PageBodyUnsupported extends PageBody {
@@ -491,14 +542,135 @@ final class PageToolbar {
   int get hashCode => Object.hash(title, actions.length);
 }
 
+/// Mirrors Swift `UIInputSpec`: the page-header search/filter field.
+///
+/// The input behaves like a row for focus (Up from the first row lands on
+/// it) and typing goes straight into it. `setValue` is the action fired on
+/// every keystroke; `submit` fires on Enter.
+final class UIInputSpec {
+  const UIInputSpec({
+    required this.id,
+    required this.label,
+    this.value = '',
+    this.placeholder = '',
+    this.setValue,
+    this.submit,
+  });
+
+  final String id;
+  final String label;
+  final String value;
+  final String placeholder;
+  final String? setValue;
+  final String? submit;
+
+  factory UIInputSpec.fromJson(Map<String, dynamic> json) => UIInputSpec(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        value: json['value'] as String? ?? '',
+        placeholder: json['placeholder'] as String? ?? '',
+        setValue: json['setValue'] as String?,
+        submit: json['submit'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'value': value,
+        'placeholder': placeholder,
+        if (setValue != null) 'setValue': setValue,
+        if (submit != null) 'submit': submit,
+      };
+
+  UIInputSpec copyWith({String? value}) => UIInputSpec(
+        id: id,
+        label: label,
+        value: value ?? this.value,
+        placeholder: placeholder,
+        setValue: setValue,
+        submit: submit,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is UIInputSpec &&
+      other.id == id &&
+      other.label == label &&
+      other.value == value &&
+      other.placeholder == placeholder &&
+      other.setValue == setValue &&
+      other.submit == submit;
+
+  @override
+  int get hashCode => Object.hash(id, label, value, placeholder);
+}
+
+/// Page header slot. Mirrors Swift `UIPageHeaderSlot`.
+sealed class PageHeader {
+  const PageHeader();
+
+  factory PageHeader.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return const PageHeaderUnsupported('none');
+    final type = json['type'] as String?;
+    switch (type) {
+      case 'input':
+        return PageHeaderInput(
+            UIInputSpec.fromJson(json['input'] as Map<String, dynamic>? ?? json));
+      default:
+        return PageHeaderUnsupported(type ?? 'unknown');
+    }
+  }
+
+  Map<String, dynamic> toJson();
+}
+
+final class PageHeaderInput extends PageHeader {
+  const PageHeaderInput(this.input);
+  final UIInputSpec input;
+  @override
+  Map<String, dynamic> toJson() =>
+      {'type': 'input', 'input': input.toJson()};
+  @override
+  bool operator ==(Object other) =>
+      other is PageHeaderInput && other.input == input;
+  @override
+  int get hashCode => input.hashCode;
+}
+
+final class PageHeaderUnsupported extends PageHeader {
+  const PageHeaderUnsupported(this.kind);
+  final String kind;
+  @override
+  Map<String, dynamic> toJson() => {'type': kind};
+  @override
+  bool operator ==(Object other) =>
+      other is PageHeaderUnsupported && other.kind == kind;
+  @override
+  int get hashCode => kind.hashCode;
+}
+
 /// Mirrors Swift `UIFooterActionsSpec`.
-final class FooterActionsSpec {
-  const FooterActionsSpec({this.actions = const [], this.status});
+final class FooterActionsSpec {  const FooterActionsSpec({this.actions = const [], this.status});
 
   final List<FooterActionSpec> actions;
   final String? status;
 
   bool get isEmpty => actions.isEmpty && status == null;
+
+  /// Mirrors Swift `UIFooterActionsSpec.isValid` (simplified): actions have
+  /// unique non-empty IDs and single-line labels.
+  bool get isValid {
+    final ids = <String>{};
+    for (final action in actions) {
+      if (action.id.isEmpty ||
+          action.label.contains('\n') ||
+          action.label.contains('\r') ||
+          !ids.add(action.id)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   factory FooterActionsSpec.fromJson(Map<String, dynamic> json) =>
       FooterActionsSpec(
@@ -618,6 +790,15 @@ final class ListSpec {
 
   @override
   int get hashCode => Object.hash(id, items.length, selectedId, rowLayout);
+
+  ListSpec copyWith({List<ListItemSpec>? items, String? selectedId, bool clearSelectedId = false}) =>
+      ListSpec(
+        id: id,
+        items: items ?? this.items,
+        emptyMessage: emptyMessage,
+        selectedId: clearSelectedId ? null : (selectedId ?? this.selectedId),
+        rowLayout: rowLayout,
+      );
 }
 
 /// How a List lays out each row. Mirrors Swift `UIListRowLayout`.
@@ -779,6 +960,29 @@ final class ListItemSpec {
 
   @override
   int get hashCode => Object.hash(id, label, detail, value, divider);
+
+  ListItemSpec copyWith({
+    bool? done,
+    ListItemSlot? leading,
+    ListItemSlot? trailing,
+    ListItemSlot? accessory,
+  }) =>
+      ListItemSpec(
+        id: id,
+        label: label,
+        detail: detail,
+        value: value,
+        done: done ?? this.done,
+        busy: busy,
+        leading: leading ?? this.leading,
+        trailing: trailing ?? this.trailing,
+        accessory: accessory ?? this.accessory,
+        top: top,
+        bottom: bottom,
+        media: media,
+        divider: divider,
+        activate: activate,
+      );
 }
 
 ListItemSlot? _slotFromJson(dynamic json) {
@@ -810,15 +1014,23 @@ sealed class ListItemSlot {
         return SlotStatus(StatusSymbolSpec.fromJson(json));
       case 'toggle':
         return SlotToggle(
-            id: json['id'] as String? ?? '',
-            on: json['on'] as bool? ?? false);
+          id: json['id'] as String? ?? '',
+          on: json['value'] as bool? ?? json['on'] as bool? ?? false,
+          label: json['label'] as String? ?? '',
+          setValue: json['setValue'] as String?,
+        );
       case 'sparkline':
         return SlotSparkline(
             values: ((json['values'] as List?) ?? []).cast<num>());
       case 'disclosure':
         return const SlotDisclosure();
       case 'checkmark':
-        return SlotCheckmark(checked: json['checked'] as bool? ?? false);
+        return SlotCheckmark(
+          id: json['id'] as String? ?? '',
+          checked: json['value'] as bool? ?? json['checked'] as bool? ?? false,
+          label: json['label'] as String? ?? '',
+          setValue: json['setValue'] as String?,
+        );
       default:
         return SlotUnsupported(type);
     }
@@ -870,13 +1082,27 @@ final class SlotStatus extends ListItemSlot {
 }
 
 final class SlotToggle extends ListItemSlot {
-  const SlotToggle({required this.id, required this.on});
+  const SlotToggle({required this.id, required this.on, this.label = '', this.setValue});
   final String id;
   final bool on;
+  final String label;
+  final String? setValue;
   @override
   String get kind => 'toggle';
   @override
-  Map<String, dynamic> toJson() => {'type': 'toggle', 'id': id, 'on': on};
+  Map<String, dynamic> toJson() => {
+        'type': 'toggle',
+        'id': id,
+        'on': on,
+        if (label.isNotEmpty) 'label': label,
+        if (setValue != null) 'setValue': setValue,
+      };
+  SlotToggle copyWith({bool? on}) => SlotToggle(
+        id: id,
+        on: on ?? this.on,
+        label: label,
+        setValue: setValue,
+      );
   @override
   bool operator ==(Object other) =>
       other is SlotToggle && other.id == id && other.on == on;
@@ -885,17 +1111,22 @@ final class SlotToggle extends ListItemSlot {
 }
 
 final class SlotSparkline extends ListItemSlot {
-  const SlotSparkline({required this.values});
+  const SlotSparkline({required this.values, this.id = ''});
   final List<num> values;
+  final String id;
   @override
   String get kind => 'sparkline';
   @override
-  Map<String, dynamic> toJson() => {'type': 'sparkline', 'values': values};
+  Map<String, dynamic> toJson() => {
+        'type': 'sparkline',
+        'values': values,
+        if (id.isNotEmpty) 'id': id,
+      };
   @override
   bool operator ==(Object other) =>
-      other is SlotSparkline && _listEq(other.values, values);
+      other is SlotSparkline && _listEq(other.values, values) && other.id == id;
   @override
-  int get hashCode => values.length;
+  int get hashCode => Object.hash(values.length, id);
 }
 
 final class SlotDisclosure extends ListItemSlot {
@@ -911,18 +1142,33 @@ final class SlotDisclosure extends ListItemSlot {
 }
 
 final class SlotCheckmark extends ListItemSlot {
-  const SlotCheckmark({required this.checked});
+  const SlotCheckmark(
+      {required this.id, required this.checked, this.label = '', this.setValue});
+  final String id;
   final bool checked;
+  final String label;
+  final String? setValue;
   @override
   String get kind => 'checkmark';
   @override
-  Map<String, dynamic> toJson() =>
-      {'type': 'checkmark', 'checked': checked};
+  Map<String, dynamic> toJson() => {
+        'type': 'checkmark',
+        'id': id,
+        'checked': checked,
+        if (label.isNotEmpty) 'label': label,
+        if (setValue != null) 'setValue': setValue,
+      };
+  SlotCheckmark copyWith({bool? checked}) => SlotCheckmark(
+        id: id,
+        checked: checked ?? this.checked,
+        label: label,
+        setValue: setValue,
+      );
   @override
   bool operator ==(Object other) =>
-      other is SlotCheckmark && other.checked == checked;
+      other is SlotCheckmark && other.id == id && other.checked == checked;
   @override
-  int get hashCode => checked.hashCode;
+  int get hashCode => Object.hash(id, checked);
 }
 
 final class SlotUnsupported extends ListItemSlot {
@@ -1098,6 +1344,389 @@ final class GaugeSpec {
   int get hashCode => Object.hash(id, ratio, label, accessibilityText);
 }
 
+// ---------------------------------------------------------------------------
+// Charts (sparkline / barChart / lineChart page bodies)
+// ---------------------------------------------------------------------------
+
+/// Mirrors Swift `UISparklineSpec`.
+///
+/// Validation mirrors Swift `isValid`: 1…100,000 finite series values,
+/// containing bounds, single-line caption/unit, valid identifiers and
+/// accessibility text.
+final class SparklineSpec {
+  const SparklineSpec({
+    required this.id,
+    required this.series,
+    this.min,
+    this.max,
+    this.caption,
+    this.unit,
+    required this.accessibilityText,
+    this.activate,
+  });
+
+  final String id;
+  final List<double> series;
+  final double? min;
+  final double? max;
+  final String? caption;
+  final String? unit;
+  final String accessibilityText;
+  final String? activate;
+
+  bool get isValid =>
+      id.isNotEmpty &&
+      series.length >= 1 &&
+      series.length <= 100000 &&
+      series.every((v) => v.isFinite) &&
+      (min?.isFinite ?? true) &&
+      (max?.isFinite ?? true) &&
+      (min == null || series.every((v) => v >= min!)) &&
+      (max == null || series.every((v) => v <= max!)) &&
+      (min == null || max == null || min! < max!) &&
+      accessibilityText.trim().isNotEmpty &&
+      (caption == null || !_hasNewline(caption!)) &&
+      (unit == null || !_hasNewline(unit!));
+
+  /// Mirrors Swift `resolvedBounds`: inferred bounds include zero; an
+  /// all-zero series expands to 0...1.
+  (double, double) get resolvedBounds {
+    final seriesMin = series.reduce((a, b) => a < b ? a : b);
+    final seriesMax = series.reduce((a, b) => a > b ? a : b);
+    final lower = min ?? (seriesMin < 0 ? seriesMin : 0);
+    var upper = max ?? (seriesMax > 0 ? seriesMax : 0);
+    if (lower == upper) upper = lower + 1;
+    return (lower, upper);
+  }
+
+  /// Mirrors Swift `normalizedSeries`.
+  List<double> get normalizedSeries {
+    final (lower, upper) = resolvedBounds;
+    final range = upper - lower;
+    return series
+        .map((v) => ((v - lower) / range).clamp(0.0, 1.0))
+        .toList();
+  }
+
+  factory SparklineSpec.fromJson(Map<String, dynamic> json) {
+    final spec = SparklineSpec(
+      id: json['id'] as String,
+      series: ((json['series'] as List?) ?? [])
+          .map((v) => (v as num).toDouble())
+          .toList(),
+      min: (json['min'] as num?)?.toDouble(),
+      max: (json['max'] as num?)?.toDouble(),
+      caption: json['caption'] as String?,
+      unit: json['unit'] as String?,
+      accessibilityText: json['accessibilityText'] as String,
+      activate: json['activate'] as String?,
+    );
+    if (!spec.isValid) {
+      throw FormatException('Sparkline needs finite data and valid bounds', json);
+    }
+    return spec;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'series': series,
+        if (min != null) 'min': min,
+        if (max != null) 'max': max,
+        if (caption != null) 'caption': caption,
+        if (unit != null) 'unit': unit,
+        'accessibilityText': accessibilityText,
+        if (activate != null) 'activate': activate,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is SparklineSpec &&
+      other.id == id &&
+      _listEq(other.series, series) &&
+      other.min == min &&
+      other.max == max &&
+      other.caption == caption &&
+      other.unit == unit &&
+      other.accessibilityText == accessibilityText &&
+      other.activate == activate;
+
+  @override
+  int get hashCode => Object.hash(id, series.length, accessibilityText);
+}
+
+bool _hasNewline(String s) => s.contains('\n') || s.contains('\r');
+
+/// Mirrors Swift `UIBarChartBar`.
+final class BarChartBar {
+  const BarChartBar({
+    required this.label,
+    required this.value,
+    this.valueCaption,
+    this.emphasis = 'default',
+  });
+
+  final String label;
+  final double value;
+  final String? valueCaption;
+  final String emphasis;
+
+  bool get isValid =>
+      label.trim().isNotEmpty &&
+      value.isFinite &&
+      value >= 0 &&
+      (emphasis == 'default' || emphasis == 'accent' || emphasis == 'danger');
+
+  factory BarChartBar.fromJson(Map<String, dynamic> json) => BarChartBar(
+        label: json['label'] as String,
+        value: (json['value'] as num).toDouble(),
+        valueCaption: json['valueCaption'] as String?,
+        emphasis: json['emphasis'] as String? ?? 'default',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+        if (valueCaption != null) 'valueCaption': valueCaption,
+        'emphasis': emphasis,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is BarChartBar &&
+      other.label == label &&
+      other.value == value &&
+      other.valueCaption == valueCaption &&
+      other.emphasis == emphasis;
+
+  @override
+  int get hashCode => Object.hash(label, value, emphasis);
+}
+
+/// Mirrors Swift `UIBarChartSpec`.
+final class BarChartSpec {
+  const BarChartSpec({
+    required this.id,
+    required this.bars,
+    required this.accessibilityText,
+    this.activate,
+  });
+
+  final String id;
+  final List<BarChartBar> bars;
+  final String accessibilityText;
+  final String? activate;
+
+  bool get isValid =>
+      id.isNotEmpty &&
+      bars.length >= 1 &&
+      bars.length <= 1000 &&
+      bars.every((b) => b.isValid) &&
+      accessibilityText.trim().isNotEmpty;
+
+  /// Mirrors Swift `normalizedValues`.
+  List<double> get normalizedValues {
+    final maximum = bars.map((b) => b.value).reduce((a, b) => a > b ? a : b);
+    final denom = maximum > 0 ? maximum : 1;
+    return bars.map((b) => (b.value / denom).clamp(0.0, 1.0)).toList();
+  }
+
+  factory BarChartSpec.fromJson(Map<String, dynamic> json) {
+    final spec = BarChartSpec(
+      id: json['id'] as String,
+      bars: ((json['bars'] as List?) ?? [])
+          .map((b) => BarChartBar.fromJson(b as Map<String, dynamic>))
+          .toList(),
+      accessibilityText: json['accessibilityText'] as String,
+      activate: json['activate'] as String?,
+    );
+    if (!spec.isValid) {
+      throw FormatException(
+          'BarChart needs labeled non-negative bars and accessibility text',
+          json);
+    }
+    return spec;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'bars': bars.map((b) => b.toJson()).toList(),
+        'accessibilityText': accessibilityText,
+        if (activate != null) 'activate': activate,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is BarChartSpec &&
+      other.id == id &&
+      _listEq(other.bars, bars) &&
+      other.accessibilityText == accessibilityText &&
+      other.activate == activate;
+
+  @override
+  int get hashCode => Object.hash(id, bars.length, accessibilityText);
+}
+
+/// Mirrors Swift `UILineChartPoint`.
+final class LineChartPoint {
+  const LineChartPoint({required this.x, required this.y});
+
+  final double x;
+  final double y;
+
+  factory LineChartPoint.fromJson(Map<String, dynamic> json) => LineChartPoint(
+        x: (json['x'] as num).toDouble(),
+        y: (json['y'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {'x': x, 'y': y};
+
+  @override
+  bool operator ==(Object other) =>
+      other is LineChartPoint && other.x == x && other.y == y;
+
+  @override
+  int get hashCode => Object.hash(x, y);
+}
+
+/// Mirrors Swift `UILineChartSeries`.
+final class LineChartSeries {
+  const LineChartSeries({required this.name, this.points = const []});
+
+  final String name;
+  final List<LineChartPoint> points;
+
+  factory LineChartSeries.fromJson(Map<String, dynamic> json) => LineChartSeries(
+        name: json['name'] as String,
+        points: ((json['points'] as List?) ?? [])
+            .map((p) => LineChartPoint.fromJson(p as Map<String, dynamic>))
+            .toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'points': points.map((p) => p.toJson()).toList(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LineChartSeries &&
+      other.name == name &&
+      _listEq(other.points, points);
+
+  @override
+  int get hashCode => Object.hash(name, points.length);
+}
+
+/// Mirrors Swift `UILineChartAxis`.
+final class LineChartAxis {
+  const LineChartAxis({this.min, this.max, this.label});
+
+  final double? min;
+  final double? max;
+  final String? label;
+
+  bool get isValid =>
+      (min == null || min!.isFinite) &&
+      (max == null || max!.isFinite) &&
+      (min == null || max == null || min! < max!);
+
+  factory LineChartAxis.fromJson(Map<String, dynamic> json) => LineChartAxis(
+        min: (json['min'] as num?)?.toDouble(),
+        max: (json['max'] as num?)?.toDouble(),
+        label: json['label'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (min != null) 'min': min,
+        if (max != null) 'max': max,
+        if (label != null) 'label': label,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LineChartAxis &&
+      other.min == min &&
+      other.max == max &&
+      other.label == label;
+
+  @override
+  int get hashCode => Object.hash(min, max, label);
+}
+
+/// Mirrors Swift `UILineChartSpec`.
+final class LineChartSpec {
+  const LineChartSpec({
+    required this.id,
+    required this.series,
+    this.xAxis = const LineChartAxis(),
+    this.yAxis = const LineChartAxis(),
+    required this.accessibilityText,
+    this.activate,
+  });
+
+  final String id;
+  final List<LineChartSeries> series;
+  final LineChartAxis xAxis;
+  final LineChartAxis yAxis;
+  final String accessibilityText;
+  final String? activate;
+
+  bool get isValid =>
+      id.isNotEmpty &&
+      series.isNotEmpty &&
+      series.every((s) =>
+          s.name.trim().isNotEmpty &&
+          s.points.every((p) => p.x.isFinite && p.y.isFinite)) &&
+      xAxis.isValid &&
+      yAxis.isValid &&
+      accessibilityText.trim().isNotEmpty;
+
+  factory LineChartSpec.fromJson(Map<String, dynamic> json) {
+    final spec = LineChartSpec(
+      id: json['id'] as String,
+      series: ((json['series'] as List?) ?? [])
+          .map((s) => LineChartSeries.fromJson(s as Map<String, dynamic>))
+          .toList(),
+      xAxis: json['xAxis'] == null
+          ? const LineChartAxis()
+          : LineChartAxis.fromJson(json['xAxis'] as Map<String, dynamic>),
+      yAxis: json['yAxis'] == null
+          ? const LineChartAxis()
+          : LineChartAxis.fromJson(json['yAxis'] as Map<String, dynamic>),
+      accessibilityText: json['accessibilityText'] as String,
+      activate: json['activate'] as String?,
+    );
+    if (!spec.isValid) {
+      throw FormatException(
+          'LineChart needs named series with finite points and valid axes',
+          json);
+    }
+    return spec;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'series': series.map((s) => s.toJson()).toList(),
+        'xAxis': xAxis.toJson(),
+        'yAxis': yAxis.toJson(),
+        'accessibilityText': accessibilityText,
+        if (activate != null) 'activate': activate,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LineChartSpec &&
+      other.id == id &&
+      _listEq(other.series, series) &&
+      other.xAxis == xAxis &&
+      other.yAxis == yAxis &&
+      other.accessibilityText == accessibilityText &&
+      other.activate == activate;
+
+  @override
+  int get hashCode => Object.hash(id, series.length, accessibilityText);
+}
+
 /// Mirrors Swift `UIBadgeSpec`.
 final class BadgeSpec {
   const BadgeSpec({required this.text, this.tone = 'default'});
@@ -1156,12 +1785,14 @@ final class ContentSpec {
     required this.label,
     this.lines = const [],
     this.emptyMessage = '',
+    this.selection,
   });
 
   final String id;
   final String label;
   final List<ContentLine> lines;
   final String emptyMessage;
+  final Map<String, dynamic>? selection;
 
   factory ContentSpec.fromJson(Map<String, dynamic> json) => ContentSpec(
         id: json['id'] as String,
@@ -1170,6 +1801,7 @@ final class ContentSpec {
             .map((l) => ContentLine.fromJson(l as Map<String, dynamic>))
             .toList(),
         emptyMessage: json['emptyMessage'] as String? ?? '',
+        selection: json['selection'] as Map<String, dynamic>?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1177,7 +1809,21 @@ final class ContentSpec {
         'label': label,
         'lines': lines.map((l) => l.toJson()).toList(),
         'emptyMessage': emptyMessage,
+        if (selection != null) 'selection': selection,
       };
+
+  ContentSpec copyWith({
+    List<ContentLine>? lines,
+    Map<String, dynamic>? selection,
+    bool clearSelection = false,
+  }) =>
+      ContentSpec(
+        id: id,
+        label: label,
+        lines: lines ?? this.lines,
+        emptyMessage: emptyMessage,
+        selection: clearSelection ? null : (selection ?? this.selection),
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -1231,11 +1877,19 @@ final class TreeSpec {
     required this.id,
     required this.items,
     this.emptyMessage = '',
+    this.selectedId,
+    this.filter,
+    this.location = '',
+    this.footer = const FooterActionsSpec(),
   });
 
   final String id;
   final List<TreeItemSpec> items;
   final String emptyMessage;
+  final String? selectedId;
+  final TreeFilterSpec? filter;
+  final String location;
+  final FooterActionsSpec footer;
 
   factory TreeSpec.fromJson(Map<String, dynamic> json) => TreeSpec(
         id: json['id'] as String,
@@ -1243,22 +1897,80 @@ final class TreeSpec {
             .map((i) => TreeItemSpec.fromJson(i as Map<String, dynamic>))
             .toList(),
         emptyMessage: json['emptyMessage'] as String? ?? '',
+        selectedId: json['selectedId'] as String?,
+        filter: json['filter'] == null
+            ? null
+            : TreeFilterSpec.fromJson(json['filter'] as Map<String, dynamic>),
+        location: json['location'] as String? ?? '',
+        footer: json['footer'] == null
+            ? const FooterActionsSpec()
+            : FooterActionsSpec.fromJson(
+                json['footer'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'items': items.map((i) => i.toJson()).toList(),
         'emptyMessage': emptyMessage,
+        if (selectedId != null) 'selectedId': selectedId,
+        if (filter != null) 'filter': filter!.toJson(),
+        'location': location,
+        'footer': footer.toJson(),
       };
+
+  TreeSpec copyWith({
+    List<TreeItemSpec>? items,
+    String? selectedId,
+    bool clearSelectedId = false,
+    TreeFilterSpec? filter,
+    String? location,
+    FooterActionsSpec? footer,
+  }) =>
+      TreeSpec(
+        id: id,
+        items: items ?? this.items,
+        emptyMessage: emptyMessage,
+        selectedId: clearSelectedId ? null : (selectedId ?? this.selectedId),
+        filter: filter ?? this.filter,
+        location: location ?? this.location,
+        footer: footer ?? this.footer,
+      );
 
   @override
   bool operator ==(Object other) =>
       other is TreeSpec &&
       other.id == id &&
-      _listEq(other.items, items);
+      _listEq(other.items, items) &&
+      other.selectedId == selectedId &&
+      other.location == location;
 
   @override
-  int get hashCode => Object.hash(id, items.length);
+  int get hashCode => Object.hash(id, items.length, selectedId);
+}
+
+/// Mirrors Swift `UITreeFilterSpec`.
+final class TreeFilterSpec {
+  const TreeFilterSpec({required this.id, this.value = ''});
+
+  final String id;
+  final String value;
+
+  factory TreeFilterSpec.fromJson(Map<String, dynamic> json) => TreeFilterSpec(
+        id: json['id'] as String,
+        value: json['value'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'value': value};
+
+  TreeFilterSpec copyWith({String? value}) =>
+      TreeFilterSpec(id: id, value: value ?? this.value);
+
+  @override
+  bool operator ==(Object other) =>
+      other is TreeFilterSpec && other.id == id && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(id, value);
 }
 
 /// Mirrors Swift `UITreeItem`.
@@ -1269,6 +1981,7 @@ final class TreeItemSpec {
     this.kind = 'file',
     this.children = const [],
     this.expanded = false,
+    this.childState = 'loaded',
   });
 
   final String id;
@@ -1276,6 +1989,7 @@ final class TreeItemSpec {
   final String kind;
   final List<TreeItemSpec> children;
   final bool expanded;
+  final String childState;
 
   factory TreeItemSpec.fromJson(Map<String, dynamic> json) => TreeItemSpec(
         id: json['id'] as String,
@@ -1285,6 +1999,7 @@ final class TreeItemSpec {
             .map((c) => TreeItemSpec.fromJson(c as Map<String, dynamic>))
             .toList(),
         expanded: json['expanded'] as bool? ?? false,
+        childState: json['childState'] as String? ?? 'loaded',
       );
 
   Map<String, dynamic> toJson() => {
@@ -1293,7 +2008,22 @@ final class TreeItemSpec {
         'kind': kind,
         'children': children.map((c) => c.toJson()).toList(),
         'expanded': expanded,
+        'childState': childState,
       };
+
+  TreeItemSpec copyWith({
+    List<TreeItemSpec>? children,
+    bool? expanded,
+    String? childState,
+  }) =>
+      TreeItemSpec(
+        id: id,
+        label: label,
+        kind: kind,
+        children: children ?? this.children,
+        expanded: expanded ?? this.expanded,
+        childState: childState ?? this.childState,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -1302,10 +2032,11 @@ final class TreeItemSpec {
       other.label == label &&
       other.kind == kind &&
       _listEq(other.children, children) &&
-      other.expanded == expanded;
+      other.expanded == expanded &&
+      other.childState == childState;
 
   @override
-  int get hashCode => Object.hash(id, label, kind, expanded);
+  int get hashCode => Object.hash(id, label, kind, expanded, childState);
 }
 
 // ---------------------------------------------------------------------------
@@ -1353,20 +2084,30 @@ final class TextBoxSpec {
 
 /// Mirrors Swift `MediaSpec` (render subset).
 final class MediaSpec {
-  const MediaSpec({this.source = '', this.caption});
+  const MediaSpec({this.source = '', this.caption, this.intrinsic});
 
   final String source;
   final String? caption;
+  final Map<String, dynamic>? intrinsic;
 
   factory MediaSpec.fromJson(Map<String, dynamic> json) => MediaSpec(
         source: json['source'] as String? ?? '',
         caption: json['caption'] as String?,
+        intrinsic: json['intrinsic'] as Map<String, dynamic>?,
       );
 
   Map<String, dynamic> toJson() => {
         'source': source,
         if (caption != null) 'caption': caption,
+        if (intrinsic != null) 'intrinsic': intrinsic,
       };
+
+  MediaSpec copyWith({String? source, Map<String, dynamic>? intrinsic}) =>
+      MediaSpec(
+        source: source ?? this.source,
+        caption: caption,
+        intrinsic: intrinsic ?? this.intrinsic,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -1377,30 +2118,92 @@ final class MediaSpec {
 }
 
 /// Mirrors Swift `UIMenuSpec` (render subset).
+/// Mirrors Swift `UIMenuSpec` (full decode).
+///
+/// The menu presents grouped actions. `presentation` is `popup` or
+/// `palette`; `anchor` is `control` or `cursor`. `selectedID` tracks the
+/// keyboard-selected item; `dismiss` is the action fired on dismiss.
 final class MenuSpec {
-  const MenuSpec({required this.id, this.items = const []});
+  const MenuSpec({
+    required this.id,
+    this.label = '',
+    this.presentation = 'popup',
+    this.anchor = 'control',
+    this.items = const [],
+    this.selectedId,
+    this.dismiss,
+  });
 
   final String id;
+  final String label;
+  final String presentation;
+  final String anchor;
   final List<MenuItemSpec> items;
+  final String? selectedId;
+  final String? dismiss;
 
-  factory MenuSpec.fromJson(Map<String, dynamic> json) => MenuSpec(
-        id: json['id'] as String,
-        items: ((json['items'] as List?) ?? [])
-            .map((i) => MenuItemSpec.fromJson(i as Map<String, dynamic>))
-            .toList(),
-      );
+  /// Mirrors Swift `UIMenuSpec.requiredCapabilities`: nil when the menu is
+  /// invalid (duplicate IDs, >256 items, selectedID not in items, or the
+  /// selected item is disabled).
+  List<String>? get requiredCapabilities {
+    final ids = items.map((i) => i.id).toSet();
+    if (items.length > 256 ||
+        ids.length != items.length ||
+        (selectedId != null && !ids.contains(selectedId)) ||
+        items.any((i) => i.id == selectedId && i.disabled)) {
+      return null;
+    }
+    return [AppKitProtocol.menuCapability, AppKitProtocol.menuAnchorCapability];
+  }
+
+  factory MenuSpec.fromJson(Map<String, dynamic> json) {
+    final spec = MenuSpec(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      presentation: json['presentation'] as String? ?? 'popup',
+      anchor: json['anchor'] as String? ?? 'control',
+      items: ((json['items'] as List?) ?? [])
+          .map((i) => MenuItemSpec.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      selectedId: json['selectedId'] as String?,
+      dismiss: json['dismiss'] as String?,
+    );
+    return spec;
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'label': label,
+        'presentation': presentation,
+        'anchor': anchor,
         'items': items.map((i) => i.toJson()).toList(),
+        if (selectedId != null) 'selectedId': selectedId,
+        if (dismiss != null) 'dismiss': dismiss,
       };
+
+  MenuSpec copyWith({String? selectedId}) => MenuSpec(
+        id: id,
+        label: label,
+        presentation: presentation,
+        anchor: anchor,
+        items: items,
+        selectedId: selectedId,
+        dismiss: dismiss,
+      );
 
   @override
   bool operator ==(Object other) =>
-      other is MenuSpec && other.id == id && _listEq(other.items, items);
+      other is MenuSpec &&
+      other.id == id &&
+      other.label == label &&
+      other.presentation == presentation &&
+      other.anchor == anchor &&
+      _listEq(other.items, items) &&
+      other.selectedId == selectedId &&
+      other.dismiss == dismiss;
 
   @override
-  int get hashCode => Object.hash(id, items.length);
+  int get hashCode => Object.hash(id, label, items.length, selectedId);
 }
 
 /// Mirrors Swift `UIMenuItemSpec` (render subset).
@@ -1409,18 +2212,24 @@ final class MenuItemSpec {
     required this.id,
     required this.label,
     this.action,
+    this.hint,
+    this.disabled = false,
     this.role = 'default',
   });
 
   final String id;
   final String label;
   final String? action;
+  final String? hint;
+  final bool disabled;
   final String role;
 
   factory MenuItemSpec.fromJson(Map<String, dynamic> json) => MenuItemSpec(
         id: json['id'] as String,
         label: json['label'] as String,
         action: json['action'] as String?,
+        hint: json['hint'] as String?,
+        disabled: json['disabled'] as bool? ?? false,
         role: json['role'] as String? ?? 'default',
       );
 
@@ -1428,6 +2237,8 @@ final class MenuItemSpec {
         'id': id,
         'label': label,
         if (action != null) 'action': action,
+        if (hint != null) 'hint': hint,
+        'disabled': disabled,
         'role': role,
       };
 
@@ -1437,35 +2248,135 @@ final class MenuItemSpec {
       other.id == id &&
       other.label == label &&
       other.action == action &&
+      other.hint == hint &&
+      other.disabled == disabled &&
       other.role == role;
 
   @override
-  int get hashCode => Object.hash(id, label, action, role);
+  int get hashCode => Object.hash(id, label, action, disabled, role);
 }
 
-/// Mirrors Swift `MarkdownEditorSpec` (render subset).
+/// Mirrors Swift `MarkdownEditorSpec` (full).
+///
+/// The editor is the richest component: text with UTF-16 selection, presentation
+/// mode, read-only/dirty flags, command hint, title, actions, insert/context
+/// menus, and footer. Complex nested payloads (`selection`, `presentation`,
+/// `commandHint`, `actions`) are kept as raw wire maps; `insertMenu`,
+/// `contextMenu`, and `footer` decode through their spec types.
 final class MarkdownEditorSpec {
-  const MarkdownEditorSpec({this.text = '', this.placeholder = ''});
+  const MarkdownEditorSpec({
+    this.text = '',
+    this.selection,
+    this.presentation,
+    this.readOnly = false,
+    this.dirty = false,
+    this.placeholder = '',
+    this.commandHint,
+    this.title,
+    this.actions,
+    this.insertMenu,
+    this.contextMenu,
+    this.footer = const FooterActionsSpec(),
+  });
 
   final String text;
+  final Map<String, dynamic>? selection;
+  final Map<String, dynamic>? presentation;
+  final bool readOnly;
+  final bool dirty;
   final String placeholder;
+  final Map<String, dynamic>? commandHint;
+  final String? title;
+  final Map<String, dynamic>? actions;
+  final MenuSpec? insertMenu;
+  final MenuSpec? contextMenu;
+  final FooterActionsSpec footer;
 
   factory MarkdownEditorSpec.fromJson(Map<String, dynamic> json) =>
       MarkdownEditorSpec(
         text: json['text'] as String? ?? '',
+        selection: json['selection'] as Map<String, dynamic>?,
+        presentation: json['presentation'] as Map<String, dynamic>?,
+        readOnly: json['readOnly'] as bool? ?? false,
+        dirty: json['dirty'] as bool? ?? false,
         placeholder: json['placeholder'] as String? ?? '',
+        commandHint: json['commandHint'] as Map<String, dynamic>?,
+        title: json['title'] as String?,
+        actions: json['actions'] as Map<String, dynamic>?,
+        insertMenu: json['insertMenu'] == null
+            ? null
+            : MenuSpec.fromJson(json['insertMenu'] as Map<String, dynamic>),
+        contextMenu: json['contextMenu'] == null
+            ? null
+            : MenuSpec.fromJson(json['contextMenu'] as Map<String, dynamic>),
+        footer: json['footer'] == null
+            ? const FooterActionsSpec()
+            : FooterActionsSpec.fromJson(
+                json['footer'] as Map<String, dynamic>),
       );
 
-  Map<String, dynamic> toJson() => {'text': text, 'placeholder': placeholder};
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        if (selection != null) 'selection': selection,
+        if (presentation != null) 'presentation': presentation,
+        'readOnly': readOnly,
+        'dirty': dirty,
+        'placeholder': placeholder,
+        if (commandHint != null) 'commandHint': commandHint,
+        if (title != null) 'title': title,
+        if (actions != null) 'actions': actions,
+        if (insertMenu != null) 'insertMenu': insertMenu!.toJson(),
+        if (contextMenu != null) 'contextMenu': contextMenu!.toJson(),
+        'footer': footer.toJson(),
+      };
+
+  MarkdownEditorSpec copyWith({
+    String? text,
+    Map<String, dynamic>? selection,
+    Map<String, dynamic>? presentation,
+    bool? readOnly,
+    bool? dirty,
+    String? placeholder,
+    Map<String, dynamic>? commandHint,
+    String? title,
+    bool clearTitle = false,
+    Map<String, dynamic>? actions,
+    MenuSpec? insertMenu,
+    bool clearInsertMenu = false,
+    MenuSpec? contextMenu,
+    bool clearContextMenu = false,
+    FooterActionsSpec? footer,
+  }) =>
+      MarkdownEditorSpec(
+        text: text ?? this.text,
+        selection: selection ?? this.selection,
+        presentation: presentation ?? this.presentation,
+        readOnly: readOnly ?? this.readOnly,
+        dirty: dirty ?? this.dirty,
+        placeholder: placeholder ?? this.placeholder,
+        commandHint: commandHint ?? this.commandHint,
+        title: clearTitle ? null : (title ?? this.title),
+        actions: actions ?? this.actions,
+        insertMenu:
+            clearInsertMenu ? null : (insertMenu ?? this.insertMenu),
+        contextMenu:
+            clearContextMenu ? null : (contextMenu ?? this.contextMenu),
+        footer: footer ?? this.footer,
+      );
 
   @override
   bool operator ==(Object other) =>
       other is MarkdownEditorSpec &&
       other.text == text &&
-      other.placeholder == placeholder;
+      other.readOnly == readOnly &&
+      other.dirty == dirty &&
+      other.placeholder == placeholder &&
+      other.title == title &&
+      other.footer == footer;
 
   @override
-  int get hashCode => Object.hash(text, placeholder);
+  int get hashCode =>
+      Object.hash(text, readOnly, dirty, placeholder, title);
 }
 
 /// Mirrors Swift `CanvasPageSpec` (render subset).
@@ -1495,19 +2406,27 @@ final class CanvasPageSpec {
 
 /// Mirrors Swift `SurfaceSpec` (render subset).
 final class SurfaceSpec {
-  const SurfaceSpec({this.child});
+  const SurfaceSpec({this.child, this.reference});
 
   final AppKitNode? child;
+  final Map<String, dynamic>? reference;
 
   factory SurfaceSpec.fromJson(Map<String, dynamic> json) => SurfaceSpec(
         child: json['child'] == null
             ? null
             : AppKitNode.fromJson(json['child'] as Map<String, dynamic>),
+        reference: json['reference'] as Map<String, dynamic>?,
       );
 
   Map<String, dynamic> toJson() => {
         if (child != null) 'child': child!.toJson(),
+        if (reference != null) 'reference': reference,
       };
+
+  SurfaceSpec copyWith({Map<String, dynamic>? reference}) => SurfaceSpec(
+        child: child,
+        reference: reference ?? this.reference,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -1639,17 +2558,27 @@ final class AppKitParticipantToken {
 // Snapshot
 // ---------------------------------------------------------------------------
 
-/// Mirrors Swift `UISnapshot` (header subset).
+/// Mirrors Swift `UISnapshot`.
+///
+/// The snapshot carries the route envelope (protocol name/version, app
+/// instance, client, view) plus the revision. A delta applies only when its
+/// route matches and its `baseRevision` equals the snapshot's `revision`.
 final class AppKitSnapshot {
   const AppKitSnapshot({
+    this.protocolName = 'unpeel-ui-v1',
     required this.appInstanceId,
     required this.clientId,
+    this.viewId = '',
+    this.revision = 0,
     required this.root,
     this.protocolVersion = AppKitProtocol.version,
   });
 
+  final String protocolName;
   final String appInstanceId;
   final String clientId;
+  final String viewId;
+  final int revision;
   final AppKitNode root;
   final int protocolVersion;
 
@@ -1657,8 +2586,11 @@ final class AppKitSnapshot {
 
   factory AppKitSnapshot.fromJson(Map<String, dynamic> json) =>
       AppKitSnapshot(
+        protocolName: json['protocol'] as String? ?? 'unpeel-ui-v1',
         appInstanceId: json['appInstanceId'] as String,
         clientId: json['clientId'] as String,
+        viewId: json['viewId'] as String? ?? '',
+        revision: json['revision'] as int? ?? 0,
         root: AppKitNode.fromJson(json['root'] as Map<String, dynamic>),
         protocolVersion: json['protocolVersion'] as int? ?? 1,
       );

@@ -1,9 +1,11 @@
 /// Markdown editing helpers ported from Swift to Dart.
 ///
-/// Ports two pure functions from
+/// Ports three pure functions from
 /// `clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/`:
 /// - `markdownBackspaceEdit(text:selection:)` from `MarkdownInsertMenu.swift`
 /// - `markdownTaskToggleEdit(text:utf16Offset:)` from `MarkdownEditorView.swift`
+/// - `shouldApplyAuthoritativeMarkdownSelection(...)` from
+///   `MarkdownEditorView.swift`
 ///
 /// Both are the native text-system translation of the Rust Markdown contracts
 /// (backspace removes list/quote/heading markers; tap toggles task checkboxes).
@@ -216,3 +218,25 @@ MarkdownTaskToggleEdit? markdownTaskToggleEdit(String text, int utf16Offset) {
     replacement: checked ? ' ' : 'x',
   );
 }
+
+/// Mirrors Swift `shouldApplyAuthoritativeMarkdownSelection(...)` from
+/// `MarkdownEditorView.swift`.
+///
+/// Decides whether an authoritative (server-driven) selection should replace
+/// the editor's current selection:
+/// - when the editor does not own focus, always apply (the user isn't
+///   actively editing), or
+/// - when the current selection already matches the previously applied
+///   authoritative range (no local edit happened since), or
+/// - when the current selection already equals the incoming range.
+///
+/// Ranges are (location, length) UTF-16 pairs, mirroring `NSRange`.
+bool shouldApplyAuthoritativeMarkdownSelection({
+  required bool editorOwnsFocus,
+  required (int, int) currentRange,
+  required (int, int)? previousRange,
+  required (int, int) incomingRange,
+}) =>
+    !editorOwnsFocus ||
+    currentRange == previousRange ||
+    currentRange == incomingRange;

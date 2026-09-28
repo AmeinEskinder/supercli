@@ -129,4 +129,61 @@ void main() {
       expect(markdownTaskToggleEdit('abc', 99), isNull);
     });
   });
+
+  group('shouldApplyAuthoritativeMarkdownSelection', () {
+    test('applies when editor does not own focus', () {
+      expect(
+          shouldApplyAuthoritativeMarkdownSelection(
+            editorOwnsFocus: false,
+            currentRange: (5, 0),
+            previousRange: (0, 0),
+            incomingRange: (10, 0),
+          ),
+          isTrue);
+    });
+
+    test('applies when current matches previous (no local edit)', () {
+      expect(
+          shouldApplyAuthoritativeMarkdownSelection(
+            editorOwnsFocus: true,
+            currentRange: (3, 0),
+            previousRange: (3, 0),
+            incomingRange: (7, 0),
+          ),
+          isTrue);
+    });
+
+    test('applies when current already equals incoming', () {
+      expect(
+          shouldApplyAuthoritativeMarkdownSelection(
+            editorOwnsFocus: true,
+            currentRange: (7, 0),
+            previousRange: (3, 0),
+            incomingRange: (7, 0),
+          ),
+          isTrue);
+    });
+
+    test('does not apply when user edited since', () {
+      expect(
+          shouldApplyAuthoritativeMarkdownSelection(
+            editorOwnsFocus: true,
+            currentRange: (5, 0),
+            previousRange: (3, 0),
+            incomingRange: (7, 0),
+          ),
+          isFalse);
+    });
+
+    test('does not apply when previous is null and ranges differ', () {
+      expect(
+          shouldApplyAuthoritativeMarkdownSelection(
+            editorOwnsFocus: true,
+            currentRange: (5, 0),
+            previousRange: null,
+            incomingRange: (7, 0),
+          ),
+          isFalse);
+    });
+  });
 }

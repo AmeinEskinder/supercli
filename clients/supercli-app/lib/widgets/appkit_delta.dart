@@ -2,7 +2,8 @@
 ///
 /// Port of `clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift`
 /// (1336 lines): the `UIDeltaOperation` decode side and the `UIDelta` envelope
-/// with its revision validation.
+/// with its revision validation. Incremental application
+/// (`UISnapshot.applying(_:)`) is in `appkit_delta_apply.dart`.
 ///
 /// A delta is a contiguous server-to-renderer change: the renderer applies it
 /// only when its snapshot revision equals `baseRevision`. JSON keys match the
@@ -15,11 +16,6 @@
 /// - `gaugeSetData` reuses [GaugeSpec.fromJson], which throws on invalid data.
 /// - The envelope requires `baseRevision >= 0`, `revision > baseRevision`,
 ///   and 1…4096 operations.
-///
-/// NOT ported (documented gap GAP-APPKIT-3): incremental application
-/// (`UISnapshot.applying(_:)`). The Dart renderer re-renders full snapshots,
-/// and the Dart component model is a render subset, so most op applications
-/// have no target type.
 library;
 
 import 'appkit_protocol.dart';

@@ -267,4 +267,216 @@ void main() {
       expect(AppKitEventKind.fromWire('nope'), isNull);
     });
   });
+
+  group('charts (sparkline/barChart/lineChart page bodies)', () {
+    test('sparkline decodes and validates', () {
+      final spec = SparklineSpec.fromJson({
+        'id': 's',
+        'series': [1.0, 2.0, 3.0],
+        'accessibilityText': 'trend',
+      });
+      expect(spec.series, [1.0, 2.0, 3.0]);
+      // resolvedBounds includes zero: 0...3.
+      expect(spec.resolvedBounds, (0.0, 3.0));
+      expect(spec.normalizedSeries, [1 / 3, 2 / 3, 1.0]);
+    });
+
+    test('sparkline rejects empty series', () {
+      expect(
+          () => SparklineSpec.fromJson(
+              {'id': 's', 'series': [], 'accessibilityText': 'a'}),
+          throwsFormatException);
+    });
+
+    test('sparkline rejects out-of-bounds min', () {
+      expect(
+          () => SparklineSpec.fromJson({
+                'id': 's',
+                'series': [1.0],
+                'min': 5.0,
+                'accessibilityText': 'a'
+              }),
+          throwsFormatException);
+    });
+
+    test('barChart decodes and normalizes', () {
+      final spec = BarChartSpec.fromJson({
+        'id': 'b',
+        'bars': [
+          {'label': 'A', 'value': 10.0},
+          {'label': 'B', 'value': 20.0, 'emphasis': 'accent'},
+        ],
+        'accessibilityText': 'bars',
+      });
+      expect(spec.bars.map((b) => b.label), ['A', 'B']);
+      expect(spec.bars[1].emphasis, 'accent');
+      expect(spec.normalizedValues, [0.5, 1.0]);
+    });
+
+    test('barChart rejects negative values', () {
+      expect(
+          () => BarChartSpec.fromJson({
+                'id': 'b',
+                'bars': [
+                  {'label': 'A', 'value': -1.0}
+                ],
+                'accessibilityText': 'a'
+              }),
+          throwsFormatException);
+    });
+
+    test('lineChart decodes with axes', () {
+      final spec = LineChartSpec.fromJson({
+        'id': 'l',
+        'series': [
+          {
+            'name': 's1',
+            'points': [
+              {'x': 0.0, 'y': 1.0},
+              {'x': 1.0, 'y': 2.0}
+            ]
+          }
+        ],
+        'xAxis': {'label': 'time'},
+        'accessibilityText': 'lines',
+      });
+      expect(spec.series.first.name, 's1');
+      expect(spec.xAxis.label, 'time');
+      expect(spec.yAxis.label, isNull);
+    });
+
+    test('page body decodes chart types', () {
+      final spark = PageBody.fromJson({
+        'type': 'sparkline',
+        'sparkline': {
+          'id': 's',
+          'series': [1.0],
+          'accessibilityText': 'a'
+        }
+      });
+      expect(spark, isA<PageBodySparkline>());
+
+      final bar = PageBody.fromJson({
+        'type': 'barChart',
+        'barChart': {
+          'id': 'b',
+          'bars': [
+            {'label': 'A', 'value': 1.0}
+          ],
+          'accessibilityText': 'a'
+        }
+      });
+      expect(bar, isA<PageBodyBarChart>());
+
+      final line = PageBody.fromJson({
+        'type': 'lineChart',
+        'lineChart': {
+          'id': 'l',
+          'series': [
+            {'name': 's', 'points': []}
+          ],
+          'accessibilityText': 'a'
+        }
+      });
+      expect(line, isA<PageBodyLineChart>());
+    });
+  });
+
+  group('UIInputSpec (page header input)', () {
+    test('decodes with defaults', () {
+      final spec = UIInputSpec.fromJson({'id': 'q', 'label': 'Search'});
+      expect(spec.value, '');
+      expect(spec.placeholder, '');
+      expect(spec.setValue, isNull);
+      expect(spec.submit, isNull);
+    });
+
+    test('decodes full', () {
+      final spec = UIInputSpec.fromJson({
+        'id': 'q',
+        'label': 'Search',
+        'value': 'hello',
+        'placeholder': 'Type…',
+        'setValue': 'set-q',
+        'submit': 'submit-q',
+      });
+      expect(spec.value, 'hello');
+      expect(spec.setValue, 'set-q');
+      expect(spec.submit, 'submit-q');
+    });
+
+    test('page header decodes input', () {
+      final header = PageHeader.fromJson({
+        'type': 'input',
+        'input': {'id': 'q', 'label': 'Search', 'value': 'x'}
+      });
+      expect(header, isA<PageHeaderInput>());
+      expect((header as PageHeaderInput).input.value, 'x');
+    });
+
+    test('page spec carries header', () {
+      final page = PageSpec.fromJson({
+        'title': 't',
+        'header': {
+          'type': 'input',
+          'input': {'id': 'q', 'label': 'Search'}
+        },
+        'body': {'type': 'list', 'list': {'id': 'l', 'items': []}}
+      });
+      expect(page.header, isA<PageHeaderInput>());
+    });
+  });
+
+  group('UIMenuSpec (full decode)', () {
+    test('decodes label/presentation/anchor/selectedId/dismiss', () {
+      final spec = MenuSpec.fromJson({
+        'id': 'm',
+        'label': 'Actions',
+        'presentation': 'palette',
+        'anchor': 'cursor',
+        'items': [
+          {'id': 'a', 'label': 'A', 'action': 'do-a'},
+          {'id': 'b', 'label': 'B', 'action': 'do-b', 'disabled': true},
+        ],
+        'selectedId': 'a',
+        'dismiss': 'dismiss-m',
+      });
+      expect(spec.label, 'Actions');
+      expect(spec.presentation, 'palette');
+      expect(spec.anchor, 'cursor');
+      expect(spec.items.length, 2);
+      expect(spec.items[1].disabled, isTrue);
+      expect(spec.selectedId, 'a');
+      expect(spec.dismiss, 'dismiss-m');
+    });
+
+    test('requiredCapabilities is null for invalid menu', () {
+      // Duplicate IDs.
+      final dup = MenuSpec(id: 'm', items: [
+        const MenuItemSpec(id: 'a', label: 'A'),
+        const MenuItemSpec(id: 'a', label: 'A2'),
+      ]);
+      expect(dup.requiredCapabilities, isNull);
+
+      // Selected ID not in items.
+      final badSel = MenuSpec(id: 'm', items: [
+        const MenuItemSpec(id: 'a', label: 'A'),
+      ], selectedId: 'zzz');
+      expect(badSel.requiredCapabilities, isNull);
+
+      // Selected item disabled.
+      final disSel = MenuSpec(id: 'm', items: [
+        const MenuItemSpec(id: 'a', label: 'A', disabled: true),
+      ], selectedId: 'a');
+      expect(disSel.requiredCapabilities, isNull);
+    });
+
+    test('requiredCapabilities returns menu capabilities when valid', () {
+      final spec = MenuSpec(id: 'm', items: [
+        const MenuItemSpec(id: 'a', label: 'A'),
+      ]);
+      expect(spec.requiredCapabilities,
+          [AppKitProtocol.menuCapability, AppKitProtocol.menuAnchorCapability]);
+    });
+  });
 }
