@@ -30,7 +30,11 @@ jobs:
         with:
           workspaces: crates/apps
       - name: Format
-        run: cargo fmt --manifest-path crates/apps/Cargo.toml --all -- --check
+        # Scope fmt to the four live crates/apps members. A workspace-wide
+        # `cargo fmt --all` also reaches the frozen clients/legacy/app-kit path
+        # dependency, which carries pre-existing import-ordering diffs and must
+        # not gate CI (clients/legacy is frozen read-only).
+        run: cargo fmt --manifest-path crates/apps/Cargo.toml -p supercli-markdown -p supercli-diffs -p supercli-filetree -p supercli-usage -- --check
       - name: Clippy
         run: cargo clippy --manifest-path crates/apps/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - name: Tests
