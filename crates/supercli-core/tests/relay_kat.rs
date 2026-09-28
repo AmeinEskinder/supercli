@@ -21,8 +21,7 @@ fn range(n: usize, f: impl Fn(usize) -> usize) -> Vec<u8> {
 }
 
 fn b64_decode(text: &str) -> Vec<u8> {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = Vec::new();
     let mut buf = 0u32;
     let mut bits = 0;
