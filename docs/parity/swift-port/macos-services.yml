@@ -306,3 +306,59 @@ files:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
         count: 4
     notes: "4 XCTest cases ported."
+
+  native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift:
+    destination: "Dart: supercli_app::feature_flags"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "AppFeature — key/title/summary/defaultsKey (supercli.experimental.<key>), envOverride + legacyEnvOverrides, defaultOn, experimental"
+        target: "clients/supercli-app/lib/feature_flags.dart::AppFeature"
+        test: "feature_flags_test.dart: all lists five features in display order, defaultsKey prefix, legacy env overrides, computerUse retired"
+      - swift: "Static feature definitions — worktrees, sessionsMcp, workspaces (key profiles), computerUse, browserMcp, remoteWorkspaces"
+        target: "clients/supercli-app/lib/feature_flags.dart::AppFeature.worktrees/sessionsMcp/workspaces/computerUse/browserMcp/remoteWorkspaces"
+        test: "feature_flags_test.dart: all lists five features in display order"
+      - swift: "AppFeature.all — display order, experimentalSectionDescription shared copy"
+        target: "clients/supercli-app/lib/feature_flags.dart::AppFeature.all, experimentalSectionDescription"
+        test: "feature_flags_test.dart: all lists five features in display order, experimental section description"
+      - swift: "SupercliFeatureFlags.isAvailable — computerUse never available"
+        target: "clients/supercli-app/lib/feature_flags.dart::SupercliFeatureFlags.isAvailable"
+        test: "feature_flags_test.dart: computerUse is retired and not in all"
+      - swift: "availableFeatures / availableShippedFeatures / availableExperimentalFeatures"
+        target: "clients/supercli-app/lib/feature_flags.dart::SupercliFeatureFlags.availableFeatures/availableShippedFeatures/availableExperimentalFeatures"
+        test: "feature_flags_test.dart: shipped vs experimental split"
+      - swift: "isEnabled — env override first, then own store, then inherited default-workspace value, then built-in default"
+        target: "clients/supercli-app/lib/feature_flags.dart::SupercliFeatureFlags.isEnabled"
+        test: "feature_flags_test.dart: retired never enabled, env override force-enables, own store wins, inherits default workspace value, falls back to built-in default"
+      - swift: "hasOwnSetting / setEnabled / revertToInheritedBaseline"
+        target: "clients/supercli-app/lib/feature_flags.dart::SupercliFeatureFlags.hasOwnSetting/setEnabled/revertToInheritedBaseline"
+        test: "feature_flags_test.dart: setEnabled then hasOwnSetting, ignores retired, revert drops every own value"
+      - swift: "mobileRemoteControlEnabled / remoteSupercliClientEnabled"
+        target: "clients/supercli-app/lib/feature_flags.dart::SupercliFeatureFlags.mobileRemoteControlEnabled/remoteSupercliClientEnabled"
+        test: "feature_flags_test.dart: env override, defaults, stored values"
+      - swift: "WorkspaceFeature.pickerEnabled — pure local/remote gate"
+        target: "clients/supercli-app/lib/feature_flags.dart::WorkspaceFeature.pickerEnabled"
+        test: "feature_flags_test.dart: either surface enables the picker"
+    tests:
+      - file: clients/supercli-app/test/feature_flags_test.dart
+        count: 20
+    notes: "Full logic port. The UserDefaults overlay is abstracted behind FeatureFlagStore (platform implements it); env comes from an injected map so evaluation stays testable. computerUse stays retired and out of `all`, matching Swift. WorkspaceFeature's computed pickerEnabled property (which reads RemoteHostFeature.pickerEnabled from another area) is not ported — the pure pickerEnabled(localWorkspacesEnabled:remoteHostPickerEnabled:) function it delegates to is, and the app composes it with its own remote-host gate."
+
+  native/SupercliNative/Sources/SupercliNative/HostManagementState.swift:
+    destination: "Dart: supercli_app::host_management_state"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "Value — devices, endpoint, error; Equatable"
+        target: "clients/supercli-app/lib/host_management_state.dart::HostManagementValue (+ HostManagementDevice)"
+        test: "host_management_state_test.dart: equality ignores list identity, devices compare by value, endpoint/error participate"
+      - swift: "apply — repeated response is a publication no-op"
+        target: "clients/supercli-app/lib/host_management_state.dart::HostManagementState.apply"
+        test: "host_management_state_test.dart: apply publishes on change, no-op for repeated response"
+      - swift: "update(endpoint:) / update(error:) — preserve the other fields"
+        target: "clients/supercli-app/lib/host_management_state.dart::HostManagementState.updateEndpoint/updateError"
+        test: "host_management_state_test.dart: updateEndpoint/updateError preserve devices and the other field, null clears"
+    tests:
+      - file: clients/supercli-app/test/host_management_state_test.dart
+        count: 9
+    notes: "Full logic port. The Swift @MainActor ObservableObject becomes a plain state holder with addListener/removeListener; the Dart app drives rebuilds through its own state layer. RemotePairedDeviceSummary is modelled as HostManagementDevice (id + name) since the Dart app has no SupercliShared binding."
