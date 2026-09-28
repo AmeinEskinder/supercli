@@ -19,23 +19,52 @@ files:
     behaviours:
       - swift: "Tab bar rendering all settings sections"
         target: "lib/screens/settingsview.dart::SettingsView"
-        test: "test/settings_test.dart (1 of 4 tests)"
+        test: "test/settings_test.dart (4 tests)"
       - swift: "Deep-link compat via compatibleRawValue"
-        target: null
-        test: null
+        target: "lib/screens/settingsview.dart::SettingsTab.compatibleRawValue"
+        test: "test/settings_test.dart (SettingsTab behaviours)"
       - swift: "Feature-gated tabs via visibleCases"
-        target: null
-        test: null
+        target: "lib/screens/settingsview.dart::SettingsTab.visibleCases"
+        test: "test/settings_test.dart (SettingsTab behaviours)"
       - swift: "Tab icons per section"
-        target: null
-        test: null
+        target: "lib/screens/settingsview.dart::SettingsTab.iconName"
+        test: "test/settings_test.dart (SettingsTab behaviours)"
+      - swift: "Tab titles"
+        target: "lib/screens/settingsview.dart::SettingsTab.title"
+        test: "test/settings_test.dart (SettingsTab behaviours)"
+      - swift: "Host-scoped tab list"
+        target: "lib/screens/settingsview.dart::SettingsTab.hostScopedCases"
+        test: "test/settings_test.dart (SettingsTab behaviours)"
       - swift: "Agents tab content"
         target: "lib/screens/agentaccesssettingspanel.dart::AgentAccessSettingsPanel"
         test: null
+      - swift: "Appearance panel (mode, tint, session titles, transparency, terminal font, editor, terminal)"
+        target: "lib/screens/appearancesettingspanel.dart::AppearanceSettingsPanel"
+        test: "test/settingsview_port_test.dart (7 tests)"
+      - swift: "Terminal font section"
+        target: "lib/screens/appearancesettingspanel.dart::TerminalFontSection"
+        test: "test/settingsview_port_test.dart"
+      - swift: "Transparency slider rows"
+        target: "lib/screens/appearancesettingspanel.dart::TransparencySliderRow"
+        test: "test/settingsview_port_test.dart"
+      - swift: "App tint swatches"
+        target: "lib/screens/appearancesettingspanel.dart::AppTintSwatch"
+        test: "test/settingsview_port_test.dart"
+      - swift: "Remote Control panel (share, devices, iOS link)"
+        target: "lib/screens/remotesettingspanel.dart::RemoteSettingsPanel"
+        test: "test/settingsview_port_test.dart (5 tests)"
+      - swift: "Share sheet (Mac/workspace, QR, SSH CLI)"
+        target: "lib/screens/remotesettingspanel.dart::ShareSheet"
+        test: "test/settingsview_port_test.dart (4 tests)"
+      - swift: "Pairing QR code view"
+        target: "lib/screens/remotesettingspanel.dart::PairingQRCodeView"
+        test: "test/settingsview_port_test.dart"
     tests:
       - file: clients/supercli-app/test/settings_test.dart
-        count: 4
-    notes: "Behaviour-level audit pending: 4 tests exist but behaviour→function→test mapping not verified for deep-link compat, visibleCases, tab icons. SettingsController wiring (Host GET/POST) is real."
+        count: 9
+      - file: clients/supercli-app/test/settingsview_port_test.dart
+        count: 16
+    notes: "2026-09-29 (porter D): SettingsTab behaviours ported (compatibleRawValue, visibleCases, iconName, title, hostScopedCases). AppearanceSettingsPanel and RemoteSettingsPanel (+ShareSheet, PairingQRCodeView) ported with tests. Remaining: SettingsSidebarPanel nav structure, SettingsContentHost, ShareWorkspaceSheet details, Notifications/Transcripts panel depth."
     wired: "2026-09-27: SettingsView mounted in SupercliApp shell (app.dart) behind settingsOpen state; SettingsController loads GET /mobile/workspace-settings from authenticated live Host (TLS, cert-pinned, bearer token from sealed /mobile/pair); toggle edits call controller.edited() → debounced POST; theme + desktop-only fields persist via SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json). 18 wiring tests + 12 local-store tests pass."
     verified: "2026-09-27 (fix): screenshot PENDING — settings-shot.png is still the rejected placeholder and must be replaced with a real 1440x900 native window (gpuidart, Xvfb) showing Connected status, real bootstrap sessions, and the General tab's actual controls with Host-loaded values. The canonical settings.open chord Ctrl-,/Cmd-, (Keymap.settings) is NOT registered natively — gpuidart's native key parser rejects punctuation keys (see docs/gpuidart-gaps-keys.md). Settings is reachable from the command palette ('Open settings'); menu reachability still to be implemented."
     dedup: "2026-09-27: DUPLICATE with feat/swift-settings@7b7e7c0. That branch wired SettingsController, the overlay, and the agents tab from the same 32abb60 base. KEEP from this branch: SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json, theme + desktop-only fields local-only, never sent to Host) — swift-settings has no local store. KEEP from swift-settings: the SettingsController/overlay/agents-tab wiring as the canonical mount (it is the queued/canonical candidate; as of 2026-09-27 next is at 32abb60 and neither branch has landed). The integrator must merge ONE settings wiring: take swift-settings as the base and cherry-pick this branch's SettingsLocalStore + local-only theme semantics + palette reachability + gpuidart-gaps-keys.md. Do NOT ship both overlays."

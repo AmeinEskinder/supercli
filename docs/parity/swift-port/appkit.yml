@@ -38,18 +38,18 @@ files:
         target: "lib/widgets/appkit_protocol.dart::PageSpec.fromJson"
         test: "test/appkit_protocol_test.dart::rich list decoding"
       - swift: "requiredCapabilities negotiation"
-        target: null
-        test: null
+        target: "lib/widgets/appkit_protocol.dart::MenuSpec.requiredCapabilities"
+        test: "test/appkit_protocol_test.dart::requiredCapabilities group (3 tests)"
       - swift: "UIMenuSpec/UIInputSpec full decode"
-        target: null
-        test: null
+        target: "lib/widgets/appkit_protocol.dart::MenuSpec.fromJson / UIInputSpec.fromJson"
+        test: "test/appkit_protocol_test.dart::UIMenuSpec group / UIInputSpec group"
       - swift: "Sparkline/barChart/lineChart page bodies"
-        target: null
-        test: null
+        target: "lib/widgets/appkit_protocol.dart::PageBodySparkline/PageBodyBarChart/PageBodyLineChart"
+        test: "test/appkit_protocol_test.dart::charts group (7 tests)"
     tests:
       - file: clients/supercli-app/test/appkit_protocol_test.dart
         count: 15
-    notes: "Core decode types ported (4216 Swift LOC -> ~1100 Dart LOC). Missing: capability negotiation (GAP-APPKIT-2), full menu/input/chart specs."
+    notes: "Core decode types ported. Added: chart page bodies (SparklineSpec/BarChartSpec/LineChartSpec with validation), UIInputSpec + PageHeader, full UIMenuSpec decode, MenuSpec.requiredCapabilities."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift:
     destination: "Dart: appkit_widgets"
@@ -71,12 +71,14 @@ files:
         target: "lib/widgets/appkit_delta.dart::AppKitDelta.isContiguousWith"
         test: "test/appkit_delta_test.dart::contiguity check mirrors UISnapshot.applying guards"
       - swift: "UISnapshot.applying(_:) incremental application (33 ops)"
-        target: null
-        test: null
+        target: "lib/widgets/appkit_delta_apply.dart::AppKitSnapshotApply.applying"
+        test: "test/appkit_delta_apply_test.dart (25 tests)"
     tests:
       - file: clients/supercli-app/test/appkit_delta_test.dart
         count: 12
-    notes: "Wire decode + envelope validation ported (1336 Swift LOC -> ~700 Dart LOC). Incremental application not ported: Dart renderer re-renders full snapshots (GAP-APPKIT-3)."
+      - file: clients/supercli-app/test/appkit_delta_apply_test.dart
+        count: 25
+    notes: "Wire decode + envelope validation + incremental application ported (1336 Swift LOC -> ~1700 Dart LOC). All 33 ops with route/contiguity guards, UTF-16 text edits, tree/list/content mutations."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift:
     destination: "Dart: appkit_widgets"
@@ -198,7 +200,10 @@ files:
       - swift: "markdownTaskToggleEdit (tap toggles task checkbox)"
         target: "lib/widgets/markdown_editing.dart::markdownTaskToggleEdit"
         test: "test/markdown_editing_test.dart::markdownTaskToggleEdit group (5 tests)"
-    notes: "UiInput fallback (989 Swift LOC -> stub). Blocked on rich text (P2)."
+      - swift: "shouldApplyAuthoritativeMarkdownSelection (authoritative selection decision)"
+        target: "lib/widgets/markdown_editing.dart::shouldApplyAuthoritativeMarkdownSelection"
+        test: "test/markdown_editing_test.dart::shouldApplyAuthoritativeMarkdownSelection group (5 tests)"
+    notes: "Pure text-system functions ported: task toggle + authoritative-selection decision. UiInput fallback (989 Swift LOC -> stub). Blocked on rich text (P2)."
 
   app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift:
     destination: "Dart: appkit_widgets"

@@ -71,11 +71,19 @@ files:
       - swift: "PaneConfirmation dialog titles/messages (archive vs remove, live vs not-live)"
         target: "lib/terminal/terminal_pane_confirmation.dart::PaneConfirmation"
         test: "test/terminal_pane_container_test.dart::PaneConfirmation group"
+      - swift: "TerminalPaneDropZonePreview: pane target zero-size; group-edge preview rect from drop-preview geometry (inset band at the edge)"
+        target: "lib/terminal/terminal_pane_drop_zones.dart::dropZonePreviewRect"
+        test: "test/terminal_pane_drop_zones_test.dart::dropZonePreviewRect group"
+      - swift: "PaneFitToDesktopButton: help text names the fitted grid (cols×rows)"
+        target: "lib/terminal/terminal_pane_drop_zones.dart::PaneFitToDesktopButton"
+        test: "test/terminal_pane_drop_zones_test.dart::PaneFitToDesktopButton group"
     tests:
       - file: clients/supercli-app/test/terminal_pane_stream_test.dart
         count: 29
       - file: clients/supercli-app/test/terminal_pane_container_test.dart
         count: 20
+      - file: clients/supercli-app/test/terminal_pane_drop_zones_test.dart
+        count: 8
     notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
@@ -104,11 +112,31 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: "OVERCLAIM REVERTED 2026-09-27: was marked 'ported' against a 64-line Dart file (Swift: 1,461 lines). The 25 tests in pane_layout_test.dart cover layout, not the full TerminalArea behaviour surface. Needs behaviour-level audit before any status above todo."
+    behaviours:
+      - swift: "RestartRecommendedBar: '<label> recommended' headline (or 'Context queued'), message, restart + dismiss actions"
+        target: "lib/screens/terminal_state_views.dart::RestartRecommendedBar"
+        test: "test/terminal_state_views_test.dart::RestartRecommendedBar group"
+      - swift: "ResumeFailedBar: 'Couldn't resume the conversation' + start-fresh/dismiss"
+        target: "lib/screens/terminal_state_views.dart::ResumeFailedBar"
+        test: "test/terminal_state_views_test.dart::ResumeFailedBar group"
+      - swift: "TerminalScrollButtonModel: visible drives opacity (0.88/0), slide offset (0/8), hit-testing"
+        target: "lib/screens/terminal_state_views.dart::TerminalScrollButtonModel"
+        test: "test/terminal_state_views_test.dart::TerminalScrollButtonModel group"
+      - swift: "EmptyStateView: 'No session selected' + hint + version label"
+        target: "lib/screens/terminal_state_views.dart::EmptyStateView"
+        test: "test/terminal_state_views_test.dart::EmptyStateView group"
+      - swift: "StartingSessionView: session label + spinner while starting"
+        target: "lib/screens/terminal_state_views.dart::StartingSessionView"
+        test: "test/terminal_state_views_test.dart::StartingSessionView group"
+      - swift: "DeadSessionView: 'Session exited' + Resume button; hidden when canResume false; 'Resuming' disabled state while restarting"
+        target: "lib/screens/terminal_state_views.dart::DeadSessionView"
+        test: "test/terminal_state_views_test.dart::DeadSessionView group"
+    tests:
+      - file: clients/supercli-app/test/terminal_state_views_test.dart
+        count: 14
+    notes: "PARTIAL 2026-09-29 (feat/port-sidebar-terminal): discrete state views ported with tests. NOT ported: ContentArea composition (settings/content swap, workspace fade, delayed connecting banner — Host/store orchestration), WarmPaneHostView/TerminalHostView (AppKit/Metal, no Dart equivalent), PixelMascotView animation (assets not bundled). The 25 tests in pane_layout_test.dart cover layout, not TerminalArea."
 
   native/SupercliNative/Tests/SupercliNativeTests/MobilePaneGroupProjectionTests.swift:
     destination: "Dart: clients/supercli-app"
