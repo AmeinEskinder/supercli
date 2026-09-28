@@ -1,6 +1,6 @@
 //! Settings resolution for the session-cleanup knobs.
 //!
-//! Ported from `UnpeelStore.swift` (`SupercliStore`) — the "Advanced session
+//! Ported from the legacy Swift store module (`SupercliStore`) — the "Advanced session
 //! cleanup" section. These are the pure normalize/resolve/label functions; the
 //! Swift originals read from `AppStateFile` and `UserDefaults`, the Rust
 //! versions take the raw `Option<i64>` so any caller (Host, CLI, TUI) can use

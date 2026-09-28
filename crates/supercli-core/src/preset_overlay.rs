@@ -1,6 +1,6 @@
 //! Preset overlay application.
 //!
-//! Ported from `UnpeelStore.swift` (`SupercliStore`) — the Presets section's
+//! Ported from the legacy Swift store module (`SupercliStore`) — the Presets section's
 //! `overlaid(_:overlay:)`. Un-migrated installs layer a legacy overlay (from
 //! native defaults) over the file-based presets before folding it into the
 //! shared file one-shot.

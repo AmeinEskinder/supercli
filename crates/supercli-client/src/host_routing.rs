@@ -1,6 +1,6 @@
 //! Host-scope routing decisions.
 //!
-//! Ported from `UnpeelStore.swift` (`SupercliStore`) — the "Remote Host
+//! Ported from the legacy Swift store module (`SupercliStore`) — the "Remote Host
 //! scope: display projection and verb plumbing" extension. These are the pure
 //! predicates the store uses to decide, per scope, whether views render the
 //! Host projection and whether verbs route through the Host.

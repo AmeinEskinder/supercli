@@ -1,6 +1,6 @@
 //! Caller→targets approval-pair maps.
 //!
-//! Ported from `UnpeelStore.swift` (`SupercliStore`) — the MCP security,
+//! Ported from the legacy Swift store module (`SupercliStore`) — the MCP security,
 //! Computer MCP access, and Browser MCP access sections. The Swift store
 //! keeps four such maps (`mcpWriteApprovals`, `mcpAppOpenApprovals`,
 //! `computerApprovals`, `browserApprovals`); the pair-shaped ones share one
