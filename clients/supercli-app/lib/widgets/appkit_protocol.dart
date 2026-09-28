@@ -2565,7 +2565,7 @@ final class AppKitParticipantToken {
 /// route matches and its `baseRevision` equals the snapshot's `revision`.
 final class AppKitSnapshot {
   const AppKitSnapshot({
-    this.protocolName = 'unpeel-ui-v1',
+    this.protocolName = 'supercli-ui-v1',
     required this.appInstanceId,
     required this.clientId,
     this.viewId = '',
@@ -2586,7 +2586,7 @@ final class AppKitSnapshot {
 
   factory AppKitSnapshot.fromJson(Map<String, dynamic> json) =>
       AppKitSnapshot(
-        protocolName: json['protocol'] as String? ?? 'unpeel-ui-v1',
+        protocolName: json['protocol'] as String? ?? 'supercli-ui-v1',
         appInstanceId: json['appInstanceId'] as String,
         clientId: json['clientId'] as String,
         viewId: json['viewId'] as String? ?? '',
