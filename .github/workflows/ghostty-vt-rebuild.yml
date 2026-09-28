@@ -17,14 +17,17 @@ on:
   workflow_dispatch:
   # workflow_dispatch requires the file on the default branch; this push
   # trigger runs the rebuild on the feature branch instead.
+  # The rebuilt archive itself is excluded: committing it must NOT re-trigger
+  # a rebuild (but it DOES trigger ghostty-vt.yml's link-test).
   push:
     branches: ['feat/ghostty-macos-rebuild']
     paths:
       - '.github/workflows/ghostty-vt-rebuild.yml'
       - 'crates/supercli-core/vendor/ghostty-vt/**'
+      - '!crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   rebuild-macos-universal:
@@ -92,3 +95,19 @@ jobs:
           name: libghostty-vt-macos-universal
           path: /tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
           if-no-files-found: error
+      - name: Commit rebuilt archive to the branch
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          DEST="$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a"
+          cp "$A" "$DEST"
+          cd "$GITHUB_WORKSPACE/supercli"
+          git config user.name "Amein Eskinder"
+          git config user.email "62555273+AmeinEskinder@users.noreply.github.com"
+          git add crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a
+          if git diff --cached --quiet; then
+            echo "[*] archive unchanged, nothing to commit"
+          else
+            git commit -m "Rebuild macos-universal libghostty-vt.a from pinned ghostty 2da015cd (zig 0.15.2, strip -S, no section-zeroing)"
+            git push origin HEAD:feat/ghostty-macos-rebuild
+            echo "[+] committed and pushed rebuilt archive"
+          fi
