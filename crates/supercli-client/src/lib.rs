@@ -33,6 +33,8 @@ pub mod crypto;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod host_store;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
@@ -43,6 +45,10 @@ pub mod relay;
 pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_connection;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
@@ -59,7 +65,16 @@ pub use credentials::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
+pub use host_store::{
+    HostCredentialStore, HostStoreError, OsKeychainCredentialStore, RemoteHostStore, SshHostRecord,
+};
+#[cfg(not(target_arch = "wasm32"))]
 pub use hosts::{HostRegistry, LiveHost};
+// MemoryHostCredentialStore is test-only: gated so production code cannot
+// import it by mistake. Available under `cargo test` or with the
+// `test-util` feature.
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "test-util")))]
+pub use host_store::MemoryHostCredentialStore;
 #[cfg(not(target_arch = "wasm32"))]
 pub use pairing::{
     client_for_paired_host, decode_pairing_code, device_identity, encode_pairing_code,
@@ -70,6 +85,14 @@ pub use pairing::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use relay_conn::{
     DeliveryState, PerformParams, RelayConnection, RelayError, RelayTransportResponse,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_connection::{
+    ConnectOutcome, ReconnectPolicy, RemoteHostConnection, RemoteHostConnector,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_runtime::{
+    PairedHostConnectionPlan, PairedTransport, RemoteHostConnectionRoute, RemoteHostConnectionState,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use transport::{
