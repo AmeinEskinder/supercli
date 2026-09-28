@@ -1,10 +1,10 @@
 //! Pure native-store policies ported from the Swift app layer.
 //!
-//! Ports the test-covered pure functions from `UnpeelStore.swift`,
+//! Ports the test-covered pure functions from the legacy Swift store,
 //! `FeatureFlags.swift`, and `HostManagementState.swift`:
 //!
 //! - feature gating and computer-use containment (`FeatureFlags.swift`)
-//! - phone-fit resize overrides (`UnpeelStore.phoneResizeOverrides`)
+//! - phone-fit resize overrides (legacy store's `phoneResizeOverrides`)
 //! - predicted resume insertion index (`RemoteResumePlacementTests`)
 //! - superseded restart ghost detection (`RestartGhostTests`)
 //! - session title resolution and pending-write decoding
