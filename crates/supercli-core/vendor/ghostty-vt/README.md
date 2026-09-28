@@ -67,8 +67,10 @@ GhosttyKit build uses is never left modified. Today there is one:
   upstream (`Terminal.switchScreen` → `ScreenSet.getInit`), so no lazy-alt
   patch exists.
 
-Slice status: `macos-universal/` was rebuilt with 0001+0002 on 2026-09-03;
-the Linux slices carry 0001 only until Lane 3's rebuild picks up 0002.
+Slice status: `macos-universal/` was rebuilt with 0001+0002 on 2026-09-28
+(zig 0.15.2, `strip -S` for debug info instead of section-zeroing, identity
+guard clean); the Linux slices carry 0001 only until Lane 3's rebuild picks
+up 0002.
 
 `GHOSTTY_SRC=/path` builds from another copy of the checkout (a git
 worktree has no `References/` checkout of its own — `rsync` the main
