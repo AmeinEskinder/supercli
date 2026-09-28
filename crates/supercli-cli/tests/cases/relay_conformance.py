@@ -27,7 +27,12 @@ VECTORS = os.path.join(REPO, "protocol", "relay-kat-vectors-v2.json")
 def check_vectors(case):
     """Rust-side KAT: cargo test in supercli-core replays the vectors; here we
     only prove the published contract file is present and well-formed so a
-    drift shows up in this matrix, not only in cargo."""
+    drift shows up in this matrix, not only in cargo.
+    The KAT runs as the dedicated `relay_kat` integration target (built
+    through `cargo test`), not as a `--lib` filter: the lib test binary also
+    contains ghostty_vt::tests::layout_matches_type_json, which forces the
+    macOS linker to extract the vendored libghostty-vt.a zig object and has
+    broken the relay-conformance link in CI."""
     try:
         with open(VECTORS) as f:
             vectors = json.load(f)
@@ -38,9 +43,9 @@ def check_vectors(case):
              for k in ("transcriptMAC", "sealedFrame"))
     case.check("protocol/relay-kat-vectors-v2.json carries transcriptMAC + sealedFrame", ok,
                str(vectors)[:120])
-    r = subprocess.run(["cargo", "test", "-q", "--manifest-path",
+    r = subprocess.run(["cargo", "test", "-q", "--locked", "--manifest-path",
                         os.path.join(REPO, "crates", "Cargo.toml"), "-p", "supercli-core",
-                        "--lib", "relay_crypto::tests::known_answer_vectors_match_swift_and_js"],
+                        "--test", "relay_kat"],
                        capture_output=True, text=True, timeout=900)
     case.check("Rust relay crypto reproduces the Swift/JS known-answer vectors",
                r.returncode == 0 and "1 passed" in r.stdout, (r.stdout + r.stderr)[-400:])
