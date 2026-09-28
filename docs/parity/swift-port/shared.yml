@@ -13,17 +13,39 @@ files:
 
   shared/SupercliShared/Sources/SupercliShared/ChromeIcons.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
-    behaviours: []
-    tests: []
-    notes: "7 SVG icon accessors (folder, branch, pin, plus, sidebarToggle, bell, gallery). UI presentation assets, not logic. Belong in Dart UI, not Rust. Not yet ported."
+    status: ported
+    behaviours:
+      - swift: "SupercliChromeIcon (8 cases: home, inbox, session, pin, clock, filter, search, folder)"
+        target: "clients/supercli-app/lib/chrome_icons.dart::SupercliChromeIcon"
+        test: "clients/supercli-app/test/chrome_icons_test.dart"
+      - swift: "assetName (24x24 PNG asset names)"
+        target: "clients/supercli-app/lib/chrome_icons.dart::SupercliChromeIcon.assetName"
+        test: "clients/supercli-app/test/chrome_icons_test.dart"
+      - swift: "branchRotation (session icon 4-way rotation)"
+        target: "clients/supercli-app/lib/chrome_icons.dart::SupercliChromeIcon.branchRotation"
+        test: "clients/supercli-app/test/chrome_icons_test.dart"
+      - swift: "glassSvg (frosted-glass SVG generation)"
+        target: "clients/supercli-app/lib/chrome_icons.dart::SupercliChromeIcon.glassSvg"
+        test: "clients/supercli-app/test/chrome_icons_test.dart"
+    tests:
+      - "clients/supercli-app/test/chrome_icons_test.dart (5 tests, UNTESTED - no Dart SDK)"
+    notes: "Icon cases and SVG generation ported. AppKit NSImage loading not portable."
+
 
   shared/SupercliShared/Sources/SupercliShared/GeneratedRuntimeCatalog.swift:
     destination: "Rust: supercli-core::app_runtime (generated)"
-    status: todo
-    behaviours: []
-    tests: []
-    notes: "887 LOC generated from runtimes/*/runtime.toml via scripts/generate-runtime-client-catalog.mjs. Runtime capability/platform/kind enums + catalog data. Rust equivalent likely in supercli-core/src/app_runtime.rs; needs verification whether generated Rust version exists or needs creating."
+    status: ported
+    behaviours:
+      - swift: "SupercliRuntimeMetadata (stableID, slug, label, platforms, kind, icons, lifecycle)"
+        target: "crates/supercli-core/src/runtime_catalog.rs::RuntimeDescriptor"
+        test: "crates/supercli-core/src/runtime_catalog.rs::tests"
+      - swift: "SupercliRuntimeCatalog.runtimes (all runtimes from TOML)"
+        target: "crates/supercli-core/src/runtime_catalog.rs::RuntimeCatalog::descriptors"
+        test: "crates/supercli-core/src/runtime_catalog.rs::tests"
+    tests:
+      - "crates/supercli-core runtime_catalog tests"
+    notes: "Rust generates catalog at build time from runtimes/*/runtime.toml via build.rs."
+
 
   shared/SupercliShared/Sources/SupercliShared/PairedHostRecord.swift:
     destination: "Rust: supercli-client::types, supercli-client::pairing"
@@ -185,10 +207,21 @@ files:
 
   shared/SupercliShared/Sources/SupercliShared/ToolIcons.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
-    behaviours: []
-    tests: []
-    notes: "163 LOC. Tool icons with runtime catalog integration (iconForApp, iconForRuntime). UI presentation assets referencing SupercliRuntimeCatalog. Belong in Dart UI, not Rust. Not yet ported."
+    status: ported
+    behaviours:
+      - swift: "SupercliToolIcon (id, key, label, kind, svgSource, isTemplate, fallback)"
+        target: "clients/supercli-app/lib/tool_icons.dart::SupercliToolIcon"
+        test: "clients/supercli-app/test/tool_icons_test.dart::SupercliToolIcon"
+      - swift: "SupercliToolIcon.resolving (runtime-first, app catalog, terminal fallback)"
+        target: "clients/supercli-app/lib/tool_icons.dart::SupercliToolIcon.resolving"
+        test: "clients/supercli-app/test/tool_icons_test.dart"
+      - swift: "SupercliAppIconCatalog (update from bootstrap, lookup by ID/command)"
+        target: "clients/supercli-app/lib/tool_icons.dart::SupercliAppIconCatalog"
+        test: "clients/supercli-app/test/tool_icons_test.dart::SupercliAppIconCatalog"
+    tests:
+      - "clients/supercli-app/test/tool_icons_test.dart (8 tests, UNTESTED - no Dart SDK)"
+    notes: "163 LOC ported. Uses Dart runtime_catalog.dart."
+
 
   shared/SupercliShared/Tests/SupercliSharedTests/PairedHostRecordTests.swift:
     destination: "Rust: supercli-client::pairing (unit tests)"
@@ -332,7 +365,9 @@ files:
 
   shared/SupercliShared/Tests/SupercliSharedTests/RuntimeCatalogTests.swift:
     destination: "Rust: supercli-core::app_runtime"
-    status: todo
-    behaviours: []
-    tests: []
-    notes: "172 LOC. Depends on GeneratedRuntimeCatalog.swift which is todo. Cannot port until catalog destination is resolved."
+    status: ported
+    behaviours:
+    tests:
+      - "crates/supercli-core runtime_catalog tests"
+    notes: "Covered by Rust runtime_catalog.rs tests."
+
