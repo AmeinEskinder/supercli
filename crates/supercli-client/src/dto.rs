@@ -891,7 +891,7 @@ mod serde_bytes_option {
                 '0'..='9' => c as u32 - '0' as u32 + 52,
                 '+' => 62,
                 '/' => 63,
-                _ => return Err(format!("invalid base64 char: {}", c)),
+                _ => return Err(format!("invalid base64 char: {c}")),
             };
             buf = (buf << 6) | v;
             bits += 6;
