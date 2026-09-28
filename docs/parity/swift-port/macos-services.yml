@@ -263,6 +263,89 @@ files:
   # The Sparkle integration lived in AppDelegate.swift (not a standalone file).
   # The updater logic is ported to Rust; AppDelegate itself stays tbd for the app worker.
 
+  native/SupercliNative/Sources/SupercliNative/AppDelegate.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell (+ Dart menu model)"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "applicationDidFinishLaunching lifecycle (SUPERCLI_LAUNCH_HIDDEN windowless start, SUPERCLI_DEBUG, deferInitialScan)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::show_window_at_launch, defer_initial_scan, debug_logging_enabled"
+        test: "app_shell::tests::service_launch_starts_windowless, normal_launch_shows_window, initial_scan_deferred_by_default, test_env_forces_synchronous_scan, debug_logging_flag"
+      - swift: "sparkleCanStart launch gate (default instance + .app bundle + feed URL + public key)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::updater_can_start"
+        test: "app_shell::tests::updater_starts_only_for_default_app_instance_with_feed_and_key"
+      - swift: "showMainWindow window chrome (1200x800, min 800x600, transparent titlebar, isMovable=false, isReleasedWhenClosed=false)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::WindowSpec"
+        test: "app_shell::tests::window_spec_matches_swift_defaults"
+      - swift: "positionTrafficLights (x=12+index*20, 38px titlebar vertical centering, clamped)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::traffic_light_origin"
+        test: "app_shell::tests::traffic_lights_positioned_per_design, traffic_light_y_is_clamped_inside_container"
+      - swift: "hideSystemTitlebarBackground (hide Background/Backdrop/Separator/Pocket/Glass views, clear NSTitlebarView)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::titlebar_subview_should_hide, titlebar_view_should_clear_background"
+        test: "app_shell::tests::paint_views_are_hidden, buttons_and_container_stay_visible, titlebar_view_is_cleared_not_hidden"
+      - swift: "ChromeHostingView (mouseDownCanMoveWindow=false); window corner-radius read with Theme fallback"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::HOSTING_VIEW_MOUSE_DOWN_CAN_MOVE_WINDOW, resolve_window_corner_radius"
+        test: "app_shell::tests::hosting_view_never_drags_window, corner_radius_uses_read_value_when_positive, corner_radius_falls_back_to_theme_default"
+      - swift: "installMainMenu menu content (App/Session/Edit/View/Window/Help, all titles/chords)"
+        target: "clients/supercli-app/lib/app_shell_menu.dart::mainMenu"
+        test: "app_shell_menu_test.dart (6 menus, chords, hidden twin)"
+      - swift: "Menu action vocabulary (@objc selectors -> store dispatch)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::MenuAction"
+        test: "app_shell_menu_test.dart::every action id maps to a Rust MenuAction variant"
+      - swift: "validateMenuItem decision table (enabled rules + Close Pane/Choose Preset dynamic titles)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::validate_menu_item"
+        test: "app_shell::tests::close_item_label_follows_pane_state, screenshot_needs_local_scope_and_gallery, session_actions_need_local_scope, new_terminal_title_follows_preset_preference, split_pane_needs_a_launcher, zoom_equalize_focus_need_multipane_group, collapse_all_needs_an_expanded_folder, static_items_are_always_enabled"
+      - swift: "validateMenuItem font zoom (increase/decrease/reset via TerminalFontModel)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::validate_font_zoom"
+        test: "app_shell::tests::font_zoom_validation"
+      - swift: "splitPaneFromMenu/splitPaneDownFromMenu launcher choice; closePaneOrWindowFromMenu dispatch"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::split_pane_target, close_active_pane_instead_of_window"
+        test: "app_shell::tests::split_pane_target_prefers_project_sidebar_launcher, cmd_w_closes_pane_when_mounted"
+      - swift: "newSupercliSession Finder service (local scope only, first folder URL)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::finder_service_folder"
+        test: "app_shell::tests::finder_service_takes_first_folder_when_local, finder_service_rejects_remote_scope_and_files"
+      - swift: "applicationShouldTerminateAfterLastWindowClosed=false; applicationShouldHandleReopen rebuild; applicationWillTerminate order"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::QUIT_AFTER_LAST_WINDOW_CLOSED, should_rebuild_window_on_reopen, TERMINATION_ORDER"
+        test: "app_shell::tests::window_close_does_not_quit, reopen_rebuilds_window_only_when_none_visible, termination_order_stops_services_before_pidfile"
+      - swift: "Sparkle delegate (installID, licenseHeadersForUpdateFeed, feedURLString)"
+        target: "crates/supercli-native-bridge/src/macos/updater.rs (replacement flow: feed pinned via FEED_URL, trusted-host check via is_allowed_download_url)"
+        test: "updater::tests (existing)"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 34
+      - file: clients/supercli-app/test/app_shell_menu_test.dart
+        count: 11
+    notes: "Sparkle delegate part already lived in updater.rs (not re-ported here). Gap for updater.rs follow-up: installID minting + licenseHeadersForUpdateFeed assembly have no Rust equivalent yet. ChromeHostingView ported (gpuidart embedder not present at this tip). Menu content owned by Dart model; Rust builds the NSMenu via objc2."
+
+  native/SupercliNative/Sources/SupercliNative/main.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "AppKit bootstrap (NSApplication, delegate, activation policy .regular, app.run())"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs (launch lifecycle section; native binding #[cfg(target_os = \"macos\")])"
+        test: "app_shell::tests (launch lifecycle)"
+      - swift: "Dock icon from resource bundle unless the bundle declares CFBundleIconFile/Name"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::should_set_dock_icon + resource_candidate_paths"
+        test: "app_shell::tests::dock_icon_set_only_when_bundle_declares_none, resource_lookup_prefers_packaged_app_dir"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 5
+    notes: "Folded into the AppDelegate port; it only called AppDelegate."
+
+  native/SupercliNative/Sources/SupercliNative/ModuleResources.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "Safe resource-bundle lookup (Contents/Resources/<bundle>/ first, then next-to-binary; Bundle.module workaround obsolete)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::RESOURCE_BUNDLE_NAME, resource_candidate_paths"
+        test: "app_shell::tests::resource_lookup_prefers_packaged_app_dir, resource_lookup_bare_executable_has_single_candidate"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 2
+    notes: "The SwiftPM-executable Bundle.module workaround is obsolete; the two-directory lookup order is preserved."
+
   # --- Test files: ported as Rust #[cfg(test)] modules ---
   native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift:
     destination: "Rust: supercli-native-bridge::macos::launchd::tests"
