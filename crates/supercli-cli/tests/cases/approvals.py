@@ -8,7 +8,7 @@ through the shared Controller contract with no TUI process.
 import sys, os, threading, time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from harness import run, mcp_post, mobile_request, tui_hook_port  # noqa: E402
+from harness import read_grants, run, mcp_post, mobile_request, tui_hook_port  # noqa: E402
 
 
 def body(case):
@@ -17,9 +17,8 @@ def body(case):
     home.session("s1", label="a session", project_id="p")
     token = home.pair_device()
     phone_port = home.reserve_mobile_port()
-    state = home.state()
-    state["mcp_write_approvals"] = {}
-    home.write_state(state)
+    # Grants live in grants.json (v0.9 shard), not app-state.json; a fresh
+    # fixture home starts with no grants.
 
     service = case.serve()
     ready = service.ready(timeout=15.0)
@@ -104,20 +103,21 @@ def body(case):
         )
         case.check("the first Controller answer is accepted", answer_status == 200)
         case.check(
-            "an already-answered approval conflicts",
-            repeated_status == 409
-            and repeated_body.get("error") == "approval no longer pending",
+            "a repeated answer is idempotent",
+            repeated_status == 200
+            and repeated_body.get("already_resolved") is True
+            and repeated_body.get("approved") is True,
             str((repeated_status, repeated_body)),
         )
     thread.join(timeout=15)
     case.check(
         "the Controller answer releases the blocked MCP call",
-        results.get("grant", (0, {}))[1] == {"approved": True},
+        results.get("grant", (0, {}))[1].get("approved") is True,
         str(results.get("grant")),
     )
-    persisted = home.state().get("mcp_write_approvals", {})
+    persisted = read_grants(home).get("mcp_write_approvals", {})
     case.check(
-        "the grant is persisted in shared Host state",
+        "the grant is persisted in the grant store",
         persisted.get("caller-1") == ["target-1"],
         str(persisted),
     )
@@ -125,7 +125,7 @@ def body(case):
     ask("fast", "caller-1", "target-1")
     case.check(
         "an approved pair returns immediately",
-        results["fast"][1] == {"approved": True},
+        results["fast"][1].get("approved") is True,
         str(results["fast"]),
     )
 
@@ -146,8 +146,8 @@ def body(case):
     case.check(
         "a Controller can deny without persisting a grant",
         deny_status == 200
-        and results.get("deny", (0, {}))[1] == {"approved": False}
-        and "caller-2" not in home.state().get("mcp_write_approvals", {}),
+        and results.get("deny", (0, {}))[1].get("approved") is False
+        and "caller-2" not in read_grants(home).get("mcp_write_approvals", {}),
         str((deny_status, results.get("deny"))),
     )
     case.check(

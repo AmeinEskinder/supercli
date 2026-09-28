@@ -14,7 +14,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from harness import BINARY, CRATES, mobile_request, run, run_cli, wait_running  # noqa: E402
+from harness import BINARY, CRATES, mobile_request, revoke_grant, run, run_cli, wait_running  # noqa: E402
 
 
 def body(case):
@@ -85,9 +85,11 @@ def body(case):
                bool(service.wait_for(lambda: "second-write" in screen(target), timeout=10.0)), screen(target)[-200:])
 
     # 3. A denied write is refused and writes nothing.
-    state = home.state()
-    state["mcp_write_approvals"] = {}
-    home.write_state(state)
+    # Revoke through the REAL grant store (grants.json, v0.9 shard): clearing
+    # app-state.json no longer revokes anything.
+    revoked = revoke_grant(home, caller, target)
+    case.check("the remembered pair is revoked through the grant store",
+               revoked.returncode == 0, (revoked.stderr + revoked.stdout)[:200])
     run_cli(home, ["settings", "set", "mcp_nonchild_write_access", "ask"])
     worker = threading.Thread(target=lambda: results.__setitem__("denied", send_from_caller("denied-write")))
     worker.start()

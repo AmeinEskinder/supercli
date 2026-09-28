@@ -1424,6 +1424,33 @@ def run_cli(home, args, timeout=30, expect_ok=None, env=None):
     return result
 
 
+def revoke_grant(home, caller, target=None, kind="write", timeout=30):
+    """Revoke a remembered grant through the REAL grant store.
+
+    Grants live in grants.json (v0.9 shard), not app-state.json: clearing
+    ``state["mcp_write_approvals"]`` no longer revokes anything. This helper
+    goes through ``supercli grants revoke`` so the grant-audit chain stays
+    consistent.
+    """
+    args = ["grants", "revoke", "--caller", caller, "--kind", kind]
+    if target is not None:
+        args += ["--target", target]
+    return run_cli(home, args, timeout=timeout)
+
+
+def read_grants(home):
+    """Read the raw grants.json map for the fixture home ({} if absent)."""
+    import json
+
+    path = os.path.join(home.root, "grants.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 # ─────────────────────────── case scaffolding ───────────────────────────
 
 

@@ -18,6 +18,7 @@ mod connectors_cli;
 #[cfg(feature = "device")]
 mod device_cli;
 mod doctor_cli;
+mod grants_cli;
 mod hooks_cli;
 mod ideas_cli;
 mod import_unpeel_cli;
