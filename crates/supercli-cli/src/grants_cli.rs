@@ -110,12 +110,14 @@ fn cmd_list(json: bool) -> Result<(), String> {
 }
 
 fn cmd_revoke(args: &[String], json: bool) -> Result<(), String> {
-    let caller = flag_value(args, "--caller")
-        .ok_or_else(|| "usage: supercli grants revoke --caller <id> [--target <id>] [--kind KIND]".to_string())?;
+    let caller = flag_value(args, "--caller").ok_or_else(|| {
+        "usage: supercli grants revoke --caller <id> [--target <id>] [--kind KIND]".to_string()
+    })?;
     let kind = match flag_value(args, "--kind") {
         None => GrantKind::Write,
-        Some(k) => GrantKind::parse(&k)
-            .ok_or_else(|| "unknown --kind (expected write|browser|computer|app-open)".to_string())?,
+        Some(k) => GrantKind::parse(&k).ok_or_else(|| {
+            "unknown --kind (expected write|browser|computer|app-open)".to_string()
+        })?,
     };
     let target = flag_value(args, "--target");
     if kind.needs_target() && target.is_none() {
@@ -153,6 +155,8 @@ pub fn run(args: &[String], json: bool) -> Result<(), String> {
             println!("{HELP}");
             Ok(())
         }
-        Some(other) => Err(format!("unknown grants subcommand '{other}'; see `supercli grants help`")),
+        Some(other) => Err(format!(
+            "unknown grants subcommand '{other}'; see `supercli grants help`"
+        )),
     }
 }
