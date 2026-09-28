@@ -244,6 +244,12 @@ final class SidebarView {
     }
 
     children.add(const UiButton('show-archived', 'Archived Sessions'));
+    // Settings menu entry: the canonical Cmd-,/Ctrl-, chord cannot be
+    // registered natively (gpuidart rejects punctuation keys — see
+    // docs/gpuidart-gaps-keys.md), so Settings is reachable from this
+    // visible menu button (handled via SupercliApp.handleClick) and from
+    // the command palette ('Open settings').
+    children.add(const UiButton('open-settings', '⚙ Settings'));
     return UiColumn('sidebar', children);
   }
 

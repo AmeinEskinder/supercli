@@ -175,6 +175,11 @@ final class SupercliApp {
   /// Toggle buttons render as `<toggle-id>-toggle` (see [SettingsToggle]);
   /// clicking one flips the setting and persists via the controller.
   bool handleClick(String nodeId) {
+    // Menu path to Settings: the sidebar's 'open-settings' button.
+    if (nodeId == 'open-settings') {
+      openSettings();
+      return settingsController != null;
+    }
     const tabPrefix = 'settings-tab-';
     if (nodeId.startsWith(tabPrefix)) {
       final tabName = nodeId.substring(tabPrefix.length);
@@ -293,6 +298,12 @@ final class SupercliApp {
         'Switch to previous recent session',
         Keymap.switcherPrevious,
       ),
+      // Settings: the canonical Cmd-,/Ctrl-, chord (Keymap.settings) is
+      // shown for documentation, but it is NOT registered natively —
+      // gpuidart's native key parser rejects punctuation keys (see
+      // docs/gpuidart-gaps-keys.md). The palette dispatches the action
+      // name directly through handleAction, so no native chord is needed.
+      ('settings.open', 'Open settings', Keymap.settings()),
     ];
     final commands = <PaletteCommand>[
       for (final (name, title, shortcut) in actionDefs)
@@ -517,10 +528,12 @@ final class SupercliApp {
       // Session-drag overlay actions — only while a drag is mounted
       // (gpuidart rejects action contexts that aren't nodes in the tree).
       if (dragActive) ...sessionDrag!.actions(),
-      // Settings overlay: the canonical chord is Cmd-,/Ctrl-, per
-      // Keymap.settings, but gpuidart's native parser rejects punctuation
-      // keys, so the UiAction uses the native-safe Keymap.settingsNative.
-      UiAction(name: 'settings.open', keys: Keymap.settingsNative()),
+      // Settings overlay: gpuidart's native key parser rejects punctuation
+      // keys (see docs/gpuidart-gaps-keys.md), so the canonical Cmd-,/Ctrl-,
+      // chord (Keymap.settings) is NOT registered natively — no UiAction
+      // for settings.open. Settings stays reachable from the command
+      // palette ("Open settings"), which dispatches the action name
+      // directly through handleAction without native registration.
       // Escape closes the settings overlay — scoped to the 'settings'
       // node so it is only active while the overlay is actually mounted
       // (gpuidart rejects action contexts that aren't nodes in the tree).

@@ -80,7 +80,28 @@ Future<void> main(List<String> args) async {
 
   final app = SupercliApp();
   app.settingsController = controller;
+
+  // Bootstrap the real session list from the live Host so the window
+  // shows "Connected — N sessions" (not "Connecting…") and the sidebar
+  // carries real session data. Without this the status line never leaves
+  // its initial state and the screenshot proves nothing about the Host.
+  try {
+    final boot = await client.bootstrap();
+    app.sessions = HostClient.sessionsFromBootstrap(boot);
+    app.pendingApprovals = HostClient.approvalsFromBootstrap(boot);
+    app.syncMru();
+    app.statusLine =
+        'Connected — ${app.sessions.length} sessions, ${app.pendingApprovals.length} pending approval(s).';
+    stderr.writeln('bootstrap: ${app.statusLine}');
+  } catch (e) {
+    stderr.writeln('bootstrap failed: $e');
+    exit(1);
+  }
+
+  // Open a real settings tab so the shot shows actual controls with
+  // Host-loaded values, not just the tab strip.
   app.openSettings();
+  app.handleAction('settings.tab.general');
   stderr.writeln(
       'settings loaded from live Host; overlay open=${app.settingsOpen}');
 
