@@ -287,6 +287,37 @@ Future<void> _dispatchAction(
         app.mruSwitcher.markUsed(current.id);
       }
       await refresh();
+    // --- Session drag (detached drag, #152) ---
+    // The drag state machine + overlay live in the app; the commit goes
+    // through the authenticated Host API (never local-only state).
+    // Initiation awaits gpuidart DnD events (G-1).
+    case 'sidebar.drag.cancel':
+      app.cancelSessionDrag();
+      await refresh();
+    case 'sidebar.drag.commit':
+      final drag = app.sessionDrag;
+      final projectId = app.dragProjectId;
+      if (drag != null && projectId != null) {
+        try {
+          await drag.commitDrop(
+            host: client,
+            projectId: projectId,
+            currentOrder: app.dragCurrentOrder,
+          );
+          app.cancelSessionDrag();
+        } on HostException catch (e) {
+          app.cancelSessionDrag();
+          app.notifications.add(
+            AppNotification(
+              id: 'drag-error',
+              title: 'Drag failed',
+              message: e.message,
+              severity: NotificationSeverity.error,
+            ),
+          );
+        }
+      }
+      await refresh();
     // --- Pane management (also reachable from the palette) ---
     case 'pane.splitRight':
       _splitPane(app, SplitDirection.horizontal);

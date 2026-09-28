@@ -56,13 +56,32 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: wired
     checklist: "#152"
-    behaviours: []
+    behaviours:
+      - swift: "Detached drag state machine: targets reorder/group/project/split, canDrop validation"
+        target: "lib/screens/projectsidebarview.dart::SidebarSessionDrag"
+        test: "test/sidebar_test.dart::SidebarSessionDrag (#152)"
+      - swift: "Drop commit composes moveSession + setSessionOrder through the Host"
+        target: "lib/screens/projectsidebarview.dart::SidebarSessionDrag.commitDrop"
+        test: "test/sidebar_test.dart::SidebarSessionDrag commit (live Host verbs)"
+      - swift: "Reorder commits one session-order verb with the recomputed hand order"
+        target: "lib/host_client.dart::HostClient.setSessionOrder"
+        test: "test/host_client_test.dart::setSessionOrder posts projectID + orderedSessionIDs"
+      - swift: "Cross-project drop files the session via session-organization, then places it"
+        target: "lib/host_client.dart::HostClient.moveSessionToProject"
+        test: "test/host_client_test.dart::moveSessionToProject posts sessionID + projectID"
+      - swift: "Drag overlay mounted in the app shell; commit/cancel dispatched to the Host"
+        target: "lib/app.dart::SupercliApp.sessionDrag + bin/main.dart::_dispatchAction"
+        test: "test/app_test.dart::beginSessionDrag mounts the overlay and records context"
     tests:
       - file: clients/supercli-app/test/sidebar_test.dart
-        count: 6
-    notes: "Worker D: 6 tests. D2 auditing behaviour coverage."
+        count: 14
+      - file: clients/supercli-app/test/host_client_test.dart
+        count: 4
+      - file: clients/supercli-app/test/app_test.dart
+        count: 4
+    notes: "Wired 2026-09-27 (feat/wire-drag): commitDrop applies validated drops against the LIVE Host via authenticated POST /mobile/session-order + /mobile/session-organization (verified against a real Host: 200 + session-order.json persisted, 400 on traversal, 401 unauthenticated); mounted in SupercliApp.build + sidebar.drag.commit/cancel dispatched in bin/main.dart. NOT verified: no real-window screenshot — blocked by missing libxkbcommon-x11.so.0 in this VM (prebuilt libgpuidart.so cannot load) and by gpuidart gap G-1 (no DnD pointer events, so a drag cannot be initiated)."
 
   native/SupercliNative/Sources/SupercliNative/Views/ProjectSidebarView.swift:
     destination: "Dart: clients/supercli-app"

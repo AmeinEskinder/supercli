@@ -12,6 +12,7 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import '../host_client.dart';
 import 'sidebarview.dart';
 
 /// Loading placeholder for sidebar content that is not knowable yet: the
@@ -46,8 +47,7 @@ final class SidebarSpinners {
   UiNode build() {
     return UiRow('sidebar-spinners', [
       for (final id in spinningIds)
-        UiText('spinner-$id', '◌ working…',
-            style: const UiStyle(fontSize: 11)),
+        UiText('spinner-$id', '◌ working…', style: const UiStyle(fontSize: 11)),
     ]);
   }
 }
@@ -55,10 +55,7 @@ final class SidebarSpinners {
 /// Workspace dots: quick-switcher dots for open workspaces.
 /// The active workspace renders filled (●), the rest hollow (○).
 final class SidebarWorkspaceDots {
-  const SidebarWorkspaceDots({
-    this.workspaces = const [],
-    this.activeId,
-  });
+  const SidebarWorkspaceDots({this.workspaces = const [], this.activeId});
 
   final List<String> workspaces;
   final String? activeId;
@@ -73,18 +70,18 @@ final class SidebarWorkspaceDots {
 
 /// Workspace selector dropdown: lists workspaces for switching.
 final class SidebarWorkspaceSelector {
-  const SidebarWorkspaceSelector({
-    this.workspaces = const [],
-    this.selected,
-  });
+  const SidebarWorkspaceSelector({this.workspaces = const [], this.selected});
 
   final List<String> workspaces;
   final String? selected;
 
   UiNode build() {
     return UiColumn('workspace-selector', [
-      const UiText('ws-selector-title', 'Workspace',
-          style: UiStyle(fontSize: 12, fontWeight: UiFontWeight.semibold)),
+      const UiText(
+        'ws-selector-title',
+        'Workspace',
+        style: UiStyle(fontSize: 12, fontWeight: UiFontWeight.semibold),
+      ),
       for (final w in workspaces)
         UiButton('ws-select-$w', w == selected ? '✓ $w' : '  $w'),
     ]);
@@ -113,11 +110,18 @@ enum SidebarDropTarget {
 /// it do not exist in gpuidart upstream — see docs/gpuidart-gaps-sidebar.md
 /// G-1. Until then the overlay renders statically and drops are issued as
 /// [UiAction]s.
+///
+/// The *commit* path is fully wired: [commitDrop] applies a validated drop
+/// against the LIVE Host through the authenticated Host API
+/// (`POST /mobile/session-order`, `POST /mobile/session-organization`),
+/// mirroring the native composition (`SupercliStore.setSessionOrder` →
+/// `RemoteHostRuntime.setSessionOrder` → Host `session-order` verb).
 final class SidebarSessionDrag {
   const SidebarSessionDrag({
     this.draggedSessionId,
     this.target = SidebarDropTarget.reorder,
     this.targetId,
+    this.targetIndex,
     this.dropToSplit = false,
   });
 
@@ -126,23 +130,39 @@ final class SidebarSessionDrag {
   final SidebarDropTarget target;
   final String? targetId;
 
+  /// Insertion index for [SidebarDropTarget.reorder] (and for placement
+  /// after a cross-project move). Null means "append at the end".
+  final int? targetIndex;
+
   /// True when the pointer is over a pane: drop splits the pane.
   final bool dropToSplit;
 
   bool get isDragging => draggedSessionId != null;
 
+  SidebarSessionDrag copyWith({
+    String? draggedSessionId,
+    SidebarDropTarget? target,
+    String? targetId,
+    int? targetIndex,
+    bool? dropToSplit,
+  }) {
+    return SidebarSessionDrag(
+      draggedSessionId: draggedSessionId ?? this.draggedSessionId,
+      target: target ?? this.target,
+      targetId: targetId ?? this.targetId,
+      targetIndex: targetIndex ?? this.targetIndex,
+      dropToSplit: dropToSplit ?? this.dropToSplit,
+    );
+  }
+
   /// Validate a drop: cannot drop a session onto itself or into its own
   /// current group (no-op), and drop-to-split requires a pane target.
-  bool canDrop({
-    required String sessionId,
-    required String? currentGroupId,
-  }) {
+  bool canDrop({required String sessionId, required String? currentGroupId}) {
     if (!isDragging) return false;
     if (draggedSessionId == sessionId) return false;
     return switch (target) {
       SidebarDropTarget.reorder => true,
-      SidebarDropTarget.group =>
-        targetId != null && targetId != currentGroupId,
+      SidebarDropTarget.group => targetId != null && targetId != currentGroupId,
       SidebarDropTarget.project => true,
       SidebarDropTarget.split => dropToSplit && targetId != null,
     };
@@ -159,19 +179,133 @@ final class SidebarSessionDrag {
       SidebarDropTarget.split => 'split pane',
     };
     return UiColumn('session-drag-overlay', [
-      UiText('drag-title', 'Dragging $draggedSessionId → $hint',
-          style: const UiStyle(fontSize: 12)),
-      const UiText('drag-gap', '(live drag needs gpuidart DnD, G-1)',
-          style: UiStyle(fontSize: 11)),
+      UiText(
+        'drag-title',
+        'Dragging $draggedSessionId → $hint',
+        style: const UiStyle(fontSize: 12),
+      ),
+      const UiText(
+        'drag-gap',
+        '(live drag needs gpuidart DnD, G-1)',
+        style: UiStyle(fontSize: 11),
+      ),
     ]);
   }
 
-  List<UiAction> actions() => const [
-        UiAction(
-            name: 'sidebar.drag.cancel',
-            keys: 'escape',
-            context: UiActionContext.node('session-drag-overlay')),
-      ];
+  List<UiAction> actions() => [
+    UiAction(
+      name: 'sidebar.drag.cancel',
+      keys: 'escape',
+      context: UiActionContext.node('session-drag-overlay'),
+    ),
+    // Commit the drop (drop = pointer release on native; Enter here
+    // until gpuidart ships DnD events — G-1). Context-scoped to the
+    // drag overlay so it never fires while idle.
+    UiAction(
+      name: 'sidebar.drag.commit',
+      keys: 'enter',
+      context: UiActionContext.node('session-drag-overlay'),
+    ),
+  ];
+
+  /// Pure order math for a reorder drop: [draggedSessionId] removed from
+  /// [currentOrder] and re-inserted at [atIndex] (null = end), clamped.
+  /// Unit-testable without the Host.
+  static List<String> movedOrder({
+    required List<String> currentOrder,
+    required String draggedSessionId,
+    int? atIndex,
+  }) {
+    final order = currentOrder.where((id) => id != draggedSessionId).toList();
+    final index = atIndex == null
+        ? order.length
+        : atIndex.clamp(0, order.length);
+    order.insert(index, draggedSessionId);
+    return order;
+  }
+
+  /// Commit the validated drop against the LIVE Host via the authenticated
+  /// Host API — the same verbs the native drag commits through.
+  ///
+  /// - [SidebarDropTarget.reorder]: one `POST /mobile/session-order` with
+  ///   the recomputed hand order of [projectId].
+  /// - [SidebarDropTarget.group]/[SidebarDropTarget.project]:
+  ///   `POST /mobile/session-organization` files the session into the
+  ///   destination project ([targetId]), then `POST /mobile/session-order`
+  ///   places it at [targetIndex] within [targetOrder] when given — the
+  ///   native `moveSession` + `setSessionOrder` composition.
+  /// - [SidebarDropTarget.split]: local pane operation, no Host verb —
+  ///   returns null without touching the Host.
+  ///
+  /// Throws [StateError] when there is nothing valid to commit, and
+  /// [HostException] when the Host rejects.
+  Future<SidebarDragCommit?> commitDrop({
+    required HostClient host,
+    required String projectId,
+    required List<String> currentOrder,
+    List<String>? targetOrder,
+  }) async {
+    final dragged = draggedSessionId;
+    if (dragged == null) {
+      throw StateError('commitDrop with no dragged session');
+    }
+    switch (target) {
+      case SidebarDropTarget.reorder:
+        final order = movedOrder(
+          currentOrder: currentOrder,
+          draggedSessionId: dragged,
+          atIndex: targetIndex,
+        );
+        await host.setSessionOrder(projectId, order);
+        return SidebarDragCommit(
+          projectId: projectId,
+          orderedSessionIds: order,
+        );
+      case SidebarDropTarget.group:
+      case SidebarDropTarget.project:
+        final destination = targetId;
+        if (destination == null || destination.isEmpty) {
+          throw StateError('commitDrop needs a targetId for $target');
+        }
+        await host.moveSessionToProject(dragged, destination);
+        List<String> order = targetOrder ?? const [];
+        if (targetIndex != null || targetOrder != null) {
+          order = movedOrder(
+            currentOrder: targetOrder ?? const [],
+            draggedSessionId: dragged,
+            atIndex: targetIndex,
+          );
+          await host.setSessionOrder(destination, order);
+        }
+        return SidebarDragCommit(
+          projectId: destination,
+          orderedSessionIds: order,
+          movedToProjectId: destination,
+        );
+      case SidebarDropTarget.split:
+        // Drop-to-split rearranges local panes; no Host verb involved.
+        return null;
+    }
+  }
+}
+
+/// Record of a drag committed against the Host: which project's order was
+/// written and, for cross-project drops, where the session was filed.
+final class SidebarDragCommit {
+  const SidebarDragCommit({
+    required this.projectId,
+    required this.orderedSessionIds,
+    this.movedToProjectId,
+  });
+
+  /// Project whose hand order was written (destination for moves).
+  final String projectId;
+
+  /// The order committed to the Host.
+  final List<String> orderedSessionIds;
+
+  /// Non-null when the session was filed into a different project.
+  final String? movedToProjectId;
 }
 
 /// The per-project sidebar panel: project header with folder color,
@@ -187,7 +321,8 @@ final class ProjectSidebarView {
   final String? selectedSessionId;
   final String filterText;
 
-  bool _matches(SidebarSession s) => filterText.isEmpty ||
+  bool _matches(SidebarSession s) =>
+      filterText.isEmpty ||
       s.title.toLowerCase().contains(filterText.toLowerCase());
 
   UiNode build() {
@@ -203,48 +338,73 @@ final class ProjectSidebarView {
                 : UiColor.hex('#8b8b8b'),
           ),
         ),
-        UiText('project-title-${project.id}', project.name,
-            style: const UiStyle(
-                fontSize: 13, fontWeight: UiFontWeight.semibold)),
-        UiText('project-toggle-${project.id}',
-            project.collapsed ? '▸' : '▾',
-            style: const UiStyle(fontSize: 11)),
+        UiText(
+          'project-title-${project.id}',
+          project.name,
+          style: const UiStyle(fontSize: 13, fontWeight: UiFontWeight.semibold),
+        ),
+        UiText(
+          'project-toggle-${project.id}',
+          project.collapsed ? '▸' : '▾',
+          style: const UiStyle(fontSize: 11),
+        ),
       ]),
     ];
     if (!project.collapsed) {
       for (final wt in project.worktrees) {
-        children.add(UiText('wt-${project.id}-$wt', '  📁 $wt',
-            style: const UiStyle(fontSize: 12)));
-        for (final s in project.allSessions
-            .where((s) => s.worktree == wt && _matches(s))) {
-          children.add(SidebarRow.sessionRow(s,
-              selected: s.id == selectedSessionId));
+        children.add(
+          UiText(
+            'wt-${project.id}-$wt',
+            '  📁 $wt',
+            style: const UiStyle(fontSize: 12),
+          ),
+        );
+        for (final s in project.allSessions.where(
+          (s) => s.worktree == wt && _matches(s),
+        )) {
+          children.add(
+            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+          );
         }
       }
       for (final group in project.groups) {
-        children.add(UiRow('pgroup-${group.id}', [
-          if (group.color != null)
-            UiText('pgroup-color-${group.id}', '■',
+        children.add(
+          UiRow('pgroup-${group.id}', [
+            if (group.color != null)
+              UiText(
+                'pgroup-color-${group.id}',
+                '■',
                 style: UiStyle(
-                    fontSize: 12, foreground: UiColor.hex(group.color!))),
-          UiText('pgroup-title-${group.id}',
+                  fontSize: 12,
+                  foreground: UiColor.hex(group.color!),
+                ),
+              ),
+            UiText(
+              'pgroup-title-${group.id}',
               '${group.title} (${group.sessions.length})',
-              style: const UiStyle(fontSize: 12)),
-          UiText('pgroup-toggle-${group.id}',
+              style: const UiStyle(fontSize: 12),
+            ),
+            UiText(
+              'pgroup-toggle-${group.id}',
               group.collapsed ? '▸' : '▾',
-              style: const UiStyle(fontSize: 11)),
-        ]));
+              style: const UiStyle(fontSize: 11),
+            ),
+          ]),
+        );
         if (!group.collapsed) {
           for (final s in group.sessions.where(_matches)) {
-            children.add(SidebarRow.sessionRow(s,
-                selected: s.id == selectedSessionId));
+            children.add(
+              SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+            );
           }
         }
       }
-      for (final s in project.sessions
-          .where((s) => s.worktree == null && _matches(s))) {
+      for (final s in project.sessions.where(
+        (s) => s.worktree == null && _matches(s),
+      )) {
         children.add(
-            SidebarRow.sessionRow(s, selected: s.id == selectedSessionId));
+          SidebarRow.sessionRow(s, selected: s.id == selectedSessionId),
+        );
       }
     }
     return UiColumn('project-sidebar-${project.id}', children);

@@ -16,6 +16,7 @@ import 'keymap.dart';
 import 'models.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
+import 'screens/projectsidebarview.dart';
 import 'screens/sidebarview.dart';
 import 'screens/terminalarea.dart';
 import 'screens/toastcenter.dart';
@@ -55,6 +56,61 @@ final class SupercliApp {
 
   /// True while the MRU switcher overlay is visible.
   bool switcherOpen = false;
+
+  /// Active detached session drag, or null when idle. Mounted in [build]
+  /// as the drag overlay; commits go through the authenticated Host API
+  /// via [SidebarSessionDrag.commitDrop] — never local-only state.
+  ///
+  /// Drag *initiation* needs native pointer DnD events that do not exist
+  /// in gpuidart upstream (docs/gpuidart-gaps-sidebar.md G-1); the state
+  /// machine, overlay, and Host commit path below are the wired half.
+  SidebarSessionDrag? sessionDrag;
+
+  /// Project the active drag belongs to (needed to commit the hand order).
+  String? dragProjectId;
+
+  /// Live hand order of the dragged project's sessions, captured at drag
+  /// start so the commit recomputes against a stable base.
+  List<String> dragCurrentOrder = const [];
+
+  /// True while a session drag overlay is mounted.
+  bool get dragActive => sessionDrag != null;
+
+  /// Begin a session drag: records the dragged session, its project, and
+  /// the project's current hand order. Pure app-state — unit-testable.
+  void beginSessionDrag({
+    required String sessionId,
+    required String projectId,
+    required List<String> currentOrder,
+  }) {
+    sessionDrag = SidebarSessionDrag(draggedSessionId: sessionId);
+    dragProjectId = projectId;
+    dragCurrentOrder = List.unmodifiable(currentOrder);
+  }
+
+  /// Update the drop target mid-drag (hover changes).
+  void retargetSessionDrag({
+    required SidebarDropTarget target,
+    String? targetId,
+    int? targetIndex,
+    bool dropToSplit = false,
+  }) {
+    final drag = sessionDrag;
+    if (drag == null) return;
+    sessionDrag = drag.copyWith(
+      target: target,
+      targetId: targetId,
+      targetIndex: targetIndex,
+      dropToSplit: dropToSplit,
+    );
+  }
+
+  /// Cancel the drag and clear its captured context.
+  void cancelSessionDrag() {
+    sessionDrag = null;
+    dragProjectId = null;
+    dragCurrentOrder = const [];
+  }
 
   /// Open the palette, building its command list from the real app state:
   /// every registered action plus every live session. No fixtures.
@@ -273,6 +329,11 @@ final class SupercliApp {
         ).build(),
       // MRU session switcher overlay (Ctrl-Tab): live MRU ordering.
       if (switcherOpen) MruSwitcherView(switcher: mruSwitcher).build(),
+      // Detached session-drag overlay: mounted while a drag is active.
+      // Commits go through the authenticated Host API (see
+      // SidebarSessionDrag.commitDrop); initiation awaits gpuidart DnD
+      // events (docs/gpuidart-gaps-sidebar.md G-1).
+      if (dragActive) sessionDrag!.build(),
     ]);
   }
 
@@ -312,6 +373,9 @@ final class SupercliApp {
       // Switcher-scoped dismiss while the overlay is open.
       if (switcherOpen)
         ...const AppKeybindings().switcherActions('mru-switcher'),
+      // Session-drag overlay actions — only while a drag is mounted
+      // (gpuidart rejects action contexts that aren't nodes in the tree).
+      if (dragActive) ...sessionDrag!.actions(),
     ];
   }
 

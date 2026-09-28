@@ -6,7 +6,12 @@
 /// workspace dots, and relative activity timestamps.
 library;
 
+import 'dart:convert';
+
 import 'package:gpuidart/gpuidart.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/screens/globalactivitymenu.dart';
 import 'package:supercli_app/screens/projectsidebarview.dart';
@@ -351,8 +356,167 @@ void main() {
     test('drag cancel action is escape', () {
       const drag = SidebarSessionDrag(draggedSessionId: 's1');
       final actions = drag.actions();
-      expect(actions.single.name, 'sidebar.drag.cancel');
-      expect(actions.single.keys, 'escape');
+      final cancel = actions.firstWhere((a) => a.name == 'sidebar.drag.cancel');
+      expect(cancel.keys, 'escape');
+    });
+
+    test('drag commit action is enter, scoped to the overlay', () {
+      const drag = SidebarSessionDrag(draggedSessionId: 's1');
+      final names = drag.actions().map((a) => a.name).toList();
+      expect(names, contains('sidebar.drag.commit'));
+    });
+  });
+
+  group('SidebarSessionDrag commit (live Host verbs)', () {
+    /// HostClient backed by a MockClient that records every request.
+    (HostClient, List<http.Request>) recordedClient() {
+      final seen = <http.Request>[];
+      final mock = MockClient((request) async {
+        seen.add(request);
+        return http.Response('{"ok": true}', 200);
+      });
+      return (
+        HostClient(
+          baseUrl: Uri.parse('http://127.0.0.1:8137'),
+          httpClient: mock,
+        ),
+        seen,
+      );
+    }
+
+    test('movedOrder moves the dragged session to the index', () {
+      expect(
+        SidebarSessionDrag.movedOrder(
+          currentOrder: ['s1', 's2', 's3'],
+          draggedSessionId: 's3',
+          atIndex: 0,
+        ),
+        ['s3', 's1', 's2'],
+      );
+    });
+
+    test('movedOrder clamps out-of-range indexes and defaults to end', () {
+      expect(
+        SidebarSessionDrag.movedOrder(
+          currentOrder: ['s1', 's2', 's3'],
+          draggedSessionId: 's1',
+          atIndex: 99,
+        ),
+        ['s2', 's3', 's1'],
+      );
+      expect(
+        SidebarSessionDrag.movedOrder(
+          currentOrder: ['s1', 's2'],
+          draggedSessionId: 's1',
+        ),
+        ['s2', 's1'],
+      );
+    });
+
+    test(
+      'reorder commit posts the recomputed order to session-order',
+      () async {
+        final (client, seen) = recordedClient();
+        const drag = SidebarSessionDrag(
+          draggedSessionId: 's3',
+          target: SidebarDropTarget.reorder,
+          targetIndex: 0,
+        );
+        final commit = await drag.commitDrop(
+          host: client,
+          projectId: 'proj-1',
+          currentOrder: ['s1', 's2', 's3'],
+        );
+        expect(seen, hasLength(1));
+        expect(seen.single.url.path, '/mobile/session-order');
+        final body = jsonDecode(seen.single.body) as Map<String, dynamic>;
+        expect(body['projectID'], 'proj-1');
+        expect(body['orderedSessionIDs'], ['s3', 's1', 's2']);
+        expect(commit!.projectId, 'proj-1');
+        expect(commit.orderedSessionIds, ['s3', 's1', 's2']);
+        expect(commit.movedToProjectId, isNull);
+        client.close();
+      },
+    );
+
+    test('cross-project drop files the session then places it', () async {
+      final (client, seen) = recordedClient();
+      const drag = SidebarSessionDrag(
+        draggedSessionId: 's1',
+        target: SidebarDropTarget.project,
+        targetId: 'proj-2',
+        targetIndex: 0,
+      );
+      final commit = await drag.commitDrop(
+        host: client,
+        projectId: 'proj-1',
+        currentOrder: ['s1', 's2'],
+        targetOrder: ['s9'],
+      );
+      // Native composition: moveSession, then setSessionOrder.
+      expect(seen, hasLength(2));
+      expect(seen[0].url.path, '/mobile/session-organization');
+      final moveBody = jsonDecode(seen[0].body) as Map<String, dynamic>;
+      expect(moveBody['sessionID'], 's1');
+      expect(moveBody['projectID'], 'proj-2');
+      expect(seen[1].url.path, '/mobile/session-order');
+      final orderBody = jsonDecode(seen[1].body) as Map<String, dynamic>;
+      expect(orderBody['projectID'], 'proj-2');
+      expect(orderBody['orderedSessionIDs'], ['s1', 's9']);
+      expect(commit!.movedToProjectId, 'proj-2');
+      client.close();
+    });
+
+    test('split drop touches no Host endpoint', () async {
+      final (client, seen) = recordedClient();
+      const drag = SidebarSessionDrag(
+        draggedSessionId: 's1',
+        target: SidebarDropTarget.split,
+        targetId: 'pane-1',
+        dropToSplit: true,
+      );
+      final commit = await drag.commitDrop(
+        host: client,
+        projectId: 'proj-1',
+        currentOrder: ['s1'],
+      );
+      expect(commit, isNull);
+      expect(seen, isEmpty);
+      client.close();
+    });
+
+    test('commit with no dragged session throws StateError', () async {
+      final (client, _) = recordedClient();
+      const drag = SidebarSessionDrag();
+      expect(
+        () => drag.commitDrop(
+          host: client,
+          projectId: 'proj-1',
+          currentOrder: const [],
+        ),
+        throwsStateError,
+      );
+      client.close();
+    });
+
+    test('Host rejection propagates as HostException', () async {
+      final mock = MockClient((request) async {
+        return http.Response('{"error": "invalid session id"}', 400);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      const drag = SidebarSessionDrag(draggedSessionId: 's1');
+      expect(
+        () => drag.commitDrop(
+          host: client,
+          projectId: 'proj-1',
+          currentOrder: ['s1'],
+        ),
+        throwsA(isA<HostException>()),
+      );
+      client.close();
     });
   });
 

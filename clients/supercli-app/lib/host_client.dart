@@ -153,6 +153,45 @@ final class HostClient {
     await _post('/mobile/sessions/$sessionId/messages', {'text': text});
   }
 
+  /// POST `/mobile/session-order` — replace one project's hand-ordered
+  /// sidebar ranks. This is the Host verb the native sidebar drag commits
+  /// through (`SupercliStore.setSessionOrder` → `RemoteHostRuntime.setSessionOrder`
+  /// → `supercli_native_bridge_remote_session_order_set`).
+  /// [orderedSessionIds] is the combined pinned + regular order exactly as
+  /// the drag commits it; sessions absent from it keep newest-first on top.
+  /// Throws [HostException] when the Host rejects the order.
+  Future<void> setSessionOrder(
+    String projectId,
+    List<String> orderedSessionIds,
+  ) async {
+    final response = await _post('/mobile/session-order', {
+      'projectID': projectId,
+      'orderedSessionIDs': orderedSessionIds,
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        'POST /mobile/session-order failed',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  /// POST `/mobile/session-organization` — move a session into another
+  /// project (the "file into group/project" half of a cross-project drop).
+  /// Throws [HostException] when the Host rejects the move.
+  Future<void> moveSessionToProject(String sessionId, String projectId) async {
+    final response = await _post('/mobile/session-organization', {
+      'sessionID': sessionId,
+      'projectID': projectId,
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        'POST /mobile/session-organization failed',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
   /// POST `/mobile/workspace-settings` — persist workspace settings
   /// (`settings.workspace.set`). The [settings] map uses the Host's
   /// camelCase wire format (see `AppSettings.toHostJson`). Throws

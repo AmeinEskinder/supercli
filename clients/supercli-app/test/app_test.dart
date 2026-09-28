@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 import 'package:supercli_app/app.dart';
 import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/screens/projectsidebarview.dart';
 
 void main() {
   group('SupercliApp shell tree', () {
@@ -38,11 +39,7 @@ void main() {
     test('session dataset reflects sessions', () {
       final app = SupercliApp()
         ..sessions = [
-          SessionSummary(
-            id: 's1',
-            title: 'Hello',
-            updatedAt: DateTime.now(),
-          ),
+          SessionSummary(id: 's1', title: 'Hello', updatedAt: DateTime.now()),
         ];
       final dataset = app.sessionDataset;
       expect(dataset.id, 'sessions');
@@ -65,6 +62,73 @@ void main() {
       final dataset = app.sessionDataset;
       expect(dataset.row(0)[0], 'Claude · ~/proj');
       expect(dataset.row(0)[1], contains('claude'));
+    });
+
+    test('no drag overlay mounted when idle', () {
+      final app = SupercliApp();
+      expect(app.dragActive, isFalse);
+      final root = app.build() as UiRow;
+      expect(
+        root.children.where((c) => c.id == 'session-drag-overlay'),
+        isEmpty,
+      );
+    });
+
+    test('beginSessionDrag mounts the overlay and records context', () {
+      final app = SupercliApp()
+        ..beginSessionDrag(
+          sessionId: 's2',
+          projectId: 'proj-1',
+          currentOrder: ['s1', 's2', 's3'],
+        );
+      expect(app.dragActive, isTrue);
+      expect(app.dragProjectId, 'proj-1');
+      expect(app.dragCurrentOrder, ['s1', 's2', 's3']);
+      final root = app.build() as UiRow;
+      final overlays = root.children.where(
+        (c) => c.id == 'session-drag-overlay',
+      );
+      expect(overlays, hasLength(1));
+      // Drag actions are registered only while mounted.
+      final names = app.actions().map((a) => a.name).toList();
+      expect(names, contains('sidebar.drag.cancel'));
+      expect(names, contains('sidebar.drag.commit'));
+    });
+
+    test('retargetSessionDrag updates the drop target', () {
+      final app = SupercliApp()
+        ..beginSessionDrag(
+          sessionId: 's2',
+          projectId: 'proj-1',
+          currentOrder: ['s1', 's2'],
+        )
+        ..retargetSessionDrag(
+          target: SidebarDropTarget.project,
+          targetId: 'proj-2',
+          targetIndex: 0,
+        );
+      expect(app.sessionDrag!.target, SidebarDropTarget.project);
+      expect(app.sessionDrag!.targetId, 'proj-2');
+      expect(app.sessionDrag!.targetIndex, 0);
+    });
+
+    test('cancelSessionDrag clears state and unmounts the overlay', () {
+      final app = SupercliApp()
+        ..beginSessionDrag(
+          sessionId: 's2',
+          projectId: 'proj-1',
+          currentOrder: ['s1', 's2'],
+        )
+        ..cancelSessionDrag();
+      expect(app.dragActive, isFalse);
+      expect(app.dragProjectId, isNull);
+      final root = app.build() as UiRow;
+      expect(
+        root.children.where((c) => c.id == 'session-drag-overlay'),
+        isEmpty,
+      );
+      final names = app.actions().map((a) => a.name).toList();
+      expect(names, isNot(contains('sidebar.drag.commit')));
     });
   });
 
