@@ -37,6 +37,8 @@ pub mod browser_mcp;
 #[cfg(feature = "native-host")]
 pub mod browser_takeover;
 #[cfg(feature = "native-host")]
+pub mod clickable_path;
+#[cfg(feature = "native-host")]
 pub mod config;
 #[cfg(feature = "native-host")]
 pub mod controller_api;
@@ -87,6 +89,8 @@ pub mod json_log;
 pub mod license;
 #[cfg(feature = "native-host")]
 pub mod local_urls;
+#[cfg(feature = "native-host")]
+pub mod mcp_approval_center;
 #[cfg(feature = "native-host")]
 pub mod mcp_auth;
 #[cfg(feature = "native-host")]
@@ -172,6 +176,8 @@ pub mod ssh_connection;
 pub mod state;
 #[cfg(feature = "native-host")]
 pub mod state_bus;
+#[cfg(feature = "native-host")]
+pub mod store_policies;
 #[cfg(feature = "native-host")]
 pub mod terminal_viewport;
 #[cfg(feature = "native-host")]

@@ -81,6 +81,56 @@ files:
         count: 8
     notes: "Full logic port. Actual UNUserNotificationCenter delivery is a thin objc2 wrapper (macOS-only, not unit-tested by design)."
 
+  native/SupercliNative/Sources/SupercliNative/ActivityLog.swift:
+    destination: "Rust: supercli-core::activity_log"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ActivityLogEntry.date() — SystemTime from unix_ms"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogEntry::date"
+        test: "activity_log::tests::schema_matches_the_native_jsonl_contract"
+      - swift: "FileStamp { size, modified_at } + loaded_stamp tracking"
+        target: "crates/supercli-core/src/activity_log.rs::FileStamp"
+        test: "activity_log::tests::refresh_from_host_picks_up_external_appends_without_writing"
+      - swift: "refresh_from_host() — skip unchanged via file metadata, reload without compacting/rewriting Host-owned file"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogStore::refresh_from_host"
+        test: "activity_log::tests::refresh_from_host_picks_up_external_appends_without_writing"
+      - swift: "Stamp refresh after append and compaction"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogStore::append"
+        test: "activity_log::tests::append_persists_updates_memory_and_refreshes_external_changes"
+    tests:
+      - file: crates/supercli-core/src/activity_log.rs
+        count: 8
+    notes: "Full port. The existing Rust implementation already covered most behaviours; this batch added date(), FileStamp/loaded_stamp, and refresh_from_host() with the ActivityLogHostConsumerTests case."
+
+  native/SupercliNative/Sources/SupercliNative/ClickablePath.swift:
+    destination: "Rust: supercli-core::clickable_path"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "TerminalWorkingDirectory — nonblank reported OSC 7 directory wins over seed"
+        target: "crates/supercli-core/src/clickable_path.rs::TerminalWorkingDirectory::current"
+        test: "clickable_path::tests::working_directory_reported_wins_over_seed"
+      - swift: "match_in_row — quoted/unquoted tokenization, URL/mailto rejection, plausible-path detection"
+        target: "crates/supercli-core/src/clickable_path.rs::match_in_row"
+        test: "clickable_path::tests::plain_path_no_line, ignores_plain_words, picks_token_under_column_when_multiple, whitespace_does_not_activate_the_only_path_on_the_row, paren_wrapped_path"
+      - swift: "Line/column parsing — :line, :line:column, #Lline; trailing punctuation stripping"
+        target: "crates/supercli-core/src/clickable_path.rs::parse"
+        test: "clickable_path::tests::relative_path_with_line_only, relative_path_with_line_and_column, strips_trailing_sentence_punctuation"
+      - swift: "absolute_path — absolute, ~, relative via cwd; rejects other-user ~name; lexical ./.. standardization"
+        target: "crates/supercli-core/src/clickable_path.rs::absolute_path"
+        test: "clickable_path::tests::tilde_path_stays_unexpanded"
+      - swift: "resolve_file — injectable existence predicate; remote Host paths never checked against Controller fs"
+        target: "crates/supercli-core/src/clickable_path.rs::resolve_file"
+        test: "clickable_path::tests::remote_resolution_does_not_require_controller_file"
+      - swift: "file_url_match — local/localhost gating, optional remote-host allowance, percent decoding, #L123"
+        target: "crates/supercli-core/src/clickable_path.rs::file_url_match"
+        test: "clickable_path::tests::* (file URL cases)"
+    tests:
+      - file: crates/supercli-core/src/clickable_path.rs
+        count: 17
+    notes: "Full port. All 14 ClickablePathTests cases ported plus working-directory precedence, tilde/.. normalization, and file URL behavior."
+
   # --- Partial: core logic ported, some behaviours remain ---
   native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift:
     destination: "Rust: supercli-native-bridge::macos::service_identity"
@@ -263,6 +313,109 @@ files:
   # The Sparkle integration lived in AppDelegate.swift (not a standalone file).
   # The updater logic is ported to Rust; AppDelegate itself stays tbd for the app worker.
 
+  native/SupercliNative/Sources/SupercliNative/MCPApprovalCenter.swift:
+    destination: "Rust: supercli-core::mcp_approval_center"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "PendingMcpApproval — id, kind (write/browser/computer/app-open), caller/target session, app id/name"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::PendingMcpApproval"
+        test: "mcp_approval_center::tests::write_presents_on_known_target"
+      - swift: "presentationSessionID — write presents on known target, falls back to caller; others present on caller"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::PendingMcpApproval::presentation_session_id"
+        test: "mcp_approval_center::tests::write_presents_on_known_target, write_falls_back_to_caller_when_target_is_unknown, browser_presents_on_caller"
+      - swift: "reconcileApprovals — FIFO queue, per-source ownership (scoped vs host), coalescing, first-answer-wins via answersInFlight"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::reconcile"
+        test: "mcp_approval_center::tests::reconcile_adds_new_and_drops_withdrawn, scoped_and_local_sources_own_their_rows_independently"
+      - swift: "answerMcpApproval — route to scoped/host backend, stale row removal"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::answer"
+        test: "mcp_approval_center::tests::answer_routes_and_first_answer_wins"
+      - swift: "mcpApprovalMessage — Host copy preferred, kind-specific fallback copy with display-name resolution"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::approval_message"
+        test: "mcp_approval_center::tests::approval_message_prefers_host_copy_then_kind_copy"
+      - swift: "McpApprovalAttention — overlay pending approvals as attention on live sessions (tree + map), empty is identity"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::apply_attention_to_nodes"
+        test: "mcp_approval_center::tests::attention_overlay_promotes_live_session_and_leaves_others, empty_pending_ids_are_identity"
+    tests:
+      - file: crates/supercli-core/src/mcp_approval_center.rs
+        count: 9
+    notes: "Pure queue/presentation/attention logic ported. AppKit orchestration (NSApp.activate, toasts, remote runtime calls, revealSessionForMcpApproval) is surface-specific and stays with the store/UI port. SidebarView sessionRowActivitySpinnerCommand and RootView ActivityMenuSessions overlay consumers belong to the Dart/SidebarView and Dart/RootView ports."
+
+  native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift:
+    destination: "Rust: supercli-core::store_policies"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "computerUseAvailable / computerUseControllable — always false (retired in every build)"
+        target: "crates/supercli-core/src/store_policies.rs::computer_use_available"
+        test: "store_policies::tests::computer_use_is_retired_in_every_build"
+      - swift: "isAvailable — .computerUse excluded, all others available"
+        target: "crates/supercli-core/src/store_policies.rs::is_feature_available"
+        test: "store_policies::tests::computer_use_is_retired_in_every_build"
+      - swift: "availableShippedFeatures — remoteWorkspaces, worktrees, sessionsMcp, profiles in order"
+        target: "crates/supercli-core/src/store_policies.rs::available_shipped_features"
+        test: "store_policies::tests::shipped_feature_order_excludes_computer_use"
+      - swift: "availableExperimentalFeatures — only browserMcp"
+        target: "crates/supercli-core/src/store_policies.rs::available_experimental_features"
+        test: "store_policies::tests::only_browser_mcp_is_experimental"
+      - swift: "isEnabled — env override, stored preference, built-in default; retired features never enabled"
+        target: "crates/supercli-core/src/store_policies.rs::is_feature_enabled"
+        test: "store_policies::tests::env_override_forces_feature_on, retired_feature_write_fails_without_modifying_state"
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 6
+    notes: "Pure gating logic ported (ComputerContainmentTests). UserDefaults persistence, workspace inheritance, and WorkspaceFeature pickerEnabled are surface-specific."
+
+  native/SupercliNative/Sources/SupercliNative/HostManagementState.swift:
+    destination: "Rust: supercli-core::store_policies"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "Value { devices, endpoint, error } — Equatable"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementValue"
+        test: "store_policies::tests::unchanged_snapshot_does_not_publish"
+      - swift: "apply — equality-gated publication (unchanged snapshot is a no-op)"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementState::apply"
+        test: "store_policies::tests::unchanged_snapshot_does_not_publish, differing_snapshot_publishes_again"
+      - swift: "update(endpoint:) / update(error:) — publish once per change"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementState::update_endpoint"
+        test: "store_policies::tests::endpoint_change_publishes_once, repeated_identical_error_update_publishes_once"
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "Equality-gated publication ported (StartupPerformanceTests HostManagementState half). The @Published/ObservableObject Combine wrapper is SwiftUI-specific; Rust tests assert via the publications counter."
+
+  native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift:
+    destination: "Rust: supercli-core::store_policies"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "phoneResizeOverrides(fromHostPublished:locallyCleared:) — running + both dims, clamp 2...300 x 2...120, cleared ids stay cleared"
+        target: "crates/supercli-core/src/store_policies.rs::phone_resize_overrides"
+        test: "store_policies::tests::phone_fit_only_running_sessions_with_both_dimensions, phone_fit_clamps_dimensions, phone_fit_locally_cleared_ids_stay_cleared"
+      - swift: "predictedResumeInsertionIndex — unranked newest-first, unranked precede ranked, shared-order ranks, below folders when no running rows"
+        target: "crates/supercli-core/src/store_policies.rs::predicted_resume_insertion_index"
+        test: "store_policies::tests::unranked_row_sorts_newest_first_among_running_rows, ranked_row_takes_its_shared_rank_after_unranked_rows, unranked_source_precedes_every_ranked_row, no_running_rows_leads_the_stopped_rows_below_folders"
+      - swift: "supersededRestartGhostIDs — dead row is ghost iff live row shares nonzero (project_id, created_at)"
+        target: "crates/supercli-core/src/store_policies.rs::superseded_restart_ghost_ids"
+        test: "store_policies::tests::restart_ghost_needs_live_row_with_same_project_and_created_at, restart_ghost_never_removes_live_rows, restart_ghost_multiple_dead_generations_share_one_live_replacement"
+      - swift: "resolvedSessionTitle — durable freshness: pending write newer than shared marker wins, legacy timestamp-less defers to valid marker"
+        target: "crates/supercli-core/src/store_policies.rs::resolved_session_title"
+        test: "store_policies::tests::title_resolution_uses_durable_freshness, legacy_pending_title_never_overwrites_a_valid_shared_marker, pending_or_legacy_native_title_publishes_when_no_valid_marker_exists"
+      - swift: "decodedPendingTitleWrites — conservative: JSON map, plist dict with u64 values, legacy [String] to zero timestamps"
+        target: "crates/supercli-core/src/store_policies.rs::decoded_pending_title_writes"
+        test: "store_policies::tests::legacy_pending_title_storage_decodes_conservatively"
+      - swift: "applyPinOverrides — raw-JSON edits preserving unknown fields, legacy flat normalization, malformed shape refuses"
+        target: "crates/supercli-core/src/store_policies.rs::apply_pin_overrides"
+        test: "store_policies::tests::pin_intent_preserves_concurrent_unrelated_shared_pin, pin_removal_touches_only_its_own_key, pin_intent_keeps_legacy_flat_pins_and_normalizes_shape, malformed_pin_state_leaves_intent_pending"
+      - swift: "reconciledPinOverrides — timestamp-based add/remove reconciliation against shared state"
+        target: "crates/supercli-core/src/store_policies.rs::reconciled_pin_overrides"
+        test: "store_policies::tests::newer_shared_unpin_retires_stale_native_added_overlay, pending_native_add_survives_an_older_shared_snapshot, newer_shared_repin_retires_native_removal, pending_native_removal_beats_an_older_shared_pin, legacy_untimestamped_removal_defers_to_readable_shared_state"
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 23
+    notes: "Only the pure, test-covered policies ported (PhoneFitProjectionTests, RemoteResumePlacementTests, RestartGhostTests, SharedOrganizationReconciliationTests). The 17k-line store's UI, persistence, and Host I/O remain tbd for the store worker."
+
   # --- Test files: ported as Rust #[cfg(test)] modules ---
   native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift:
     destination: "Rust: supercli-native-bridge::macos::launchd::tests"
@@ -306,3 +459,66 @@ files:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
         count: 4
     notes: "4 XCTest cases ported."
+  native/SupercliNative/Tests/SupercliNativeTests/ActivityLogHostConsumerTests.swift:
+    destination: "Rust: supercli-core::activity_log::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/activity_log.rs
+        count: 1
+    notes: "1 XCTest case ported: refresh_from_host picks up external appends without writing."
+  native/SupercliNative/Tests/SupercliNativeTests/ClickablePathTests.swift:
+    destination: "Rust: supercli-core::clickable_path::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/clickable_path.rs
+        count: 14
+    notes: "All 14 XCTest cases ported (plus 3 additional Rust tests for working-directory precedence and file URLs)."
+  native/SupercliNative/Tests/SupercliNativeTests/ComputerContainmentTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 6
+    notes: "6 XCTest cases ported: computer use retired, shipped order, experimental set, retired write refusal, env override."
+  native/SupercliNative/Tests/SupercliNativeTests/MCPApprovalPresentationTests.swift:
+    destination: "Rust: supercli-core::mcp_approval_center::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/mcp_approval_center.rs
+        count: 5
+    notes: "5 XCTest cases ported (presentation session + attention overlay). The SidebarView spinner and RootView activity-menu cases belong to the Dart/SidebarView and Dart/RootView ports."
+  native/SupercliNative/Tests/SupercliNativeTests/PhoneFitProjectionTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 3
+    notes: "3 XCTest cases ported: running+both-dims, clamping, locally-cleared semantics."
+  native/SupercliNative/Tests/SupercliNativeTests/RemoteResumePlacementTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "4 XCTest cases ported: unranked newest-first, shared ranks, unranked precedence, below-folders fallback."
+  native/SupercliNative/Tests/SupercliNativeTests/RestartGhostTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 3
+    notes: "3 XCTest cases ported: ghost grouping, live rows never ghosts, multiple dead generations."
+  native/SupercliNative/Tests/SupercliNativeTests/SharedOrganizationReconciliationTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 13
+    notes: "13 XCTest cases ported: title freshness/normalization, pending-write decoding, pin add/remove raw-JSON edits, legacy flat normalization, malformed refusal, timestamp reconciliation, legacy removal deferral."
+  native/SupercliNative/Tests/SupercliNativeTests/StartupPerformanceTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: partial
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "HostManagementState equality-gating half ported (4 tests). The HostServiceManager slow-reconciliation half belongs to the native-bridge service-manager worker."
