@@ -64,8 +64,12 @@ void main() {
         baseUrl: Uri.parse('http://127.0.0.1:8137'),
         httpClient: mock,
       );
-      final first = await client.answerApproval(const ApprovalAnswer.approve('a1'));
-      final second = await client.answerApproval(const ApprovalAnswer.approve('a1'));
+      final first = await client.answerApproval(
+        const ApprovalAnswer.approve('a1'),
+      );
+      final second = await client.answerApproval(
+        const ApprovalAnswer.approve('a1'),
+      );
       expect(first, isTrue);
       expect(second, isFalse, reason: 'second answer must not be sent');
       expect(calls, 1, reason: 'exactly one HTTP POST');
@@ -161,10 +165,7 @@ void main() {
       expect(seenPath, '/mobile/workspace-settings');
       expect(settings['autoStopArchiveMinutes'], 240);
       expect(settings['browserDefaultAccess'], 'on');
-      expect(
-        (settings['experimentalSettings'] as Map)['sessionsMcp'],
-        false,
-      );
+      expect((settings['experimentalSettings'] as Map)['sessionsMcp'], false);
       client.close();
     });
 
@@ -177,6 +178,74 @@ void main() {
         httpClient: mock,
       );
       expect(() => client.settingsGet(), throwsA(isA<HostException>()));
+      client.close();
+    });
+
+    test('setSessionOrder posts projectID + orderedSessionIDs', () async {
+      Map<String, dynamic>? seenBody;
+      String? seenPath;
+      final mock = MockClient((request) async {
+        seenPath = request.url.path;
+        seenBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response('{"ok": true}', 200);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      await client.setSessionOrder('proj-1', ['s1', 's3', 's2']);
+      expect(seenPath, '/mobile/session-order');
+      expect(seenBody!['projectID'], 'proj-1');
+      expect(seenBody!['orderedSessionIDs'], ['s1', 's3', 's2']);
+      client.close();
+    });
+
+    test('setSessionOrder throws HostException on non-200', () async {
+      final mock = MockClient((request) async {
+        return http.Response('{"error": "invalid session id"}', 400);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      expect(
+        () => client.setSessionOrder('proj-1', ['s1']),
+        throwsA(isA<HostException>()),
+      );
+      client.close();
+    });
+
+    test('moveSessionToProject posts sessionID + projectID', () async {
+      Map<String, dynamic>? seenBody;
+      String? seenPath;
+      final mock = MockClient((request) async {
+        seenPath = request.url.path;
+        seenBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response('{"ok": true}', 200);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      await client.moveSessionToProject('s9', 'proj-2');
+      expect(seenPath, '/mobile/session-organization');
+      expect(seenBody!['sessionID'], 's9');
+      expect(seenBody!['projectID'], 'proj-2');
+      client.close();
+    });
+
+    test('moveSessionToProject throws HostException on non-200', () async {
+      final mock = MockClient((request) async {
+        return http.Response('{"error": "unknown session"}', 404);
+      });
+      final client = HostClient(
+        baseUrl: Uri.parse('http://127.0.0.1:8137'),
+        httpClient: mock,
+      );
+      expect(
+        () => client.moveSessionToProject('nope', 'proj-2'),
+        throwsA(isA<HostException>()),
+      );
       client.close();
     });
   });

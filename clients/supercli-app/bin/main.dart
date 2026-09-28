@@ -76,35 +76,41 @@ Future<void> main(List<String> args) async {
       // Toast on newly arrived approvals (drives the ToastCenter).
       for (final a in approvals) {
         if (!prevApprovalIds.contains(a.id)) {
-          app.notifications.add(AppNotification(
-            id: 'approval-${a.id}',
-            title: 'Approval requested',
-            message: '${a.tool}: ${a.summary}',
-            severity: NotificationSeverity.warning,
-            focusTarget: 'mcp-approval-overlay',
-          ));
+          app.notifications.add(
+            AppNotification(
+              id: 'approval-${a.id}',
+              title: 'Approval requested',
+              message: '${a.tool}: ${a.summary}',
+              severity: NotificationSeverity.warning,
+              focusTarget: 'mcp-approval-overlay',
+            ),
+          );
         }
       }
       app.statusLine =
           'Connected — ${sessions.length} sessions, ${approvals.length} pending approval(s).';
     } on HostException catch (e) {
       app.statusLine = 'Host error: $e';
-      app.notifications.add(AppNotification(
-        id: 'host-error',
-        title: 'Host error',
-        message: '$e',
-        severity: NotificationSeverity.error,
-      ));
+      app.notifications.add(
+        AppNotification(
+          id: 'host-error',
+          title: 'Host error',
+          message: '$e',
+          severity: NotificationSeverity.error,
+        ),
+      );
     } catch (e) {
       // Non-HostException failures (connection refused, timeout, TLS, JSON)
       // must not become an uncaught 255; record and continue headless.
       app.statusLine = 'Connection error: $e';
-      app.notifications.add(AppNotification(
-        id: 'connection-error',
-        title: 'Connection error',
-        message: '$e',
-        severity: NotificationSeverity.error,
-      ));
+      app.notifications.add(
+        AppNotification(
+          id: 'connection-error',
+          title: 'Connection error',
+          message: '$e',
+          severity: NotificationSeverity.error,
+        ),
+      );
       stderr.writeln('headless: bootstrap failed: $e');
     }
     final host = gpui;
@@ -116,7 +122,8 @@ Future<void> main(List<String> args) async {
         dataset,
         columns: const ['Title', 'Updated'],
         rows: [
-          for (final s in app.sessions) [s.title, SupercliApp.formatTime(s.updatedAt)],
+          for (final s in app.sessions)
+            [s.title, SupercliApp.formatTime(s.updatedAt)],
         ],
       );
       await host.publish(app.build(), actions: app.actions());
@@ -163,7 +170,9 @@ Future<void> main(List<String> args) async {
     await refresh();
     final approval = app.pendingApproval;
     if (approval != null) {
-      final sent = await client.answerApproval(ApprovalAnswer.approve(approval.id));
+      final sent = await client.answerApproval(
+        ApprovalAnswer.approve(approval.id),
+      );
       stdout.writeln('headless: answered approval ${approval.id} (sent=$sent)');
     } else {
       stdout.writeln('headless: no pending approvals');
@@ -276,6 +285,37 @@ Future<void> _dispatchAction(
         app.mruSwitcher.markUsed(current.id);
       }
       await refresh();
+    // --- Session drag (detached drag, #152) ---
+    // The drag state machine + overlay live in the app; the commit goes
+    // through the authenticated Host API (never local-only state).
+    // Initiation awaits gpuidart DnD events (G-1).
+    case 'sidebar.drag.cancel':
+      app.cancelSessionDrag();
+      await refresh();
+    case 'sidebar.drag.commit':
+      final drag = app.sessionDrag;
+      final projectId = app.dragProjectId;
+      if (drag != null && projectId != null) {
+        try {
+          await drag.commitDrop(
+            host: client,
+            projectId: projectId,
+            currentOrder: app.dragCurrentOrder,
+          );
+          app.cancelSessionDrag();
+        } on HostException catch (e) {
+          app.cancelSessionDrag();
+          app.notifications.add(
+            AppNotification(
+              id: 'drag-error',
+              title: 'Drag failed',
+              message: e.message,
+              severity: NotificationSeverity.error,
+            ),
+          );
+        }
+      }
+      await refresh();
     // --- Pane management (also reachable from the palette) ---
     case 'pane.splitRight':
       _splitPane(app, SplitDirection.horizontal);
@@ -286,8 +326,9 @@ Future<void> _dispatchAction(
     case 'pane.zoom':
       final layout = app.paneLayout;
       if (layout != null) {
-        app.paneLayout =
-            layout.isZoomed ? layout.unzoom() : layout.toggleZoom();
+        app.paneLayout = layout.isZoomed
+            ? layout.unzoom()
+            : layout.toggleZoom();
       }
       await refresh();
     case 'pane.equalize':

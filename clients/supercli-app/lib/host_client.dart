@@ -24,7 +24,7 @@ final class HostException implements Exception {
 
 final class HostClient {
   HostClient({required this.baseUrl, http.Client? httpClient, this.token})
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
   final Uri baseUrl;
   final http.Client _http;
@@ -66,7 +66,8 @@ final class HostClient {
 
   /// Sessions parsed from a bootstrap body. Tolerates absence.
   static List<SessionSummary> sessionsFromBootstrap(
-      Map<String, dynamic> bootstrap) {
+    Map<String, dynamic> bootstrap,
+  ) {
     final sessions = (bootstrap['sessions'] as List?) ?? const [];
     return sessions
         .map((s) => SessionSummary.fromJson(s as Map<String, dynamic>))
@@ -75,7 +76,8 @@ final class HostClient {
 
   /// Pending approvals parsed from a bootstrap body (real Host wire format).
   static List<PendingApproval> approvalsFromBootstrap(
-      Map<String, dynamic> bootstrap) {
+    Map<String, dynamic> bootstrap,
+  ) {
     final approvals = (bootstrap['pendingApprovals'] as List?) ?? const [];
     return approvals
         .map((a) => PendingApproval.fromJson(a as Map<String, dynamic>))
@@ -104,10 +106,7 @@ final class HostClient {
     if (_answered.contains(answer.id)) {
       return false;
     }
-    final response = await _post(
-      '/mobile/approvals/answer',
-      answer.toJson(),
-    );
+    final response = await _post('/mobile/approvals/answer', answer.toJson());
     if (response.statusCode >= 200 && response.statusCode < 300) {
       _answered.add(answer.id);
       return true;
@@ -122,7 +121,9 @@ final class HostClient {
   ///
   /// The caller is responsible for looping; a timeout or error throws
   /// [HostException] and the caller should back off and retry.
-  Future<Map<String, dynamic>> pollEvents({Duration timeout = const Duration(seconds: 30)}) async {
+  Future<Map<String, dynamic>> pollEvents({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     final url = baseUrl.replace(
       path: '${baseUrl.path}/mobile/events/poll',
       queryParameters: {'timeout_ms': '${timeout.inMilliseconds}'},
@@ -139,6 +140,45 @@ final class HostClient {
   /// POST `/mobile/sessions/<id>/messages` — send a prompt to a session.
   Future<void> sendMessage(String sessionId, String text) async {
     await _post('/mobile/sessions/$sessionId/messages', {'text': text});
+  }
+
+  /// POST `/mobile/session-order` — replace one project's hand-ordered
+  /// sidebar ranks. This is the Host verb the native sidebar drag commits
+  /// through (`SupercliStore.setSessionOrder` → `RemoteHostRuntime.setSessionOrder`
+  /// → `supercli_native_bridge_remote_session_order_set`).
+  /// [orderedSessionIds] is the combined pinned + regular order exactly as
+  /// the drag commits it; sessions absent from it keep newest-first on top.
+  /// Throws [HostException] when the Host rejects the order.
+  Future<void> setSessionOrder(
+    String projectId,
+    List<String> orderedSessionIds,
+  ) async {
+    final response = await _post('/mobile/session-order', {
+      'projectID': projectId,
+      'orderedSessionIDs': orderedSessionIds,
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        'POST /mobile/session-order failed',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  /// POST `/mobile/session-organization` — move a session into another
+  /// project (the "file into group/project" half of a cross-project drop).
+  /// Throws [HostException] when the Host rejects the move.
+  Future<void> moveSessionToProject(String sessionId, String projectId) async {
+    final response = await _post('/mobile/session-organization', {
+      'sessionID': sessionId,
+      'projectID': projectId,
+    });
+    if (response.statusCode != 200) {
+      throw HostException(
+        'POST /mobile/session-organization failed',
+        statusCode: response.statusCode,
+      );
+    }
   }
 
   /// POST `/mobile/workspace-settings` — persist workspace settings
@@ -189,8 +229,9 @@ final class HostClient {
 
   Future<http.Response> _get(String path) async {
     final url = baseUrl.replace(path: '${baseUrl.path}$path');
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw HostException('GET $path failed', statusCode: response.statusCode);
     }
@@ -219,10 +260,13 @@ final class HostClient {
       path: '${baseUrl.path}/mobile/git/status',
       queryParameters: {'path': repoPath},
     );
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 15));
     _checkOk(response, 'git status');
-    return GitStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return GitStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// GET /mobile/git/diff — unified diff of one file against HEAD.
@@ -231,21 +275,26 @@ final class HostClient {
       path: '${baseUrl.path}/mobile/git/diff',
       queryParameters: {'path': repoPath, 'file': file},
     );
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 15));
     _checkOk(response, 'git diff');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['diff'] as String?) ?? '';
   }
 
   /// GET /mobile/git/history — recent commits.
-  Future<List<GitHistoryCommit>> gitHistory(String repoPath, {int limit = 50}) async {
+  Future<List<GitHistoryCommit>> gitHistory(
+    String repoPath, {
+    int limit = 50,
+  }) async {
     final url = baseUrl.replace(
       path: '${baseUrl.path}/mobile/git/history',
       queryParameters: {'path': repoPath, 'limit': '$limit'},
     );
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 15));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 15));
     _checkOk(response, 'git history');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final commits = (body['commits'] as List?) ?? const [];
@@ -262,10 +311,7 @@ final class HostClient {
     String repoPath, {
     Map<String, Object>? extra,
   }) async {
-    final response = await _post(route, {
-      'path': repoPath,
-      ...?extra,
-    });
+    final response = await _post(route, {'path': repoPath, ...?extra});
     if (response.statusCode != 200) {
       throw HostException(
         '$route failed: ${response.body}',
@@ -277,18 +323,22 @@ final class HostClient {
   /// POST /mobile/git/stage — `git add` the given repo-relative paths.
   /// The Host gates this through the ApprovalHub (human approval).
   Future<void> gitStage(String repoPath, List<String> files) =>
-      _gitPostApproved('/mobile/git/stage', repoPath,
-          extra: {'files': files});
+      _gitPostApproved('/mobile/git/stage', repoPath, extra: {'files': files});
 
   /// POST /mobile/git/unstage — `git restore --staged`.
   Future<void> gitUnstage(String repoPath, List<String> files) =>
-      _gitPostApproved('/mobile/git/unstage', repoPath,
-          extra: {'files': files});
+      _gitPostApproved(
+        '/mobile/git/unstage',
+        repoPath,
+        extra: {'files': files},
+      );
 
   /// POST /mobile/git/commit.
-  Future<void> gitCommit(String repoPath, String message) =>
-      _gitPostApproved('/mobile/git/commit', repoPath,
-          extra: {'message': message});
+  Future<void> gitCommit(String repoPath, String message) => _gitPostApproved(
+    '/mobile/git/commit',
+    repoPath,
+    extra: {'message': message},
+  );
 
   /// POST /mobile/git/fetch — `git fetch --prune`.
   Future<void> gitFetch(String repoPath) =>
@@ -312,8 +362,9 @@ final class HostClient {
       path: '${baseUrl.path}/mobile/files/list',
       queryParameters: {'path': path},
     );
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 10));
     _checkOk(response, 'files list');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final entries = (body['entries'] as List?) ?? const [];
@@ -330,8 +381,9 @@ final class HostClient {
       path: '${baseUrl.path}/mobile/files/read',
       queryParameters: params,
     );
-    final response =
-        await _http.get(url, headers: _authHeaders).timeout(const Duration(seconds: 10));
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(const Duration(seconds: 10));
     _checkOk(response, 'files read');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final b64 = (body['dataBase64'] as String?) ?? '';
@@ -360,7 +412,9 @@ final class HostClient {
   /// GET /mobile/usage/stats — Host session counts + provider transcript presence.
   Future<UsageStats> usageStats() async {
     final response = await _get('/mobile/usage/stats');
-    return UsageStats.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return UsageStats.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   void _checkOk(http.Response response, String what) {
