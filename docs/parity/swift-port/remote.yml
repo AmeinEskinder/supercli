@@ -134,30 +134,6 @@ files:
       - file: crates/supercli-client/src/host_store.rs
         count: 9
     notes: "Porting record management (pair/adopt/forget/rename/select/setLinkEnabled). Keychain credential storage is platform-specific; Rust uses the credential store abstraction."
-  native/SupercliNative/Sources/SupercliNative/SelectedHostScope.swift:
-    destination: "Rust: supercli-client"
-    status: ported
-    checklist: ""
-    behaviours:
-      - swift: "permits_local_execution"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::permits_local_execution"
-        test: "crates/supercli-client/src/scope.rs::tests::only_local_permits_execution"
-      - swift: "is_local_machine"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::is_local_machine"
-        test: "crates/supercli-client/src/scope.rs::tests::local_workspace_is_local_machine"
-      - swift: "supports_session_panes"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::supports_session_panes"
-        test: "crates/supercli-client/src/scope.rs::tests::all_scopes_support_panes"
-      - swift: "pane_scope_id"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::pane_scope_id"
-        test: "crates/supercli-client/src/scope.rs::tests::pane_scope_id_stable"
-      - swift: "scoped_local_home / remote_host_id / local_workspace_home / local_workspace_name / session_launch_wire_value"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope"
-        test: "crates/supercli-client/src/scope.rs::tests::wire_values"
-    tests:
-      - file: crates/supercli-client/src/scope.rs
-        count: 5
-    notes: "Ported by worker F (2af9778). 9/9 behaviours mapped, 5 tests."
   native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift:
     destination: "Dart: clients/supercli-app"
     status: partial
