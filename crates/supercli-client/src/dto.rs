@@ -128,10 +128,13 @@ pub struct ProjectSummary {
     pub parent_project_id: Option<String>,
     #[serde(rename = "sortOrder", default)]
     pub sort_order: Option<i64>,
-    // The Host's bootstrap names plain child groups `isGroup`; the iOS
-    // model reads `isFolder`. Accept both wire spellings.
-    #[serde(rename = "isFolder", default, alias = "isGroup")]
-    pub is_folder: Option<bool>,
+    // The Host's sidebar and bootstrap send `isGroup` (sessions.rs);
+    // Swift's RemoteControlProtocol also uses `isGroup`. Canonical wire
+    // spelling is `isGroup`. No `isFolder` alias: no frozen legacy client
+    // uses camelCase `isFolder` in this protocol (legacy macOS native
+    // reads snake_case `is_folder` from a different store format).
+    #[serde(rename = "isGroup", default)]
+    pub is_group: Option<bool>,
     #[serde(rename = "worktreeBranch", default)]
     pub worktree_branch: Option<String>,
 }
@@ -147,7 +150,7 @@ impl ProjectSummary {
     pub fn accepts_session_drop(&self) -> bool {
         self.parent_project_id.is_some()
             && self.worktree_branch.is_none()
-            && self.is_folder == Some(true)
+            && self.is_group == Some(true)
     }
 }
 
@@ -466,18 +469,22 @@ pub struct TerminalWriteRequest {
     /// Base64-encoded terminal input data.
     pub data: String,
     /// Optional idempotency key for one logical input send.
-    #[serde(rename = "idempotencyKey", default)]
+    /// Wire key is `wid`, matching the Host (controller_api.rs,
+    /// remote_server.rs) and Swift's `writeID` CodingKey.
+    #[serde(rename = "wid", default)]
     pub idempotency_key: Option<String>,
 }
 
 /// A terminal resize request.
 ///
 /// Mirrors `RemoteTerminalResizeRequest` in `RemoteControlProtocol.swift`.
+/// Wire field is `columns`, matching the Host (`controller_api.rs`
+/// `resize_session` reads `columns`) and Swift.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalResizeRequest {
     #[serde(rename = "sessionID")]
     pub session_id: String,
-    pub cols: i64,
+    pub columns: i64,
     pub rows: i64,
 }
 
@@ -633,11 +640,12 @@ pub struct ViewportSubscription {
 /// A run of cells with the same style (for viewport patches).
 ///
 /// Mirrors `RemoteTerminalCellRun` in `RemoteControlProtocol.swift`.
+/// Wire field is `column`, matching Swift. (The Host does not currently
+/// emit viewport patches; Swift is the reference implementation.)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalCellRun {
     pub row: i64,
-    #[serde(rename = "startColumn")]
-    pub start_column: i64,
+    pub column: i64,
     pub cells: Vec<TerminalCell>,
 }
 
@@ -999,7 +1007,7 @@ mod tests {
                 path: "/home".into(),
                 parent_project_id: None,
                 sort_order: Some(0),
-                is_folder: None,
+                is_group: None,
                 worktree_branch: None,
             },
             ProjectSummary {
@@ -1008,7 +1016,7 @@ mod tests {
                 path: "/home/a".into(),
                 parent_project_id: Some("home".into()),
                 sort_order: Some(1),
-                is_folder: Some(true),
+                is_group: Some(true),
                 worktree_branch: None,
             },
             ProjectSummary {
@@ -1017,7 +1025,7 @@ mod tests {
                 path: "/home/b".into(),
                 parent_project_id: Some("home".into()),
                 sort_order: Some(0),
-                is_folder: Some(true),
+                is_group: Some(true),
                 worktree_branch: None,
             },
             // Not a plain group (no isFolder): not a filing destination.
@@ -1027,7 +1035,7 @@ mod tests {
                 path: "/proj".into(),
                 parent_project_id: Some("home".into()),
                 sort_order: Some(2),
-                is_folder: None,
+                is_group: None,
                 worktree_branch: None,
             },
             // Worktree child: never a filing destination.
@@ -1037,7 +1045,7 @@ mod tests {
                 path: "/wt".into(),
                 parent_project_id: Some("home".into()),
                 sort_order: Some(3),
-                is_folder: Some(true),
+                is_group: Some(true),
                 worktree_branch: Some("feature".into()),
             },
         ]
@@ -1192,7 +1200,7 @@ mod tests {
         let w: TerminalWriteRequest = serde_json::from_value(serde_json::json!({
             "sessionID": "sess-1",
             "data": "aGVsbG8=",
-            "idempotencyKey": "key-1",
+            "wid": "key-1",
         }))
         .unwrap();
         assert_eq!(w.session_id, "sess-1");
@@ -1201,11 +1209,11 @@ mod tests {
 
         let r: TerminalResizeRequest = serde_json::from_value(serde_json::json!({
             "sessionID": "sess-1",
-            "cols": 80,
+            "columns": 80,
             "rows": 24,
         }))
         .unwrap();
-        assert_eq!(r.cols, 80);
+        assert_eq!(r.columns, 80);
         assert_eq!(r.rows, 24);
     }
 
@@ -1256,7 +1264,7 @@ mod tests {
             "changedRuns": [
                 {
                     "row": 0,
-                    "startColumn": 0,
+                    "column": 0,
                     "cells": [{"text": "x", "style": {}}]
                 }
             ],

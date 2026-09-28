@@ -104,11 +104,23 @@ final class SessionSummary {
   }
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
+    // Wire format (camelCase) takes precedence; older snake_case spellings
+    // are kept for backward compat. `unread` may arrive as a bool or a
+    // number from the Host; fall back to `unread_count`.
+    int unreadCount;
+    final unread = json['unread'];
+    if (unread is bool) {
+      unreadCount = unread ? 1 : 0;
+    } else if (unread is num) {
+      unreadCount = unread.toInt();
+    } else {
+      unreadCount = (json['unread_count'] as num?)?.toInt() ?? 0;
+    }
     return SessionSummary(
       id: json['id'] as String,
       title: (json['title'] as String?) ?? 'Untitled',
       updatedAt: _parseUpdatedAt(json),
-      unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
+      unreadCount: unreadCount,
       command: (json['command'] as String?) ?? '',
       cwd: (json['cwd'] as String?) ?? '',
       agentId: (json['activeRuntimeID'] as String?) ?? '',

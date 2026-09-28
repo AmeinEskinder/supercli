@@ -72,9 +72,9 @@ fn b_session_summary() -> SessionSummary {
 }
 
 /// Swift: `testProjectGroupFieldsRoundTripAndRemainAdditive`.
-/// Note: Swift encodes the group flag as `isGroup`; the Rust DTO accepts that
-/// spelling on decode but canonically serializes `isFolder`, so the fixture
-/// uses `isFolder` (byte-stability is defined against Rust's output).
+/// Note: Swift and the Host both use `isGroup` for the group flag
+/// (Host: sessions.rs sidebar; Swift: RemoteControlProtocol). The fixture
+/// uses `isGroup` (byte-stability is defined against Rust's output).
 fn b_project_summary() -> ProjectSummary {
     ProjectSummary {
         id: "group-research".into(),
@@ -82,7 +82,7 @@ fn b_project_summary() -> ProjectSummary {
         path: "/dev/supercli".into(),
         parent_project_id: Some("project-supercli".into()),
         sort_order: None,
-        is_folder: Some(true),
+        is_group: Some(true),
         worktree_branch: None,
     }
 }
@@ -298,7 +298,7 @@ fn b_terminal_write_request() -> TerminalWriteRequest {
 fn b_terminal_resize_request() -> TerminalResizeRequest {
     TerminalResizeRequest {
         session_id: "session-1".into(),
-        cols: 120,
+        columns: 120,
         rows: 42,
     }
 }
@@ -371,7 +371,7 @@ fn b_viewport_subscription() -> ViewportSubscription {
 fn b_terminal_cell_run() -> TerminalCellRun {
     TerminalCellRun {
         row: 12,
-        start_column: 4,
+        column: 4,
         cells: vec![
             TerminalCell {
                 text: "O".into(),

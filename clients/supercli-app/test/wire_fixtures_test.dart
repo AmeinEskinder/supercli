@@ -7,10 +7,9 @@
 /// here instead of the app at runtime.
 ///
 /// NOTE: `session_summary.json` and `pending_approval.json` decode through
-/// `lib/models.dart` because those names are already taken there. Both are
-/// older snake_case domain models, NOT the shared camelCase wire DTOs — the
-/// fixture test asserts only the fields the old decoders populate and
-/// documents this as known drift.
+/// `lib/models.dart` because those names are already taken there. Both
+/// `models.dart` decoders read the camelCase wire format (with backward
+/// compat for the older snake_case spellings).
 library;
 
 import 'dart:convert';
@@ -55,14 +54,15 @@ void main() {
 
   group('session and project', () {
     test(
-      'session_summary decodes (via models.dart; known snake_case drift)',
+      'session_summary decodes (via models.dart)',
       () {
         final m = _load('session_summary.json');
         final s = domain.SessionSummary.fromJson(m);
         expect(s.id, 'session-1');
         expect(s.title, 'iOS remote PRD');
-        // models.dart uses snake_case fields; the wire DTO names differ
-        // (projectID vs project_id). Assert only what the old model covers.
+        // models.dart reads the camelCase wire fields.
+        expect(s.updatedAt.millisecondsSinceEpoch, 1789996860000);
+        expect(s.unreadCount, 1);
         expect(m['projectID'], 'project-1');
       },
     );
@@ -83,9 +83,8 @@ void main() {
       expect(p.name, 'Research');
       expect(p.path, '/dev/supercli');
       expect(p.parentProjectID, 'project-supercli');
-      // The Host names group rows `isGroup`; the wire DTO accepts the alias
-      // but canonically serializes `isFolder` (see fixtures README).
-      expect(p.isFolder, isTrue);
+      // The Host and Swift both name group rows `isGroup`.
+      expect(p.isGroup, isTrue);
     });
   });
 
@@ -115,7 +114,7 @@ void main() {
 
   group('approvals', () {
     test(
-      'pending_approval decodes (via models.dart; known snake_case drift)',
+      'pending_approval decodes (via models.dart)',
       () {
         final m = _load('pending_approval.json');
         final a = domain.PendingApproval.fromJson(m);
@@ -235,7 +234,7 @@ void main() {
       // Rust canonical form keeps the raw ESC byte (serde_json escapes it as
       // \u001b); the Swift test used the base64 of the same bytes.
       expect(r.data, '\x1B[A');
-      expect(r.idempotencyKey, 'write-123');
+      expect(r.wid, 'write-123');
     });
 
     test('terminal_resize_request decodes', () {
@@ -243,7 +242,7 @@ void main() {
         _load('terminal_resize_request.json'),
       );
       expect(r.sessionID, 'session-1');
-      expect(r.cols, 120);
+      expect(r.columns, 120);
       expect(r.rows, 42);
     });
 
@@ -307,7 +306,7 @@ void main() {
     test('terminal_cell_run decodes', () {
       final r = TerminalCellRun.fromJson(_load('terminal_cell_run.json'));
       expect(r.row, 12);
-      expect(r.startColumn, 4);
+      expect(r.column, 4);
       expect(r.cells, hasLength(2));
       expect(r.cells.map((c) => c.text).join(), 'OK');
     });
@@ -320,7 +319,7 @@ void main() {
       expect(p.changedRuns, hasLength(1));
       final run = p.changedRuns.first;
       expect(run.row, 12);
-      expect(run.startColumn, 4);
+      expect(run.column, 4);
       expect(run.cells.map((c) => c.text).join(), 'OK');
       expect(run.cells.first.foreground!.index, 2);
       expect(p.cursor, isNotNull);
