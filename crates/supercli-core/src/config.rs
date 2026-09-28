@@ -105,8 +105,8 @@ pub static SETTINGS: &[SettingDef] = &[
     },
     SettingDef {
         path: "theme",
-        ty: SettingType::Enum(&["system", "light", "dark"]),
-        allowed: "system, light, or dark",
+        ty: SettingType::Enum(&["system", "light", "dark", "midnight"]),
+        allowed: "system, light, dark, or midnight",
     },
 ];
 
@@ -151,7 +151,7 @@ static KNOWN_STATE_KEYS: &[&str] = &[
 pub struct ConfigIssue {
     /// Dotted path, e.g. `theme` or `experimental_features.sessions_mcp`.
     pub path: String,
-    /// Human-readable reason, e.g. `expected system, light, or dark; got "neon"`.
+    /// Human-readable reason, e.g. `expected system, light, dark, or midnight; got "neon"`.
     pub message: String,
 }
 
@@ -403,7 +403,7 @@ mod tests {
                 .clone()
         };
         assert!(
-            by_path("theme").contains("system, light, or dark"),
+            by_path("theme").contains("system, light, dark, or midnight"),
             "{}",
             by_path("theme")
         );
