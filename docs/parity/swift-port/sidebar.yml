@@ -49,10 +49,24 @@ files:
       - "SidebarSession.fromHostSummary: attention from activity=blocked, busy from activity=working/starting, pinned + projectId from Host"
       - "Project tree uses real Host project names from bootstrap projects array"
       - "Selection wired via app.selectedSessionId; verified headless against live Host (2 real sessions)"
+      - swift: "SidebarBranchLabel: branch shown in monospaced 10pt, hidden when branch == projectName"
+        target: "lib/screens/sidebarview.dart::SidebarBranchLabel"
+        test: "test/sidebar_completion_test.dart::SidebarBranchLabel group"
+      - swift: "ActiveProjectBranchLabel: label only for the project holding the selected session; hidden for worktrees"
+        target: "lib/screens/sidebarview.dart::ActiveProjectBranchLabel"
+        test: "test/sidebar_completion_test.dart::ActiveProjectBranchLabel group"
+      - swift: "SidebarFooter: settings + add-project + collapse-all; collapse-all disabled while nothing expanded; add-project hidden while remote Host scoped"
+        target: "lib/screens/sidebarview.dart::SidebarFooter"
+        test: "test/sidebar_completion_test.dart::SidebarFooter group"
+      - swift: "ArchiveActionButton/RemoveActionButton: archive for resumable sessions, remove for non-resumable"
+        target: "lib/screens/sidebarview.dart::RowActionButtons"
+        test: "test/sidebar_completion_test.dart::RowActionButtons group"
     tests:
       - file: clients/supercli-app/test/sidebar_test.dart
         count: 36
-    notes: "Partial 2026-09-27 (feat/wire-sidebar): Host wiring done for session list, status signals and project tree (headless e2e against live Host, 2 real sessions). SidebarView.swift is 4,406 lines / ~151 funcs with no full behaviour mapping yet (D2 audit); remaining behaviours still todo. Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM); not verified."
+      - file: clients/supercli-app/test/sidebar_completion_test.dart
+        count: 9
+    notes: "Partial 2026-09-27 (feat/wire-sidebar): Host wiring done for session list, status signals and project tree (headless e2e against live Host, 2 real sessions). 2026-09-29 (feat/port-sidebar-terminal): branch labels, footer, row action buttons ported with tests. SidebarView.swift is 4,406 lines / ~151 funcs; remaining behaviours (drag highlight rendering, motion/transitions, scroll targets, fade masks, preset strip, context menus beyond #153/#154) still todo. Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM); not verified."
 
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: "Dart: clients/supercli-app"

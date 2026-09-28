@@ -435,3 +435,128 @@ final class ProjectContextMenu {
   static String actionForButtonId(String buttonId) =>
       SessionContextMenu.actionForButtonId(buttonId);
 }
+
+/// Branch label for a project row (SidebarView.swift: SidebarBranchLabel).
+///
+/// Shows the checked-out branch in monospaced 10pt, muted at 55% opacity.
+/// Renders nothing (empty string) when the branch equals the project name —
+/// the branch is only interesting when it differs.
+final class SidebarBranchLabel {
+  const SidebarBranchLabel({required this.branch, required this.projectName});
+
+  final String branch;
+  final String projectName;
+
+  /// Whether the label renders: hidden when branch == projectName.
+  bool get visible => branch != projectName;
+
+  /// Display text: empty when not visible.
+  String get text => visible ? branch : '';
+
+  UiNode build(String nodeId) {
+    if (!visible) return const UiText('branch-hidden', '');
+    return UiText(
+      nodeId,
+      '⎇ $branch',
+      style: const UiStyle(fontSize: 10),
+    );
+  }
+}
+
+/// Active-project branch label (SidebarView.swift: ActiveProjectBranchLabel).
+///
+/// Shows the [SidebarBranchLabel] only for the project holding the selected
+/// session. A leaf on purpose: it observes the selection and the async
+/// branch resolution without invalidating the project row around it.
+/// Renders nothing for every other project, and nothing while the project
+/// is a worktree (branch shown elsewhere).
+final class ActiveProjectBranchLabel {
+  const ActiveProjectBranchLabel({
+    required this.projectId,
+    required this.selectedSessionProjectId,
+    required this.branchName,
+    required this.projectName,
+    this.isWorktree = false,
+  });
+
+  final String projectId;
+  final String? selectedSessionProjectId;
+  final String? branchName;
+  final String projectName;
+  final bool isWorktree;
+
+  /// Whether this project holds the selected session.
+  bool get isActiveProject => selectedSessionProjectId == projectId;
+
+  /// Whether the label renders at all.
+  bool get visible =>
+      isActiveProject && !isWorktree && branchName != null;
+
+  UiNode build() {
+    if (!visible) return const UiText('active-branch-hidden', '');
+    return SidebarBranchLabel(
+      branch: branchName!,
+      projectName: projectName,
+    ).build('active-branch-$projectId');
+  }
+}
+
+/// Sidebar footer strip (SidebarView.swift: SidebarFooter).
+///
+/// Settings ⚙ + add-project ＋ on the left, collapse-all on the right.
+/// Collapse-all is disabled while nothing is expanded (mirrors the Svelte
+/// binding `disabled={$expandedProjectIds.size===0}`). The gear opens
+/// settings; add-project hides while a remote Host is scoped
+/// ([localVerbsVisible] false).
+final class SidebarFooter {
+  const SidebarFooter({
+    this.expandedProjectCount = 0,
+    this.localVerbsVisible = true,
+  });
+
+  /// Number of expanded projects; collapse-all is disabled when 0.
+  final int expandedProjectCount;
+
+  /// False while a remote Host is selected: the session-tree local verbs
+  /// (Add Project) disappear.
+  final bool localVerbsVisible;
+
+  bool get collapseAllEnabled => expandedProjectCount > 0;
+
+  UiNode build() {
+    return UiRow('sidebar-footer', [
+      const UiButton('footer-settings', '⚙'),
+      if (localVerbsVisible) const UiButton('footer-add-project', '＋'),
+      const UiButton('footer-collapse-all', '⇤'),
+    ]);
+  }
+
+  List<UiAction> actions() => [
+    const UiAction(name: 'settings.open'),
+    if (localVerbsVisible) const UiAction(name: 'project.add'),
+    const UiAction(name: 'sidebar.collapse-all'),
+  ];
+}
+
+/// Row hover action buttons (SidebarView.swift: ArchiveActionButton,
+/// RemoveActionButton).
+///
+/// 22×22 buttons shown in the row's meta slot on hover:
+/// - Archive (for resumable sessions): archives the session.
+/// - Remove/X (for non-resumable sessions): immediate kill/delete; the
+///   context-menu Remove verb still confirms.
+final class RowActionButtons {
+  const RowActionButtons._();
+
+  /// Whether the archive button shows (session can resume → archive it).
+  static bool showsArchive(bool canResume) => canResume;
+
+  /// Whether the remove button shows (session cannot resume → remove it).
+  static bool showsRemove(bool canResume) => !canResume;
+
+  static UiNode archiveButton(String sessionId) =>
+      UiButton('row-archive-$sessionId', '🗃');
+
+  static UiNode removeButton(String sessionId) =>
+      UiButton('row-remove-$sessionId', '✕');
+}
