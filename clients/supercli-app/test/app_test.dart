@@ -87,6 +87,8 @@ void main() {
       expect(byName['composer.focus']!.keys, Keymap.composerFocus());
       // Platform primary modifier: meta (Cmd) on macOS, ctrl on Linux/Windows.
       expect(byName['sidebar.toggle']!.keys, Keymap.sidebarToggle());
+      // Settings overlay: meta+, (Cmd+,) on macOS, ctrl+, on Linux/Windows.
+      expect(byName['settings.open']!.keys, Keymap.settings());
     });
 
     test('list navigation is scoped to the sidebar node', () {

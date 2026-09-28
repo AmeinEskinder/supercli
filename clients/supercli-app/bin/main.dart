@@ -24,6 +24,7 @@ import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/notifications.dart';
 import 'package:supercli_app/pane_layout.dart';
+import 'package:supercli_app/screens/settings_controller.dart';
 
 Future<void> main(List<String> args) async {
   final host = _parseArg(args, '--host=') ?? '127.0.0.1';
@@ -46,6 +47,21 @@ Future<void> main(List<String> args) async {
     token: token,
   );
   final app = SupercliApp();
+
+  // Settings persistence: load workspace settings from the Host on startup.
+  // Edits debounce-persist via POST /mobile/workspace-settings. Failures
+  // surface as toasts through the NotificationQueue.
+  final settingsController = SettingsController(
+    host: client,
+    onError: (message) => app.notifications.add(AppNotification(
+      id: 'settings-error',
+      title: 'Settings error',
+      message: message,
+      severity: NotificationSeverity.error,
+    )),
+  );
+  app.settingsController = settingsController;
+  await settingsController.load();
 
   // Allow headless smoke runs (no native window) for CI.
   final headless = args.contains('--headless');
@@ -229,6 +245,11 @@ Future<void> _dispatchAction(
     case 'palette.open':
       app.openPalette();
       await refresh();
+    // --- Settings: delegated to SupercliApp.handleAction (the single
+    // implementation; openSettings is a no-op until the controller is set).
+    case 'settings.open':
+    case 'settings.close':
+      if (app.handleAction(action)) await refresh();
     case 'palette.up':
       app.paletteState?.moveUp();
       await refresh();
@@ -359,6 +380,16 @@ Future<void> _handleClick(
   HostClient client,
   Future<void> Function() refresh,
 ) async {
+  final id = event.id ?? '';
+
+  // Settings interactions (tab buttons 'settings-tab-<name>', toggles
+  // '<id>-toggle') are handled by the canonical SupercliApp.handleClick
+  // implementation; it flips AppSettings fields and debounce-persists.
+  if (app.handleClick(id)) {
+    await refresh();
+    return;
+  }
+
   final approval = app.pendingApproval;
   if (approval == null) return;
   if (event.id == 'mcp-allow' || event.id == 'approve') {
