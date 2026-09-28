@@ -1,0 +1,1 @@
+{"entries":[{"id":"entry-1","role":"user","blocks":[{"kind":"text","text":"hi"}]},{"id":"entry-2","role":"agent","blocks":[{"kind":"reasoning","text":"Thinking through the request."},{"kind":"text","text":"Hi. What should we work on?"}]}],"hasMore":false}
