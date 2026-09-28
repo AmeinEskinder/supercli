@@ -46,3 +46,11 @@ secret-service = { version = "4", features = ["rt-async-io-crypto-rust"] }
 # test-util exposes test-only helpers (e.g. MemoryHostCredentialStore) to
 # downstream crates' integration tests. Production code must never enable it.
 test-util = []
+
+# remote_runtime_live imports the test-only MemoryHostCredentialStore to prove
+# the production constructor uses the OS keychain instead. cfg(test) is NOT
+# set on the lib when building integration tests, so the feature must be
+# declared required here; run with `cargo test -p supercli-client --features test-util`.
+[[test]]
+name = "remote_runtime_live"
+required-features = ["test-util"]
