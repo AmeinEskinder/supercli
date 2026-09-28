@@ -160,14 +160,6 @@ files:
     tests: []
     notes: ""
 
-  native/SupercliNative/Sources/SupercliNative/Views/RemoteFolderPicker.swift:
-    destination: "Dart: clients/supercli-app"
-    status: todo
-    checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
-
   native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryMarkup.swift:
     destination: "Dart: clients/supercli-app"
     status: todo
