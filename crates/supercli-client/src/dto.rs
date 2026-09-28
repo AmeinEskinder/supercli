@@ -21,7 +21,6 @@ pub enum ActivityState {
     #[serde(other)]
     Unknown,
 }
-
 /// Lifecycle status of a session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -320,6 +319,592 @@ pub struct BootstrapSnapshot {
     pub pro_entitled: Option<bool>,
 }
 
+/// A device paired with the Host.
+///
+/// Mirrors `RemotePairedDeviceSummary` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairedDeviceSummary {
+    pub id: String,
+    pub name: String,
+    pub platform: String,
+    #[serde(rename = "appVersion", default)]
+    pub app_version: Option<String>,
+    #[serde(rename = "pairedAtUnixMs")]
+    pub paired_at_unix_ms: i64,
+    #[serde(rename = "lastSeenAtUnixMs", default)]
+    pub last_seen_at_unix_ms: Option<i64>,
+    /// Whether this device may reach the Host over the Supercli Link relay.
+    /// Nil means allowed (pre-flag records) — the flag only ever narrows.
+    #[serde(rename = "relayAllowed", default)]
+    pub relay_allowed: Option<bool>,
+}
+
+/// A workspace on the connected Host.
+///
+/// Mirrors `RemoteWorkspaceSummary` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceSummary {
+    /// Stable workspace id — the registry UUID, or a stable key for the
+    /// default / current instance.
+    pub id: String,
+    pub name: String,
+    /// That workspace's App color hue in degrees (nil = neutral default).
+    #[serde(rename = "tintHue", default)]
+    pub tint_hue: Option<f64>,
+    /// True for the workspace THIS connected app instance is.
+    #[serde(rename = "isCurrent")]
+    pub is_current: bool,
+    /// Whether that workspace's app instance is currently running.
+    #[serde(rename = "isRunning")]
+    pub is_running: bool,
+    /// What the entry is on the connected Host: "local", "ssh", or "paired".
+    /// Additive and optional: older Hosts omit it, nil decodes as "local".
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
+impl WorkspaceSummary {
+    /// The effective kind, defaulting to "local" for older Hosts.
+    pub fn effective_kind(&self) -> &str {
+        self.kind.as_deref().unwrap_or("local")
+    }
+}
+
+/// Progress of a resumable artifact upload.
+///
+/// Mirrors `RemoteArtifactUploadProgress` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtifactUploadProgress {
+    #[serde(rename = "uploadID")]
+    pub upload_id: String,
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(rename = "fileName")]
+    pub file_name: String,
+    #[serde(rename = "mimeType", default)]
+    pub mime_type: Option<String>,
+    #[serde(rename = "totalBytes")]
+    pub total_bytes: i64,
+    #[serde(rename = "receivedBytes")]
+    pub received_bytes: i64,
+    #[serde(rename = "chunkSize")]
+    pub chunk_size: i64,
+    #[serde(rename = "nextOffset")]
+    pub next_offset: i64,
+    pub complete: bool,
+    #[serde(rename = "artifactID", default)]
+    pub artifact_id: Option<String>,
+    #[serde(rename = "updatedAtUnixMs")]
+    pub updated_at_unix_ms: i64,
+}
+
+/// Request to create a new session.
+///
+/// Mirrors `RemoteCreateSessionRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateSessionRequest {
+    #[serde(rename = "projectID")]
+    pub project_id: String,
+    #[serde(rename = "presetID", default)]
+    pub preset_id: Option<String>,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(rename = "worktreePath", default)]
+    pub worktree_path: Option<String>,
+    #[serde(rename = "worktreeBranch", default)]
+    pub worktree_branch: Option<String>,
+    #[serde(rename = "initialText", default)]
+    pub initial_text: Option<String>,
+    #[serde(rename = "initialTextSubmitMode", default)]
+    pub initial_text_submit_mode: TextSubmitMode,
+}
+
+/// How text is submitted to a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TextSubmitMode {
+    #[default]
+    PasteAndSubmit,
+    PasteOnly,
+    TypeAndSubmit,
+}
+
+/// Response to a session creation request.
+///
+/// Mirrors `RemoteCreateSessionResponse` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateSessionResponse {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(rename = "capturedAtUnixMs", default)]
+    pub captured_at_unix_ms: Option<i64>,
+    /// Present on newer Hosts so the client can render the starting
+    /// session immediately instead of waiting for the next bootstrap poll.
+    #[serde(default)]
+    pub session: Option<SessionSummary>,
+}
+
+/// Text input to a session.
+///
+/// Mirrors `RemoteSessionTextInput` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionTextInput {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub text: String,
+    #[serde(rename = "submitMode")]
+    pub submit_mode: TextSubmitMode,
+}
+
+/// A terminal write request.
+///
+/// Mirrors `RemoteTerminalWriteRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalWriteRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    /// Base64-encoded terminal input data.
+    pub data: String,
+    /// Optional idempotency key for one logical input send.
+    #[serde(rename = "idempotencyKey", default)]
+    pub idempotency_key: Option<String>,
+}
+
+/// A terminal resize request.
+///
+/// Mirrors `RemoteTerminalResizeRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalResizeRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub cols: i64,
+    pub rows: i64,
+}
+
+/// A terminal color.
+///
+/// Mirrors `RemoteTerminalColor` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalColor {
+    pub kind: TerminalColorKind,
+    #[serde(default)]
+    pub index: Option<u8>,
+    #[serde(default)]
+    pub red: Option<u8>,
+    #[serde(default)]
+    pub green: Option<u8>,
+    #[serde(default)]
+    pub blue: Option<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalColorKind {
+    DefaultForeground,
+    DefaultBackground,
+    Ansi,
+    Rgb,
+}
+
+impl TerminalColor {
+    pub fn default_foreground() -> Self {
+        Self {
+            kind: TerminalColorKind::DefaultForeground,
+            index: None,
+            red: None,
+            green: None,
+            blue: None,
+        }
+    }
+
+    pub fn default_background() -> Self {
+        Self {
+            kind: TerminalColorKind::DefaultBackground,
+            index: None,
+            red: None,
+            green: None,
+            blue: None,
+        }
+    }
+
+    pub fn ansi(index: u8) -> Self {
+        Self {
+            kind: TerminalColorKind::Ansi,
+            index: Some(index),
+            red: None,
+            green: None,
+            blue: None,
+        }
+    }
+
+    pub fn rgb(red: u8, green: u8, blue: u8) -> Self {
+        Self {
+            kind: TerminalColorKind::Rgb,
+            index: None,
+            red: Some(red),
+            green: Some(green),
+            blue: Some(blue),
+        }
+    }
+}
+
+/// Terminal text style.
+///
+/// Mirrors `RemoteTerminalStyle` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct TerminalStyle {
+    #[serde(default)]
+    pub bold: bool,
+    #[serde(default)]
+    pub italic: bool,
+    #[serde(default)]
+    pub underline: bool,
+    #[serde(default)]
+    pub inverse: bool,
+    #[serde(default)]
+    pub dim: bool,
+    #[serde(default)]
+    pub strikethrough: bool,
+}
+
+/// A single terminal cell.
+///
+/// Mirrors `RemoteTerminalCell` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalCell {
+    pub text: String,
+    #[serde(default)]
+    pub foreground: Option<TerminalColor>,
+    #[serde(default)]
+    pub background: Option<TerminalColor>,
+    pub style: TerminalStyle,
+}
+
+/// A terminal cursor.
+///
+/// Mirrors `RemoteTerminalCursor` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalCursor {
+    pub row: i64,
+    pub column: i64,
+    pub shape: CursorShape,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CursorShape {
+    Block,
+    Beam,
+    Underline,
+    Hidden,
+}
+
+/// A full viewport frame.
+///
+/// Mirrors `RemoteViewportFrame` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewportFrame {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub sequence: u64,
+    pub rows: i64,
+    pub columns: i64,
+    pub cells: Vec<TerminalCell>,
+    #[serde(default)]
+    pub cursor: Option<TerminalCursor>,
+    #[serde(rename = "alternateScreen", default)]
+    pub alternate_screen: bool,
+    #[serde(rename = "capturedAtUnixMs")]
+    pub captured_at_unix_ms: i64,
+}
+
+/// A viewport subscription request.
+///
+/// Mirrors `RemoteViewportSubscription` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewportSubscription {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub rows: i64,
+    pub columns: i64,
+}
+
+/// A run of cells with the same style (for viewport patches).
+///
+/// Mirrors `RemoteTerminalCellRun` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalCellRun {
+    pub row: i64,
+    #[serde(rename = "startColumn")]
+    pub start_column: i64,
+    pub cells: Vec<TerminalCell>,
+}
+
+/// A viewport patch (incremental update).
+///
+/// Mirrors `RemoteViewportPatch` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewportPatch {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub sequence: u64,
+    #[serde(rename = "baseSequence")]
+    pub base_sequence: u64,
+    #[serde(rename = "changedRuns", default)]
+    pub changed_runs: Vec<TerminalCellRun>,
+    #[serde(default)]
+    pub cursor: Option<TerminalCursor>,
+    #[serde(rename = "capturedAtUnixMs")]
+    pub captured_at_unix_ms: i64,
+}
+
+/// Kind of a stream event.
+///
+/// Mirrors `RemoteStreamEventKind` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamEventKind {
+    BootstrapSnapshot,
+    SessionsChanged,
+    ProjectsChanged,
+    TranscriptSnapshot,
+    TranscriptChunk,
+    ViewportFrame,
+    ViewportPatch,
+    InputAccepted,
+    InputRejected,
+    DeviceRevoked,
+    Heartbeat,
+    Error,
+}
+
+/// A generic stream event envelope.
+///
+/// Mirrors `RemoteStreamEvent` in `RemoteControlProtocol.swift`.
+/// Note: This is distinct from `SessionEventWire` in `events.rs`, which is
+/// the newer typed session-event stream (Phase 6 R4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamEvent {
+    #[serde(rename = "protocolVersion")]
+    pub protocol_version: i64,
+    pub id: String,
+    #[serde(rename = "requestID", default)]
+    pub request_id: Option<String>,
+    pub kind: StreamEventKind,
+    #[serde(rename = "sessionID", default)]
+    pub session_id: Option<String>,
+    /// Binary payload (base64 in JSON). The concrete type depends on `kind`:
+    /// e.g. `ViewportFrame` for `ViewportFrame`, `TranscriptSnapshot` for
+    /// `TranscriptSnapshot`.
+    #[serde(default, with = "serde_bytes_option")]
+    pub payload: Option<Vec<u8>>,
+    #[serde(rename = "createdAtUnixMs")]
+    pub created_at_unix_ms: i64,
+}
+
+/// Answer a pending MCP approval prompt from a controller.
+///
+/// Mirrors `RemoteApprovalAnswerRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalAnswerRequest {
+    pub id: String,
+    pub approved: bool,
+}
+
+/// Tell the Host the client opened/observed a session, clearing unread.
+///
+/// Mirrors `RemoteMarkReadRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkReadRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+}
+
+/// A session action (stop, restart, remove, etc.).
+///
+/// Mirrors `RemoteSessionAction` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionAction {
+    /// Kill the hosted PTY but keep the session row/history restartable.
+    Stop,
+    /// Re-run the original command with the desktop resume behavior.
+    Restart,
+    /// Legacy protocol-minor-5 action. Kept only so newer Hosts can decode
+    /// requests from older Controllers.
+    #[serde(rename = "restart_agent")]
+    RestartAgent,
+    /// Resume an ended managed agent inside its still-live terminal.
+    #[serde(rename = "resume_agent")]
+    ResumeAgent,
+    /// Remove the session row and delete its on-disk artifacts.
+    Remove,
+}
+
+/// Request to perform a session action.
+///
+/// Mirrors `RemoteSessionActionRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionActionRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub action: SessionAction,
+}
+
+/// Patch for session organization (title, pin, archive, project).
+///
+/// Mirrors `RemoteSessionOrganizationPatch` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct SessionOrganizationPatch {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub pinned: Option<bool>,
+    #[serde(default)]
+    pub archived: Option<bool>,
+    #[serde(rename = "notifyWhenDone", default)]
+    pub notify_when_done: Option<bool>,
+    #[serde(rename = "projectID", default)]
+    pub project_id: Option<String>,
+}
+
+/// Request a screenshot of a session.
+///
+/// Mirrors `RemoteScreenshotRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScreenshotRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+}
+
+/// Response to a screenshot request.
+///
+/// Mirrors `RemoteScreenshotRequestResponse` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScreenshotRequestResponse {
+    pub accepted: bool,
+    #[serde(rename = "requestedAtUnixMs")]
+    pub requested_at_unix_ms: i64,
+}
+
+/// A plugin update.
+///
+/// Mirrors `RemotePluginUpdate` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginUpdate {
+    pub id: String,
+    pub state: String,
+    #[serde(rename = "installedVersion", default)]
+    pub installed_version: Option<String>,
+    #[serde(rename = "latestVersion", default)]
+    pub latest_version: Option<String>,
+    #[serde(rename = "updateAvailable")]
+    pub update_available: bool,
+}
+
+/// Plugin updates status.
+///
+/// Mirrors `RemotePluginUpdates` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginUpdates {
+    pub checking: bool,
+    #[serde(default)]
+    pub items: Vec<PluginUpdate>,
+}
+
+/// Request to restart a session.
+///
+/// Mirrors `RemoteRestartSessionRequest` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RestartSessionRequest {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+}
+
+/// Push token registration.
+///
+/// Mirrors `RemotePushTokenRegistration` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushTokenRegistration {
+    pub token: String,
+    pub platform: String,
+    #[serde(rename = "appVersion", default)]
+    pub app_version: Option<String>,
+}
+
+/// Serde helper for `Option<Vec<u8>>` as base64.
+mod serde_bytes_option {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(bytes) => s.serialize_some(&base64_encode(bytes)),
+            None => s.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<u8>>, D::Error> {
+        let opt: Option<String> = Option::deserialize(d)?;
+        opt.map(|s| base64_decode(&s).map_err(serde::de::Error::custom))
+            .transpose()
+    }
+
+    fn base64_encode(bytes: &[u8]) -> String {
+        // Simple base64 implementation to avoid extra deps.
+        const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let mut buf = [0u8; 3];
+            buf[..chunk.len()].copy_from_slice(chunk);
+            let n = (buf[0] as u32) << 16 | (buf[1] as u32) << 8 | buf[2] as u32;
+            out.push(CHARS[((n >> 18) & 63) as usize] as char);
+            out.push(CHARS[((n >> 12) & 63) as usize] as char);
+            out.push(if chunk.len() > 1 {
+                CHARS[((n >> 6) & 63) as usize] as char
+            } else {
+                '='
+            });
+            out.push(if chunk.len() > 2 {
+                CHARS[(n & 63) as usize] as char
+            } else {
+                '='
+            });
+        }
+        out
+    }
+
+    fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
+        // Simple base64 decoder.
+        let mut out = Vec::new();
+        let mut buf = 0u32;
+        let mut bits = 0;
+        for c in s.chars() {
+            if c == '=' {
+                break;
+            }
+            let v = match c {
+                'A'..='Z' => c as u32 - 'A' as u32,
+                'a'..='z' => c as u32 - 'a' as u32 + 26,
+                '0'..='9' => c as u32 - '0' as u32 + 52,
+                '+' => 62,
+                '/' => 63,
+                _ => return Err(format!("invalid base64 char: {}", c)),
+            };
+            buf = (buf << 6) | v;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                out.push((buf >> bits) as u8);
+                buf &= (1 << bits) - 1;
+            }
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -492,5 +1077,303 @@ mod tests {
         .unwrap();
         assert!(p.accepts_session_drop());
         assert!(!p.is_worktree());
+    }
+
+    // Tests for RemoteControlProtocol.swift DTO ports.
+    // Each mirrors a Swift XCTest in RemoteControlProtocolTests.swift.
+
+    #[test]
+    fn paired_device_summary_round_trips_last_seen() {
+        // Mirrors Swift testPairedDeviceSummaryRoundTripsLastSeen.
+        let d: PairedDeviceSummary = serde_json::from_value(serde_json::json!({
+            "id": "dev-1",
+            "name": "iPhone",
+            "platform": "ios",
+            "appVersion": "1.2.3",
+            "pairedAtUnixMs": 1700000000000i64,
+            "lastSeenAtUnixMs": 1700000001000i64,
+            "relayAllowed": false,
+        }))
+        .unwrap();
+        assert_eq!(d.id, "dev-1");
+        assert_eq!(d.last_seen_at_unix_ms, Some(1700000001000));
+        assert_eq!(d.relay_allowed, Some(false));
+
+        // Round-trip.
+        let json = serde_json::to_value(&d).unwrap();
+        let d2: PairedDeviceSummary = serde_json::from_value(json).unwrap();
+        assert_eq!(d, d2);
+
+        // Optional fields decode as None when absent (pre-flag records).
+        let d3: PairedDeviceSummary = serde_json::from_value(serde_json::json!({
+            "id": "dev-2",
+            "name": "Mac",
+            "platform": "macos",
+            "pairedAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert_eq!(d3.last_seen_at_unix_ms, None);
+        assert_eq!(d3.relay_allowed, None);
+    }
+
+    #[test]
+    fn workspace_summary_decodes_kind_default() {
+        // Mirrors Swift testBootstrapRoundTripsHostWorkspaceList.
+        let w: WorkspaceSummary = serde_json::from_value(serde_json::json!({
+            "id": "ws-1",
+            "name": "Main",
+            "tintHue": 210.5,
+            "isCurrent": true,
+            "isRunning": true,
+            "kind": "local",
+        }))
+        .unwrap();
+        assert_eq!(w.effective_kind(), "local");
+
+        // Older Hosts omit kind; nil decodes as "local".
+        let w2: WorkspaceSummary = serde_json::from_value(serde_json::json!({
+            "id": "ws-2",
+            "name": "Secondary",
+            "isCurrent": false,
+            "isRunning": false,
+        }))
+        .unwrap();
+        assert_eq!(w2.effective_kind(), "local");
+        assert_eq!(w2.tint_hue, None);
+    }
+
+    #[test]
+    fn artifact_upload_progress_round_trips() {
+        // Mirrors Swift testResumableArtifactUploadProgressRoundTrips.
+        let p: ArtifactUploadProgress = serde_json::from_value(serde_json::json!({
+            "uploadID": "up-1",
+            "sessionID": "sess-1",
+            "fileName": "screenshot.png",
+            "mimeType": "image/png",
+            "totalBytes": 102400,
+            "receivedBytes": 51200,
+            "chunkSize": 16384,
+            "nextOffset": 51200,
+            "complete": false,
+            "updatedAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert_eq!(p.upload_id, "up-1");
+        assert!(!p.complete);
+        assert_eq!(p.artifact_id, None);
+
+        let json = serde_json::to_value(&p).unwrap();
+        let p2: ArtifactUploadProgress = serde_json::from_value(json).unwrap();
+        assert_eq!(p, p2);
+    }
+
+    #[test]
+    fn create_session_request_round_trips_initial_prompt() {
+        // Mirrors Swift testCreateSessionRequestRoundTripsInitialPrompt.
+        let r: CreateSessionRequest = serde_json::from_value(serde_json::json!({
+            "projectID": "proj-1",
+            "presetID": "preset-1",
+            "initialText": "Hello, world!",
+            "initialTextSubmitMode": "pasteAndSubmit",
+        }))
+        .unwrap();
+        assert_eq!(r.project_id, "proj-1");
+        assert_eq!(r.initial_text, Some("Hello, world!".to_string()));
+        assert_eq!(r.initial_text_submit_mode, TextSubmitMode::PasteAndSubmit);
+
+        let json = serde_json::to_value(&r).unwrap();
+        let r2: CreateSessionRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(r, r2);
+    }
+
+    #[test]
+    fn terminal_write_resize_round_trip() {
+        // Mirrors Swift testTerminalWriteResizeAndCreateResponseRoundTrip.
+        let w: TerminalWriteRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "data": "aGVsbG8=",
+            "idempotencyKey": "key-1",
+        }))
+        .unwrap();
+        assert_eq!(w.session_id, "sess-1");
+        assert_eq!(w.data, "aGVsbG8=");
+        assert_eq!(w.idempotency_key, Some("key-1".to_string()));
+
+        let r: TerminalResizeRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "cols": 80,
+            "rows": 24,
+        }))
+        .unwrap();
+        assert_eq!(r.cols, 80);
+        assert_eq!(r.rows, 24);
+    }
+
+    #[test]
+    fn viewport_frame_round_trips_styled_cells() {
+        // Mirrors Swift testViewportFrameRoundTripsStyledCells.
+        let f: ViewportFrame = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "sequence": 42,
+            "rows": 24,
+            "columns": 80,
+            "cells": [
+                {
+                    "text": "h",
+                    "foreground": {"kind": "ansi", "index": 1},
+                    "style": {"bold": true}
+                },
+                {
+                    "text": "i",
+                    "style": {}
+                }
+            ],
+            "cursor": {"row": 0, "column": 2, "shape": "block", "visible": true},
+            "alternateScreen": false,
+            "capturedAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert_eq!(f.session_id, "sess-1");
+        assert_eq!(f.sequence, 42);
+        assert_eq!(f.cells.len(), 2);
+        assert_eq!(f.cells[0].text, "h");
+        assert!(f.cells[0].style.bold);
+        assert_eq!(f.cells[0].foreground, Some(TerminalColor::ansi(1)));
+        assert!(f.cursor.is_some());
+
+        let json = serde_json::to_value(&f).unwrap();
+        let f2: ViewportFrame = serde_json::from_value(json).unwrap();
+        assert_eq!(f, f2);
+    }
+
+    #[test]
+    fn viewport_patch_round_trips_changed_runs() {
+        // Mirrors Swift testViewportPatchRoundTripsChangedRuns.
+        let p: ViewportPatch = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "sequence": 43,
+            "baseSequence": 42,
+            "changedRuns": [
+                {
+                    "row": 0,
+                    "startColumn": 0,
+                    "cells": [{"text": "x", "style": {}}]
+                }
+            ],
+            "capturedAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert_eq!(p.base_sequence, 42);
+        assert_eq!(p.changed_runs.len(), 1);
+        assert_eq!(p.changed_runs[0].cells[0].text, "x");
+    }
+
+    #[test]
+    fn stream_event_round_trip() {
+        // Mirrors Swift testStreamEventCanCarryEncodedViewportFrame.
+        let e: StreamEvent = serde_json::from_value(serde_json::json!({
+            "protocolVersion": 1,
+            "id": "evt-1",
+            "kind": "viewportFrame",
+            "sessionID": "sess-1",
+            "createdAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert_eq!(e.kind, StreamEventKind::ViewportFrame);
+        assert_eq!(e.session_id, Some("sess-1".to_string()));
+        assert_eq!(e.payload, None);
+    }
+
+    #[test]
+    fn session_action_request_round_trip() {
+        // Mirrors Swift testSessionActionRequestRoundTrips.
+        let r: SessionActionRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "action": "stop",
+        }))
+        .unwrap();
+        assert_eq!(r.action, SessionAction::Stop);
+
+        // Legacy restart_agent decodes.
+        let r2: SessionActionRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "action": "restart_agent",
+        }))
+        .unwrap();
+        assert_eq!(r2.action, SessionAction::RestartAgent);
+    }
+
+    #[test]
+    fn session_organization_patch_round_trips_partial_fields() {
+        // Mirrors Swift testSessionOrganizationPatchRoundTripsPartialFields.
+        let p: SessionOrganizationPatch = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+            "title": "New Title",
+            "pinned": true,
+        }))
+        .unwrap();
+        assert_eq!(p.title, Some("New Title".to_string()));
+        assert_eq!(p.pinned, Some(true));
+        assert_eq!(p.archived, None);
+        assert_eq!(p.project_id, None);
+    }
+
+    #[test]
+    fn screenshot_request_round_trip() {
+        // Mirrors Swift testScreenshotRequestAndAcknowledgementRoundTrip.
+        let r: ScreenshotRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "sess-1",
+        }))
+        .unwrap();
+        assert_eq!(r.session_id, "sess-1");
+
+        let resp: ScreenshotRequestResponse = serde_json::from_value(serde_json::json!({
+            "accepted": true,
+            "requestedAtUnixMs": 1700000000000i64,
+        }))
+        .unwrap();
+        assert!(resp.accepted);
+    }
+
+    #[test]
+    fn plugin_updates_round_trip() {
+        let u: PluginUpdates = serde_json::from_value(serde_json::json!({
+            "checking": false,
+            "items": [
+                {
+                    "id": "plugin-1",
+                    "state": "active",
+                    "installedVersion": "1.0.0",
+                    "latestVersion": "1.1.0",
+                    "updateAvailable": true,
+                }
+            ],
+        }))
+        .unwrap();
+        assert!(!u.checking);
+        assert_eq!(u.items.len(), 1);
+        assert!(u.items[0].update_available);
+    }
+
+    #[test]
+    fn terminal_color_constructors() {
+        // Mirrors Swift RemoteTerminalColor static constructors.
+        assert_eq!(
+            TerminalColor::default_foreground().kind,
+            TerminalColorKind::DefaultForeground
+        );
+        assert_eq!(
+            TerminalColor::ansi(1),
+            TerminalColor {
+                kind: TerminalColorKind::Ansi,
+                index: Some(1),
+                red: None,
+                green: None,
+                blue: None,
+            }
+        );
+        let rgb = TerminalColor::rgb(255, 0, 0);
+        assert_eq!(rgb.red, Some(255));
+        assert_eq!(rgb.green, Some(0));
     }
 }
