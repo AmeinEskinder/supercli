@@ -68,9 +68,13 @@ pub use credentials::{
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use host_store::{
-    HostCredentialStore, HostStoreError, MemoryHostCredentialStore, OsKeychainCredentialStore,
-    RemoteHostStore, SshHostRecord,
+    HostCredentialStore, HostStoreError, OsKeychainCredentialStore, RemoteHostStore, SshHostRecord,
 };
+// MemoryHostCredentialStore is test-only: gated so production code cannot
+// import it by mistake. Available under `cargo test` or with the
+// `test-util` feature.
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "test-util")))]
+pub use host_store::MemoryHostCredentialStore;
 #[cfg(not(target_arch = "wasm32"))]
 pub use hosts::{HostRegistry, LiveHost};
 #[cfg(not(target_arch = "wasm32"))]
