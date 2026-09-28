@@ -461,4 +461,98 @@ void main() {
       expect(ds.cell(0, 2), 'Paired');
     });
   });
+
+  group('SettingsTab behaviours (SettingsView.swift)', () {
+    test('compatibleRawValue maps legacy deep-link spellings', () {
+      // Agents & Apps split (2026-09-16)
+      expect(SettingsTab.compatibleRawValue('agentsApps'), SettingsTab.agents);
+      expect(SettingsTab.compatibleRawValue('mcp'), SettingsTab.agents);
+      expect(SettingsTab.compatibleRawValue('sessions'), SettingsTab.agentAccess);
+      expect(SettingsTab.compatibleRawValue('browser'), SettingsTab.agentAccess);
+      expect(SettingsTab.compatibleRawValue('profiles'), SettingsTab.workspaces);
+      expect(SettingsTab.compatibleRawValue('features'), SettingsTab.features);
+      expect(SettingsTab.compatibleRawValue('experimental'), SettingsTab.features);
+      // License merged into Remote (2026-08-13)
+      expect(SettingsTab.compatibleRawValue('license'), SettingsTab.remote);
+      // Current spellings resolve directly
+      expect(SettingsTab.compatibleRawValue('appearance'), isNull);
+      expect(SettingsTab.compatibleRawValue('general'), SettingsTab.general);
+      expect(SettingsTab.compatibleRawValue('advanced'), SettingsTab.advanced);
+      // Unknown spellings return null
+      expect(SettingsTab.compatibleRawValue('nope'), isNull);
+      expect(SettingsTab.compatibleRawValue(''), isNull);
+    });
+
+    test('visibleCases gates tabs by feature flags', () {
+      List<SettingsTab> visible({
+        bool sessionsMcp = false,
+        bool browserMcp = false,
+        bool workspacesEnabled = false,
+        bool worktreesEnabled = false,
+        bool mobileRemoteControlEnabled = false,
+      }) =>
+          SettingsTab.visibleCases(
+            sessionsMcp: sessionsMcp,
+            browserMcp: browserMcp,
+            workspacesEnabled: workspacesEnabled,
+            worktreesEnabled: worktreesEnabled,
+            mobileRemoteControlEnabled: mobileRemoteControlEnabled,
+          );
+
+      // All flags off: agentAccess, workspaces, worktrees, remote hidden;
+      // deprecated sessions/browser/license never shown.
+      var v = visible();
+      expect(v, isNot(contains(SettingsTab.agentAccess)));
+      expect(v, isNot(contains(SettingsTab.workspaces)));
+      expect(v, isNot(contains(SettingsTab.worktrees)));
+      expect(v, isNot(contains(SettingsTab.remote)));
+      expect(v, isNot(contains(SettingsTab.sessions)));
+      expect(v, isNot(contains(SettingsTab.browser)));
+      expect(v, isNot(contains(SettingsTab.license)));
+      // Always-visible tabs remain
+      expect(v, contains(SettingsTab.general));
+      expect(v, contains(SettingsTab.advanced));
+
+      // sessionsMcp on → agentAccess appears
+      expect(visible(sessionsMcp: true), contains(SettingsTab.agentAccess));
+      // browserMcp on → agentAccess appears
+      expect(visible(browserMcp: true), contains(SettingsTab.agentAccess));
+      // workspaces flag → workspaces tab
+      expect(visible(workspacesEnabled: true), contains(SettingsTab.workspaces));
+      // worktrees flag → worktrees tab
+      expect(visible(worktreesEnabled: true), contains(SettingsTab.worktrees));
+      // mobile flag → remote tab
+      expect(
+          visible(mobileRemoteControlEnabled: true), contains(SettingsTab.remote));
+    });
+
+    test('iconName covers every tab', () {
+      for (final tab in SettingsTab.values) {
+        expect(tab.iconName, isNotEmpty,
+            reason: 'SettingsTab.${tab.name} needs an icon');
+        expect(tab.iconName, startsWith('settings-'));
+      }
+      // Spot checks against the Swift ChromeIcon mapping
+      expect(SettingsTab.workspaces.iconName, 'settings-workspaces');
+      expect(SettingsTab.remote.iconName, 'settings-remote');
+      expect(SettingsTab.features.iconName, 'settings-features');
+    });
+
+    test('title matches tabTitles', () {
+      for (final tab in SettingsTab.values) {
+        expect(tab.title, SettingsView.tabTitles[tab]);
+      }
+    });
+
+    test('hostScopedCases are the Host-contract tabs', () {
+      final scoped = SettingsTab.hostScopedCases;
+      expect(scoped, contains(SettingsTab.agents));
+      expect(scoped, contains(SettingsTab.plugins));
+      expect(scoped, contains(SettingsTab.agentAccess));
+      expect(scoped, contains(SettingsTab.presets));
+      // Non-scoped tabs (local-only UI) are excluded
+      expect(scoped, isNot(contains(SettingsTab.workspaces)));
+      expect(scoped, isNot(contains(SettingsTab.remote)));
+    });
+  });
 }
