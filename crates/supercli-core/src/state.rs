@@ -963,6 +963,55 @@ pub fn sort_sessions_newest_first(sessions: &mut [SessionInfo]) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Ported from UnpeelStore.swift (clients/legacy): session cleanup and
+// sidebar limit resolution. The Swift store normalized these shared
+// app-state.json knobs so the app and the TUI read the same truth;
+// the rules are provider-neutral and live here.
+// ---------------------------------------------------------------------------
+
+/// Allowed values for `auto_stop_archive_minutes` (0 = Never/off).
+/// Mirrors Swift's `autoStopArchiveMinuteOptions` in UnpeelStore.swift.
+pub const AUTO_STOP_ARCHIVE_MINUTE_OPTIONS: &[u64] = &[0, 30, 60, 120, 240, 480, 1440];
+
+/// Default when the key is absent: on at one day (opt-out feature).
+/// Mirrors Swift's `defaultAutoStopArchiveMinutes`.
+pub const DEFAULT_AUTO_STOP_ARCHIVE_MINUTES: u64 = 1440;
+
+/// Allowed values for `sidebar_stopped_limit` (0 = no inactive preview).
+/// Mirrors Swift's `sidebarStoppedLimitOptions`.
+pub const SIDEBAR_STOPPED_LIMIT_OPTIONS: &[u64] = &[0, 3, 5, 10, 15, 25];
+
+/// Default when the key is absent.
+/// Mirrors Swift's `defaultSidebarStoppedLimit`.
+pub const DEFAULT_SIDEBAR_STOPPED_LIMIT: u64 = 5;
+
+impl AppState {
+    /// Resolve `auto_stop_archive_minutes`: absent key = on at the default
+    /// cutoff (opt-out); an explicit value — including 0 = Never — wins;
+    /// junk reads as 0 (off), never as a silent default-on.
+    /// Mirrors Swift's `resolvedAutoStopArchiveMinutes` in UnpeelStore.swift.
+    pub fn resolved_auto_stop_archive_minutes(&self) -> u64 {
+        match self.auto_stop_archive_minutes {
+            None => DEFAULT_AUTO_STOP_ARCHIVE_MINUTES,
+            Some(minutes) if AUTO_STOP_ARCHIVE_MINUTE_OPTIONS.contains(&minutes) => minutes,
+            _ => 0,
+        }
+    }
+
+    /// Resolve `sidebar_stopped_limit`: absent key = the default window; an
+    /// explicit value — including 0 = None — wins; junk reads as the
+    /// default window (it must never silently file extra rows).
+    /// Mirrors Swift's `resolvedSidebarStoppedLimit` in UnpeelStore.swift.
+    pub fn resolved_sidebar_stopped_limit(&self) -> u64 {
+        match self.sidebar_stopped_limit {
+            None => DEFAULT_SIDEBAR_STOPPED_LIMIT,
+            Some(limit) if SIDEBAR_STOPPED_LIMIT_OPTIONS.contains(&limit) => limit,
+            _ => DEFAULT_SIDEBAR_STOPPED_LIMIT,
+        }
+    }
+}
+
 pub fn sort_pinned_sessions_newest_first(sessions: &mut [PinnedSidebarSession]) {
     sessions.sort_by(|a, b| {
         b.pinned_at
@@ -1231,7 +1280,8 @@ mod tests {
         abbreviate_home_path, builtin_global_presets, initial_session_label, mcp_scope_permits,
         normalize_pinned_sessions, normalize_projects, projects_in_same_tree,
         valid_session_attribution_id, AppState, McpGrant, McpRole, McpScope, PinnedSidebarSession,
-        Project, SessionInfo, SessionTitleMode,
+        Project, SessionInfo, SessionTitleMode, DEFAULT_AUTO_STOP_ARCHIVE_MINUTES,
+        DEFAULT_SIDEBAR_STOPPED_LIMIT,
     };
     use std::collections::HashMap;
     use std::path::Path;
@@ -1611,6 +1661,66 @@ mod tests {
                 .map(|project| project.sort_order)
                 .collect::<Vec<_>>(),
             vec![0, 1, 2]
+        );
+    }
+    // --- Ported from UnpeelStore.swift: cleanup/limit resolution ---
+
+    #[test]
+    fn auto_stop_archive_minutes_absent_means_default_on() {
+        let state = AppState::default();
+        assert_eq!(
+            state.resolved_auto_stop_archive_minutes(),
+            DEFAULT_AUTO_STOP_ARCHIVE_MINUTES
+        );
+        assert_eq!(DEFAULT_AUTO_STOP_ARCHIVE_MINUTES, 1440);
+    }
+
+    #[test]
+    fn auto_stop_archive_minutes_explicit_wins_including_never() {
+        let mut state = AppState::default();
+        state.auto_stop_archive_minutes = Some(60);
+        assert_eq!(state.resolved_auto_stop_archive_minutes(), 60);
+        state.auto_stop_archive_minutes = Some(0);
+        assert_eq!(state.resolved_auto_stop_archive_minutes(), 0);
+    }
+
+    #[test]
+    fn auto_stop_archive_minutes_junk_reads_as_off() {
+        let mut state = AppState::default();
+        state.auto_stop_archive_minutes = Some(45);
+        assert_eq!(state.resolved_auto_stop_archive_minutes(), 0);
+        state.auto_stop_archive_minutes = Some(u64::MAX);
+        assert_eq!(state.resolved_auto_stop_archive_minutes(), 0);
+    }
+
+    #[test]
+    fn sidebar_stopped_limit_absent_means_default_window() {
+        let state = AppState::default();
+        assert_eq!(
+            state.resolved_sidebar_stopped_limit(),
+            DEFAULT_SIDEBAR_STOPPED_LIMIT
+        );
+        assert_eq!(DEFAULT_SIDEBAR_STOPPED_LIMIT, 5);
+    }
+
+    #[test]
+    fn sidebar_stopped_limit_explicit_wins_including_none() {
+        let mut state = AppState::default();
+        state.sidebar_stopped_limit = Some(10);
+        assert_eq!(state.resolved_sidebar_stopped_limit(), 10);
+        state.sidebar_stopped_limit = Some(0);
+        assert_eq!(state.resolved_sidebar_stopped_limit(), 0);
+    }
+
+    #[test]
+    fn sidebar_stopped_limit_junk_reads_as_default_window() {
+        // Junk never silently files extra rows: it reads as the default
+        // window, unlike auto-stop where junk reads as off.
+        let mut state = AppState::default();
+        state.sidebar_stopped_limit = Some(7);
+        assert_eq!(
+            state.resolved_sidebar_stopped_limit(),
+            DEFAULT_SIDEBAR_STOPPED_LIMIT
         );
     }
 }

@@ -1,0 +1,79 @@
+# Sidecar for UnpeelStore.swift (clients/legacy, 16,559 LOC).
+# Owned collectively by the unpeelstore porters. Porter A owns the sessions +
+# projects/workspaces behaviours below. Porters B (settings), C (remote),
+# D (plugins) append their behaviours to the same file entry as they complete
+# sections. See docs/parity/swift-port/README.md for the strict "ported" standard.
+area: unpeelstore
+files:
+  native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift:
+    destination: "Rust: crates/supercli-core (porter A: sessions, projects/workspaces)"
+    status: partial
+    checklist: ""
+    behaviours:
+      # --- Porter A: sessions / restart recommendation (ported 2026-09-29) ---
+      - swift: "restartRecommendation(for:): hostProtocolVersion < 2 → reloadTerminal recommendation"
+        target: "crates/supercli-core/src/resume.rs::restart_recommendation"
+        test: "resume::restart_recommendation_fires_below_protocol_floor"
+      - swift: "restartRecommendation(for:): version >= 2 or nil → no recommendation"
+        target: "crates/supercli-core/src/resume.rs::restart_recommendation"
+        test: "resume::restart_recommendation_quiet_at_and_above_floor"
+      - swift: "SessionRestartRecommendation.Action labels (Resume Agent / Reload Terminal)"
+        target: "crates/supercli-core/src/resume.rs::RestartAction::label"
+        test: "resume::restart_action_labels_match_swift"
+      # --- Porter A: sessions / durable resume evidence (ported 2026-09-29) ---
+      - swift: "hasDurableResumeEvidence: provider id + non-empty transcript file → true"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_from_provider_id_plus_transcript"
+      - swift: "hasDurableResumeEvidence: empty transcript file → false"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_rejects_empty_transcript"
+      - swift: "hasDurableResumeEvidence: provider id + conversation hook event → true; unknown events → false"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_from_hook_event"
+      - swift: "hasDurableResumeEvidence: provider-session.json marker merges with manifest (marker wins, blank falls back)"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_marker_merges_with_manifest"
+      - swift: "hasDurableResumeEvidence: any file under managed storage → true; empty dir → false"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_from_managed_storage_files"
+      - swift: "hasDurableResumeEvidence: no signal, or provider id alone → false"
+        target: "crates/supercli-core/src/resume.rs::has_durable_resume_evidence"
+        test: "resume::durable_evidence_false_without_any_signal"
+      # --- Porter A: projects/workspaces / cleanup config (ported 2026-09-29) ---
+      - swift: "resolvedAutoStopArchiveMinutes: absent → 1440 (default on); explicit wins incl. 0=Never; junk → 0 (off)"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_auto_stop_archive_minutes"
+        test: "state::auto_stop_archive_minutes_absent_means_default_on"
+      - swift: "resolvedAutoStopArchiveMinutes: explicit valid value wins"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_auto_stop_archive_minutes"
+        test: "state::auto_stop_archive_minutes_explicit_wins_including_never"
+      - swift: "resolvedAutoStopArchiveMinutes: junk reads as off (0)"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_auto_stop_archive_minutes"
+        test: "state::auto_stop_archive_minutes_junk_reads_as_off"
+      - swift: "resolvedSidebarStoppedLimit: absent → 5 (default); explicit wins incl. 0=None"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_sidebar_stopped_limit"
+        test: "state::sidebar_stopped_limit_absent_means_default_window"
+      - swift: "resolvedSidebarStoppedLimit: explicit valid value wins"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_sidebar_stopped_limit"
+        test: "state::sidebar_stopped_limit_explicit_wins_including_none"
+      - swift: "resolvedSidebarStoppedLimit: junk reads as default window (5)"
+        target: "crates/supercli-core/src/state.rs::AppState::resolved_sidebar_stopped_limit"
+        test: "state::sidebar_stopped_limit_junk_reads_as_default_window"
+      # --- Porter A: dropped (already in Rust Host) ---
+      - swift: "ManifestPidIdentity (anti-recycling guard)"
+        target: "dropped: Host does it (crates/supercli-core/src/session_host.rs::PidIdentity)"
+        test: null
+      - swift: "projectFolderColor / setProjectFolderColor (UI plumbing around Host truth)"
+        target: "dropped: Host does it (crates/supercli-core/src/session_ops.rs::set_project_folder_color)"
+        test: null
+      - swift: "SharedMarker enum (archived.json, title.json, read.json, provider-session.json, project-override.json)"
+        target: "dropped: Host does it (crates/supercli-core/src/session_ops.rs::ARCHIVE_MARKER etc.)"
+        test: null
+      - swift: "Worktrees section (delegates to WorktreeGit.swift)"
+        target: "dropped: Host does it (crates/supercli-core/src/host_git.rs)"
+        test: null
+    tests:
+      - file: crates/supercli-core/src/resume.rs
+        count: 9
+      - file: crates/supercli-core/src/state.rs
+        count: 6
+    notes: "Porter A 2026-09-29: sessions (restart recommendation, durable resume evidence) and projects/workspaces (cleanup config resolution) ported with 15 tests. PidIdentity, folder colors, shared markers, worktrees dropped (Host implements). Remaining sessions/projects sections (selection state, decode caches, hook activity, archive, rename/remove, restart orchestration, groups, native-added projects) need behaviour audit. Settings (porter B), remote (porter C), plugins (porter D) sections todo."

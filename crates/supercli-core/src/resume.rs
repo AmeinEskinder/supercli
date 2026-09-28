@@ -348,6 +348,209 @@ pub(crate) fn join(tokens: Vec<String>) -> String {
     tokens.join(" ")
 }
 
+// ---------------------------------------------------------------------------
+// Ported from UnpeelStore.swift (clients/legacy): session restart
+// recommendations and durable resume evidence. These are client-side
+// decision rules the Swift store applied when rendering session UI;
+// the logic is provider-neutral and lives here so every frontend
+// (native, Dart, TUI) shares one implementation.
+// ---------------------------------------------------------------------------
+
+/// Action a restart recommendation offers. Mirrors Swift's
+/// `SessionRestartRecommendation.Action` in UnpeelStore.swift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestartAction {
+    ResumeAgent,
+    ReloadTerminal,
+}
+
+impl RestartAction {
+    pub fn label(&self) -> &'static str {
+        match self {
+            RestartAction::ResumeAgent => "Resume Agent",
+            RestartAction::ReloadTerminal => "Reload Terminal",
+        }
+    }
+}
+
+/// Restart recommendation for a session. Mirrors Swift's
+/// `SessionRestartRecommendation` in UnpeelStore.swift.
+/// A `None` action is informational: the intent is queued, but no safe
+/// immediate action exists while the managed runtime is active.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRestartRecommendation {
+    pub token: String,
+    pub message: String,
+    pub action: Option<RestartAction>,
+}
+
+/// Minimum host protocol version for current terminal behavior.
+/// Sessions on older hosts get a reload recommendation.
+/// Mirrors Swift's `requiredSessionHostProtocolVersion` in UnpeelStore.swift.
+pub const REQUIRED_SESSION_HOST_PROTOCOL_VERSION: u32 = 2;
+
+/// Restart recommendation for a live session, if any. An old hosted PTY
+/// must be replaced to gain current terminal behavior. Only a known Host
+/// below the essential maintenance compatibility floor requires a
+/// terminal reload. Mirrors Swift's `restartRecommendation(for:)` in
+/// UnpeelStore.swift.
+pub fn restart_recommendation(
+    host_protocol_version: Option<u32>,
+) -> Option<SessionRestartRecommendation> {
+    let version = host_protocol_version?;
+    if version < REQUIRED_SESSION_HOST_PROTOCOL_VERSION {
+        return Some(SessionRestartRecommendation {
+            token: format!("host-protocol:{REQUIRED_SESSION_HOST_PROTOCOL_VERSION}"),
+            message: "Reload to use the updated terminal host.".to_string(),
+            action: Some(RestartAction::ReloadTerminal),
+        });
+    }
+    None
+}
+
+/// Trimmed non-empty string, or None. Mirrors the Swift `trimmed` helper
+/// used when resolving provider metadata from markers and manifests.
+fn trim_nonempty(value: Option<&str>) -> Option<&str> {
+    let trimmed = value?.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+/// Read the cross-frontend `provider-session.json` shared marker from a
+/// session dir. Returns (provider_session_id, provider_transcript_path).
+/// Mirrors Swift's marker read in `hasDurableResumeEvidence`.
+fn read_provider_session_marker(session_dir: &Path) -> Option<(Option<String>, Option<String>)> {
+    let path = session_dir.join("provider-session.json");
+    let data = std::fs::read(&path).ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&data).ok()?;
+    let id = value
+        .get("provider_session_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let transcript = value
+        .get("provider_transcript_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    Some((id, transcript))
+}
+
+fn is_nonempty_regular_file(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .map(|m| m.is_file() && m.len() > 0)
+        .unwrap_or(false)
+}
+
+/// Hook event names that prove a provider-owned conversation started.
+/// Mirrors the Swift allowlist in `hasDurableResumeEvidence`.
+const CONVERSATION_HOOK_EVENTS: &[&str] = &[
+    "Start",
+    "UserPromptSubmit",
+    "Stop",
+    "StopFailure",
+    "PermissionRequest",
+];
+
+fn has_conversation_hook_event(session_dir: &Path) -> bool {
+    let path = session_dir.join("last-hook-event.json");
+    let data = match std::fs::read(&path) {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+    let value: serde_json::Value = match serde_json::from_slice(&data) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let name = value
+        .get("hook_event_name")
+        .or_else(|| value.get("hookEventName"))
+        .and_then(|v| v.as_str());
+    matches!(name, Some(n) if CONVERSATION_HOOK_EVENTS.contains(&n))
+}
+
+/// Whether any regular file exists under `dir`, visiting at most
+/// `visit_cap` entries and never following symlinks. Mirrors the Swift
+/// managed-storage walk in `hasDurableResumeEvidence`.
+fn has_any_regular_file(dir: &Path, visit_cap: usize) -> bool {
+    let mut pending = vec![dir.to_path_buf()];
+    let mut visited = 0usize;
+    while let Some(current) = pending.pop() {
+        let entries = match std::fs::read_dir(&current) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            visited += 1;
+            if visited > visit_cap {
+                return false;
+            }
+            let file_type = match entry.file_type() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if file_type.is_symlink() {
+                continue;
+            }
+            if file_type.is_file() {
+                return true;
+            }
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            }
+        }
+    }
+    false
+}
+
+/// Whether a session has durable evidence of reaching a provider-owned
+/// conversation. The Host may mint an id and create an empty managed
+/// directory before exec, so neither fact is enough on its own.
+///
+/// Evidence (in order):
+/// 1. A provider id plus the provider's own non-empty transcript file.
+/// 2. A provider id plus a conversation hook event in last-hook-event.json.
+/// 3. Any regular file under the validated managed storage path.
+///
+/// Mirrors Swift's `hasDurableResumeEvidence(manifest:dirPath:)` in
+/// UnpeelStore.swift. The marker/manifest merge ("latest wins, never erase")
+/// is preserved: marker values win when present and non-empty, otherwise
+/// the manifest values apply.
+pub fn has_durable_resume_evidence(
+    manifest_provider_session_id: Option<&str>,
+    manifest_provider_transcript_path: Option<&str>,
+    session_dir: &Path,
+    managed_storage_path: Option<&Path>,
+) -> bool {
+    let marker = read_provider_session_marker(session_dir);
+    let provider_id = trim_nonempty(marker.as_ref().and_then(|m| m.0.as_deref()))
+        .or_else(|| trim_nonempty(manifest_provider_session_id));
+    let transcript_path = trim_nonempty(marker.as_ref().and_then(|m| m.1.as_deref()))
+        .or_else(|| trim_nonempty(manifest_provider_transcript_path));
+
+    // The provider's own non-empty transcript is durable proof that this
+    // exact launch became a real resumable session.
+    if provider_id.is_some() {
+        if let Some(path) = transcript_path {
+            if is_nonempty_regular_file(Path::new(path)) {
+                return true;
+            }
+        }
+        if has_conversation_hook_event(session_dir) {
+            return true;
+        }
+    }
+
+    if let Some(storage) = managed_storage_path {
+        if has_any_regular_file(storage, 256) {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,5 +667,169 @@ mod tests {
             strip_resume_flags(tokens, &[("--resume", true), ("-c", false)]),
             vec!["agent", "--model", "fast"]
         );
+    }
+
+    // --- Ported from UnpeelStore.swift: restart recommendations ---
+
+    #[test]
+    fn restart_recommendation_fires_below_protocol_floor() {
+        let rec = restart_recommendation(Some(1)).expect("version 1 < floor 2");
+        assert_eq!(rec.token, "host-protocol:2");
+        assert_eq!(rec.message, "Reload to use the updated terminal host.");
+        assert_eq!(rec.action, Some(RestartAction::ReloadTerminal));
+        assert_eq!(rec.action.unwrap().label(), "Reload Terminal");
+    }
+
+    #[test]
+    fn restart_recommendation_quiet_at_and_above_floor() {
+        assert!(restart_recommendation(Some(2)).is_none());
+        assert!(restart_recommendation(Some(3)).is_none());
+        assert!(restart_recommendation(None).is_none());
+    }
+
+    #[test]
+    fn restart_action_labels_match_swift() {
+        assert_eq!(RestartAction::ResumeAgent.label(), "Resume Agent");
+        assert_eq!(RestartAction::ReloadTerminal.label(), "Reload Terminal");
+    }
+
+    // --- Ported from UnpeelStore.swift: durable resume evidence ---
+
+    fn temp_session_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("resume_evidence_test").join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn durable_evidence_from_provider_id_plus_transcript() {
+        let session_dir = temp_session_dir("transcript");
+        let transcript = session_dir.join("t.txt");
+        std::fs::write(&transcript, "hello").unwrap();
+        assert!(has_durable_resume_evidence(
+            Some("prov-1"),
+            Some(transcript.to_str().unwrap()),
+            &session_dir,
+            None,
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
+    }
+
+    #[test]
+    fn durable_evidence_rejects_empty_transcript() {
+        let session_dir = temp_session_dir("empty_transcript");
+        let transcript = session_dir.join("t.txt");
+        std::fs::write(&transcript, "").unwrap();
+        assert!(!has_durable_resume_evidence(
+            Some("prov-1"),
+            Some(transcript.to_str().unwrap()),
+            &session_dir,
+            None,
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
+    }
+
+    #[test]
+    fn durable_evidence_from_hook_event() {
+        let session_dir = temp_session_dir("hook");
+        std::fs::write(
+            session_dir.join("last-hook-event.json"),
+            r#"{"hook_event_name":"UserPromptSubmit"}"#,
+        )
+        .unwrap();
+        assert!(has_durable_resume_evidence(
+            Some("prov-1"),
+            None,
+            &session_dir,
+            None,
+        ));
+        // Unknown event names do not count.
+        std::fs::write(
+            session_dir.join("last-hook-event.json"),
+            r#"{"hookEventName":"PreToolUse"}"#,
+        )
+        .unwrap();
+        assert!(!has_durable_resume_evidence(
+            Some("prov-1"),
+            None,
+            &session_dir,
+            None,
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
+    }
+
+    #[test]
+    fn durable_evidence_marker_merges_with_manifest() {
+        let session_dir = temp_session_dir("marker");
+        // Marker wins when present; manifest is the fallback.
+        std::fs::write(
+            session_dir.join("provider-session.json"),
+            r#"{"provider_session_id":"marker-id"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            session_dir.join("last-hook-event.json"),
+            r#"{"hook_event_name":"Stop"}"#,
+        )
+        .unwrap();
+        assert!(has_durable_resume_evidence(
+            Some("manifest-id"),
+            None,
+            &session_dir,
+            None,
+        ));
+        // Blank marker values fall back to the manifest.
+        std::fs::write(
+            session_dir.join("provider-session.json"),
+            r#"{"provider_session_id":"   "}"#,
+        )
+        .unwrap();
+        assert!(has_durable_resume_evidence(
+            Some("manifest-id"),
+            None,
+            &session_dir,
+            None,
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
+    }
+
+    #[test]
+    fn durable_evidence_from_managed_storage_files() {
+        let session_dir = temp_session_dir("managed");
+        let storage = session_dir.join("storage");
+        std::fs::create_dir_all(&storage).unwrap();
+        std::fs::write(storage.join("state.db"), "x").unwrap();
+        // No provider id at all, but managed storage has a file.
+        assert!(has_durable_resume_evidence(
+            None,
+            None,
+            &session_dir,
+            Some(&storage),
+        ));
+        // Empty storage directory: no evidence.
+        let empty = session_dir.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(!has_durable_resume_evidence(
+            None,
+            None,
+            &session_dir,
+            Some(&empty),
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
+    }
+
+    #[test]
+    fn durable_evidence_false_without_any_signal() {
+        let session_dir = temp_session_dir("none");
+        assert!(!has_durable_resume_evidence(None, None, &session_dir, None,));
+        // Provider id alone (minted before exec) is not enough.
+        assert!(!has_durable_resume_evidence(
+            Some("prov-1"),
+            None,
+            &session_dir,
+            None,
+        ));
+        let _ = std::fs::remove_dir_all(&session_dir);
     }
 }

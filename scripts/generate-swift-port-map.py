@@ -63,6 +63,7 @@ WORKER_AREAS = (
     "remote",
     "appkit",
     "ios",
+    "unpeelstore",
 )
 
 STATUSES = ("todo", "partial", "ported", "wired", "verified")
