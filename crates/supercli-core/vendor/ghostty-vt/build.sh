@@ -64,6 +64,12 @@ trap revert_patches EXIT
 SRC_A="$GHOSTTY_SRC/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a"
 mkdir -p "$HERE/macos-universal"
 cp "$SRC_A" "$HERE/macos-universal/libghostty-vt.a"
+# zig emits a spurious __mh_execute_header definition in the static lib's
+# zig object. It is harmless until the linker extracts that object (only
+# the layout_matches_type_json unit test needs ghostty_type_json from it),
+# at which point it duplicates the linker's own __mh_execute_header and the
+# link fails. Neutralize it (demote to a local symbol).
+python3 "$HERE/fix-mh-execute-header.py" "$HERE/macos-universal/libghostty-vt.a"
 lipo -info "$HERE/macos-universal/libghostty-vt.a"
 echo "[+] vendored: $HERE/macos-universal/libghostty-vt.a"
 

@@ -110,7 +110,7 @@ void main() {
       expect(panel.handleAction('bogus.action'), false);
     });
 
-    test('actions declare return / escape / primary+e (unpeel parity)', () {
+    test('actions declare return / escape / primary+e (legacy macOS parity)', () {
       final panel = McpApprovalPanel(approval: makeApproval());
       final actions = panel.actions();
       final byName = {for (final a in actions) a.name: a};
@@ -127,7 +127,7 @@ void main() {
       }
     });
 
-    group('unpeel parity: Return = Allow, Escape = Deny (MCPApprovalPanel.swift:249-266)', () {
+    group('legacy macOS parity: Return = Allow, Escape = Deny (MCPApprovalPanel.swift:249-266)', () {
       McpApprovalPanel panelWithDecision(void Function(ApprovalDecision) cb) =>
           McpApprovalPanel(approval: makeApproval(), onDecision: cb);
 

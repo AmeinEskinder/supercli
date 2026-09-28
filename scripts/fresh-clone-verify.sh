@@ -82,6 +82,7 @@ matches=$(grep -rli 'unpeel' . \
             -e 'package-lock.json' \
             -e 'docs/rename-allowlist.md' \
             -e '.github/workflows/rename-guard.yml' \
+            -e '.github/workflows/linux.yml' \
             -e 'scripts/sync-main-v2.sh' \
             -e '^\./\.git$' \
   || true)
@@ -166,6 +167,40 @@ if [ -n "$bundle_matches" ]; then
   exit 1
 fi
 echo "bundle ID guard PASS"
+
+echo "--- 4e. CLRTY license prefix guard (must be SCLI-, legacy key-format keys rejected) ---"
+# Intentional CLRTY references (rejection logic, not acceptance):
+# - crates/supercli-native-bridge/src/macos/license.rs: LEGACY_KEY_PREFIX + rejection
+# - crates/supercli-core/src/license.rs: LEGACY_KEY_PREFIX + rejection
+# - clients/supercli-app/lib/screens/licensesettings.dart: isLegacyKey helper
+# - clients/supercli-app/test/settings_test.dart: rejection tests
+# - docs/parity/: sidecar notes on the legacy format
+# - docs/security/signing-keys.md: documentation
+clrty_matches=$(grep -rl 'CLRTY' . \
+  --exclude-dir=.git \
+  --exclude-dir=target \
+  --exclude-dir=node_modules \
+  --exclude-dir=__pycache__ \
+  --exclude-dir=gpuidart \
+  --exclude-dir=.dart_tool \
+  --exclude='*.lock' \
+  --exclude='rename-guard.yml' \
+  --exclude='fresh-clone-verify.sh' \
+  --exclude='sync-main-v2.sh' \
+  2>/dev/null | grep -v -e '^./clients/legacy/' \
+                        -e '^./crates/supercli-native-bridge/src/macos/license.rs$' \
+                        -e '^./crates/supercli-core/src/license.rs$' \
+                        -e '^./clients/supercli-app/lib/screens/licensesettings.dart$' \
+                        -e '^./clients/supercli-app/test/settings_test.dart$' \
+                        -e '^./docs/parity/' \
+                        -e '^./docs/security/signing-keys.md$' \
+  || true)
+if [ -n "$clrty_matches" ]; then
+  echo "FAIL: CLRTY references found outside clients/legacy and rejection-logic files (license keys are SCLI-):"
+  echo "$clrty_matches"
+  exit 1
+fi
+echo "CLRTY guard PASS"
 
 echo "--- 5. main-v2 exclusions (docs/internal/EXCLUSIONS.md) ---"
 # Read exclusions from the markdown table

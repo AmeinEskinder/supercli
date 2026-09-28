@@ -1,5 +1,5 @@
 //! Rust side of the Supercli Link license flow, for the TUI / headless hosts.
-//! Mirrors `LicenseManager.swift`: same key format (`CLRTY-<b64>.<b64>`,
+//! Mirrors `LicenseManager.swift`: same key format (`SCLI-<b64>.<b64>`,
 //! Ed25519 over the encoded-payload string), same endpoints
 //! (`/api/activate`, `/api/deactivate`, `/api/remote/entitlement`), same
 //! entitlement cache file the relay uplink already reads. The key is stored
@@ -9,10 +9,64 @@
 use base64::Engine;
 use std::io::{Read, Write};
 
-const PUBLIC_KEY_B64: &str = "6RfwwHUhth8Ji7T7p/QbDOQjeN9Zrk1S34Hk85cpg54=";
-const KEY_PREFIX: &str = "CLRTY-";
+/// Bundled license public key v1 (Ed25519, provided by Amein).
+/// This is the LICENSE key only; it must NOT be reused for the updater.
+const PUBLIC_KEY_B64: &str = "E32qYUoJsxH5TLSRt/xrjQcWxwVwawVAfLJjM+HbpZI=";
+/// License key prefix (`SCLI-<payloadB64url>.<signatureB64url>`).
+pub const KEY_PREFIX: &str = "SCLI-";
+/// Legacy key format (`CLRTY-`). Keys with this prefix are rejected;
+/// supercli has no legacy customers to migrate.
+pub const LEGACY_KEY_PREFIX: &str = "CLRTY-";
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+/// Failure modes for offline license-key validation. This is the single
+/// source of truth for key parsing and verification, shared by
+/// `supercli-core` and `supercli-native-bridge` (whose macOS license module
+/// delegates here instead of duplicating the crypto).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LicenseKeyError {
+    /// `CLRTY-` legacy key format: rejected outright, never verified.
+    LegacyRejected,
+    /// Bad envelope: prefix, structure, base64, or JSON payload.
+    Malformed,
+    /// Well-formed envelope whose Ed25519 signature did not verify.
+    BadSignature,
+}
+
+impl std::fmt::Display for LicenseKeyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LegacyRejected => {
+                formatter.write_str("CLRTY- keys use the legacy key format and are not accepted")
+            }
+            Self::Malformed => formatter.write_str("malformed license key"),
+            Self::BadSignature => formatter.write_str("invalid license signature"),
+        }
+    }
+}
+
+/// Resolve the effective license public key (base64): `env_override` (the
+/// `SUPERCLI_LICENSE_PUBLIC_KEY` value) is honored ONLY when `dev_build` is
+/// true. Release builds always use the bundled key, so a compromised
+/// environment cannot substitute an attacker key.
+pub fn resolve_public_key_b64_with<'a>(
+    env_override: Option<&'a str>,
+    dev_build: bool,
+    bundled_key_b64: &'a str,
+) -> &'a str {
+    if dev_build {
+        if let Some(key) = env_override.map(str::trim).filter(|s| !s.is_empty()) {
+            return key;
+        }
+    }
+    bundled_key_b64
+}
+
+/// `resolve_public_key_b64_with` using this build's actual dev/release mode.
+pub fn resolve_public_key_b64(env_override: Option<&str>) -> &str {
+    resolve_public_key_b64_with(env_override, cfg!(debug_assertions), PUBLIC_KEY_B64)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct LicensePayload {
     pub v: i64,
     pub id: String,
@@ -65,26 +119,47 @@ fn b64url(s: &str) -> Option<Vec<u8>> {
         .ok()
 }
 
-/// Verify a key offline and return its payload (None = malformed/forged).
-pub fn verify(raw: &str) -> Option<LicensePayload> {
+/// Canonical offline key validation: normalize → reject legacy → split →
+/// JSON-decode the payload → Ed25519-verify over the *encoded* payload
+/// string (as `LicenseManager.swift` signs it) against `public_key_b64`.
+pub fn validate_key_with(
+    raw: &str,
+    public_key_b64: &str,
+) -> Result<LicensePayload, LicenseKeyError> {
     let key = normalize_key(raw);
-    let body = key.strip_prefix(KEY_PREFIX)?;
-    let (payload_b64, sig_b64) = body.split_once('.')?;
-    let sig = b64url(sig_b64)?;
-    let payload = b64url(payload_b64)?;
-    let pubkey_env = std::env::var("SUPERCLI_LICENSE_PUBLIC_KEY").ok();
-    let pubkey_b64 = pubkey_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(PUBLIC_KEY_B64);
+    // Reject legacy CLRTY- keys explicitly. They use a different prefix and
+    // were signed by the old vendor's key; they must never verify here.
+    if key.starts_with(LEGACY_KEY_PREFIX) {
+        return Err(LicenseKeyError::LegacyRejected);
+    }
+    let body = key
+        .strip_prefix(KEY_PREFIX)
+        .ok_or(LicenseKeyError::Malformed)?;
+    let (payload_b64, sig_b64) = body.split_once('.').ok_or(LicenseKeyError::Malformed)?;
+    let sig = b64url(sig_b64).ok_or(LicenseKeyError::Malformed)?;
+    let payload = b64url(payload_b64).ok_or(LicenseKeyError::Malformed)?;
     let pubkey = base64::engine::general_purpose::STANDARD
-        .decode(pubkey_b64)
-        .ok()?;
+        .decode(public_key_b64.trim())
+        .map_err(|_| LicenseKeyError::BadSignature)?;
     ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, &pubkey)
         .verify(payload_b64.as_bytes(), &sig)
-        .ok()?;
-    serde_json::from_slice(&payload).ok()
+        .map_err(|_| LicenseKeyError::BadSignature)?;
+    serde_json::from_slice(&payload).map_err(|_| LicenseKeyError::Malformed)
+}
+
+/// `validate_key_with` against an explicit key, erasing the failure reason.
+pub fn verify_with_key(raw: &str, public_key_b64: &str) -> Option<LicensePayload> {
+    validate_key_with(raw, public_key_b64).ok()
+}
+
+/// Verify a key offline and return its payload (None = malformed/forged).
+/// Legacy `CLRTY-` keys (old vendor format) are rejected; supercli has no
+/// legacy customers to migrate. The `SUPERCLI_LICENSE_PUBLIC_KEY` env
+/// override is honored in dev builds only — release builds always use the
+/// bundled key.
+pub fn verify(raw: &str) -> Option<LicensePayload> {
+    let pubkey_env = std::env::var("SUPERCLI_LICENSE_PUBLIC_KEY").ok();
+    verify_with_key(raw, resolve_public_key_b64(pubkey_env.as_deref()))
 }
 
 fn license_path() -> std::path::PathBuf {
@@ -669,6 +744,10 @@ pub struct ActivationCommit {
 /// response that may have taken seconds to arrive.
 pub fn request_activation(raw_key: &str, device_name: &str) -> Result<PendingActivation, String> {
     let key = normalize_key(raw_key);
+    // Legacy CLRTY- keys get a clear rejection, not the generic message.
+    if key.starts_with(LEGACY_KEY_PREFIX) {
+        return Err("CLRTY- keys use the legacy key format and are not accepted".into());
+    }
     let payload = verify(&key).ok_or("that doesn't look like a valid Supercli license key")?;
     // Capture suppression before crossing the network. The commit refuses a
     // response if another frontend deactivated/rejected Link meanwhile.
@@ -960,15 +1039,112 @@ pub fn known_mac_id() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine as _;
+
     #[test]
     fn normalize_repairs_smart_dashes_and_whitespace() {
-        assert_eq!(super::normalize_key("CLRTY\u{2013}a b\nc"), "CLRTY-abc");
+        assert_eq!(super::normalize_key("SCLI\u{2013}a b\nc"), "SCLI-abc");
     }
 
     #[test]
     fn verify_rejects_garbage() {
-        assert!(super::verify("CLRTY-abc.def").is_none());
+        assert!(super::verify("SCLI-abc.def").is_none());
         assert!(super::verify("nope").is_none());
+    }
+
+    #[test]
+    fn verify_rejects_legacy_clrty_keys() {
+        // CLRTY- keys use the legacy key format; supercli has no
+        // legacy customers to migrate. They must never verify.
+        assert!(super::verify("CLRTY-abc.def").is_none());
+        assert!(super::verify("CLRTY-eyJhIjoxfQ.c2ln").is_none());
+    }
+
+    #[test]
+    fn bundled_public_key_is_pinned_license_v1() {
+        // The bundled license public key (v1, provided by Amein) is pinned.
+        // Any accidental change must fail CI. This is the LICENSE key only;
+        // it must NOT be reused for the updater.
+        let engine = base64::engine::general_purpose::STANDARD;
+        let key_bytes = engine
+            .decode(super::PUBLIC_KEY_B64.trim())
+            .expect("bundled key must be valid base64");
+        assert_eq!(key_bytes.len(), 32, "Ed25519 public key must be 32 bytes");
+        let key_array: [u8; 32] = key_bytes.try_into().unwrap();
+        // Must be a valid Ed25519 point.
+        ed25519_dalek::VerifyingKey::from_bytes(&key_array)
+            .expect("bundled key must be a valid Ed25519 point");
+        // Fingerprint pinning: sha256 of the raw key starts with bff14084e409b8f0.
+        use sha2::Digest as _;
+        let fingerprint: String = sha2::Sha256::digest(key_array)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert!(
+            fingerprint.starts_with("bff14084e409b8f0"),
+            "bundled key fingerprint mismatch: {fingerprint}"
+        );
+    }
+
+    #[test]
+    fn release_build_ignores_public_key_env_override() {
+        // Simulates a release build: even with the env var set to an
+        // attacker key, the bundled key wins. This is the anti-bypass
+        // guarantee — the override is dev-only.
+        assert_eq!(
+            super::resolve_public_key_b64_with(Some("attacker-key"), false, "bundled-key"),
+            "bundled-key"
+        );
+    }
+
+    #[test]
+    fn dev_build_honors_public_key_env_override() {
+        assert_eq!(
+            super::resolve_public_key_b64_with(Some("dev-key"), true, "bundled-key"),
+            "dev-key"
+        );
+    }
+
+    #[test]
+    fn empty_env_override_falls_back_to_bundled() {
+        assert_eq!(
+            super::resolve_public_key_b64_with(Some("   "), true, "bundled-key"),
+            "bundled-key"
+        );
+        assert_eq!(
+            super::resolve_public_key_b64_with(None, true, "bundled-key"),
+            "bundled-key"
+        );
+        assert_eq!(
+            super::resolve_public_key_b64_with(None, false, "bundled-key"),
+            "bundled-key"
+        );
+    }
+
+    #[test]
+    fn validate_key_with_distinguishes_failure_modes() {
+        use super::LicenseKeyError;
+        assert_eq!(
+            super::validate_key_with("CLRTY-eyJhIjoxfQ.c2ln", "irrelevant").unwrap_err(),
+            LicenseKeyError::LegacyRejected
+        );
+        assert_eq!(
+            super::validate_key_with("SCLI-nodot", "irrelevant").unwrap_err(),
+            LicenseKeyError::Malformed
+        );
+        assert_eq!(
+            super::validate_key_with("garbage", "irrelevant").unwrap_err(),
+            LicenseKeyError::Malformed
+        );
+        // Well-formed envelope, bogus signature.
+        assert_eq!(
+            super::validate_key_with(
+                "SCLI-eyJhIjoxfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                &"A".repeat(44),
+            )
+            .unwrap_err(),
+            LicenseKeyError::BadSignature
+        );
     }
 
     #[test]

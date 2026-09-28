@@ -5808,7 +5808,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
     /// event delivered to that window follows the rendered `UiAction` path
     /// (`approval.approve` -> `_handleAction` -> `answerApproval`) against
     /// the real Host HTTP stack (`handle_connection` + `ApprovalHub`).
-    /// Unpeel parity: MCPApprovalPanel.swift:249-266 (plain Return = Allow,
+    /// Legacy macOS parity: MCPApprovalPanel.swift:249-266 (plain Return = Allow,
     /// plain Escape = Deny; modified keypresses pass through).
     ///
     /// The approval is queued before the app starts so the app's initial
@@ -6182,7 +6182,7 @@ non-ephemeral ports — a product regression, not a port race. Attempts: {failur
         let before = screenshot("before.png");
 
         // The real key event: plain Return approves, plain Escape denies
-        // (unpeel parity, MCPApprovalPanel.swift:249-266).
+        // (legacy macOS parity, MCPApprovalPanel.swift:249-266).
         let chord = if deny { "Escape" } else { "Return" };
         let injected = if deny {
             run_injector(&["--deny"])
