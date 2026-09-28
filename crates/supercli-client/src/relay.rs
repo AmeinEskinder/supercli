@@ -365,6 +365,42 @@ impl RelayCredentials {
     }
 }
 
+/// Watchdog budget for a relay request callback, ported from
+/// `NativeRelayBridge.callbackWaitMilliseconds` in
+/// `clients/legacy/native/SupercliNative/Sources/SupercliNative/NativeRelayBridge.swift`.
+///
+/// URLSession's WebSocket connect and the authenticated E2E host-hello
+/// receive can each consume ten seconds in the shared connection. Only an
+/// unconstrained bootstrap can pay that worst-case establishment cost;
+/// effects are generation-bound and therefore get scheduling headroom only.
+/// This watchdog must sit outside the connection's own delivery timeout,
+/// otherwise a slow but healthy first Link request is misclassified as
+/// ambiguous.
+pub mod callback_watchdog {
+    /// Headroom for connection establishment (WebSocket + E2E hello).
+    pub const CONNECTION_ESTABLISHMENT_HEADROOM_MS: u64 = 20_000;
+    /// Headroom for callback scheduling.
+    pub const CALLBACK_SCHEDULING_HEADROOM_MS: u64 = 5_000;
+
+    /// Total milliseconds to wait for a relay request callback.
+    ///
+    /// `may_establish_connection` is true for unbound requests (generation 0)
+    /// that may pay the connection-establishment cost.
+    pub fn callback_wait_milliseconds(
+        request_timeout_ms: u64,
+        may_establish_connection: bool,
+    ) -> u64 {
+        let establishment = if may_establish_connection {
+            CONNECTION_ESTABLISHMENT_HEADROOM_MS
+        } else {
+            0
+        };
+        let headroom = establishment.saturating_add(CALLBACK_SCHEDULING_HEADROOM_MS);
+        let total = request_timeout_ms.saturating_add(headroom);
+        total.max(1_000)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,5 +491,20 @@ mod tests {
         assert!(json.contains("\"deviceID\""));
         assert!(json.contains("\"saltB64\""));
         assert!(json.contains("\"ephemeralPublicKeyB64\""));
+    }
+
+    // Ported from NativeRelayBridgeTests.swift.
+
+    #[test]
+    fn callback_watchdog_includes_connect_budget_only_for_unbound_requests() {
+        use super::callback_watchdog::callback_wait_milliseconds;
+        assert_eq!(callback_wait_milliseconds(10_000, true), 35_000);
+        assert_eq!(callback_wait_milliseconds(35_000, false), 40_000);
+    }
+
+    #[test]
+    fn callback_watchdog_saturates_without_wrapping() {
+        use super::callback_watchdog::callback_wait_milliseconds;
+        assert_eq!(callback_wait_milliseconds(u64::MAX, true), u64::MAX);
     }
 }
