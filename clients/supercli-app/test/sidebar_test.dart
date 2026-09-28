@@ -355,11 +355,15 @@ void main() {
   });
 
   group('project sidebar widgets', () {
-    test('skeleton renders the requested rows', () {
-      const skel = SidebarSkeleton(rows: 4);
+    test('skeleton is blank with a single centered spinner (no fake rows)', () {
+      // SidebarSkeleton.swift: placeholder rows were tried and removed —
+      // the placeholder is deliberately blank with one muted spinner.
+      const skel = SidebarSkeleton();
       final node = skel.build();
       expect(node, isA<UiColumn>());
-      expect((node as UiColumn).children.length, 4);
+      final texts = textsOf(node);
+      expect(texts, ['◌']);
+      expect(texts.any((t) => t.contains('▓')), isFalse);
     });
 
     test('workspace dots mark the active workspace', () {
