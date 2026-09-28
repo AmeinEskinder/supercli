@@ -22,6 +22,42 @@ final class HostException implements Exception {
   String toString() => 'HostException($statusCode): $message';
 }
 
+/// One chunk of a session's PTY output journal.
+///
+/// Wire format of `GET /mobile/output`
+/// (crates/supercli-serve/src/mobile.rs `handle_output`):
+/// `{sessionID, offset, nextOffset, dataBase64, truncated, capturedAtUnixMs}`.
+final class TerminalOutputChunk {
+  const TerminalOutputChunk({
+    required this.sessionId,
+    required this.offset,
+    required this.nextOffset,
+    required this.data,
+    required this.truncated,
+  });
+
+  factory TerminalOutputChunk.fromJson(Map<String, dynamic> json) {
+    return TerminalOutputChunk(
+      sessionId: (json['sessionID'] as String?) ?? '',
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      nextOffset: (json['nextOffset'] as num?)?.toInt() ?? 0,
+      data: base64Decode((json['dataBase64'] as String?) ?? ''),
+      truncated: (json['truncated'] as bool?) ?? false,
+    );
+  }
+
+  final String sessionId;
+  final int offset;
+  final int nextOffset;
+
+  /// Raw PTY bytes for this chunk.
+  final List<int> data;
+
+  /// True when the requested offset fell off the journal: the client must
+  /// reset its VT state and treat this chunk as a fresh baseline.
+  final bool truncated;
+}
+
 final class HostClient {
   HostClient({required this.baseUrl, http.Client? httpClient, this.token})
     : _http = httpClient ?? http.Client();
@@ -187,6 +223,79 @@ final class HostClient {
     if (response.statusCode != 200) {
       throw HostException(
         'POST /mobile/session-organization failed',
+
+  // ------------------------------------------------------------------
+  // Terminal routes (crates/supercli-core/src/controller_api.rs).
+  //
+  // The terminal pane streams a session's PTY over the authenticated
+  // /mobile/* gateway — never by reading Host journal files directly.
+  // ------------------------------------------------------------------
+
+  /// GET `/mobile/output?session_id=…&offset=…&limit=…&wait_ms=…` — poll one
+  /// session's PTY output journal. Long-poll: `waitMs` holds the request
+  /// until new bytes arrive (server-bounded at 25 s).
+  Future<TerminalOutputChunk> terminalOutput(
+    String sessionId, {
+    int? offset,
+    int limit = 65536,
+    Duration wait = const Duration(seconds: 25),
+  }) async {
+    final params = <String, String>{
+      'session_id': sessionId,
+      'limit': '$limit',
+      'wait_ms': '${wait.inMilliseconds}',
+    };
+    if (offset != null) params['offset'] = '$offset';
+    final url = baseUrl.replace(
+      path: '${baseUrl.path}/mobile/output',
+      queryParameters: params,
+    );
+    final response = await _http
+        .get(url, headers: _authHeaders)
+        .timeout(wait + const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw HostException(
+        'terminal output failed',
+        statusCode: response.statusCode,
+      );
+    }
+    return TerminalOutputChunk.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// POST `/mobile/write` — write text to a session's PTY master.
+  /// [writeId] is the idempotency key (`wid` on the wire); the Host drops
+  /// duplicate writes with the same id.
+  Future<void> writeToSession(
+    String sessionId,
+    String data, {
+    String? writeId,
+  }) async {
+    final body = <String, Object>{
+      'sessionID': sessionId,
+      'data': data,
+      'wid': ?writeId,
+    };
+    final response = await _post('/mobile/write', body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HostException(
+        'terminal write failed: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  /// POST `/mobile/resize` — SIGWINCH a session's PTY.
+  Future<void> resizeSession(String sessionId, int columns, int rows) async {
+    final response = await _post('/mobile/resize', {
+      'sessionID': sessionId,
+      'columns': columns,
+      'rows': rows,
+    });
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HostException(
+        'terminal resize failed: ${response.body}',
         statusCode: response.statusCode,
       );
     }

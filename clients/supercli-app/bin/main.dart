@@ -24,6 +24,7 @@ import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/notifications.dart';
 import 'package:supercli_app/pane_layout.dart';
+import 'package:supercli_app/screens/terminalpaneview.dart';
 
 Future<void> main(List<String> args) async {
   final host = _parseArg(args, '--host=') ?? '127.0.0.1';
@@ -115,6 +116,13 @@ Future<void> main(List<String> args) async {
       );
       stderr.writeln('headless: bootstrap failed: $e');
     }
+    // Keep the terminal pane bound to the selected session's live Host
+    // stream (idempotent: no-op when the session hasn't changed). Only with
+    // a window: headless runs must not leave a poll loop keeping the
+    // isolate alive after main returns.
+    if (gpui != null) {
+      await _syncTerminalView(app, client);
+    }
     final host = gpui;
     if (host != null) {
       final dataset = app.sessionDataset;
@@ -192,8 +200,59 @@ Future<void> _handleAction(
 ) async {
   final action = event.data['name'] as String?;
   if (action != null) {
+    // Terminal key bindings (terminal.key.*): forward the mapped escape
+    // sequence to the pane's Host write route. The action context names
+    // the mounted terminal node ('terminal-pane-<paneId>').
+    if (action.startsWith('terminal.key.')) {
+      final context = event.action?.context ?? '';
+      const nodePrefix = 'terminal-pane-';
+      final paneId = context.startsWith(nodePrefix)
+          ? context.substring(nodePrefix.length)
+          : null;
+      final view = paneId != null ? app.paneViews[paneId] : null;
+      if (view != null) {
+        // GpuiEvent actions carry no modifier set; plain special keys
+        // (enter, backspace, arrows, …) map without modifiers. Ctrl+letter
+        // raw input needs the gpuidart raw key-event API (gap G-5).
+        if (view.pane.handleKeyAction(action, const {})) {
+          await refresh();
+        }
+      }
+      return;
+    }
     await _dispatchAction(action, app, client, refresh);
   }
+}
+
+/// Ensure the primary pane has a live terminal view streaming the selected
+/// session from the Host. Idempotent: returns immediately when the view is
+/// already bound to this session; otherwise stops the old stream and starts
+/// a new one.
+///
+/// NOTE (gap): only the initial pane ('pane-1') is wired. User-split panes
+/// get new ids and render the placeholder until per-pane session binding
+/// lands.
+Future<void> _syncTerminalView(SupercliApp app, HostClient client) async {
+  if (app.sessions.isEmpty) return;
+  final session =
+      app.sessions[app.selectedSession.clamp(0, app.sessions.length - 1)];
+  const paneId = 'pane-1';
+  final existing = app.paneViews[paneId];
+  if (existing != null && existing.sessionId == session.id) return;
+  existing?.stop();
+  final view = TerminalPaneView.hosted(
+    client: client,
+    sessionId: session.id,
+    paneId: paneId,
+    title: session.title,
+    onStreamError: (Object e) {
+      app.statusLine = 'Terminal stream error: $e';
+    },
+  );
+  app.paneViews[paneId] = view;
+  // Don't block the refresh on the first long-poll; the grid fills in as
+  // chunks arrive and the next publish picks them up.
+  unawaited(view.start());
 }
 
 /// Dispatch a named action. Palette command execution routes through here,

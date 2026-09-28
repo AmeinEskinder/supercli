@@ -43,6 +43,12 @@ final class SupercliApp {
   /// selected session; splits persist for the app lifetime.
   PaneLayout? paneLayout;
 
+  /// Live terminal views keyed by pane id. A view is created per pane when
+  /// a Host session is selected and streams that session's PTY output via
+  /// the authenticated Host API ([SessionOutputStream]); the terminal area
+  /// renders the registered view instead of the placeholder.
+  final Map<String, TerminalPaneView> paneViews = {};
+
   /// Command palette state. Non-null while the palette is open; built from
   /// the live action registry + live sessions via [paletteCommands].
   CommandPaletteState? paletteState;
@@ -305,7 +311,11 @@ final class SupercliApp {
       else
         UiColumn('sidebar-collapsed', [const UiButton('expand-sidebar', '+')]),
       UiColumn('content-area', [
-        TerminalArea(layout: layout, statusText: statusLine).build(),
+        TerminalArea(
+          layout: layout,
+          statusText: statusLine,
+          views: paneViews,
+        ).build(),
         if (approval != null)
           McpApprovalPanel(
             approval: approval,
@@ -347,6 +357,9 @@ final class SupercliApp {
       // Pane management (mounted PaneLayout).
       ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
           .actions(),
+      // Live terminal key bindings (terminal.key.* scoped to each mounted
+      // terminal node; dispatched to the Host write route).
+      for (final view in paneViews.values) ...view.actions(),
       // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
       // ctrl on Linux/Windows).
       UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
