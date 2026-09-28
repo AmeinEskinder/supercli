@@ -37,6 +37,8 @@ pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod mouse_mode;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
