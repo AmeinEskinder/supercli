@@ -25,7 +25,7 @@ Behaviour-level detail lives in the per-area sidecars under
 - Total Swift files: 273
 - Total Swift LOC: 145,637
 - Verified: 0.0% of LOC (0 / 145,637 lines)
-- Status breakdown: partial: 13 files (10,354 LOC) · ported: 22 files (14,718 LOC) · todo: 238 files (120,565 LOC)
+- Status breakdown: partial: 14 files (12,578 LOC) · ported: 22 files (14,718 LOC) · todo: 237 files (118,341 LOC)
 - Destination breakdown: Dart: appkit_widgets: 29 files (14,374 LOC) · Dart: clients/supercli-app: 96 files (44,723 LOC) · Rust: supercli-client/core: 18 files (7,633 LOC) · Rust: supercli-client/core (iOS non-UI): 24 files (8,807 LOC) · Rust: supercli-core/client: 44 files (42,105 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::hook_server::tests: 1 files (278 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::launchd::tests: 1 files (149 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::license::tests: 1 files (167 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::notifications::tests: 1 files (308 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_identity::tests: 1 files (182 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · Rust: supercli-native-bridge::macos::service_manager::tests: 1 files (33 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 25 files (4,534 LOC)
 - Unresolved (`tbd`) destinations: 25 files
 
@@ -214,7 +214,7 @@ Behaviour-level detail lives in the per-area sidecars under
 | native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceDots.swift | 2171 | Dart: clients/supercli-app | ported |  | 1 |
 | native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceSelector.swift | 548 | Dart: clients/supercli-app | ported |  | 1 |
 | native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift | 1461 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/Views/TerminalPaneView.swift | 2224 | Dart: clients/supercli-app | todo |  | 0 |
+| native/SupercliNative/Sources/SupercliNative/Views/TerminalPaneView.swift | 2224 | Dart: clients/supercli-app | partial | 184 | 49 |
 | native/SupercliNative/Sources/SupercliNative/Views/ToastCenter.swift | 122 | Dart: clients/supercli-app | ported |  | 3 |
 | native/SupercliNative/Sources/SupercliNative/Views/ViewerAvatarsView.swift | 113 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/WorkspaceOpenMenu.swift | 161 | Dart: clients/supercli-app | todo |  | 0 |
