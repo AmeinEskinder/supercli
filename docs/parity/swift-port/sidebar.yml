@@ -243,60 +243,67 @@ files:
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'Porter P: tests SupercliStore.reconcilingAutoDiscoveredWorktrees (3 tests). Needs SupercliStore worktree adoption logic port — not yet in Rust/Dart.'
   native/SupercliNative/Tests/SupercliNativeTests/HostedSessionManifestTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: todo
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'Porter P: tests SupercliStore.sessionLifecycleLockURL/acquireSessionLifecycleLease (5 tests). Needs Rust lifecycle-lock port — not yet in supercli-core.'
   native/SupercliNative/Tests/SupercliNativeTests/MobileSessionControlTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: todo
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'BLOCKED: source MobileSessionControl.swift depends on RemoteBrowserArtifact/MobilePairingStore/NativeControllerRouter not yet in Dart.'
   native/SupercliNative/Tests/SupercliNativeTests/ProjectWorkspaceMoveTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: todo
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'BLOCKED: source ProjectWorkspaceMove.swift depends on project models/SupercliStore not yet in Dart.'
   native/SupercliNative/Tests/SupercliNativeTests/SessionMoveRulesTests.swift:
     destination: 'Dart: clients/supercli-app'
-    status: todo
+    status: ported
     checklist: ''
-    behaviours: []
-    tests: []
-    notes: Heuristic said Rust supercli-core/client; worker D corrected to Dart app.
+    behaviours:
+      - 'Session move rules: home/worktree/root filing, drag accept, checkout crossing'
+    tests:
+      - 'test/session_move_rules_test.dart (6 tests, covers all 5 XCTest cases)'
+    notes: 'Porter P: verified existing Dart tests cover all 5 XCTest cases 1:1 (plus 1 extra). Heuristic said Rust supercli-core/client; worker D corrected to Dart app.'
   native/SupercliNative/Tests/SupercliNativeTests/SessionSelectionPerformanceTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: todo
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'Porter P: 5 tests for sidebar selection state publication (global/changed rows, stable identity, titlebar branch). UI state logic — needs Dart sidebar model port.'
   native/SupercliNative/Tests/SupercliNativeTests/SessionTitleDefaultsTests.swift:
     destination: 'Dart: clients/supercli-app'
-    status: todo
+    status: ported
     checklist: ''
-    behaviours: []
-    tests: []
-    notes: ''
+    behaviours:
+      - 'SessionTitleDefaults.abbreviatedPath: home prefix → ~, boundary-safe'
+      - 'SessionTitleDefaults.initialLabel: command wins, else folder, else Terminal'
+    tests:
+      - 'test/session_title_defaults_test.dart (4 tests)'
+    notes: 'Porter P: ported Models.swift SessionTitleDefaults enum to lib/session_title_defaults.dart. All 4 XCTest cases covered.'
   native/SupercliNative/Tests/SupercliNativeTests/UnpeelWorkspaceRegistryTests.swift:
     destination: 'Dart: clients/supercli-app'
-    status: todo
+    status: partial
     checklist: ''
-    behaviours: []
-    tests: []
-    notes: ''
+    behaviours:
+      - 'Workspace registry codec (profiles key, slugify, create/rename/remove)'
+    tests:
+      - 'test/workspace_registry_test.dart (10 tests, covers codec)'
+    notes: 'Porter P: codec behaviours covered by Porter K Dart tests. 3 UI/settings tests (deep link, worktrees tab, unified tabs) not portable — belong to settings UI.'
   native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: todo
     checklist: ''
     behaviours: []
     tests: []
-    notes: ''
+    notes: 'BLOCKED: source WorkspacePool.swift depends on NativeRemoteBackend/RemoteBootstrapSnapshot not yet in Dart.'
