@@ -306,3 +306,33 @@ files:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
         count: 4
     notes: "4 XCTest cases ported."
+  native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift:
+    destination: "Rust: supercli-core + supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "settings_resolve — auto_stop_archive_minutes normalization/resolution/labels (absent vs explicit vs junk)"
+        target: "crates/supercli-core/src/settings_resolve.rs::normalize_auto_stop_archive_minutes, resolve_auto_stop_archive_minutes"
+        test: "settings_resolve::tests (10 tests)"
+      - swift: "settings_resolve — sidebar_stopped_limit normalization/resolution/labels (absent vs explicit vs junk)"
+        target: "crates/supercli-core/src/settings_resolve.rs::normalize_sidebar_stopped_limit, resolve_sidebar_stopped_limit"
+        test: "settings_resolve::tests (10 tests)"
+      - swift: "approval_pairs — caller->targets approval map discipline (approve/revoke/prune/carry) for MCP write, MCP app-open, computer, browser approvals"
+        target: "crates/supercli-core/src/approval_pairs.rs::ApprovalPairs"
+        test: "approval_pairs::tests (8 tests)"
+      - swift: "preset_overlay — legacy preset overlay application (removed/edited/added)"
+        target: "crates/supercli-core/src/preset_overlay.rs"
+        test: "preset_overlay::tests (5 tests)"
+      - swift: "host_routing — Host-scope projection display and verb routing predicates"
+        target: "crates/supercli-client/src/host_routing.rs"
+        test: "host_routing::tests (5 tests)"
+    tests:
+      - file: crates/supercli-core/src/settings_resolve.rs
+        count: 10
+      - file: crates/supercli-core/src/approval_pairs.rs
+        count: 8
+      - file: crates/supercli-core/src/preset_overlay.rs
+        count: 5
+      - file: crates/supercli-client/src/host_routing.rs
+        count: 5
+    notes: "Partial port: 4 pure-logic sections (settings resolution, approval pairs, preset overlay, host routing) ported with 28 tests. The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
