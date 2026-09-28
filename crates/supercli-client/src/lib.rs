@@ -48,6 +48,8 @@ pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod remote_connection;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
@@ -87,6 +89,10 @@ pub use pairing::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use relay_conn::{
     DeliveryState, PerformParams, RelayConnection, RelayError, RelayTransportResponse,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_connection::{
+    ConnectOutcome, ReconnectPolicy, RemoteHostConnection, RemoteHostConnector,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use remote_runtime::{

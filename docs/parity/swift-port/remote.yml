@@ -78,7 +78,7 @@ files:
     notes: "App-side Link authority record, entitlement fetch, APNs push. Heavily AppKit/Keychain-dependent; portable core (authority record, entitlement cache) to be extracted to Rust."
   native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift:
     destination: "Rust: supercli-client"
-    status: partial
+    status: wired
     checklist: ""
     behaviours:
       - swift: "RemoteHostConnectionState enum (idle/connecting/connected/reconnecting/repairRequired/incompatible/failed)"
@@ -90,10 +90,23 @@ files:
       - swift: "PairedHostConnectionPlan Direct->Link fallback (link disabled => no relay; cert pin validation)"
         target: "crates/supercli-client/src/remote_runtime.rs::PairedHostConnectionPlan::build"
         test: "crates/supercli-client/src/remote_runtime.rs::tests::direct_first_then_link_fallback"
+      - swift: "connectPairedHost: Direct first, Link only on classified reachability failure, never on hard failures"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::connect"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
+      - swift: "reconnection keeps last valid state visible; backoff; 401 => repairRequired (re-pair, not retry)"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::reconnect"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_reconnect_after_host_death, live_wrong_token_requires_repair_not_retry"
+      - swift: "disconnect tears down to idle; health check re-runs bootstrap on the live client"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::disconnect, health_check"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
     tests:
       - file: crates/supercli-client/src/remote_runtime.rs
         count: 6
-    notes: "Porting connection-state enums and Direct->Link fallback plan. The @MainActor ObservableObject UI runtime (session verbs, pane state) stays Swift/Dart-side; verbs ride HostClient which is already Rust."
+      - file: crates/supercli-client/src/remote_connection.rs
+        count: 5
+      - file: crates/supercli-client/tests/remote_runtime_live.rs
+        count: 3
+    notes: "WIRED (feat/wire-remote-runtime): the connection lifecycle is mounted against a live Host via the authenticated API — connect/disconnect/reconnect/health_check integration-tested against a real `supercli serve` (pinned TLS + bearer). Direct->Link gating unit-tested; the Link leg itself needs the app's live relay connection (row 217). The @MainActor UI runtime's session verbs and pane state remain Swift/Dart-side; verbs ride HostClient which is already Rust."
   native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
     destination: "Rust: supercli-client"
     status: partial
@@ -114,6 +127,9 @@ files:
       - swift: "RemoteHostStore::adoptSSH (upsert by target)"
         target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::adopt_ssh"
         test: "crates/supercli-client/src/host_store.rs::tests::adopt_ssh_upserts_by_target"
+      - swift: "RemoteHostStore::adopt persists RemoteHostCredentials (authToken + relayCredentials), not the bare token"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::adopt, secrets_for"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::connected_store (bundle assertion)"
     tests:
       - file: crates/supercli-client/src/host_store.rs
         count: 9
