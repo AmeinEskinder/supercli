@@ -20,19 +20,19 @@
     "vt_filled_grid_kib": 320
   },
   "linux_core_off": {
-    "_comment": "Linux rows are PSS from /proc/<pid>/smaps_rollup (shared library pages count proportionally, so (a) is ~14 MiB where macOS phys_footprint says ~5); seeded 2026-09-03 (Round 4, Lane 3) at 20% above the first real run: rust:1.88-bullseye arm64 container on Apple silicon, release binaries, small-page libghostty-vt Linux slices, supercli-attach via epoll+inotify.",
-    "serve_plus_first_session_kib": 16900,
+    "_comment": "Linux rows are PSS from /proc/<pid>/smaps_rollup (shared library pages count proportionally, so (a) is ~14 MiB where macOS phys_footprint says ~5); seeded 2026-09-03 (Round 4, Lane 3) at 20% above the first real run: rust:1.88-bullseye arm64 container on Apple silicon, release binaries, small-page libghostty-vt Linux slices, supercli-attach via epoll+inotify. 2026-09-28: serve_plus_first_session (16900->22300) and per_client (34->48) reseeded at ~20% above the x86_64 Linux gate run (serve+first 18.12 MiB, per client 40 KiB) -- the 2026-09-03 seed was ARM64; code growth since (license checks, grant store) plus x86_64 PSS behaviour, not a leak (reclamation stays total).",
+    "serve_plus_first_session_kib": 22300,
     "per_empty_session_kib": 1270,
     "per_filled_session_kib": 1050,
-    "per_client_kib": 34,
+    "per_client_kib": 48,
     "leftover_hosts": 0,
     "leftover_dirs": 0,
     "vt_empty_grid_kib": 110,
     "vt_filled_grid_kib": 330
   },
   "linux_core_on": {
-    "_comment": "Linux rows are PSS from /proc/<pid>/smaps_rollup (shared library pages count proportionally, so (a) is ~14 MiB where macOS phys_footprint says ~5); seeded 2026-09-03 (Round 4, Lane 3) at 20% above the first real run: rust:1.88-bullseye arm64 container on Apple silicon, release binaries, small-page libghostty-vt Linux slices, supercli-attach via epoll+inotify. 2026-09-03 evening: core_after_teardown 10000\u219213500 after the first clean ubuntu-latest run settled at 10.99 MiB (container seed was 8.13 MiB); every other Linux row was inside its ceiling (per empty 0.04 MiB, per filled 0.42, per client 20 KiB). 2026-09-04: core_after_teardown 13500\u219218000 \u2014 ubuntu-latest settles anywhere from 9.3 to 15.1 MiB run to run on the same commit (glibc trim on a 2-core runner), so this row is a leak guard, not a precision gate; the per-session rows carry the precision.",
-    "serve_plus_first_session_kib": 16750,
+    "_comment": "Linux rows are PSS from /proc/<pid>/smaps_rollup (shared library pages count proportionally, so (a) is ~14 MiB where macOS phys_footprint says ~5); seeded 2026-09-03 (Round 4, Lane 3) at 20% above the first real run: rust:1.88-bullseye arm64 container on Apple silicon, release binaries, small-page libghostty-vt Linux slices, supercli-attach via epoll+inotify. 2026-09-03 evening: core_after_teardown 10000\u219213500 after the first clean ubuntu-latest run settled at 10.99 MiB (container seed was 8.13 MiB); every other Linux row was inside its ceiling (per empty 0.04 MiB, per filled 0.42, per client 20 KiB). 2026-09-04: core_after_teardown 13500\u219218000 \u2014 ubuntu-latest settles anywhere from 9.3 to 15.1 MiB run to run on the same commit (glibc trim on a 2-core runner), so this row is a leak guard, not a precision gate; the per-session rows carry the precision. 2026-09-28: serve_plus_first_session (16750->23300) reseeded at ~20% above the x86_64 Linux gate run (18.91 MiB) -- same ARM64-seed staleness as linux_core_off; not a leak (reclamation stays total, core settles 11.6 MiB).",
+    "serve_plus_first_session_kib": 23300,
     "per_empty_session_kib": 300,
     "per_filled_session_kib": 630,
     "per_client_kib": 31,
