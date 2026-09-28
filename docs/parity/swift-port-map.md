@@ -42,6 +42,9 @@ Behaviour-level detail lives in the per-area sidecars under
 | appkit | 29 | 14,374 |
 | ios | 45 | 26,905 |
 
+_Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, excluded from the table):_
+  - secure-credential-store (Rust, no Swift source — new security requirement)
+
 ## Files
 
 | Path | LOC | Destination | Status | Checklist rows | Tests ported |
