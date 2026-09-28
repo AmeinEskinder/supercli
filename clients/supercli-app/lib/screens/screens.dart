@@ -18,6 +18,7 @@ export 'recentactivityview.dart';
 export 'remotefolderpicker.dart';
 export 'remotehostworkspaceview.dart';
 export 'rootview.dart';
+export 'rootview_logic.dart';
 export 'sessiongallerymarkup.dart';
 export 'sessiongallerypanel.dart';
 export 'sessionlauncherview.dart';

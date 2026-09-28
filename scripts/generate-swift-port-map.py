@@ -63,6 +63,7 @@ WORKER_AREAS = (
     "remote",
     "appkit",
     "ios",
+    "rootview",
 )
 
 STATUSES = ("todo", "partial", "ported", "wired", "verified")
