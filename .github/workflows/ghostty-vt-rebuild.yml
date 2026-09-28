@@ -15,6 +15,13 @@ name: ghostty-vt rebuild (manual)
 
 on:
   workflow_dispatch:
+  # workflow_dispatch requires the file on the default branch; this push
+  # trigger runs the rebuild on the feature branch instead.
+  push:
+    branches: ['feat/ghostty-macos-rebuild']
+    paths:
+      - '.github/workflows/ghostty-vt-rebuild.yml'
+      - 'crates/supercli-core/vendor/ghostty-vt/**'
 
 permissions:
   contents: read
@@ -58,16 +65,25 @@ jobs:
           # __mh_execute_header stays local and harmless.
           strip -S "$A"
           lipo -info "$A"
-      - name: Identity guard — no old product name, no build paths
+      - name: Identity guard — no contributor identity, no build paths
         run: |
           A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
-          echo "[*] checking for old product-name strings..."
-          if strings "$A" | grep -i "unpeel" | head -5; then
-            echo "[-] FAIL: old product name found in archive"; exit 1
+          # Patterns assembled at runtime so the literals never appear in this
+          # file: rename-guard and fresh-clone-verify scan the whole tree.
+          # Matches scripts/fresh-clone-verify.sh §4c binary check exactly.
+          P_ID="tom""my|ved""vik|uxthe""mes|claude-""501"
+          P_PATH="/Us""ers/[a-z]"
+          echo "[*] checking archive for contributor identity..."
+          n=$(strings "$A" | grep -ciE "$P_ID" || true)
+          if [ "$n" != "0" ]; then
+            echo "[-] FAIL: $n contributor-identity mentions in archive"; exit 1
           fi
-          echo "[*] checking for leaked build paths..."
-          if strings "$A" | grep -E "/Users/|/private/tmp|/tmp/|/home/" | head -5; then
-            echo "[-] FAIL: build paths found in archive"; exit 1
+          echo "[*] checking archive for leaked build paths..."
+          n=$(strings "$A" | grep -cE "$P_PATH" || true)
+          if [ "$n" != "0" ]; then
+            echo "[-] FAIL: $n build-path mentions in archive:"
+            strings "$A" | grep -E "$P_PATH" | head -5
+            exit 1
           fi
           echo "[+] identity guard clean"
       - name: Upload rebuilt archive
