@@ -884,6 +884,41 @@ mod tests {
         assert!(records.iter().all(|r| r.host_id != "a"));
     }
 
+    #[test]
+    fn paired_host_link_enabled_narrows_only() {
+        // Mirrors PairedHostRecordTests.testStoredRecordWithoutLinkEnabledDecodesAsAllowed:
+        // nil means allowed; only `false` narrows.
+        let mut record = PairedHostRecord {
+            host_id: "h".to_string(),
+            name: "Host".to_string(),
+            endpoint: "http://h:1/mobile".to_string(),
+            controller_device_id: "d".to_string(),
+            paired_at_unix_ms: 1,
+            certificate_fingerprint: None,
+            remote_server_port: None,
+            remote_server_certificate_fingerprint: None,
+            link_enabled: None,
+        };
+        assert!(record.is_link_enabled());
+
+        // A stored record that predates the flag (missing key) decodes as allowed.
+        let legacy_json = br#"{"host_id":"h","name":"Host","endpoint":"http://h:1/mobile","controller_device_id":"d","paired_at_unix_ms":1}"#;
+        let decoded: PairedHostRecord = serde_json::from_slice(legacy_json).unwrap();
+        assert_eq!(decoded.link_enabled, None);
+        assert!(decoded.is_link_enabled());
+
+        record.link_enabled = Some(false);
+        assert!(!record.is_link_enabled());
+        // The narrowed value survives a round-trip.
+        let reloaded: PairedHostRecord =
+            serde_json::from_slice(&serde_json::to_vec(&record).unwrap()).unwrap();
+        assert_eq!(reloaded.link_enabled, Some(false));
+        assert!(!reloaded.is_link_enabled());
+
+        record.link_enabled = Some(true);
+        assert!(record.is_link_enabled());
+    }
+
     // ------------------------------------------------------------------
     // Controller state: records persistence + device identity
     // ------------------------------------------------------------------
