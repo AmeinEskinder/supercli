@@ -57,6 +57,8 @@ supercli — run and steer CLI agent sessions
   supercli transcript <id> [--entries N] [--markdown]
   supercli open <path|resource> [--with APP] [--kind KIND] [--json]
   supercli settings list|get <key>|set <key> <value> [--json]
+  supercli grants list|revoke --caller <id> [--target <id>] [--json]
+                                  inspect and revoke remembered grants
   supercli apps list|install <app-id> [--check] [--json]
                                   MCP gates apply to Sessions launched afterward
   supercli connector discover|install|connect|disconnect|doctor|run [--json]
@@ -1127,6 +1129,13 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
         "doctor" => Ok(crate::doctor_cli::run(&args[1..])),
+        "grants" => match args.get(1).map(String::as_str) {
+            Some("--help" | "-h" | "help") if args.len() == 2 => {
+                println!("{}", crate::grants_cli::HELP);
+                Ok(0)
+            }
+            _ => crate::grants_cli::run(&args[1..], parsed.has("json")).map(|_| 0),
+        },
         "self-update" => Ok(crate::self_update_cli::run(&args[1..])),
         "init" => Ok(crate::init_cli::run(
             &parsed.positional[1..],
