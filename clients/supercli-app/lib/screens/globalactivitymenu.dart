@@ -31,7 +31,7 @@ final class GlobalActivityMenu {
             UiText('gact-glyph-${s.id}',
                 s.attention ? '●' : (s.busy ? '◌' : '·'),
                 style: const UiStyle(fontSize: 11)),
-            UiButton('activity-${s.id}', s.title),
+            UiButton('activity-${s.id}', s.displayTitle),
           ], style: const UiStyle(gap: 6)),
     ]);
   }

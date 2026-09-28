@@ -11,6 +11,10 @@ final class SessionSummary {
     required this.title,
     required this.updatedAt,
     this.unreadCount = 0,
+    this.command = '',
+    this.cwd = '',
+    this.agentId = '',
+    this.appName = '',
   });
 
   final String id;
@@ -18,21 +22,121 @@ final class SessionSummary {
   final DateTime updatedAt;
   final int unreadCount;
 
+  /// Raw launch command (wire `command`). Shown as secondary text, never
+  /// as the primary label — see [displayTitle].
+  final String command;
+
+  /// Launch working directory (wire `cwd`).
+  final String cwd;
+
+  /// Host-observed foreground runtime id (wire `activeRuntimeID`),
+  /// e.g. "claude". Empty when the session is a plain terminal.
+  final String agentId;
+
+  /// Host-resolved installed App name (wire `activeAppName`).
+  final String appName;
+
+  /// Human-friendly primary label for the sidebar row.
+  ///
+  /// Prefers the Host label when it carries meaning beyond the raw
+  /// command (custom title, agent terminal title, app title marker).
+  /// Otherwise derives an "agent · folder" style label like the native
+  /// client, so rows never show a raw command line as their title.
+  String get displayTitle {
+    final t = title.trim();
+    final c = command.trim();
+    if (t.isNotEmpty && t != 'Untitled' && t != c) return t;
+    final agent = agentLabel;
+    final folder = shortCwd;
+    if (agent.isNotEmpty && folder.isNotEmpty) return '$agent · $folder';
+    if (agent.isNotEmpty) return agent;
+    if (folder.isNotEmpty) return folder;
+    if (c.isNotEmpty) return c;
+    return 'Terminal';
+  }
+
+  /// Secondary line for the sidebar row: agent and working directory,
+  /// with the raw command appended when it differs from [displayTitle].
+  /// This is the secondary-text carrier for the command (gpuidart has
+  /// no tooltip primitive).
+  String get subtitle {
+    final parts = <String>[];
+    if (agentLabel.isNotEmpty) parts.add(agentLabel);
+    if (shortCwd.isNotEmpty) parts.add(shortCwd);
+    var sub = parts.join(' · ');
+    final c = command.trim();
+    if (c.isNotEmpty && c != displayTitle) {
+      sub = sub.isEmpty ? c : '$sub — $c';
+    }
+    return sub;
+  }
+
+  /// Display name for the agent: the App name when an installed App owns
+  /// the session, else the runtime id capitalized ("claude" → "Claude").
+  String get agentLabel {
+    if (appName.trim().isNotEmpty) return appName.trim();
+    final id = agentId.trim();
+    if (id.isEmpty) return '';
+    return id[0].toUpperCase() + id.substring(1);
+  }
+
+  /// Cwd abbreviated for display: the home dir becomes "~/…", otherwise
+  /// the last two path segments.
+  String get shortCwd {
+    final raw = cwd.trim();
+    if (raw.isEmpty) return '';
+    var prefix = '';
+    var path = raw;
+    const homePrefix = '/home/';
+    if (path.startsWith(homePrefix)) {
+      final rest = path.substring(homePrefix.length);
+      final slash = rest.indexOf('/');
+      if (slash < 0) return '~'; // exactly /home/<user>
+      prefix = '~/';
+      path = rest.substring(slash + 1);
+    }
+    final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.length <= 2) {
+      // Short non-home paths keep their original form (leading slash).
+      return prefix.isEmpty ? raw : '$prefix${segments.join('/')}';
+    }
+    return '$prefix…/${segments.sublist(segments.length - 2).join('/')}';
+  }
+
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
     return SessionSummary(
       id: json['id'] as String,
       title: (json['title'] as String?) ?? 'Untitled',
-      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: _parseUpdatedAt(json),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
+      command: (json['command'] as String?) ?? '',
+      cwd: (json['cwd'] as String?) ?? '',
+      agentId: (json['activeRuntimeID'] as String?) ?? '',
+      appName: (json['activeAppName'] as String?) ?? '',
     );
+  }
+
+  /// The Host wire format carries `updatedAtUnixMs` (int ms). Tolerate the
+  /// legacy `updated_at` ISO string too.
+  static DateTime _parseUpdatedAt(Map<String, dynamic> json) {
+    final ms = json['updatedAtUnixMs'];
+    if (ms is num) {
+      return DateTime.fromMillisecondsSinceEpoch(ms.toInt());
+    }
+    return DateTime.tryParse(json['updated_at'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   Map<String, Object> toJson() => {
         'id': id,
         'title': title,
         'updated_at': updatedAt.toIso8601String(),
+        'updatedAtUnixMs': updatedAt.millisecondsSinceEpoch,
         'unread_count': unreadCount,
+        'command': command,
+        'cwd': cwd,
+        'activeRuntimeID': agentId,
+        'activeAppName': appName,
       };
 }
 
