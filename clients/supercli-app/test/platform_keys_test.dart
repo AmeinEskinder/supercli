@@ -52,4 +52,14 @@ void main() {
       }
     });
   });
+
+  group('settings shortcut chord', () {
+    test('resolves to meta+, on macOS (Cmd+,)', () {
+      expect('${primaryModifier(isMacOS: true)},', 'meta+,');
+    });
+
+    test('resolves to ctrl+, on Linux/Windows', () {
+      expect('${primaryModifier(isMacOS: false)},', 'ctrl+,');
+    });
+  });
 }

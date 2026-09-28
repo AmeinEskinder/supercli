@@ -17,6 +17,8 @@ import 'models.dart';
 import 'screens/commandpaletteview.dart';
 import 'screens/mcpapprovalpanel.dart';
 import 'screens/projectsidebarview.dart';
+import 'screens/settings_controller.dart';
+import 'screens/settingsview.dart';
 import 'screens/sidebarview.dart';
 import 'screens/terminalarea.dart';
 import 'screens/toastcenter.dart';
@@ -116,6 +118,126 @@ final class SupercliApp {
     sessionDrag = null;
     dragProjectId = null;
     dragCurrentOrder = const [];
+  }
+
+  /// Settings persistence controller. Set by the app entry point on startup
+  /// (after the Host handshake); null until then. Owns the [AppSettings]
+  /// model and syncs it with the Host via GET/POST /mobile/workspace-settings.
+  SettingsController? settingsController;
+
+  /// True while the settings overlay is visible.
+  bool settingsOpen = false;
+
+  /// The currently selected settings tab.
+  SettingsTab activeSettingsTab = SettingsTab.general;
+
+  /// Open the settings overlay. No-op until [settingsController] is set.
+  void openSettings() {
+    if (settingsController != null) {
+      settingsOpen = true;
+    }
+  }
+
+  /// Close the settings overlay.
+  void closeSettings() {
+    settingsOpen = false;
+  }
+
+  /// Handle a UI action by name. Returns true if the action was consumed.
+  ///
+  /// The app entry point routes `host.events` action events here (the same
+  /// pattern as [McpApprovalPanel.handleAction]).
+  bool handleAction(String actionName) {
+    switch (actionName) {
+      case 'settings.open':
+        openSettings();
+        return true;
+      case 'settings.close':
+        closeSettings();
+        return true;
+    }
+    if (actionName.startsWith('settings.tab.')) {
+      final tabName = actionName.substring('settings.tab.'.length);
+      for (final tab in SettingsTab.values) {
+        if (tab.name == tabName) {
+          activeSettingsTab = tab;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Handle a click on a node by id. Returns true if consumed.
+  ///
+  /// Tab buttons are rendered with ids `settings-tab-<name>` (see
+  /// [SettingsView.build]); clicking one switches the active tab.
+  /// Toggle buttons render as `<toggle-id>-toggle` (see [SettingsToggle]);
+  /// clicking one flips the setting and persists via the controller.
+  bool handleClick(String nodeId) {
+    const tabPrefix = 'settings-tab-';
+    if (nodeId.startsWith(tabPrefix)) {
+      final tabName = nodeId.substring(tabPrefix.length);
+      for (final tab in SettingsTab.values) {
+        if (tab.name == tabName) {
+          activeSettingsTab = tab;
+          return true;
+        }
+      }
+    }
+    const toggleSuffix = '-toggle';
+    if (nodeId.endsWith(toggleSuffix)) {
+      return toggleSetting(
+        nodeId.substring(0, nodeId.length - toggleSuffix.length),
+      );
+    }
+    return false;
+  }
+
+  /// Flip the [AppSettings] field bound to [toggleId] and schedule a
+  /// debounced Host save via the settings controller. Returns true if the
+  /// toggle id is known. Toggle ids are defined by [SettingsToggle] usages
+  /// in settingspanels.dart / sessionsaccesssections.dart /
+  /// worktreessettingspanel.dart.
+  bool toggleSetting(String toggleId) {
+    final settings = settingsController?.settings;
+    if (settings == null) return false;
+    switch (toggleId) {
+      case 'worktree-access':
+      case 'agent-worktree-permission':
+        settings.worktreeAccess = !settings.worktreeAccess;
+      case 'auto-gallery':
+      case 'agent-auto-gallery':
+        settings.autoGallery = !settings.autoGallery;
+      case 'sessions-mcp':
+        settings.sessionsMcp = !settings.sessionsMcp;
+      case 'feat-remote-ws':
+        settings.remoteWorkspaces = !settings.remoteWorkspaces;
+      case 'feat-git-worktrees':
+        settings.gitWorktrees = !settings.gitWorktrees;
+      case 'feat-browser-mcp':
+      case 'browser-mcp':
+        settings.browserMcp = !settings.browserMcp;
+      case 'feat-auto-screenshots':
+      case 'browser-auto-screenshots':
+        settings.autoAddBrowserScreenshots =
+            !settings.autoAddBrowserScreenshots;
+      case 'transcript-content':
+        settings.transcriptContentEnabled = !settings.transcriptContentEnabled;
+      case 'notify-completion':
+        settings.notifyOnCompletion = !settings.notifyOnCompletion;
+      case 'notify-flags':
+        settings.notifyFlags = !settings.notifyFlags;
+      case 'adv-show-worktrees':
+      case 'show-agent-worktrees':
+        settings.showAgentWorktrees = !settings.showAgentWorktrees;
+      case 'adv-trace-log':
+        settings.traceLog = !settings.traceLog;
+      default:
+        return false;
+    }
+    settingsController?.edited();
+    return true;
   }
 
   /// Open the palette, building its command list from the real app state:
@@ -243,10 +365,8 @@ final class SupercliApp {
     if (cached != null) return cached;
     final created = TableDataset(
       'sessions',
-      columns: const ['Session', 'Details', 'Updated'],
-      rows: sessions
-          .map((s) => [s.displayTitle, s.subtitle, formatTime(s.updatedAt)])
-          .toList(),
+      columns: const ['Title', 'Updated'],
+      rows: sessions.map((s) => [s.title, formatTime(s.updatedAt)]).toList(),
     );
     _sessionDataset = created;
     return created;
@@ -344,6 +464,14 @@ final class SupercliApp {
       // SidebarSessionDrag.commitDrop); initiation awaits gpuidart DnD
       // events (docs/gpuidart-gaps-sidebar.md G-1).
       if (dragActive) sessionDrag!.build(),
+      // Settings overlay (Cmd-,): mounted when open, fed by the live
+      // SettingsController (Host-backed settings via GET/POST
+      // /mobile/workspace-settings; desktop-only fields persist locally).
+      if (settingsOpen && settingsController != null)
+        SettingsView(
+          settings: settingsController!.settings,
+          activeTab: activeSettingsTab,
+        ).build(),
     ]);
   }
 
@@ -389,6 +517,19 @@ final class SupercliApp {
       // Session-drag overlay actions — only while a drag is mounted
       // (gpuidart rejects action contexts that aren't nodes in the tree).
       if (dragActive) ...sessionDrag!.actions(),
+      // Settings overlay: the canonical chord is Cmd-,/Ctrl-, per
+      // Keymap.settings, but gpuidart's native parser rejects punctuation
+      // keys, so the UiAction uses the native-safe Keymap.settingsNative.
+      UiAction(name: 'settings.open', keys: Keymap.settingsNative()),
+      // Escape closes the settings overlay — scoped to the 'settings'
+      // node so it is only active while the overlay is actually mounted
+      // (gpuidart rejects action contexts that aren't nodes in the tree).
+      if (settingsOpen)
+        const UiAction(
+          name: 'settings.close',
+          keys: 'escape',
+          context: UiActionContext.node('settings'),
+        ),
     ];
   }
 

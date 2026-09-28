@@ -33,6 +33,7 @@ enum SettingsTab {
   browser,
   workspaces,
   worktrees,
+  agents,
   plugins,
   presets,
   notifications,
@@ -99,6 +100,7 @@ final class SettingsView {
     SettingsTab.browser: 'Browser',
     SettingsTab.workspaces: 'Workspaces',
     SettingsTab.worktrees: 'Worktrees',
+    SettingsTab.agents: 'Agents',
     SettingsTab.plugins: 'Plugins',
     SettingsTab.presets: 'Presets',
     SettingsTab.notifications: 'Notifications',
@@ -146,6 +148,12 @@ final class SettingsView {
           showAgentWorktrees: showAgentWorktrees,
         ).build();
       case SettingsTab.plugins:
+        return PluginSettingsPanel(plugins: plugins).build();
+      case SettingsTab.agents:
+        // Swift: Agents tab shows PluginSettingsPanel with scope .agents
+        // (the agent CLIs: install, connect, launch). For now, reuse the
+        // plugins panel; agent-specific filtering comes with the Host
+        // runtime catalog integration.
         return PluginSettingsPanel(plugins: plugins).build();
       case SettingsTab.presets:
         return PresetsSettingsPanel(presets: presets).build();
