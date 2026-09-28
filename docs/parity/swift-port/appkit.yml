@@ -214,15 +214,18 @@ files:
 
   app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift:
     destination: "Dart: appkit_widgets"
-    status: partial
+    status: ported
     behaviours:
       - swift: "Keyboard list navigation (wrap/clamp)"
         target: "lib/widgets/list_navigation.dart::KeyboardListNavigator"
-        test: null
-      - swift: "Role-aware navigation decision table"
-        target: null
-        test: null
-    notes: "KeyboardListNavigator exists (47 Swift LOC -> 51 Dart LOC). Decision table not ported; no tests."
+        test: "test/list_navigation_test.dart::wrap/clamp/empty/setLength (4 tests)"
+      - swift: "Role-aware navigation decision table uiListNavigationDecision(key:primaryRole:)"
+        target: "lib/widgets/list_navigation.dart::uiListNavigationDecision"
+        test: "test/list_navigation_test.dart::uiListNavigationDecision group (5 tests)"
+    tests:
+      - file: clients/supercli-app/test/list_navigation_test.dart
+        count: 9
+    notes: "KeyboardListNavigator + UIListNavigationKey/UIListItemPrimaryRole/UIListNavigationDecision decision table ported 1:1; every (key, role) combination pinned by tests."
 
   app-kit/swift/Tests/SupercliAppKitUITests/ProtocolTests.swift:
     destination: "Dart: appkit_widgets"

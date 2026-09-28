@@ -49,3 +49,77 @@ final class KeyboardListNavigator {
     }
   }
 }
+
+/// Platform-neutral keys understood by the shared focused-row decision table.
+/// Port of `UIListNavigationKey` (ListNavigation.swift).
+enum UIListNavigationKey {
+  down,
+  up,
+  first,
+  last,
+  pageDown,
+  pageUp,
+  enter,
+  space,
+  back,
+}
+
+/// Primary role of a list item, driving role-aware navigation decisions.
+/// Port of `UIListItemPrimaryRole` (UIProtocol.swift).
+enum UIListItemPrimaryRole {
+  /// `static` is a reserved word in Dart.
+  static_,
+  toggle,
+  checkmark,
+  disclosure,
+  command,
+  destructive,
+}
+
+/// Navigation decisions produced by [uiListNavigationDecision].
+/// Port of `UIListNavigationDecision` (ListNavigation.swift).
+enum UIListNavigationDecision {
+  down,
+  up,
+  first,
+  last,
+  pageDown,
+  pageUp,
+  invokePrimary,
+  back,
+}
+
+/// One keyboard decision table shared by every native Page/List renderer.
+/// Routing remains server-driven; `invokePrimary` only asks the caller to emit
+/// the action declared by the current authoritative row.
+///
+/// Port of `uiListNavigationDecision(key:primaryRole:)` (ListNavigation.swift).
+UIListNavigationDecision? uiListNavigationDecision({
+  required UIListNavigationKey key,
+  required UIListItemPrimaryRole primaryRole,
+}) {
+  switch (key) {
+    case UIListNavigationKey.enter:
+      return primaryRole == UIListItemPrimaryRole.static_
+          ? null
+          : UIListNavigationDecision.invokePrimary;
+    case UIListNavigationKey.space:
+      return primaryRole == UIListItemPrimaryRole.toggle
+          ? UIListNavigationDecision.invokePrimary
+          : UIListNavigationDecision.pageDown;
+    case UIListNavigationKey.down:
+      return UIListNavigationDecision.down;
+    case UIListNavigationKey.up:
+      return UIListNavigationDecision.up;
+    case UIListNavigationKey.first:
+      return UIListNavigationDecision.first;
+    case UIListNavigationKey.last:
+      return UIListNavigationDecision.last;
+    case UIListNavigationKey.pageDown:
+      return UIListNavigationDecision.pageDown;
+    case UIListNavigationKey.pageUp:
+      return UIListNavigationDecision.pageUp;
+    case UIListNavigationKey.back:
+      return UIListNavigationDecision.back;
+  }
+}
