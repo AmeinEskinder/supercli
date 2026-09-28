@@ -78,7 +78,7 @@ files:
     notes: "App-side Link authority record, entitlement fetch, APNs push. Heavily AppKit/Keychain-dependent; portable core (authority record, entitlement cache) to be extracted to Rust."
   native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift:
     destination: "Rust: supercli-client"
-    status: partial
+    status: ported
     checklist: ""
     behaviours:
       - swift: "RemoteHostConnectionState enum (idle/connecting/connected/reconnecting/repairRequired/incompatible/failed)"
@@ -90,10 +90,21 @@ files:
       - swift: "PairedHostConnectionPlan Direct->Link fallback (link disabled => no relay; cert pin validation)"
         target: "crates/supercli-client/src/remote_runtime.rs::PairedHostConnectionPlan::build"
         test: "crates/supercli-client/src/remote_runtime.rs::tests::direct_first_then_link_fallback"
+      - swift: "Capability-gated session verbs (title/pin/notify/project/archive/stop/remove/restart/reload)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::set_session_title"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::organization_verbs_record_backend_calls"
+      - swift: "Generation-based stale-result rejection after disconnect/reconnect"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::complete_verb"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::stale_verb_after_disconnect_is_rejected"
+      - swift: "EffectQueue: UTF-8 stitching, 64KiB chunking, 4MiB backpressure bound"
+        target: "crates/supercli-client/src/remote_runtime.rs::EffectQueue"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::write_batches_split_at_64kib_on_utf8_boundaries"
     tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/RemoteHostRuntimeTests.swift
+        count: 81
       - file: crates/supercli-client/src/remote_runtime.rs
-        count: 6
-    notes: "Porting connection-state enums and Direct->Link fallback plan. The @MainActor ObservableObject UI runtime (session verbs, pane state) stays Swift/Dart-side; verbs ride HostClient which is already Rust."
+        count: 87
+    notes: "Ported all 81 XCTest cases to Rust (87 tests total including 6 pre-existing). Covers: capability-gated verbs, stale-result rejection, session selection, replacement correlation, transport identity, retirement barriers, output pages, pane pumps, terminal effects, outcome-unknown semantics, UTF-8 batching. Verified: cargo fmt --check, clippy -D warnings, cargo test."
   native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
     destination: "Rust: supercli-client"
     status: partial
