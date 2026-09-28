@@ -1,0 +1,78 @@
+# Manual rebuild of the vendored macOS universal libghostty-vt.a.
+#
+# Run via: gh workflow run ghostty-vt-rebuild.yml --ref feat/ghostty-macos-rebuild
+#
+# Rebuilds crates/supercli-core/vendor/ghostty-vt/macos-universal/libghostty-vt.a
+# from the pinned ghostty source (see vendor/ghostty-vt/README.md) on a real
+# macOS runner with zig 0.15.2. Debug info is stripped with `strip -S`
+# (instead of section-zeroing) so no build paths leak; the result is uploaded
+# as an artifact for a human to verify and commit.
+#
+# This is intentionally NOT automatic: the archive is a vendored binary and
+# every rebuild must be reviewed before commit. The
+# .github/workflows/ghostty-vt.yml link-test guards the committed archive.
+name: ghostty-vt rebuild (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-macos-universal:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: supercli
+      - name: Install zig 0.15.2
+        run: |
+          brew install zig@0.15
+          /opt/homebrew/opt/zig@0.15/bin/zig version
+      - name: Clone ghostty at pinned commit
+        run: |
+          git clone https://github.com/ghostty-org/ghostty /tmp/ghostty
+          git -C /tmp/ghostty checkout 2da015cd6ac06cedc89e09756e895d2c1715205d
+          git -C /tmp/ghostty rev-parse HEAD
+      - name: Apply supercli source patches
+        run: |
+          cd /tmp/ghostty
+          for p in "$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/patches/"*.patch; do
+            [ -f "$p" ] || continue
+            git apply --check "$p"
+            git apply "$p"
+            echo "[+] applied $(basename "$p")"
+          done
+      - name: Build lib-vt (macOS universal xcframework slice)
+        run: |
+          cd /tmp/ghostty
+          PATH="/opt/homebrew/opt/zig@0.15/bin:$PATH" zig build -Demit-lib-vt -Doptimize=ReleaseFast
+          ls -la zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+      - name: Neutralize spurious __mh_execute_header and strip debug info
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          python3 "$GITHUB_WORKSPACE/supercli/crates/supercli-core/vendor/ghostty-vt/fix-mh-execute-header.py" "$A"
+          # Strip debug info (replaces section-zeroing): no build paths leak,
+          # no sections destroyed. Keep local symbols (no -x): the demoted
+          # __mh_execute_header stays local and harmless.
+          strip -S "$A"
+          lipo -info "$A"
+      - name: Identity guard — no old product name, no build paths
+        run: |
+          A=/tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          echo "[*] checking for old product-name strings..."
+          if strings "$A" | grep -i "unpeel" | head -5; then
+            echo "[-] FAIL: old product name found in archive"; exit 1
+          fi
+          echo "[*] checking for leaked build paths..."
+          if strings "$A" | grep -E "/Users/|/private/tmp|/tmp/|/home/" | head -5; then
+            echo "[-] FAIL: build paths found in archive"; exit 1
+          fi
+          echo "[+] identity guard clean"
+      - name: Upload rebuilt archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: libghostty-vt-macos-universal
+          path: /tmp/ghostty/zig-out/lib/ghostty-vt.xcframework/macos-arm64_x86_64/libghostty-vt.a
+          if-no-files-found: error

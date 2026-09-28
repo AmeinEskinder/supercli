@@ -1,0 +1,46 @@
+# macOS ghostty-vt archive link guard.
+#
+# The vendored macos-universal libghostty-vt.a must link against the real
+# macOS linker and its ghostty_vt tests must pass. This is a REQUIRED check:
+# the archive was once rebuilt with section-zeroing that was never validated
+# with a macOS linker, and the relay KAT had to sidestep the broken link.
+# If this job fails, the vendored archive is corrupt — rebuild it from the
+# pinned ghostty source (see crates/supercli-core/vendor/ghostty-vt/README.md
+# and the manual .github/workflows/ghostty-vt-rebuild.yml).
+name: ghostty-vt macOS link
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main', 'next', 'feat/**']
+    paths:
+      - 'crates/supercli-core/vendor/ghostty-vt/**'
+      - 'crates/supercli-core/src/ghostty_vt.rs'
+      - 'crates/supercli-core/src/terminal_viewport.rs'
+      - 'crates/supercli-core/build.rs'
+      - '.github/workflows/ghostty-vt.yml'
+  pull_request:
+    paths:
+      - 'crates/supercli-core/vendor/ghostty-vt/**'
+      - 'crates/supercli-core/src/ghostty_vt.rs'
+      - 'crates/supercli-core/src/terminal_viewport.rs'
+      - 'crates/supercli-core/build.rs'
+      - '.github/workflows/ghostty-vt.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  macos-link-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install declared Rust MSRV
+        uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+      - name: Link vendored libghostty-vt and run ghostty_vt tests
+        run: cargo test --locked --manifest-path crates/Cargo.toml -p supercli-core --lib ghostty_vt
+        env:
+          CARGO_BUILD_JOBS: 2
