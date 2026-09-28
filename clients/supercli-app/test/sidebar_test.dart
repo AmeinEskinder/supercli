@@ -464,7 +464,7 @@ void main() {
       'id': id,
       'projectID': projectID,
       'title': 'Fix bug',
-      'command': 'unpeel',
+      'command': 'supercli',
       'createdAtUnixMs': 1758931200000,
       'updatedAtUnixMs': 1758934800000,
       'status': 'running',
