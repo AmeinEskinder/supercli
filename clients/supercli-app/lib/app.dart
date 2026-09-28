@@ -25,6 +25,10 @@ final class SupercliApp {
   SupercliApp();
 
   List<SessionSummary> sessions = const [];
+
+  /// Projects from the Host bootstrap (`projects` array). Used for the
+  /// sidebar's project tree headers (real names, not IDs).
+  List<HostProject> projects = const [];
   List<PendingApproval> pendingApprovals = const [];
   String composerText = '';
   int selectedSession = 0;
@@ -78,8 +82,11 @@ final class SupercliApp {
       ('approval.deny', 'Deny pending request', Keymap.approvalDeny),
       ('mcp.approve', 'Approve pending MCP request', Keymap.approvalAllow),
       ('mcp.deny', 'Deny pending MCP request', Keymap.approvalDeny),
-      ('mcp.edit', 'Edit pending MCP request before answering',
-          Keymap.editDetail()),
+      (
+        'mcp.edit',
+        'Edit pending MCP request before answering',
+        Keymap.editDetail(),
+      ),
       ('sidebar.toggle', 'Toggle sidebar', Keymap.sidebarToggle()),
       ('sessions.up', 'Select previous session', 'up'),
       ('sessions.down', 'Select next session', 'down'),
@@ -97,8 +104,11 @@ final class SupercliApp {
       ('pane.focusPrev', 'Focus previous pane', ''),
       ('find.show', 'Find in terminal', Keymap.find()),
       ('switcher.next', 'Switch to next recent session', Keymap.switcherNext),
-      ('switcher.previous', 'Switch to previous recent session',
-          Keymap.switcherPrevious),
+      (
+        'switcher.previous',
+        'Switch to previous recent session',
+        Keymap.switcherPrevious,
+      ),
     ];
     final commands = <PaletteCommand>[
       for (final (name, title, shortcut) in actionDefs)
@@ -181,35 +191,32 @@ final class SupercliApp {
   }
 
   /// Sidebar sessions derived from the Host bootstrap.
+  ///
+  /// Status signals (attention dot, busy spinner, pin) come from the
+  /// Host's `activity`/`pinned` fields via [SidebarSession.fromHostSummary];
+  /// no client-side guessing.
   List<SidebarSession> get _sidebarSessions => [
-        for (final s in sessions)
-          SidebarSession(
-            summary: s,
-            projectId: _projectIdFor(s),
-          ),
-      ];
+    for (final s in sessions) SidebarSession.fromHostSummary(s),
+  ];
 
-  /// Group sessions by project for the sidebar tree. Sessions without an
-  /// explicit project land in a single "Sessions" project.
+  /// Group sessions by project for the sidebar tree. Project headers use
+  /// the real names from the Host bootstrap `projects` array; sessions
+  /// whose project is unknown land in a single "Sessions" project
+  /// (see [SidebarSession.fromHostSummary]).
   List<SidebarProject> get _sidebarProjects {
     final byProject = <String, List<SidebarSession>>{};
     for (final s in _sidebarSessions) {
       byProject.putIfAbsent(s.projectId, () => []).add(s);
     }
+    final names = {for (final p in projects) p.id: p.name};
     return [
       for (final entry in byProject.entries)
         SidebarProject(
           id: entry.key,
-          name: entry.key,
+          name: names[entry.key] ?? entry.key,
           sessions: entry.value,
         ),
     ];
-  }
-
-  String _projectIdFor(SessionSummary s) {
-    // The Host bootstrap carries an optional `project` field; fall back to
-    // a single default project so the tree always renders.
-    return 'Sessions';
   }
 
   PendingApproval? get pendingApproval =>
@@ -221,7 +228,8 @@ final class SupercliApp {
   /// toasts). This is the mounted DESKTOP shell — not a scaffold.
   UiNode build() {
     final approval = pendingApproval;
-    final layout = paneLayout ??
+    final layout =
+        paneLayout ??
         PaneLayout.single(
           paneId: 'pane-1',
           title: sessions.isEmpty
@@ -239,9 +247,7 @@ final class SupercliApp {
               : sessions[selectedSession.clamp(0, sessions.length - 1)].id,
         ).build()
       else
-        UiColumn('sidebar-collapsed', [
-          const UiButton('expand-sidebar', '+'),
-        ]),
+        UiColumn('sidebar-collapsed', [const UiButton('expand-sidebar', '+')]),
       UiColumn('content-area', [
         TerminalArea(layout: layout, statusText: statusLine).build(),
         if (approval != null)
@@ -252,7 +258,10 @@ final class SupercliApp {
         else
           const UiText('no-approval', 'No pending approvals.'),
         ToastCenter(queue: notifications).build(),
-        const UiInput('composer', placeholder: 'Type a message… (Enter to send)'),
+        const UiInput(
+          'composer',
+          placeholder: 'Type a message… (Enter to send)',
+        ),
       ]),
       // Command palette overlay (Cmd-K): mounted when open, fed by the
       // live action registry + live sessions.
@@ -271,42 +280,39 @@ final class SupercliApp {
   List<UiAction> actions() {
     final approval = pendingApproval;
     return [
-        // Approval overlay actions — only when the panel is actually mounted
-        // (gpuidart rejects action contexts that aren't nodes in the tree).
-        if (approval != null)
-          ...McpApprovalPanel(
-            approval: approval,
-          ).actions(),
-        // Pane management (mounted PaneLayout).
-        ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
-            .actions(),
-        // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
-        // ctrl on Linux/Windows).
-        UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
-        // Session list navigation (scoped to the sidebar node, which is
-        // the rendered UiColumn('sidebar'); the old 'session-list' scope
-        // matched no node and was dead).
-        const UiAction(
-          name: 'sessions.up',
-          keys: 'up',
-          context: UiActionContext.node('sidebar'),
-        ),
-        const UiAction(
-          name: 'sessions.down',
-          keys: 'down',
-          context: UiActionContext.node('sidebar'),
-        ),
-        // Focus the composer.
-        UiAction(name: 'composer.focus', keys: Keymap.composerFocus()),
-        // Command palette (Cmd-K) + MRU switcher (Ctrl-Tab): global chords.
-        ...AppKeybindings().globalActions(),
-        // Palette-scoped navigation while the overlay is open.
-        if (paletteOpen)
-          ...const AppKeybindings().paletteActions('command-palette'),
-        // Switcher-scoped dismiss while the overlay is open.
-        if (switcherOpen)
-          ...const AppKeybindings().switcherActions('mru-switcher'),
-      ];
+      // Approval overlay actions — only when the panel is actually mounted
+      // (gpuidart rejects action contexts that aren't nodes in the tree).
+      if (approval != null) ...McpApprovalPanel(approval: approval).actions(),
+      // Pane management (mounted PaneLayout).
+      ...(paneLayout ?? PaneLayout.single(paneId: 'pane-1', title: 'zsh'))
+          .actions(),
+      // Sidebar toggle (platform primary modifier: meta/Cmd on macOS,
+      // ctrl on Linux/Windows).
+      UiAction(name: 'sidebar.toggle', keys: Keymap.sidebarToggle()),
+      // Session list navigation (scoped to the sidebar node, which is
+      // the rendered UiColumn('sidebar'); the old 'session-list' scope
+      // matched no node and was dead).
+      const UiAction(
+        name: 'sessions.up',
+        keys: 'up',
+        context: UiActionContext.node('sidebar'),
+      ),
+      const UiAction(
+        name: 'sessions.down',
+        keys: 'down',
+        context: UiActionContext.node('sidebar'),
+      ),
+      // Focus the composer.
+      UiAction(name: 'composer.focus', keys: Keymap.composerFocus()),
+      // Command palette (Cmd-K) + MRU switcher (Ctrl-Tab): global chords.
+      ...AppKeybindings().globalActions(),
+      // Palette-scoped navigation while the overlay is open.
+      if (paletteOpen)
+        ...const AppKeybindings().paletteActions('command-palette'),
+      // Switcher-scoped dismiss while the overlay is open.
+      if (switcherOpen)
+        ...const AppKeybindings().switcherActions('mru-switcher'),
+    ];
   }
 
   static String formatTime(DateTime t) {
