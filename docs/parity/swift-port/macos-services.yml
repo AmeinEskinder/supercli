@@ -423,31 +423,6 @@ files:
         count: 9
     notes: "Pure queue/presentation/attention logic ported. AppKit orchestration (NSApp.activate, toasts, remote runtime calls, revealSessionForMcpApproval) is surface-specific and stays with the store/UI port. SidebarView sessionRowActivitySpinnerCommand and RootView ActivityMenuSessions overlay consumers belong to the Dart/SidebarView and Dart/RootView ports."
 
-  native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift:
-    destination: "Rust: supercli-core::store_policies"
-    status: partial
-    checklist: ""
-    behaviours:
-      - swift: "computerUseAvailable / computerUseControllable — always false (retired in every build)"
-        target: "crates/supercli-core/src/store_policies.rs::computer_use_available"
-        test: "store_policies::tests::computer_use_is_retired_in_every_build"
-      - swift: "isAvailable — .computerUse excluded, all others available"
-        target: "crates/supercli-core/src/store_policies.rs::is_feature_available"
-        test: "store_policies::tests::computer_use_is_retired_in_every_build"
-      - swift: "availableShippedFeatures — remoteWorkspaces, worktrees, sessionsMcp, profiles in order"
-        target: "crates/supercli-core/src/store_policies.rs::available_shipped_features"
-        test: "store_policies::tests::shipped_feature_order_excludes_computer_use"
-      - swift: "availableExperimentalFeatures — only browserMcp"
-        target: "crates/supercli-core/src/store_policies.rs::available_experimental_features"
-        test: "store_policies::tests::only_browser_mcp_is_experimental"
-      - swift: "isEnabled — env override, stored preference, built-in default; retired features never enabled"
-        target: "crates/supercli-core/src/store_policies.rs::is_feature_enabled"
-        test: "store_policies::tests::env_override_forces_feature_on, retired_feature_write_fails_without_modifying_state"
-    tests:
-      - file: crates/supercli-core/src/store_policies.rs
-        count: 6
-    notes: "Pure gating logic ported (ComputerContainmentTests). UserDefaults persistence, workspace inheritance, and WorkspaceFeature pickerEnabled are surface-specific."
-
   native/SupercliNative/Sources/SupercliNative/HostManagementState.swift:
     destination: "Rust: supercli-core::store_policies"
     status: partial
