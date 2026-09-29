@@ -13,9 +13,13 @@
 //!   a manifest that claims `running` may resume state, given whether the
 //!   recorded child still exists and the pid identity verdict (the existing
 //!   [`crate::session_host::PidIdentity`] verdict).
-//! - `resolvedLastRealActivityAtMs` / `sessionLastRealActivityAtMs` /
-//!   `resolvedLifecycleAtMs` / `sessionRecencyMs` — the provider-aware
-//!   recency ordering behind Recent and the sidebar date mode.
+//!
+//! Recency ordering (`resolvedLastRealActivityAtMs`, `sessionLastRealActivityAtMs`,
+//! `resolvedLifecycleAtMs`) already lives in Rust as
+//! `session_ops::{last_activity_ms, latest_lifecycle_ms, recents_recency_ms}`
+//! (which additionally cover the background-hooks generation dir); the
+//! latest-alert combiner lives there too as `session_ops::session_recency_ms`.
+//! This module does not duplicate them.
 //!
 //! The Swift-only machinery stays with Swift: the RAII
 //! `NativeSessionFileLockLease` maps to `app_state::FileLock` plus
@@ -25,12 +29,36 @@
 //! macOS-only syscalls in `session_host`.
 
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value};
 
 use crate::app_paths;
 use crate::session_host::PidIdentity;
+
+/// Process-wide sequence for temp-file names: pid separates processes,
+/// the sequence separates concurrent writers inside one process, and the
+/// wall-clock nanos separate a restarted process that reuses a pid.
+static MARKER_TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Unique temp-file name in `session_dir` for an atomic marker write.
+/// The name must be unique per writer: concurrent writers sharing one
+/// fixed temp name would clobber each other's in-flight bytes.
+fn marker_tmp_path(session_dir: &Path, marker: SharedMarker) -> PathBuf {
+    let seq = MARKER_TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    session_dir.join(format!(
+        ".{}.{}.{}.{}.tmp",
+        marker.file_name(),
+        std::process::id(),
+        nanos,
+        seq
+    ))
+}
 
 /// A cross-process shared marker file inside one session directory.
 ///
@@ -103,9 +131,9 @@ pub fn write_shared_marker(
     let Ok(serialized) = serde_json::to_vec(body) else {
         return false;
     };
-    // Atomic land: temp file in the same directory, then rename. Swift uses
-    // NSData's `.atomic` write, which is the same durable pattern.
-    let tmp = session_dir.join(format!(".{}.tmp", marker.file_name()));
+    // Atomic land: unique temp file in the same directory, then rename.
+    // Swift uses NSData's `.atomic` write, which is the same durable pattern.
+    let tmp = marker_tmp_path(session_dir, marker);
     if std::fs::write(&tmp, &serialized).is_err() {
         return false;
     }
@@ -193,122 +221,6 @@ pub fn replacement_restart_allows_state(
         return false;
     }
     child_process_exists == Some(false) || pid_identity == PidIdentity::NotOurs
-}
-
-// ---------------------------------------------------------------------------
-// Recency / activity ordering
-// ---------------------------------------------------------------------------
-
-/// Latest real activity signal with the provider-aware rule from the
-/// legacy Swift store: hook-capable agents have a truthful durable hook
-/// seed; when that seed is absent they have not produced a lifecycle event
-/// yet, so a TUI repaint in `output.bin` must NOT make them recent — `None`
-/// is returned rather than consulting screen/output repaint signals.
-/// Hookless tools use the host's parsed-screen change stamp, falling back
-/// to `output.bin` only for manifests that predate that field.
-pub fn resolved_last_real_activity_at_ms(
-    uses_lifecycle_hooks: bool,
-    hook_event_at_ms: Option<i64>,
-    screen_changed_at_ms: Option<i64>,
-    output_at_ms: Option<i64>,
-) -> Option<i64> {
-    if uses_lifecycle_hooks {
-        return hook_event_at_ms;
-    }
-    screen_changed_at_ms.or(output_at_ms)
-}
-
-/// Canonical timestamp used by Recent/date ordering. Creation is the start
-/// event and therefore the floor. The host's `updated_at` joins the rank
-/// only after it writes an exited manifest; while running that field is a
-/// heartbeat and would otherwise float every live session to now.
-pub fn resolved_lifecycle_at_ms(
-    created_at_ms: i64,
-    uses_lifecycle_hooks: bool,
-    hook_event_at_ms: Option<i64>,
-    screen_changed_at_ms: Option<i64>,
-    output_at_ms: Option<i64>,
-    final_exited_at_ms: Option<i64>,
-) -> i64 {
-    created_at_ms
-        .max(
-            resolved_last_real_activity_at_ms(
-                uses_lifecycle_hooks,
-                hook_event_at_ms,
-                screen_changed_at_ms,
-                output_at_ms,
-            )
-            .unwrap_or(0),
-        )
-        .max(final_exited_at_ms.unwrap_or(0))
-}
-
-/// Unified Recent recency: the latest lifecycle event or app alert, with
-/// creation as its floor. Read receipts are not activity — callers pass the
-/// latest *alert* stamp, never a read stamp, so selecting/reading a row
-/// never reshuffles a Recent surface.
-///
-/// Swift's `sessionRecencyMs(_:)` returns 0 for an unknown session id; here
-/// the caller supplies the session's `created_at_ms` and owns the lookup,
-/// so an unknown session is simply never passed in.
-pub fn session_recency_ms(
-    created_at_ms: i64,
-    lifecycle_at_ms: Option<i64>,
-    latest_alert_at_ms: Option<i64>,
-) -> i64 {
-    created_at_ms
-        .max(lifecycle_at_ms.unwrap_or(0))
-        .max(latest_alert_at_ms.unwrap_or(0))
-}
-
-// ---------------------------------------------------------------------------
-// Filesystem-backed activity read
-// ---------------------------------------------------------------------------
-
-/// Modification time of `path` in ms since the epoch — the Rust half of
-/// Swift's `fileModificationAtMs`. `None` when the file is absent or its
-/// timestamp is unreadable.
-pub fn file_modification_at_ms(path: &Path) -> Option<i64> {
-    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
-    let millis = modified.duration_since(UNIX_EPOCH).ok()?.as_millis();
-    i64::try_from(millis).ok()
-}
-
-/// Filesystem-backed last-real-activity read for unread-marker
-/// reconciliation. Mirrors Swift's `sessionLastRealActivityAtMs`, keep it
-/// command-aware:
-///
-/// - hook-capable agents: the durable hook seed's mtime. A missing seed
-///   means the agent has not produced a lifecycle event yet, so `None` is
-///   returned rather than consulting screen/output repaint signals;
-/// - hookless tools: the host's parsed-screen change stamp from
-///   `manifest.json` (only when positive), falling back to `output.bin`'s
-///   mtime for manifests that predate that field.
-///
-/// Swift detects the tool from `command` via `SetupTool.detect`; here the
-/// caller passes the already-resolved hook predicate (the
-/// `uses_lifecycle_hooks` the rest of Rust derives from its tool catalog).
-pub fn session_last_real_activity_at_ms(
-    session_dir: &Path,
-    uses_lifecycle_hooks: bool,
-) -> Option<i64> {
-    if uses_lifecycle_hooks {
-        return file_modification_at_ms(&session_dir.join("last-hook-event.json"));
-    }
-    let manifest_screen_changed_at = std::fs::read(session_dir.join("manifest.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
-        .and_then(|json| json.get("screen_changed_at").and_then(positive_i64));
-    manifest_screen_changed_at.or_else(|| file_modification_at_ms(&session_dir.join("output.bin")))
-}
-
-/// A JSON number that is positive — Swift's `(as? NSNumber)?.int64Value`
-/// with the `stamp > 0` guard.
-fn positive_i64(value: &Value) -> Option<i64> {
-    let stamp = value
-        .as_i64()
-        .or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))?;
-    (stamp > 0).then_some(stamp)
 }
 
 #[cfg(test)]
@@ -483,123 +395,5 @@ mod tests {
                 "state {state:?} should not allow adoption"
             );
         }
-    }
-
-    #[test]
-    fn hook_agent_activity_ignores_tui_repaint() {
-        // Hook seed present: it wins even against a newer output stamp.
-        assert_eq!(
-            resolved_last_real_activity_at_ms(true, Some(1000), Some(5000), Some(9000)),
-            Some(1000)
-        );
-        // Hook seed absent: TUI repaint must NOT make the session recent.
-        assert_eq!(
-            resolved_last_real_activity_at_ms(true, None, Some(5000), Some(9000)),
-            None
-        );
-        // Hookless tools: screen stamp, then output.bin fallback.
-        assert_eq!(
-            resolved_last_real_activity_at_ms(false, Some(1000), Some(5000), Some(9000)),
-            Some(5000)
-        );
-        assert_eq!(
-            resolved_last_real_activity_at_ms(false, Some(1000), None, Some(9000)),
-            Some(9000)
-        );
-        assert_eq!(
-            resolved_last_real_activity_at_ms(false, None, None, None),
-            None
-        );
-    }
-
-    #[test]
-    fn lifecycle_at_uses_creation_floor_and_exited_heartbeat() {
-        // Creation is the floor even with no activity.
-        assert_eq!(
-            resolved_lifecycle_at_ms(1000, false, None, None, None, None),
-            1000
-        );
-        // Real activity raises it.
-        assert_eq!(
-            resolved_lifecycle_at_ms(1000, false, None, None, Some(4000), None),
-            4000
-        );
-        // The final exited stamp raises it (while running, updated_at is a
-        // heartbeat and must not float the row — callers withhold it).
-        assert_eq!(
-            resolved_lifecycle_at_ms(1000, false, None, None, Some(4000), Some(6000)),
-            6000
-        );
-        // Stale activity below creation never drags the rank down.
-        assert_eq!(
-            resolved_lifecycle_at_ms(8000, false, None, Some(1000), None, None),
-            8000
-        );
-    }
-
-    #[test]
-    fn recency_uses_latest_of_created_lifecycle_and_alert() {
-        assert_eq!(session_recency_ms(1000, Some(2000), Some(3000)), 3000);
-        assert_eq!(session_recency_ms(1000, Some(5000), Some(3000)), 5000);
-        assert_eq!(session_recency_ms(9000, Some(5000), None), 9000);
-        assert_eq!(session_recency_ms(1000, None, None), 1000);
-    }
-
-    #[test]
-    fn session_last_activity_hook_agent_uses_seed_mtime() {
-        let home = temp_home();
-        let dir = home.join("app-sessions").join("s1");
-        let seed = dir.join("last-hook-event.json");
-        std::fs::write(&seed, b"{}").expect("seed");
-        assert_eq!(
-            session_last_real_activity_at_ms(&dir, true),
-            file_modification_at_ms(&seed)
-        );
-    }
-
-    #[test]
-    fn session_last_activity_hook_agent_missing_seed_is_none() {
-        let home = temp_home();
-        let dir = home.join("app-sessions").join("s1");
-        // No seed: a fresh output.bin must NOT make the session recent.
-        std::fs::write(dir.join("output.bin"), b"x").expect("seed");
-        assert_eq!(session_last_real_activity_at_ms(&dir, true), None);
-    }
-
-    #[test]
-    fn session_last_activity_hookless_prefers_manifest_stamp() {
-        let home = temp_home();
-        let dir = home.join("app-sessions").join("s1");
-        std::fs::write(
-            dir.join("manifest.json"),
-            br#"{"screen_changed_at": 1234567890}"#,
-        )
-        .expect("seed");
-        std::fs::write(dir.join("output.bin"), b"x").expect("seed");
-        assert_eq!(
-            session_last_real_activity_at_ms(&dir, false),
-            Some(1_234_567_890)
-        );
-    }
-
-    #[test]
-    fn session_last_activity_hookless_falls_back_to_output_bin() {
-        let home = temp_home();
-        let dir = home.join("app-sessions").join("s1");
-        // A zero stamp defers to output.bin, like Swift's `stamp > 0` guard.
-        std::fs::write(dir.join("manifest.json"), br#"{"screen_changed_at": 0}"#).expect("seed");
-        let out = dir.join("output.bin");
-        std::fs::write(&out, b"x").expect("seed");
-        assert_eq!(
-            session_last_real_activity_at_ms(&dir, false),
-            file_modification_at_ms(&out)
-        );
-    }
-
-    #[test]
-    fn session_last_activity_nothing_present_is_none() {
-        let home = temp_home();
-        let dir = home.join("app-sessions").join("s1");
-        assert_eq!(session_last_real_activity_at_ms(&dir, false), None);
     }
 }

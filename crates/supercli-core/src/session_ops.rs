@@ -1389,6 +1389,23 @@ pub fn recents_recency_ms(session_id: &str, command: &str, created_at: u64) -> u
     latest_lifecycle_ms(session_id, command, created_at, None)
 }
 
+/// Unified Recent recency: the latest lifecycle event or app alert, with
+/// creation as its floor. Read receipts are not activity — callers pass the
+/// latest *alert* stamp, never a read stamp, so selecting/reading a row
+/// never reshuffles a Recent surface.
+///
+/// Takes precomputed stamps (unlike `latest_lifecycle_ms`, which reads the
+/// session dir itself) for callers that already hold a Session row.
+pub fn session_recency_ms(
+    created_at_ms: u64,
+    lifecycle_at_ms: Option<u64>,
+    latest_alert_at_ms: Option<u64>,
+) -> u64 {
+    created_at_ms
+        .max(lifecycle_at_ms.unwrap_or(0))
+        .max(latest_alert_at_ms.unwrap_or(0))
+}
+
 /// Shared manual sidebar order (`~/.supercli/session-order.json`):
 /// `{ project_id: [session ids] }`. The desktop keeps the same list in its
 /// UserDefaults overlay; this file is how a drag in one frontend reaches
@@ -2541,6 +2558,20 @@ mod tests {
         rewrite_session_order_value, set_group_pinned_in_state,
         validate_session_order_references_at, InitialTextSubmitMode,
     };
+
+    #[test]
+    fn session_recency_ms_uses_latest_of_created_lifecycle_and_alert() {
+        assert_eq!(
+            super::session_recency_ms(1000, Some(2000), Some(3000)),
+            3000
+        );
+        assert_eq!(
+            super::session_recency_ms(1000, Some(5000), Some(3000)),
+            5000
+        );
+        assert_eq!(super::session_recency_ms(9000, Some(5000), None), 9000);
+        assert_eq!(super::session_recency_ms(1000, None, None), 1000);
+    }
 
     #[test]
     fn project_folder_color_round_trips_through_app_state() {
