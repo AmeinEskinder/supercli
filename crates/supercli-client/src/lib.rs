@@ -84,7 +84,6 @@ pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
 pub mod types;
-pub mod unix_ui_client;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod viewer_presence;
 #[cfg(not(target_arch = "wasm32"))]
