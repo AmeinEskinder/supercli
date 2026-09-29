@@ -435,6 +435,8 @@ impl QuickPresetGroup {
 /// `is_plugin_command` classifies a command as a plugin (from the Host's App
 /// catalog); `app_for_head` resolves an executable basename to an app
 /// `(id, name)` pair.
+type PresetIdentity = (Option<SetupTool>, Option<(String, String)>);
+
 pub fn collect_quick_preset_groups(
     catalog: &RuntimeCatalog,
     items: &[Preset],
@@ -443,8 +445,7 @@ pub fn collect_quick_preset_groups(
 ) -> Vec<QuickPresetGroup> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: HashMap<String, Vec<Preset>> = HashMap::new();
-    let mut identities: HashMap<String, (Option<SetupTool>, Option<(String, String)>)> =
-        HashMap::new();
+    let mut identities: HashMap<String, PresetIdentity> = HashMap::new();
 
     for preset in items.iter().filter(|p| p.enabled) {
         let cli = SetupTool::detect(catalog, &preset.command);
@@ -582,7 +583,7 @@ mod tests {
             ..p.clone()
         };
         // `claude` may or may not be quick-launchable; sanitized only checks non-empty
-        assert_eq!(q.sanitized().quick_launch, true);
+        assert!(q.sanitized().quick_launch);
     }
 
     #[test]
@@ -596,25 +597,25 @@ mod tests {
     fn quick_preset_tool_detect_from_command() {
         let catalog = test_catalog();
         // Find a quick-launchable runtime and detect via its first alias.
-        let quick: Vec<_> = QuickPresetTool::all_cases(&catalog);
+        let quick: Vec<_> = QuickPresetTool::all_cases(catalog);
         assert!(!quick.is_empty(), "catalog has quick-launch runtimes");
         let tool = &quick[0];
-        let meta = tool.metadata(&catalog).unwrap();
+        let meta = tool.metadata(catalog).unwrap();
         let alias = meta.detection.command_aliases.first().unwrap();
-        let detected = QuickPresetTool::detect(&catalog, alias);
+        let detected = QuickPresetTool::detect(catalog, alias);
         assert_eq!(detected.as_ref().map(|t| t.id()), Some(tool.id()));
         // Unknown command -> None
-        assert!(QuickPresetTool::detect(&catalog, "definitely-not-a-tool-xyz").is_none());
+        assert!(QuickPresetTool::detect(catalog, "definitely-not-a-tool-xyz").is_none());
     }
 
     #[test]
     fn setup_tool_detect_and_display_name() {
         let catalog = test_catalog();
-        let tools = SetupTool::all_cases(&catalog);
+        let tools = SetupTool::all_cases(catalog);
         assert!(!tools.is_empty());
         let tool = &tools[0];
-        assert!(!tool.display_name(&catalog).is_empty());
-        assert!(SetupTool::detect(&catalog, "definitely-not-a-tool-xyz").is_none());
+        assert!(!tool.display_name(catalog).is_empty());
+        assert!(SetupTool::detect(catalog, "definitely-not-a-tool-xyz").is_none());
     }
 
     #[test]
@@ -662,10 +663,10 @@ mod tests {
     #[test]
     fn collect_quick_preset_groups_groups_by_cli() {
         let catalog = test_catalog();
-        let quick = QuickPresetTool::all_cases(&catalog);
+        let quick = QuickPresetTool::all_cases(catalog);
         let tool = &quick[0];
         let alias = tool
-            .metadata(&catalog)
+            .metadata(catalog)
             .unwrap()
             .detection
             .command_aliases
@@ -695,7 +696,7 @@ mod tests {
                 quick_launch: true,
             },
         ];
-        let groups = collect_quick_preset_groups(&catalog, &items, |_| false, |_| None);
+        let groups = collect_quick_preset_groups(catalog, &items, |_| false, |_| None);
         // p1+p2 share the CLI group; p3 is custom.
         assert_eq!(groups.len(), 2);
         let cli_group = groups.iter().find(|g| g.cli.is_some()).unwrap();
@@ -713,7 +714,24 @@ mod tests {
             enabled: None,
             quick_launch: None,
         };
-        assert!(file.to_preset(&catalog).is_none());
+        assert!(file.to_preset(catalog).is_none());
+    }
+
+    #[test]
+    fn global_preset_file_converts_global_presets() {
+        // Dart: 'converts global presets'.
+        let catalog = test_catalog();
+        let file = GlobalPresetFile {
+            id: "test".into(),
+            label: "Test".into(),
+            command: "claude".into(),
+            project_id: None,
+            enabled: None,
+            quick_launch: Some(true),
+        };
+        let preset = file.to_preset(catalog);
+        assert!(preset.is_some());
+        assert_eq!(preset.unwrap().id, "test");
     }
 
     #[test]

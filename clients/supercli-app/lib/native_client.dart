@@ -16,17 +16,96 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 
 /// Low-level C ABI bindings. Prefer [SupercliNative] for typed access.
+///
+/// The native library is located as follows:
+/// 1. The `SUPERCLI_FFI_LIB` environment variable, when set (CI and dev).
+/// 2. Platform default search paths (`libsupercli_client_ffi.so` / `.dylib`,
+///    `supercli_client_ffi.dll`, or the iOS process image).
+///
+/// At load time the Dart side checks [abiVersion] against
+/// [kExpectedAbiVersion] and throws on mismatch, so a stale library can
+/// never silently serve wrong-shaped data.
+///
+/// ## Shipping the library
+///
+/// The app bundle must ship the cdylib built from
+/// `crates/supercli-client-ffi` (`cargo build -p supercli-client-ffi
+/// --release`):
+/// - macOS: `libsupercli_client_ffi.dylib` inside the app bundle's
+///   `Frameworks/` (gpuidart desktop shell).
+/// - Linux: `libsupercli_client_ffi.so` next to the executable or on the
+///   loader path.
+/// - Windows: `supercli_client_ffi.dll` next to the executable.
+/// - Android: `libsupercli_client_ffi.so` in the APK's `lib/<abi>/`.
+/// - iOS: statically linked into the process image (`DynamicLibrary.process()`).
 final class SupercliNativeBindings {
+  /// ABI version this Dart code was written against. Must match
+  /// `SUPERCLI_FFI_ABI_VERSION` in `supercli_client_ffi.h`.
+  static const int kExpectedAbiVersion = 1;
+
   static DynamicLibrary? _lib;
+  static bool _abiChecked = false;
 
   static DynamicLibrary get lib {
-    return _lib ??= _open();
+    final lib = _lib ??= _open();
+    if (!_abiChecked) {
+      _abiChecked = true;
+      final version = _abiVersionOf(lib);
+      if (version != kExpectedAbiVersion) {
+        throw StateError(
+          'supercli-client-ffi ABI mismatch: library reports $version, '
+          'Dart expects $kExpectedAbiVersion. Rebuild the cdylib from '
+          'crates/supercli-client-ffi.',
+        );
+      }
+    }
+    return lib;
+  }
+
+  static int _abiVersionOf(DynamicLibrary lib) {
+    return lib
+        .lookup<NativeFunction<Uint32 Function()>>(
+          'supercli_ffi_abi_version',
+        )
+        .asFunction<int Function()>()();
+  }
+
+  /// ABI version reported by the loaded library (for diagnostics).
+  static int get abiVersion => _abiVersionOf(lib);
+
+  /// Last error recorded by the Rust library, or null when none.
+  /// The returned string is freed after reading.
+  static String? get lastError {
+    final ptr = lib
+        .lookup<NativeFunction<Pointer<Char> Function()>>(
+          'supercli_last_error',
+        )
+        .asFunction<Pointer<Char> Function()>()();
+    if (ptr == nullptr) return null;
+    final s = ptr.cast<Utf8>().toDartString();
+    _stringFreeOf(lib, ptr);
+    return s.isEmpty ? null : s;
+  }
+
+  static void _stringFreeOf(DynamicLibrary lib, Pointer<Char> ptr) {
+    lib
+        .lookup<NativeFunction<Void Function(Pointer<Char>)>>(
+          'supercli_string_free',
+        )
+        .asFunction<void Function(Pointer<Char>)>()(ptr);
   }
 
   /// Override the loaded library (tests).
-  static set debugLibrary(DynamicLibrary? value) => _lib = value;
+  static set debugLibrary(DynamicLibrary? value) {
+    _lib = value;
+    _abiChecked = value != null;
+  }
 
   static DynamicLibrary _open() {
+    final envPath = Platform.environment['SUPERCLI_FFI_LIB'];
+    if (envPath != null && envPath.isNotEmpty) {
+      return DynamicLibrary.open(envPath);
+    }
     if (Platform.isMacOS) {
       return DynamicLibrary.open('libsupercli_client_ffi.dylib');
     }

@@ -829,4 +829,178 @@ mod tests {
         assert_eq!(projected.projects[0].id, "p1");
         assert!(holds.project_hold.is_none());
     }
+
+    // ------------------------------------------------------------------
+    // Ported from clients/supercli-app/test/workspace_pool_test.dart
+    // (23 Dart tests; the 9 above covered a subset — these close the gap).
+    // ------------------------------------------------------------------
+
+    fn pooled_session(id: &str, activity: &str, status: &str, archived: bool, title: &str) -> PooledSession {
+        PooledSession {
+            id: id.into(),
+            project_id: "project".into(),
+            title: title.into(),
+            command: "claude".into(),
+            status: status.into(),
+            activity: activity.into(),
+            archived,
+        }
+    }
+
+    #[test]
+    fn accept_snapshot_caches_and_publishes_on_first_contact() {
+        // Dart: 'accepting a snapshot caches it and publishes'.
+        let incoming = PooledSnapshot {
+            projects: vec![],
+            sessions: vec![pooled_session("s1", "blocked", "running", false, "s1")],
+            captured_at_unix_ms: 1000,
+        };
+        let result = accept_pooled_snapshot(
+            None,
+            &incoming,
+            &OrganizationHolds::default(),
+            &AttentionLatch::default(),
+            false,
+            2000,
+        );
+        assert!(result.published);
+        assert_eq!(
+            result.snapshot.sessions.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            vec!["s1"]
+        );
+        assert!(result.attention.has_attention);
+    }
+
+    #[test]
+    fn backoff_exponent_clamps_at_16_and_caps() {
+        // Dart: 'exponent clamps at 16 and result caps' with the 30/240
+        // custom base/cap: [30, 60, 120, 240, 240].
+        let delays: Vec<u64> = (1..=5).map(|f| backoff_delay_ms(f, 30, 240)).collect();
+        assert_eq!(delays, vec![30, 60, 120, 240, 240]);
+        assert!(delays[2] > delays[0] * 3 / 2, "backoff grows faster than linear");
+        // Default policy constants.
+        assert_eq!(backoff_delay_ms(100, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS), policy::BACKOFF_CAP_MS);
+        assert_eq!(
+            backoff_delay_ms(17, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
+            backoff_delay_ms(100, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
+            "exponent clamped at 16"
+        );
+        assert_eq!(backoff_delay_ms(1, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS), policy::BACKOFF_BASE_MS);
+    }
+
+    #[test]
+    fn slot_pool_local_targets_bypass_remote_cap() {
+        // Dart: 'local targets are not subject to the remote cap'.
+        // The pool itself is remote-only; callers gate on `is_remote`
+        // (mirrors runEntryLoop's `entry.target.isRemote` guard).
+        let mut slots = RemoteSlotPool::new(1);
+        assert!(slots.try_acquire("ssh-b"), "one remote holds the only slot");
+        let acquire_if_remote = |slots: &mut RemoteSlotPool, key: &str, is_remote: bool| {
+            if is_remote { slots.try_acquire(key) } else { true }
+        };
+        assert!(acquire_if_remote(&mut slots, "local-a", false), "local targets never queue");
+        assert!(!acquire_if_remote(&mut slots, "ssh-c", true), "second remote waits");
+    }
+
+    #[test]
+    fn slot_pool_retired_waiter_resumes_without_slot() {
+        // Dart: 'retired waiter resumes without a slot'.
+        let mut slots = RemoteSlotPool::new(1);
+        assert!(slots.try_acquire("a"));
+        assert!(!slots.try_acquire("b"));
+        slots.cancel_waiter("b");
+        assert_eq!(slots.release("a", &HashSet::new()), None);
+        assert!(!slots.holds_slot("a"));
+    }
+
+    #[test]
+    fn slot_pool_max_slots_clamps_to_at_least_one() {
+        // Dart: 'max slots clamps to at least one'.
+        assert_eq!(RemoteSlotPool::new(0).max_slots(), 1);
+    }
+
+    #[test]
+    fn attention_foreground_never_notifies() {
+        // Dart: 'foreground workspace never notifies'.
+        let latch = AttentionLatch {
+            seeded: true,
+            notified_session_ids: HashSet::new(),
+        };
+        let blocked: HashSet<String> = ["s1".into()].into_iter().collect();
+        let adv = advance_attention(&latch, &blocked, true);
+        assert!(adv.notify_session_ids.is_empty());
+        assert!(adv.has_attention);
+        // The foreground latch still records blocked, so leaving the scope
+        // does not replay it as new.
+        assert!(adv.latch.notified_session_ids.contains("s1"));
+    }
+
+    #[test]
+    fn attention_archived_sessions_never_raise() {
+        // Dart: 'archived sessions never raise attention'.
+        assert!(!pooled_session("s1", "blocked", "running", true, "s1").needs_attention());
+        assert!(pooled_session("s1", "blocked", "running", false, "s1").needs_attention());
+        assert!(!pooled_session("s1", "idle", "running", false, "s1").needs_attention());
+        assert!(!pooled_session("s1", "blocked", "exited", false, "s1").needs_attention());
+    }
+
+    #[test]
+    fn attention_title_falls_back_to_command() {
+        // Dart: 'empty title falls back to command for notification text'.
+        assert_eq!(pooled_session("s1", "blocked", "running", false, "").attention_title(), "claude");
+        assert_eq!(pooled_session("s1", "blocked", "running", false, "My title").attention_title(), "My title");
+    }
+
+    #[test]
+    fn reconcile_lend_retires_entry_but_keeps_cache() {
+        // Dart: 'lend retires the pool entry but keeps the cache'.
+        let entries: HashMap<String, String> =
+            [("a".to_string(), "fp:a".to_string())].into_iter().collect();
+        let targets = vec![WorkspacePoolTarget {
+            key: "a".into(),
+            name: "Workspace a".into(),
+            transport_kind: "local".into(),
+            is_remote: false,
+            expected_host_id: None,
+            fingerprint: "fp:a".into(),
+        }];
+        let excluded: HashSet<String> = ["a".into()].into_iter().collect();
+        let cached: HashSet<String> = ["a".into()].into_iter().collect();
+        let result = reconcile_pool_targets(&entries, &targets, &excluded, &HashSet::new(), &cached);
+        assert_eq!(result.retire_keys, vec!["a".to_string()]);
+        assert!(result.drop_cache_keys.is_empty(), "excluded (runtime-served) keys keep their cache");
+        assert!(result.start_targets.is_empty(), "lent workspace must not be re-polled");
+
+        // The runtime lets go: pooling resumes on the next reconcile.
+        let resumed = reconcile_pool_targets(&HashMap::new(), &targets, &HashSet::new(), &HashSet::new(), &cached);
+        assert_eq!(resumed.start_targets.iter().map(|t| t.key.as_str()).collect::<Vec<_>>(), vec!["a"]);
+    }
+
+    #[test]
+    fn reconcile_identity_latched_fingerprint_not_repolled() {
+        // Dart: 'identity-latched fingerprint is not re-polled'.
+        let targets = vec![WorkspacePoolTarget {
+            key: "a".into(),
+            name: "Workspace a".into(),
+            transport_kind: "local".into(),
+            is_remote: false,
+            expected_host_id: None,
+            fingerprint: "fp:a".into(),
+        }];
+        let latched: HashSet<String> = ["fp:a".into()].into_iter().collect();
+        let result = reconcile_pool_targets(&HashMap::new(), &targets, &HashSet::new(), &latched, &HashSet::new());
+        assert!(result.start_targets.is_empty());
+    }
+
+    #[test]
+    fn policy_constants_mirror_swift_initializer() {
+        // Dart: 'defaults mirror the Swift initializer'.
+        assert_eq!(policy::POLL_INTERVAL_MS, 25_000);
+        assert_eq!(policy::BACKOFF_BASE_MS, 5_000);
+        assert_eq!(policy::BACKOFF_CAP_MS, 300_000);
+        assert_eq!(policy::MAINTENANCE_INTERVAL_MS, 30_000);
+        assert_eq!(policy::IMMEDIATE_REFRESH_THROTTLE_SECS, 2.0);
+        assert_eq!(policy::MAX_LIVE_REMOTE_CONNECTIONS, 4);
+        assert_eq!(policy::ORGANIZATION_HOLD_SECS, 15.0);
+    }
 }

@@ -262,6 +262,8 @@ mod tests {
         assert_eq!(device_id_from_device(Some("NoParens")), None);
         assert_eq!(device_id_from_device(Some("Bad ()")), None);
         assert_eq!(device_id_from_device(None), None);
+        // Nested parens: the last parenthesised segment wins.
+        assert_eq!(device_id_from_device(Some("Mac (a) (b)")), Some("b"));
     }
 
     #[test]
