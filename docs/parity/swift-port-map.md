@@ -229,7 +229,7 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceDots.swift | 2171 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceSelector.swift | 548 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift | 1461 | Dart: clients/supercli-app | partial |  | 14 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/TerminalPaneView.swift | 2224 | Dart: clients/supercli-app | partial | 184 | 57 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/TerminalPaneView.swift | 2224 | Dart: clients/supercli-app | partial | 184 | 109 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/ToastCenter.swift | 122 | Dart: clients/supercli-app | ported |  | 3 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/ViewerAvatarsView.swift | 113 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/WorkspaceOpenMenu.swift | 161 | Dart: clients/supercli-app | todo |  | 0 |

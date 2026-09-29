@@ -99,6 +99,24 @@ files:
       - swift: "PaneFitToDesktopButton: help text names the fitted grid (cols×rows)"
         target: "lib/terminal/terminal_pane_drop_zones.dart::PaneFitToDesktopButton"
         test: "test/terminal_pane_drop_zones_test.dart::PaneFitToDesktopButton group"
+      - swift: "TerminalPaneTitleChip rename editing: double-click to begin, draft prefilled with label, commit trims and commits only when non-empty and changed, Esc cancels, blur commits, drag blocked while editing, tooltips"
+        target: "lib/terminal/terminal_pane_rename.dart::TerminalPaneRename"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneRename groups (tooltip/endEdit/dragAllowed)"
+      - swift: "TerminalPaneContainer focus resolution: effectiveActivePaneID (local -> store group-matched -> default), paneIsFocused (split vs solo/main-area vs project sidebar), paneShowsActiveBorder (multi-pane only, never zoomed), showsPaneSplitControls (focused or hovered only), paneIsWorking (starting/busy/restarting/resuming)"
+        target: "lib/terminal/terminal_pane_focus.dart::TerminalPaneFocus"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneFocus groups"
+      - swift: "requestPaneArchive: starting/busy/attention -> confirmation card, idle/exited -> direct archive request; isAgentTerminal (activeRuntimeID/activeApp/SetupTool) gates corner gallery controls"
+        target: "lib/terminal/terminal_pane_archive.dart::TerminalPaneArchive"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneArchive groups"
+      - swift: "Pane more menu content: copy-transcript submenu (20/50/whole), copy session ID text, pin/unpin project-sidebar verbs, resume/resume-agent/restart-app/notify-toggle/clear-attention, stop-and-archive vs archive, remove-session vs remove-from-list (direct vs confirm), launcher menu (new terminal, Agents/Plugins sections), Detach Pane, Exit Multi-Pane View"
+        target: "lib/terminal/terminal_pane_menu.dart::buildPaneSessionMenu/buildPaneLauncherMenu"
+        test: "test/terminal_pane_surface_test.dart::buildPaneSessionMenu/buildPaneLauncherMenu/copySessionIdText groups"
+      - swift: "Split layout: child extents (total - dividerWidth) split by ratio; divider path key (components joined with ','); existingSessionLeafCount (solo=1, group=max(1,sessionLeaves)); launcher titles (Starting…/New pane); unavailable-pane title"
+        target: "lib/terminal/terminal_pane_split.dart::TerminalPaneSplitLayout"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneSplitLayout/pane titles groups"
+      - swift: "AppKit-only surface NOT ported (platform): PanelPane/TerminalPane/TitleChip drag-source registrations (NSViewRepresentable click-through frames), drop-zone magnet spring, PaneMoreMenuButton/Controller/Anchor native menu plumbing, PaneSplitButton/DialogPillButton/PaneCardChrome/ProjectSidebarPinDropTarget rendering, window-drag gesture, zoom rule (only zoomed leaf renders)"
+        target: "dropped: AppKit/SwiftUI rendering plumbing — no portable logic"
+        test: "n/a"
     tests:
       - file: clients/supercli-app/test/terminal_pane_stream_test.dart
         count: 29
@@ -106,7 +124,9 @@ files:
         count: 20
       - file: clients/supercli-app/test/terminal_pane_drop_zones_test.dart
         count: 8
-    notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
+      - file: clients/supercli-app/test/terminal_pane_surface_test.dart
+        count: 52
+    notes: "PARTIAL 2026-09-29: data plane + container logic + full surface inventory ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content, title-chip rename editing, focus resolution incl. active border + split-button visibility + working spinner, archive-verb decision, agent-terminal gate, full pane more-menu model for session and launcher panes, split layout extents + divider path keys + session-leaf counts, launcher/unavailable titles, drop-zone preview rects, fit-to-desktop text). Single home: lib/screens/terminalpaneview.dart re-exports all surface modules (implementation in lib/terminal/terminal_pane_*.dart, following the area's existing pattern); PORTER_DUTY dup-check vs origin/next clean (only overlap: already-ported TerminalPaneDropPreviewGeometry, reused not duplicated). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. AppKit-only rendering plumbing deliberately dropped (drag-source NSViewRepresentable registrations, magnet spring, native menu plumbing, card chrome, pin preview rendering, window-drag gesture). GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Rust: supercli-core::terminal_drop_maps"
