@@ -42,6 +42,10 @@ tungstenite = "0.26"
 # select the pure-Rust async-io runtime here (no libdbus system dep).
 secret-service = { version = "4", features = ["rt-async-io-crypto-rust"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# Exclusive file locking on Windows via LockFileEx (link-license.lock).
+fs2 = "0.4"
+
 [features]
 # test-util exposes test-only helpers (e.g. MemoryHostCredentialStore) to
 # downstream crates' integration tests. Production code must never enable it.
