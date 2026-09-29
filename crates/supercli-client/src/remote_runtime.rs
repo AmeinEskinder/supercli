@@ -1657,8 +1657,8 @@ impl RemoteHostRuntime {
     /// `resourceRequest(operation:capability:parameters:bytes:)` — the
     /// caller supplies the per-operation capability (e.g. "artifact.upload.file",
     /// "project.add", "filesystem.directories.list"), never a single generic
-    /// gate. Swift callers: uploadFile ("artifact.upload.file"), UnpeelStore
-    /// addProject ("project.add"), RemoteFolderPicker directories
+    /// gate. Swift callers: uploadFile ("artifact.upload.file"), the store
+    /// client's addProject ("project.add"), RemoteFolderPicker directories
     /// ("filesystem.directories.list") and createDirectory
     /// ("filesystem.directories.create").
     pub fn resource_request(
