@@ -5,11 +5,13 @@
 /// built library (`cargo build -p supercli-client-ffi --release`). CI sets
 /// this; the test is skipped with a clear message when the variable is
 /// absent so `dart test` stays green on machines without a Rust toolchain.
+library;
+
 import 'dart:io';
 
 import 'package:test/test.dart';
 
-import '../lib/native_client.dart';
+import 'package:supercli_app/native_client.dart';
 
 void main() {
   final ffiLib = Platform.environment['SUPERCLI_FFI_LIB'];

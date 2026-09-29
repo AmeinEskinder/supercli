@@ -6,9 +6,11 @@
 /// FFI. Those tests require the real `supercli-client-ffi` cdylib: CI builds
 /// it (`cargo build -p supercli-client-ffi --release`) and sets
 /// `SUPERCLI_FFI_LIB`. Pure-icon tests (forRuntime/terminal) need no library.
+library;
+
 import 'package:test/test.dart';
-import '../lib/tool_icons.dart';
-import '../lib/plugin_settings_list.dart';
+import 'package:supercli_app/tool_icons.dart';
+import 'package:supercli_app/plugin_settings_list.dart';
 
 /// Minimal runtime descriptor map, shaped like the JSON the Rust catalog
 /// returns over FFI.
@@ -20,15 +22,18 @@ Map<String, dynamic> testRuntime({
   bool supportsQuickLaunch = true,
   String kind = 'agent',
   String? icon,
-}) => {
-  'id': id,
-  'slug': slug,
-  'legacy_slug': legacySlug,
-  'label': label,
-  'supports_quick_launch': supportsQuickLaunch,
-  'kind': kind,
-  if (icon != null) 'icon': icon,
-};
+}) {
+  final m = <String, dynamic>{
+    'id': id,
+    'slug': slug,
+    'legacy_slug': legacySlug,
+    'label': label,
+    'supports_quick_launch': supportsQuickLaunch,
+    'kind': kind,
+  };
+  if (icon != null) m['icon'] = icon;
+  return m;
+}
 
 void main() {
   group('SupercliToolIcon', () {
