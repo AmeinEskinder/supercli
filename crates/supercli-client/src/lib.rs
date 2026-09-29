@@ -79,6 +79,8 @@ pub mod remote_ws_transport;
 pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod startup_presentation_cache;
 pub mod stream_frame_reconciler;
 pub mod terminal_query_filter;
 #[cfg(not(target_arch = "wasm32"))]
