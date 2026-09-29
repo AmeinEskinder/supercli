@@ -460,6 +460,6 @@ test('archive entry check requires the three binaries, the payloads, and protoco
   )
   assert.throws(
     () => assertCliArchiveEntries(complete.filter((entry) => !entry.startsWith('generated')), 'linux-aarch64'),
-    /missing the generated directory payload: generated\/GeneratedRuntimeCatalog\.swift/
+    /missing the generated directory payload: generated\/runtime-catalog\.json/
   )
 })
