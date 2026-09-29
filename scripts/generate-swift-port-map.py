@@ -42,6 +42,32 @@ except ImportError:
     print("ERROR: PyYAML is required (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
+
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that fails on duplicate mapping keys.
+
+    A duplicate Swift path inside one sidecar file used to be silently
+    swallowed (PyYAML keeps the last value), hiding rows from the generated
+    map — e.g. the store Swift file keyed twice in macos-services.yml. Any
+    duplicate key is now a hard error naming the file and key.
+    """
+
+
+def _construct_strict_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        if key in mapping:
+            raise yaml.YAMLError(f"duplicate key in sidecar: {key!r}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_strict_mapping,
+)
+
 # Swift areas to walk, relative to clients/legacy.
 SWIFT_AREAS = [
     "native/SupercliNative",
@@ -53,17 +79,16 @@ SWIFT_AREAS = [
 # Path fragments (case-insensitive) that mark vendored/third-party code.
 EXCLUDE_FRAGMENTS = ("vendor", "third-party", "third_party", "libghostty-spm")
 
-# Worker areas, each owning docs/parity/swift-port/<area>.yml.
-WORKER_AREAS = (
-    "shared",
-    "macos-services",
-    "terminal",
-    "sidebar",
-    "settings",
-    "remote",
-    "appkit",
-    "ios",
-)
+# Worker areas are discovered from docs/parity/swift-port/<area>.yml at
+# runtime (see load_sidecars): adding a sidecar needs no script change, and
+# no area name literal lives in this script (rename guard).
+def discover_worker_areas(sidecar_dir):
+    """Sorted area names from <area>.yml files in sidecar_dir."""
+    if not os.path.isdir(sidecar_dir):
+        return []
+    return sorted(
+        fname[:-4] for fname in os.listdir(sidecar_dir) if fname.endswith(".yml")
+    )
 
 STATUSES = ("todo", "partial", "ported", "wired", "verified")
 
@@ -202,7 +227,7 @@ def collect_swift_files(legacy_root):
 
 
 def load_sidecars(sidecar_dir):
-    """Load all <area>.yml -> {rel_path: entry}. Validates area names."""
+    """Load all <area>.yml -> {rel_path: entry}."""
     claimed = {}
     if not os.path.isdir(sidecar_dir):
         return claimed
@@ -210,13 +235,13 @@ def load_sidecars(sidecar_dir):
         if not fname.endswith(".yml"):
             continue
         area = fname[:-4]
-        if area not in WORKER_AREAS:
-            print(f"WARNING: unknown sidecar area '{area}' in {fname}; "
-                  f"expected one of {WORKER_AREAS}", file=sys.stderr)
-            continue
         path = os.path.join(sidecar_dir, fname)
         with open(path, "r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            try:
+                data = yaml.load(fh, Loader=_StrictLoader) or {}
+            except yaml.YAMLError as exc:
+                print(f"ERROR: {fname}: {exc}", file=sys.stderr)
+                sys.exit(1)
         if data.get("area", area) != area:
             print(f"WARNING: {fname} declares area '{data.get('area')}', "
                   f"expected '{area}'", file=sys.stderr)
@@ -249,7 +274,7 @@ def tests_ported_count(entry):
     return total
 
 
-def render_map(files, rows, dropped, stale_sidecars):
+def render_map(files, rows, dropped, stale_sidecars, areas):
     """files: {rel: loc}; rows: {rel: (dest, status, checklist, tests)}."""
     total_loc = sum(files.values())
     verified_loc = sum(loc for rel, loc in files.items()
@@ -315,7 +340,7 @@ def render_map(files, rows, dropped, stale_sidecars):
     out.append("")
     out.append("| Area | Files | LOC |")
     out.append("|---|---|---|")
-    for area in WORKER_AREAS:
+    for area in areas:
         out.append(f"| {area} | {area_files.get(area, 0)} | "
                    f"{area_loc.get(area, 0):,} |")
     out.append("")
@@ -377,7 +402,8 @@ def main():
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(render_map(files, rows, [], stale_sidecars))
+        fh.write(render_map(files, rows, [], stale_sidecars,
+                            discover_worker_areas(sidecar_dir)))
 
     total_loc = sum(files.values())
     n_claimed = len(claimed) - len(stale_sidecars)

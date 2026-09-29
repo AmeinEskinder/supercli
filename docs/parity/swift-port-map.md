@@ -33,14 +33,15 @@ Behaviour-level detail lives in the per-area sidecars under
 
 | Area | Files | LOC |
 |---|---|---|
-| shared | 18 | 7,633 |
-| macos-services | 74 | 36,537 |
-| terminal | 32 | 14,312 |
-| sidebar | 42 | 21,891 |
-| settings | 12 | 7,141 |
-| remote | 21 | 16,844 |
 | appkit | 29 | 14,374 |
 | ios | 45 | 26,905 |
+| macos-services | 74 | 36,537 |
+| remote | 21 | 16,844 |
+| settings | 12 | 7,141 |
+| shared | 18 | 7,633 |
+| sidebar | 42 | 21,891 |
+| terminal | 32 | 14,312 |
+| unpeelstore | 0 | 0 |
 
 _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, excluded from the table):_
   - secure-credential-store (Rust, no Swift source — new security requirement)
@@ -185,7 +186,7 @@ _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift | 75 | Dart: clients/supercli-app | ported |  | 6 |
 | native/SupercliNative/Sources/SupercliNative/Theme.swift | 1758 | Dart: clients/supercli-app/lib/theme.dart | ported |  | 20 |
 | native/SupercliNative/Sources/SupercliNative/ToolIcons.swift | 100 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift | 16559 | Rust: supercli-core + supercli-client | partial |  | 28 |
+| native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift | 16559 | Rust: supercli-core + supercli-client | partial |  | 51 |
 | native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift | 422 | Dart: clients/supercli-app/lib/screens/workspace_registry.dart | partial |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift | 327 | Dart: clients/supercli-app | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/Views/AgentAccessSettingsPanel.swift | 52 | Dart: clients/supercli-app | partial | 202, 204, 205 | 3 |
