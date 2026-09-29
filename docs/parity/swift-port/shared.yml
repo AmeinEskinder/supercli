@@ -43,29 +43,6 @@ files:
     notes: "Rust generates catalog at build time from runtimes/*/runtime.toml via build.rs. Logic moving to Rust per Amein's one-implementation rule. Dart runtime_catalog.dart is a hand-copied duplicate (4 of 16 runtimes); delete it and expose Rust catalog via FFI."
 
 
-  shared/SupercliShared/Sources/SupercliShared/PairedHostRecord.swift:
-    destination: 'Rust: supercli-client::types, supercli-client::pairing'
-    status: ported
-    behaviours:
-    - swift: PairedHostRecord struct (host_id, name, endpoint, controller_device_id,
-        paired_at_unix_ms, certificate_fingerprint, remote_server_port, remote_server_certificate_fingerprint,
-        link_enabled)
-      target: supercli-client::types::PairedHostRecord
-      test: supercli-client/src/pairing.rs::paired_host_upsert_is_stable
-    - swift: PairedHostRecord.isLinkEnabled (nil means allowed, only false narrows)
-      target: supercli-client::types::PairedHostRecord::is_link_enabled
-      test: 'supercli-client/src/types.rs (inline doc: link_enabled.unwrap_or(true))'
-    - swift: PairedHostCollection.upserting (replace by host_id, else append)
-      target: supercli-client::pairing::upsert_paired_host
-      test: supercli-client/src/pairing.rs::paired_host_upsert_is_stable
-    - swift: PairedHostCollection.removing (filter by host_id)
-      target: supercli-client::pairing::remove_paired_host
-      test: supercli-client/src/pairing.rs (unit tests)
-    tests:
-    - file: crates/supercli-client/src/pairing.rs
-      count: 5
-    notes: Fully ported. Wire field names preserved (macID legacy). is_link_enabled
-      matches Swift semantics.
   shared/SupercliShared/Sources/SupercliShared/RelayProtocol.swift:
     destination: 'Rust: supercli-client::relay, supercli-client::crypto'
     status: ported
@@ -327,20 +304,6 @@ files:
     notes: "163 LOC ported. Uses Dart runtime_catalog.dart."
 
 
-  shared/SupercliShared/Tests/SupercliSharedTests/PairedHostRecordTests.swift:
-    destination: 'Rust: supercli-client::pairing (unit tests)'
-    status: ported
-    behaviours:
-    - swift: testPairedHostRecordIsLinkEnabledByDefault
-      target: supercli-client::types::PairedHostRecord::is_link_enabled
-      test: supercli-client/src/pairing.rs::paired_host_upsert_is_stable
-    - swift: testPairedHostCollectionUpserting
-      target: supercli-client::pairing::upsert_paired_host
-      test: supercli-client/src/pairing.rs::paired_host_upsert_is_stable
-    tests:
-    - file: crates/supercli-client/src/pairing.rs
-      count: 2
-    notes: 82 LOC, 3 tests. Covered by Rust pairing.rs unit tests.
   shared/SupercliShared/Tests/SupercliSharedTests/PluginProtocolTests.swift:
     destination: 'Rust: supercli-client::dto (unit tests)'
     status: ported
