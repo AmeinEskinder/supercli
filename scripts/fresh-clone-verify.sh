@@ -70,7 +70,6 @@ matches=$(grep -rli 'unpeel' . \
             -e '^./scripts/publish-cloudflare-release.mjs$' \
             -e '^./scripts/release-app-installer.test.mjs$' \
             -e '^./scripts/release-app-state.test.mjs$' \
-            -e '^./generated/GeneratedRuntimeCatalog.swift$' \
             -e '^./generated/runtime-catalog.json$' \
             -e 'CHANGELOG.md' \
             -e 'THIRD_PARTY_NOTICES.txt' \

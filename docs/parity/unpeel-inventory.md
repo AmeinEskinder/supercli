@@ -525,7 +525,7 @@ A remote Controller only. The detail screen is always a live terminal, never a c
 | Relay protocol | Forward-secret E2E handshake, sealed frames, transcript MAC | RelayProtocol.swift |
 | Relay connection | WebSocket relay client used by iOS and the native Link downlink | RemoteRelayConnection.swift |
 | Paired host record | Persisted Host identity used for fail-closed reconnects | PairedHostRecord.swift |
-| Runtime catalog (generated) | Swift copy of the runtime registry (names, icons, tints) | GeneratedRuntimeCatalog.swift; generated/GeneratedRuntimeCatalog.swift |
+| Runtime catalog (generated) | JSON copy of the runtime registry (names, icons, tints) | generated/runtime-catalog.json (Swift output deleted under Swift-0%) |
 | Tool/chrome icons | Shared provider/browser icon art | ToolIcons.swift; ChromeIcons.swift |
 | KAT vector tests | Relay crypto pinned to `protocol/relay-kat-vectors-v1.json` | Tests/UnpeelSharedTests/RelayCryptoVectorTests.swift |
 | Transport contract tests | Plugin/remote/transport contract tests | Tests/UnpeelSharedTests/* |

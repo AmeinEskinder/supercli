@@ -447,7 +447,7 @@ test('archive entry check requires the three binaries, the payloads, and protoco
     'supercli', 'supercli-host', 'supercli-attach', 'LICENSE', 'THIRD_PARTY_NOTICES.txt',
     'BUILD_PROVENANCE.json', 'protocol', 'protocol/host-capabilities-v1.json',
     'protocol/host-conformance-v1.json', 'protocol/relay-kat-vectors-v2.json',
-    'generated', 'generated/GeneratedRuntimeCatalog.swift'
+    'generated', 'generated/runtime-catalog.json'
   ]
   assert.doesNotThrow(() => assertCliArchiveEntries(complete, 'macos-universal'))
   assert.throws(

@@ -29,9 +29,6 @@ names and references. Do not rename.
 - `scripts/generate-runtime-client-catalog.mjs` — emits the JSON runtime catalog
   (`generated/runtime-catalog.json`); Swift generation was removed under the
   Swift-0% goal.
-- `generated/GeneratedRuntimeCatalog.swift` — legacy checked-in Swift output,
-  superseded by `generated/runtime-catalog.json`; tracked in the port map as
-  a dropped file.
 - Frozen native-app release channel (published `Unpeel-*.dmg` / `Unpeel-*.zip`
   artifact names for the frozen macOS app; renaming would break download URLs):
   - `scripts/release-app.mjs`

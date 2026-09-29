@@ -7,8 +7,8 @@
 // output; provider recipes remain Host-owned.
 //
 // Swift generation was removed: under the Swift-0% goal no new Swift is
-// generated. The legacy generated/GeneratedRuntimeCatalog.swift reference
-// copy is tracked in the port map as a dropped file.
+// generated. The legacy generated/GeneratedRuntimeCatalog.swift was deleted;
+// the JSON catalog (generated/runtime-catalog.json) is the single source.
 
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import path from 'node:path'

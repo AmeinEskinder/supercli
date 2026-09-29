@@ -55,7 +55,7 @@ except ImportError:
 # Repo-root-relative directories to walk for Swift files.
 # clients/legacy holds the frozen legacy clients (native, iOS, app-kit,
 # shared, dioxus bridges, dmg background, vendored libghostty-spm).
-# generated/ holds the GeneratedRuntimeCatalog.swift reference copy.
+# generated/ holds the JSON runtime catalog (Swift output deleted under Swift-0%).
 # crates/supercli-cli/tests holds the Swift test clients (pairclient,
 # relayclient).
 SWIFT_ROOTS = [
@@ -96,7 +96,6 @@ D_RUST_IOS = "Rust: supercli-client/core (iOS non-UI)"
 D_GAP_IOS_UI = "gpuidart gap: iOS UI (waits for gpuidart mobile)"
 D_TBD = "tbd"
 D_DELETE_WITH_APP = "dropped: vendored libghostty-spm, deleted with app"
-D_DROPPED_GENERATED = "dropped: generated file, superseded by JSON catalog"
 
 NATIVE_SERVICE_KW = (
     "Service", "Keychain", "Launchd", "Updater", "Sparkle", "Notification",
@@ -146,9 +145,6 @@ def heuristic_destination(rel_path):
     # Vendored Ghostty SPM: delete-with-app, never ported.
     if "vendor/libghostty-spm" in rel_path.lower():
         return D_DELETE_WITH_APP
-    # Generated runtime catalog: superseded by the JSON catalog.
-    if rel_path == "generated/GeneratedRuntimeCatalog.swift":
-        return D_DROPPED_GENERATED
     # Swift test clients for the Rust CLI.
     if rel_path.startswith("crates/supercli-cli/tests/"):
         return D_RUST_LOGIC
@@ -197,8 +193,7 @@ def worker_area_of(rel_path):
         return "ios"
     if rel_path.startswith("clients/legacy/dioxus/"):
         return "macos-services"  # native shell bridges
-    if rel_path in ("clients/legacy/native/dmg-background.swift",
-                    "generated/GeneratedRuntimeCatalog.swift"):
+    if rel_path == "clients/legacy/native/dmg-background.swift":
         return "macos-services"
     if rel_path.startswith("crates/supercli-cli/tests/"):
         return "remote"  # Swift test clients for pairing/relay
@@ -260,7 +255,7 @@ def normalize_sidecar_key(key):
     Legacy sidecar keys are relative to clients/legacy/ (e.g.
     "shared/SupercliShared/Foo.swift"). New keys for files outside
     clients/legacy/ must already be repo-root-relative (e.g.
-    "generated/GeneratedRuntimeCatalog.swift"). Both resolve to the same
+    "crates/supercli-cli/tests/pairclient/main.swift"). Both resolve to the same
     repo-root-relative path used as the map row key.
     """
     if key.startswith(("clients/", "generated/", "crates/")):

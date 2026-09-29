@@ -256,11 +256,12 @@ updates.
 
 ## Server archives, `protocol/`, and the Mac app's server binaries
 
-- **Every CLI archive ships `generated/`** — `generated/GeneratedRuntimeCatalog.swift`,
+- **Every CLI archive ships `generated/`** — `generated/runtime-catalog.json`,
   the client-safe runtime catalog. The Apple clients in this tree consume the
-  identical copy at `clients/shared/SupercliShared/Sources/SupercliShared/` (both are
+  frozen legacy copy at `clients/legacy/shared/SupercliShared/Sources/SupercliShared/`
+  (written by the old Swift generator, no longer regenerated); the JSON is
   written by `bun run generate:runtimes` and verified by `bun run
-  check:runtimes`); the archive copy exists for out-of-tree clients and
+  check:runtimes`; the archive copy exists for out-of-tree clients and
   humans. Same rules as `protocol/`: in the tar lists, in the required-entry
   check, ignored by `install.sh`.
 - **Every CLI archive ships `protocol/`** — all of `protocol/*` (capability
