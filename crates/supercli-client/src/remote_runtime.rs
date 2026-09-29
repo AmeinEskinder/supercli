@@ -252,7 +252,11 @@ pub mod host_operation {
     pub const PUSH_REGISTER: &str = "push.register";
     pub const NOTIFY_WHEN_DONE_SET: &str = "session.notify_when_done.set";
     pub const APPROVAL_ANSWER: &str = "approval.answer";
-    pub const RESOURCE_REQUEST: &str = "resource.request";
+    // NOTE: There is intentionally no generic RESOURCE_REQUEST capability.
+    // Swift's `resourceRequest(operation:capability:...)` takes a per-operation
+    // capability supplied by the caller (e.g. "artifact.upload.file",
+    // "project.add", "filesystem.directories.list"). A single generic gate
+    // would not match Swift's per-operation gating.
 }
 
 /// One user-facing failure from a remote organization or lifecycle verb.
@@ -1031,8 +1035,10 @@ impl RemoteHostRuntime {
 
     /// Close the connection. Bumps the generation so any in-flight verb
     /// result is rejected as stale — the synchronous model of Swift's
-    /// disconnect discarding pending continuations.
-    pub fn disconnect(&mut self) {
+    /// disconnect discarding pending continuations. Closes the backend
+    /// connection like Swift's `disconnect()` closing the old connection
+    /// (Swift: `close(oldConnection, after: retirementPrerequisite)`).
+    pub fn disconnect(&mut self, backend: &mut dyn RemoteBackend) {
         self.generation += 1;
         self.transport = None;
         self.connection_route = None;
@@ -1040,6 +1046,7 @@ impl RemoteHostRuntime {
         self.bootstrapped = false;
         self.snapshot = None;
         self.selected_session_id = None;
+        backend.close();
     }
 
     /// Begin a verb: capture the current generation. Fails when not
@@ -1646,14 +1653,23 @@ impl RemoteHostRuntime {
         }
     }
 
+    /// Generic resource request. Mirrors Swift's
+    /// `resourceRequest(operation:capability:parameters:bytes:)` — the
+    /// caller supplies the per-operation capability (e.g. "artifact.upload.file",
+    /// "project.add", "filesystem.directories.list"), never a single generic
+    /// gate. Swift callers: uploadFile ("artifact.upload.file"), UnpeelStore
+    /// addProject ("project.add"), RemoteFolderPicker directories
+    /// ("filesystem.directories.list") and createDirectory
+    /// ("filesystem.directories.create").
     pub fn resource_request(
         &mut self,
         backend: &mut dyn RemoteBackend,
         operation: &str,
+        capability: &str,
         parameters: &HashMap<String, String>,
         bytes: Vec<u8>,
     ) -> Result<Vec<u8>, RemoteHostVerbError> {
-        let generation = self.begin_verb(host_operation::RESOURCE_REQUEST, "resource request")?;
+        let generation = self.begin_verb(capability, "resource request")?;
         match backend.resource_request(operation, parameters, bytes) {
             Ok(response) => {
                 if generation != self.generation {
@@ -2503,7 +2519,7 @@ mod port_tests {
 
         // Disconnect drops the verb generation; a late scripted answer can
         // no longer be accepted (Swift: `guard isCurrent(connection)`).
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         backend.plugin_updates_result = Some(Ok(make_plugin_updates()));
         let err = rt.read_plugin_updates(&mut backend).unwrap_err();
         assert!(matches!(err, RemoteHostVerbError::NotConnected));
@@ -2592,7 +2608,7 @@ mod port_tests {
     fn disconnect_cancels_pending_and_releases_runtime() {
         // Swift: testDisconnectWakesCancelledRefreshSleepAndReleasesRuntime
         let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         let err = rt.read_plugin_updates(&mut backend).unwrap_err();
         assert!(matches!(err, RemoteHostVerbError::NotConnected));
     }
@@ -2973,7 +2989,7 @@ mod port_tests {
         let first = rt.generation;
         // Begin a verb under the old generation.
         let stale_gen = rt.begin_verb(host_operation::WRITE, "write").unwrap();
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         backend.push_bootstrap(Ok(make_snapshot(&base_capabilities(), vec![])));
         rt.connect(ssh_transport(), &mut backend)
             .expect("reconnect");
@@ -2991,7 +3007,7 @@ mod port_tests {
         let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
         // A stale in-flight verb from host A is rejected after switching.
         let stale = rt.begin_verb(host_operation::WRITE, "write").unwrap();
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         backend.push_bootstrap(Ok(make_snapshot(&base_capabilities(), vec![])));
         rt.connect(ssh_transport(), &mut backend)
             .expect("connect B");
@@ -3002,7 +3018,7 @@ mod port_tests {
     fn failed_second_host_keeps_first_host_retired() {
         // Swift: testHostBFactoryFailureStillKeepsHostARetirementForImmediateReturn
         let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         backend.push_bootstrap(Err(BackendError::new("unreachable", "B down")));
         assert!(rt.connect(ssh_transport(), &mut backend).is_err());
         // The runtime is idle again; a fresh connect to host A still works.
@@ -3208,9 +3224,9 @@ mod port_tests {
     #[test]
     fn stale_verb_after_disconnect_is_rejected() {
         // Swift: testStaleResultRejectionAfterDisconnect (72)
-        let (mut rt, backend) = connected_runtime(&base_capabilities(), vec![]);
+        let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
         let generation = rt.begin_verb(host_operation::WRITE, "write").unwrap();
-        rt.disconnect();
+        rt.disconnect(&mut backend);
         let result = rt.complete_verb(generation, "title", Ok(()), false);
         assert!(matches!(result, Err(RemoteHostVerbError::StaleResult)));
         assert!(backend.organization_calls.is_empty());
@@ -3323,11 +3339,11 @@ mod port_tests {
     #[test]
     fn file_and_resource_verbs_record() {
         // Swift: testAttachmentUploadVerb (64) + testResourceRequestVerb (65)
+        // resourceRequest takes a per-operation capability (Swift:
+        // `resourceRequest(operation:capability:parameters:bytes:)`), e.g.
+        // "artifact.upload.file" for uploadFile, "project.add" for addProject.
         let mut caps = base_capabilities();
-        caps.extend([
-            host_operation::ARTIFACT_UPLOAD,
-            host_operation::RESOURCE_REQUEST,
-        ]);
+        caps.extend([host_operation::ARTIFACT_UPLOAD, "gallery.get"]);
         let (mut rt, mut backend) = connected_runtime(&caps, vec![]);
         let path = rt
             .upload_attachment(&mut backend, Some("s"), "image/png", vec![1, 2, 3])
@@ -3335,7 +3351,7 @@ mod port_tests {
         assert_eq!(path, "/uploads/file.png");
         let mut params = HashMap::new();
         params.insert("id".to_string(), "r1".to_string());
-        rt.resource_request(&mut backend, "gallery.get", &params, vec![])
+        rt.resource_request(&mut backend, "gallery.get", "gallery.get", &params, vec![])
             .unwrap();
         assert!(backend
             .organization_calls
@@ -3345,6 +3361,36 @@ mod port_tests {
             .organization_calls
             .iter()
             .any(|c| c.starts_with("resource:gallery.get:1:0")));
+    }
+
+    #[test]
+    fn resource_request_requires_per_operation_capability() {
+        // Swift: `resourceRequest(operation:capability:...)` gates on the
+        // caller-supplied per-operation capability, not a generic gate.
+        // A Host advertising "gallery.get" must NOT satisfy a request for
+        // "gallery.delete", and vice versa.
+        let mut caps = base_capabilities();
+        caps.push("gallery.get");
+        let (mut rt, mut backend) = connected_runtime(&caps, vec![]);
+        let params = HashMap::new();
+        // Wrong capability → rejected without a backend call.
+        let err = rt
+            .resource_request(
+                &mut backend,
+                "gallery.delete",
+                "gallery.delete",
+                &params,
+                vec![],
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            RemoteHostVerbError::CapabilityUnavailable { capability }
+                if capability == "gallery.delete"
+        ));
+        // Right capability → backend is called.
+        rt.resource_request(&mut backend, "gallery.get", "gallery.get", &params, vec![])
+            .unwrap();
     }
 
     // MARK: - remaining organization verbs (54-63)
@@ -3709,9 +3755,21 @@ mod port_tests {
     #[test]
     fn disconnect_is_idempotent() {
         // Swift: testDisconnectIsIdempotent
-        let (mut rt, _backend) = connected_runtime(&base_capabilities(), vec![]);
-        rt.disconnect();
-        rt.disconnect();
+        let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
+        rt.disconnect(&mut backend);
+        rt.disconnect(&mut backend);
+        assert!(!rt.is_active());
+    }
+
+    #[test]
+    fn disconnect_closes_backend() {
+        // Swift: disconnect() closes the old connection via
+        // `close(oldConnection, after: retirementPrerequisite)`.
+        // The Rust disconnect must call backend.close().
+        let (mut rt, mut backend) = connected_runtime(&base_capabilities(), vec![]);
+        assert_eq!(backend.close_count, 0);
+        rt.disconnect(&mut backend);
+        assert_eq!(backend.close_count, 1);
         assert!(!rt.is_active());
     }
 }

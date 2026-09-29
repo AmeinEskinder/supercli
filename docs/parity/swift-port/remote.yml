@@ -99,12 +99,18 @@ files:
       - swift: "EffectQueue: UTF-8 stitching, 64KiB chunking, 4MiB backpressure bound"
         target: "crates/supercli-client/src/remote_runtime.rs::EffectQueue"
         test: "crates/supercli-client/src/remote_runtime.rs::port_tests::write_batches_split_at_64kib_on_utf8_boundaries"
+      - swift: "resourceRequest(operation:capability:...) per-operation capability gating (not a generic gate)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::resource_request"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::resource_request_requires_per_operation_capability"
+      - swift: "disconnect() closes the backend connection"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::disconnect"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::disconnect_closes_backend"
     tests:
       - file: native/SupercliNative/Tests/SupercliNativeTests/RemoteHostRuntimeTests.swift
         count: 81
       - file: crates/supercli-client/src/remote_runtime.rs
-        count: 87
-    notes: "Ported all 81 XCTest cases to Rust (87 tests total including 6 pre-existing). Covers: capability-gated verbs, stale-result rejection, session selection, replacement correlation, transport identity, retirement barriers, output pages, pane pumps, terminal effects, outcome-unknown semantics, UTF-8 batching. Verified: cargo fmt --check, clippy -D warnings, cargo test."
+        count: 89
+    notes: "Ported all 81 XCTest cases to Rust (89 tests total including 6 pre-existing + 2 review fixes). Covers: capability-gated verbs, stale-result rejection, session selection, replacement correlation, transport identity, retirement barriers, output pages, pane pumps, terminal effects, outcome-unknown semantics, UTF-8 batching. Review fixes (v2): disconnect() now calls backend.close() (was missing); resource_request() now takes per-operation capability matching Swift's resourceRequest(operation:capability:...) (was using invented generic 'resource.request' gate, now removed). HONEST GAP: Swift's async/MainActor Task model (retirement barriers, continuations, MainActor isolation) is modeled as a synchronous deterministic state machine with generation counters; real async interleavings are not tested. Verified: cargo fmt --check, clippy -D warnings, cargo test."
   native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
     destination: "Rust: supercli-client"
     status: partial
