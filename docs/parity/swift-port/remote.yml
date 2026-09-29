@@ -221,3 +221,48 @@ files:
       - file: crates/supercli-client/src/host_store.rs
         count: 4
     notes: "SECURITY: OsKeychainCredentialStore uses the OS native store via the keyring crate (macOS Keychain/Security.framework, Linux Secret Service/libsecret, Windows Credential Manager). MemoryHostCredentialStore is explicitly documented as test-only. RemoteHostStore::with_os_keychain() is the production constructor. Credentials are NEVER written to plaintext config files."
+
+  # FFI move (next@5dc280a): viewer presence decision kernel moved from Dart to Rust.
+  native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift:
+    destination: "Rust: supercli-client::viewer_presence"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ViewerInfo struct (device identity, display name)"
+        target: "crates/supercli-client/src/viewer_presence.rs::ViewerInfo"
+        test: "crates/supercli-client/src/viewer_presence.rs::parse_presence_extracts_device_ids_and_names"
+      - swift: "ViewerPresenceStore.parsePresence (presence-file JSON parsing)"
+        target: "crates/supercli-client/src/viewer_presence.rs::parse_presence"
+        test: "crates/supercli-client/src/viewer_presence.rs::parse_presence_extracts_device_ids_and_names"
+      - swift: "displayName(fromDevice:ip:) (display-name derivation)"
+        target: "crates/supercli-client/src/viewer_presence.rs::display_name_from_device"
+        test: "crates/supercli-client/src/viewer_presence.rs::display_name_parsing"
+      - swift: "deviceID(fromDevice:) (device-id extraction)"
+        target: "crates/supercli-client/src/viewer_presence.rs::device_id_from_device"
+        test: "crates/supercli-client/src/viewer_presence.rs::device_id_parsing"
+      - swift: "Cross-feed merge with per-feed TTL expiry (20s file / 15s mobile), newest-wins"
+        target: "crates/supercli-client/src/viewer_presence.rs::merge_presence"
+        test: "crates/supercli-client/src/viewer_presence.rs::merge_expires_per_feed_and_newest_wins"
+      - swift: "isDeviceViewing(sessionID:deviceID:) (exact device check)"
+        target: "crates/supercli-client/src/viewer_presence.rs::is_device_viewing"
+        test: "crates/supercli-client/src/viewer_presence.rs::is_device_viewing_checks_exact_device"
+      - swift: "announceConnectionChanges (silent initial seeding, announce on edge)"
+        target: "crates/supercli-client/src/viewer_presence.rs::connection_arrivals"
+        test: "crates/supercli-client/src/viewer_presence.rs::connection_arrivals_seed_silently_then_announce"
+    tests:
+      - file: crates/supercli-client/src/viewer_presence.rs
+        count: 7
+    notes: "327 LOC. Decision kernel moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart viewer_presence.dart deleted; FFI exposes via supercli-client-ffi. File watching, timers, and toast callbacks are platform runtime machinery and stay on the caller side."
+
+  native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift:
+    destination: "Rust: supercli-client::viewer_presence"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ViewerPresenceTests — presence parsing, TTL merge, device viewing checks"
+        target: "crates/supercli-client/src/viewer_presence.rs"
+        test: "crates/supercli-client/src/viewer_presence.rs (7 tests)"
+    tests:
+      - file: crates/supercli-client/src/viewer_presence.rs
+        count: 7
+    notes: "Behaviours covered by 7 Rust tests. No Dart test file existed for viewer_presence."

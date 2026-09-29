@@ -109,23 +109,23 @@ files:
     notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-core::terminal_drop_maps"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "TerminalDropTargetMap.Region.contains(row:column:) — half-open hit test"
-        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetRegion.contains"
-        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap target hit testing is fresh, bounded, and half-open"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::DropTargetRegion::contains"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs::region_contains_is_half_open"
       - swift: "TerminalDropTargetMap.accepts(row:column:nowMilliseconds:) — version/pid/freshness gate"
-        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetMap.accepts"
-        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap target hit testing is fresh, bounded, and half-open"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::DropTargetMap::accepts"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs::drop_map_accepts_validates_all_gates"
       - swift: "TerminalDropTargetEvent JSON wire contract"
-        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetEvent.toJson"
-        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap event JSON uses the shared wire contract"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::DropTargetEvent"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs::drop_map_json_wire_contract"
     tests:
-      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+      - file: crates/supercli-core/src/terminal_drop_maps.rs
         count: 6
-    notes: "Ported 2026-09-29: pure logic (JSON codec, hit testing, freshness gate, event serialization). File I/O (load/writeEvent) not portable — uses FileManager. Logic moving to Rust per Amein's one-implementation rule. Codec belongs in Rust (producer is app-kit drop_target.rs)."
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_drop_target_map.dart deleted. File I/O (load/writeEvent) not portable — uses FileManager. Codec producer is app-kit drop_target.rs."
 
   native/SupercliNative/Sources/SupercliNative/TerminalFindBar.swift:
     destination: "Dart: clients/supercli-app"
@@ -136,20 +136,20 @@ files:
     notes: "OVERCLAIM REVERTED 2026-09-27: was marked 'ported' against a 35-line Dart file with 0 tests ported (Swift: 176 lines). Dart port exists at lib/screens/terminalfindbar.dart but has 0 tests. The AppKit NSView (NSTextField, NSStackView, focus management) is not portable; the updateCounts(total:selected:) display logic ('3 of 17' / 'No results' / bare total) is portable and needs tests. Needs behaviour-level audit before any status above todo."
 
   native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-core::terminal_drop_maps"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "TerminalPathDragMap.path(atScreenRow:column:nowMilliseconds:) — row match + absolute-path gate"
-        target: "lib/terminal/terminal_path_drag_map.dart::TerminalPathDragMap.pathAt"
-        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap fresh mapped cell resolves an absolute path"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::PathDragMap::path_at"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs::path_drag_map_resolves_first_matching_absolute_path"
       - swift: "Stale/future/relative maps fail closed"
-        target: "lib/terminal/terminal_path_drag_map.dart::TerminalPathDragMap.pathAt"
-        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap stale, future, and relative maps fail closed"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::PathDragMap::path_at"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs::path_drag_map_json_wire_contract"
     tests:
-      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+      - file: crates/supercli-core/src/terminal_drop_maps.rs
         count: 6
-    notes: "Ported 2026-09-29: pure logic (JSON codec, row hit test, freshness gate, absolute-path check). File I/O (load) not portable — uses FileManager. Logic moving to Rust per Amein's one-implementation rule. Codec belongs in Rust (producer is app-kit drop_target.rs)."
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_path_drag_map.dart deleted. File I/O (load) not portable — uses FileManager. Codec producer is app-kit drop_target.rs."
 
   native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift:
     destination: "Dart: clients/supercli-app"
@@ -204,17 +204,17 @@ files:
     notes: "AppKit UI (NSView, CGRect, superview hierarchy, SwapContainer attach/detach). The pane-cache retention policy (RemoteGhosttyPaneCache) may have portable logic, but the tests are view-hierarchy tests. Not portable without a native window."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalDropTargetMapTests.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-core::terminal_drop_maps"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "TerminalDropTargetMapTests — hit testing, freshness, event wire contract"
-        target: "lib/terminal/terminal_drop_target_map.dart"
-        test: "test/terminal_drop_target_map_test.dart"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs"
+        test: "crates/supercli-core/src/terminal_drop_maps.rs (6 tests)"
     tests:
-      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+      - file: crates/supercli-core/src/terminal_drop_maps.rs
         count: 6
-    notes: "Test file ported 2026-09-29 alongside TerminalDropTargetMap.swift. Logic moving to Rust per Amein's one-implementation rule."
+    notes: "Behaviours covered by 6 Rust tests. Dart terminal_drop_target_map_test.dart deleted with the FFI move."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalFontModelTests.swift:
     destination: "Dart: clients/supercli-app"
