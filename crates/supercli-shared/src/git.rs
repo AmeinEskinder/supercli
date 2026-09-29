@@ -7,10 +7,8 @@
 //! it was ported from.
 //!
 //! Single implementation: previously duplicated as `supercli-core`'s private
-//! `controller_host::git_head_branch` (now re-exported from this module as
-//! `supercli_core::git::head_branch`). This crate is the home because the
-//! workspace dependency graph forbids `supercli-client` from depending on
-//! `supercli-core` (`core → connector → client` would cycle).
+//! `controller_host::git_head_branch` and `supercli-client`'s
+//! `remote_dto_adapters::git_head_reader::current_branch`.
 //!
 //! Web-safe: compiles for `wasm32-unknown-unknown` (`std::fs` compiles on
 //! wasm32; the calls fail gracefully at runtime where there is no FS).

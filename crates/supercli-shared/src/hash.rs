@@ -6,11 +6,7 @@
 //! value must survive a relaunch.
 //!
 //! Single implementation: previously duplicated as `supercli-core`'s private
-//! `worktrees::fnv1a` and `launch_config::stable_hash` (both now call this).
-//! This crate is the home because the workspace dependency graph forbids
-//! `supercli-client` from depending on `supercli-core`
-//! (`core → connector → client` would cycle); core re-exports this module as
-//! `supercli_core::hash`.
+//! `worktrees::fnv1a` and `supercli-client`'s `launch_config::stable_hash`.
 //!
 //! Web-safe: compiles for `wasm32-unknown-unknown` (pure computation).
 

@@ -215,12 +215,12 @@ fn dirs_home() -> PathBuf {
 pub fn defaults_suite_name(for_supercli_home: Option<&str>) -> Option<String> {
     match for_supercli_home {
         Some(home) if !home.trim().is_empty() => {
-            // Deterministic FNV-1a (crate::hash::fnv1a): Swift's
+            // Deterministic FNV-1a (supercli_shared::hash::fnv1a): Swift's
             // `String.hashValue` is salted per process, which would change
             // the derived suite name every launch.
             Some(format!(
                 "com.supercli.devhome.{:x}",
-                crate::hash::fnv1a(home)
+                supercli_shared::hash::fnv1a(home)
             ))
         }
         _ => None,

@@ -8,8 +8,8 @@
 //!   Controller scope ID.
 //!
 //! Git HEAD reading (the Swift `GitHeadReader.currentBranch`) lives in the
-//! single implementation at [`crate::git::head_branch`] (re-exported for the
-//! Host as `supercli_core::git::head_branch`).
+//! single implementation at [`supercli_shared::git::head_branch`] (re-exported
+//! for the Host as `supercli_core::git::head_branch`).
 //!
 //! The Swift original also has extensions on `Project`, `Preset`,
 //! `SessionEntry`, and `SupercliStore` that build full DTOs; those depend on

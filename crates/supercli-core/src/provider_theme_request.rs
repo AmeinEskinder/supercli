@@ -208,19 +208,21 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
         let head_frame = b"\x1b[48;2;200;10;10m ";
         let tail_frame = b"\x1b[48;2;20;20;20m ";
-        let mut f = std::fs::File::create(session_dir.join("output.bin")).unwrap();
-        let head_frames = (SAMPLER_SAMPLE_BYTES * 2) / head_frame.len();
-        for _ in 0..head_frames {
-            f.write_all(head_frame).unwrap();
+        // Scoped so the file handle closes before the tail-only read below.
+        {
+            let mut f = std::fs::File::create(session_dir.join("output.bin")).unwrap();
+            let head_frames = (SAMPLER_SAMPLE_BYTES * 2) / head_frame.len();
+            for _ in 0..head_frames {
+                f.write_all(head_frame).unwrap();
+            }
+            // The tail region alone fills the whole sample window, so a correct
+            // tail-only read sees nothing but the tail color. If the whole file
+            // were read, the head color would win (ratio 2.0 > 1.6 dominance).
+            let tail_frames = SAMPLER_SAMPLE_BYTES / tail_frame.len();
+            for _ in 0..tail_frames {
+                f.write_all(tail_frame).unwrap();
+            }
         }
-        // The tail region alone fills the whole sample window, so a correct
-        // tail-only read sees nothing but the tail color. If the whole file
-        // were read, the head color would win (ratio 2.0 > 1.6 dominance).
-        let tail_frames = SAMPLER_SAMPLE_BYTES / tail_frame.len();
-        for _ in 0..tail_frames {
-            f.write_all(tail_frame).unwrap();
-        }
-        drop(f);
         let len = std::fs::metadata(session_dir.join("output.bin"))
             .unwrap()
             .len();

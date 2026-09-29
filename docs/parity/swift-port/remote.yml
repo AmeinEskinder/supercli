@@ -298,8 +298,8 @@ files:
     checklist: ""
     behaviours:
       - swift: "GitHeadReader.currentBranch (parse .git/HEAD, follow worktree .git files, detached HEAD short commit)"
-        target: "crates/supercli-client/src/git.rs::head_branch"
-        test: "crates/supercli-client/src/git.rs::tests::head_branch_reads_branch"
+        target: "crates/supercli-shared/src/git.rs::head_branch"
+        test: "crates/supercli-shared/src/git.rs::tests::head_branch_reads_branch"
       - swift: "SessionStatus.remoteStatus (exited→exited, others→running)"
         target: "crates/supercli-client/src/remote_dto_adapters.rs::SessionStatus::remote_status"
         test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::session_status_maps_to_remote"
@@ -312,7 +312,7 @@ files:
     tests:
       - file: crates/supercli-client/src/remote_dto_adapters.rs
         count: 7
-    notes: "247 LOC. Pure adapters ported: git HEAD reader (branch/worktree/detached — single implementation at supercli-client::git::head_branch, re-exported as supercli_core::git), status/activity mappings, scope ID derivation. Swift extensions on Project/Preset/SessionEntry/SupercliStore depend on app-local model types with no Rust equivalent yet; not ported."
+    notes: "247 LOC. Pure adapters ported: git HEAD reader (branch/worktree/detached — single implementation at supercli-shared::git::head_branch, re-exported as supercli_core::git), status/activity mappings, scope ID derivation. Swift extensions on Project/Preset/SessionEntry/SupercliStore depend on app-local model types with no Rust equivalent yet; not ported."
 
   native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift:
     destination: "Rust: supercli-client"
@@ -329,15 +329,15 @@ files:
         target: "crates/supercli-client/src/launch_config.rs::attach_command"
         test: "crates/supercli-client/src/launch_config.rs::tests::attach_command_has_direct_prefix"
       - swift: "AppDefaults.stableHash (deterministic FNV-1a)"
-        target: "crates/supercli-client/src/hash.rs::fnv1a"
-        test: "crates/supercli-client/src/hash.rs::tests::fnv1a_hello_known_value"
+        target: "crates/supercli-shared/src/hash.rs::fnv1a"
+        test: "crates/supercli-shared/src/hash.rs::tests::fnv1a_hello_known_value"
       - swift: "AppDefaults.suite(forSupercliHome:) derivation"
         target: "crates/supercli-client/src/launch_config.rs::defaults_suite_name"
         test: "crates/supercli-client/src/launch_config.rs::tests::defaults_suite_name_derives_from_home"
     tests:
       - file: crates/supercli-client/src/launch_config.rs
         count: 7
-    notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported (single implementation at supercli-client::hash::fnv1a, re-exported as supercli_core::hash). supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
+    notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported (single implementation at supercli-shared::hash::fnv1a, re-exported as supercli_core::hash). supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
 
   ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
     destination: "Rust: supercli-client"
