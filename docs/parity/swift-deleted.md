@@ -28,9 +28,9 @@ and sums LOC for rows with Status `merged` into the map headline
 
 ## Totals
 
-- Merged into `next`: **887 LOC** (1 file) — 0.5% of baseline
-- Pending merge: **9,025 LOC** (8 files)
-- All verified deletions: **9,912 LOC** (9 files) — 5.9% of baseline
+- Merged into `next`: **10,819 LOC** (17 files) — 6.5% of baseline
+- Pending merge: **4,072 LOC** (13 files, feat/verify-delete-batch6)
+- All verified deletions: **14,891 LOC** (30 files) — 8.9% of baseline
 | clients/legacy/ios/SupercliIOS/Sources/SupercliIOS/DevSettings.swift | 29 | merged (feat/verify-delete-batch4) | merged | supercli-client/src/dev_settings.rs::DevSettings — toggle state + persistence key + UserDefaults abstraction | 4 Rust tests pass (defaults_to_off, toggle_persists_to_store, toggle_off_clears_persisted_value, uses_stable_defaults_key) |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift | 30 | merged (feat/verify-delete-batch4) | merged | supercli-core/src/provider_theme_request.rs::ProviderThemeReadRequest — read() + matches(), tail-only output.bin sampling | 7 Rust tests pass (incl. read_samples_only_the_tail_for_large_output_bin) |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ClickablePath.swift | 209 | merged (feat/verify-delete-batch4) | merged | supercli-core/src/clickable_path.rs — match_in_row, resolve_file, absolute_path, file_url_match | Rust tests pass (sidecar: 6 behaviours mapped) |
@@ -39,3 +39,16 @@ and sums LOC for rows with Status `merged` into the map headline
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ActivityLogHostConsumerTests.swift | 43 | merged (feat/verify-delete-batch4) | merged | superseded by Rust test in supercli-core/src/activity_log.rs | 1 Rust test: refresh_from_host picks up external appends without writing |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift | 273 | merged (feat/verify-delete-batch4) | merged | supercli-core/src/feature_flags.rs::AppFeature — single implementation after dedup (feat/port-feature-flags@6ebd362) | 26 Rust tests pass |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ModuleResources.swift | 32 | merged (feat/verify-delete-batch4) | merged | supercli-native-bridge/src/macos/app_shell.rs — resource bundle lookup order (Contents/Resources/ then next-to-binary) | 2 Rust tests pass (resource_lookup_prefers_packaged_app_dir, resource_lookup_bare_executable_has_single_candidate) |
+| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIUnixSessionClient.swift | 513 | (feat/verify-delete-batch6) | pending | Dart: clients/supercli-app/lib/host_client.dart (HostClient HTTP) — deliberate architecture decision, GAP-APPKIT-1, Unix-socket transport not ported | N/A — transport-specific reconnect/frame-decode/event-dispatch has no Dart equivalent |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Package.swift | 59 | (feat/verify-delete-batch6) | pending | SwiftPM manifest, demo-only — no Dart equivalent | N/A — build file |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/AppFixtures.swift | 188 | (feat/verify-delete-batch6) | pending | demo-only test fixtures — no Dart product equivalent (Dart appkit widget tests use inline fixtures) | N/A — demo fixtures |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/ComponentTreeView.swift | 177 | (feat/verify-delete-batch6) | pending | demo-only SwiftUI view — no Dart product equivalent | N/A — demo view |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/ContentView.swift | 610 | (feat/verify-delete-batch6) | pending | demo-only SwiftUI view — no Dart product equivalent | N/A — demo view |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/KitchenSinkApp.swift | 44 | (feat/verify-delete-batch6) | pending | demo-only app entry — no Dart equivalent | N/A — demo entry |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/MiniHost.swift | 889 | (feat/verify-delete-batch6) | pending | demo-only test-double Host for SwiftUI previews — no Dart product equivalent | N/A — demo test double |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/SemanticWalkthrough.swift | 266 | (feat/verify-delete-batch6) | pending | demo-only walkthrough — no Dart product equivalent | N/A — demo walkthrough |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/SurfaceMiniHost.swift | 857 | (feat/verify-delete-batch6) | pending | demo-only test-double Host (Surface variant) — no Dart product equivalent | N/A — demo test double |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/TerminalPane.swift | 273 | (feat/verify-delete-batch6) | pending | demo-only terminal pane — no Dart product equivalent | N/A — demo view |
+| clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/WebComponentPane.swift | 151 | (feat/verify-delete-batch6) | pending | demo-only web pane — no Dart product equivalent | N/A — demo view |
+| clients/legacy/app-kit/swift/Package.swift | 17 | (feat/verify-delete-batch6) | pending | SwiftPM manifest, build file — no Dart equivalent | N/A — build file |
+| clients/legacy/shared/SupercliShared/Package.swift | 28 | (feat/verify-delete-batch6) | pending | SwiftPM manifest — no Rust equivalent (Rust uses Cargo) | N/A — build file |

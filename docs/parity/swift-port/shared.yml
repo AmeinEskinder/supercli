@@ -1,12 +1,5 @@
 area: shared
 files:
-  shared/SupercliShared/Package.swift:
-    destination: 'dropped: SwiftPM manifest, no Rust equivalent'
-    status: ported
-    behaviours: []
-    tests: []
-    notes: Swift package manifest (28 LOC). No behaviours to port; Rust uses Cargo.
-      Nothing to test.
   shared/SupercliShared/Sources/SupercliShared/ChromeIcons.swift:
     destination: "Dart: clients/supercli-app"
     status: ported
