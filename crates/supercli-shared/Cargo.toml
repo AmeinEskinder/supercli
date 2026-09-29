@@ -1,0 +1,15 @@
+[package]
+name = "supercli-shared"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Tiny leaf crate: shared pure logic (git HEAD reading, FNV-1a hashing) with zero non-std dependencies"
+
+[dependencies]
+# Intentionally empty: std only. Both supercli-core and supercli-client
+# depend on this crate so the single implementations stay portable,
+# including the wasm32 Controller core.
+
+[dev-dependencies]
+tempfile = "3"

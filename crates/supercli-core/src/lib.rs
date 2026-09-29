@@ -65,12 +65,19 @@ pub mod feature_flags;
 pub mod first_run;
 #[cfg(feature = "native-host")]
 mod ghostty_vt;
+// Single implementations live in the tiny leaf crate supercli-shared
+// (std only); re-exported here so Host code keeps the
+// `supercli_core::git` / `supercli_core::hash` paths.
+#[cfg(feature = "controller-core")]
+pub use supercli_shared::git;
 #[cfg(feature = "native-host")]
 pub mod grant_audit;
 #[cfg(feature = "native-host")]
 pub mod grant_store;
 #[cfg(feature = "native-host")]
 pub mod grant_writer;
+#[cfg(feature = "controller-core")]
+pub use supercli_shared::hash;
 #[cfg(feature = "native-host")]
 pub mod hook_assets;
 #[cfg(feature = "native-host")]

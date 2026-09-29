@@ -45,6 +45,7 @@ pub mod host_routing;
 pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
+pub mod launch_config;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod link_authority;
 #[cfg(not(target_arch = "wasm32"))]
@@ -65,8 +66,10 @@ pub mod relay_conn;
 pub mod relay_transport;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_connection;
+pub mod remote_dto_adapters;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
+pub mod remote_terminal_websocket;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
 #[cfg(not(target_arch = "wasm32"))]

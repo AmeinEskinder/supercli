@@ -2772,6 +2772,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subtle",
+ "supercli-shared",
  "thiserror 2.0.21",
  "tungstenite",
  "ureq",
@@ -2830,6 +2831,7 @@ dependencies = [
  "sha1",
  "sha2 0.10.9",
  "supercli-connector",
+ "supercli-shared",
  "tar",
  "tempfile",
  "toml",
@@ -2924,6 +2926,13 @@ dependencies = [
  "supercli-events",
  "tempfile",
  "uuid",
+]
+
+[[package]]
+name = "supercli-shared"
+version = "0.9.0"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]
