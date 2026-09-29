@@ -3,4 +3,22 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: ios
-files: {}
+files:
+  ios/SupercliIOS/Sources/SupercliIOS/DevSettings.swift:
+    destination: "Rust: supercli-client::dev_settings"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "DevSettings.showTerminalBounds — debug toggle persisted to UserDefaults on every change (didSet)"
+        target: "crates/supercli-client/src/dev_settings.rs::DevSettings::set_show_terminal_bounds"
+        test: "dev_settings::tests::toggle_persists_to_store, dev_settings::tests::toggle_off_clears_persisted_value"
+      - swift: "DevSettings.init() — load persisted toggle, default off"
+        target: "crates/supercli-client/src/dev_settings.rs::DevSettings::load"
+        test: "dev_settings::tests::defaults_to_off, dev_settings::tests::toggle_persists_to_store"
+      - swift: "DevSettings.boundsKey — stable defaults key"
+        target: "crates/supercli-client/src/dev_settings.rs::SHOW_TERMINAL_BOUNDS_KEY"
+        test: "dev_settings::tests::uses_stable_defaults_key"
+    tests:
+      - file: crates/supercli-client/src/dev_settings.rs
+        count: 4
+    notes: "Ported from DevSettings.swift (29 LOC). UserDefaults abstracted behind the DevSettingsStore trait; the @Observable/@MainActor UI wrapper stays in Swift/Dart."

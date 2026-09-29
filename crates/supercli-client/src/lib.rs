@@ -34,6 +34,7 @@
 pub mod credentials;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
+pub mod dev_settings;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod direct_transport;
 pub mod dto;

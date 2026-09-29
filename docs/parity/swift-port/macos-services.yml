@@ -663,3 +663,24 @@ files:
       - file: crates/supercli-core/src/store_policies.rs
         count: 4
     notes: "HostManagementState equality-gating half ported (4 tests). The HostServiceManager slow-reconciliation half belongs to the native-bridge service-manager worker."
+  native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift:
+    destination: "Rust: supercli-core::provider_theme_request"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ProviderThemeReadRequest.read() — provider background (opencode/grok dispatch) + canvas dominant color from the session output.bin tail"
+        target: "crates/supercli-core/src/provider_theme_request.rs::ProviderThemeReadRequest::read"
+        test: "provider_theme_request::tests::read_returns_grok_light_background_for_light_flag, read_returns_no_provider_background_for_plain_command, read_samples_canvas_from_output_bin_tail, read_ignores_empty_output_bin"
+      - swift: "ProviderThemeReadRequest.matches(identity:sessionsDir:command:workingDirectory:) — pure identity check for cache validity"
+        target: "crates/supercli-core/src/provider_theme_request.rs::ProviderThemeReadRequest::matches"
+        test: "provider_theme_request::tests::matches_accepts_identical_parameters, matches_rejects_any_difference"
+      - swift: "TerminalFrameStyle.providerBackground(command:workingDirectory:) — opencode/grok tool detection from the command head"
+        target: "crates/supercli-core/src/provider_theme_request.rs::provider_background"
+        test: "provider_theme_request::tests::read_returns_grok_light_background_for_light_flag, read_returns_no_provider_background_for_plain_command"
+      - swift: "ProviderCanvasSampler.dominantBackground(sessionID:sessionsDir:) — output.bin tail sampling via the existing SGR scanner"
+        target: "crates/supercli-core/src/provider_theme_request.rs::dominant_canvas_background"
+        test: "provider_theme_request::tests::read_samples_canvas_from_output_bin_tail, read_ignores_empty_output_bin"
+    tests:
+      - file: crates/supercli-core/src/provider_theme_request.rs
+        count: 6
+    notes: "Ported from ProviderThemeReadRequest.swift (30 LOC). read() wires to the existing provider_theme resolvers (opencode_background, grok_background, dominant_background_in_data); UUID identity carried as String."
