@@ -423,6 +423,26 @@ files:
         count: 9
     notes: "Pure queue/presentation/attention logic ported. AppKit orchestration (NSApp.activate, toasts, remote runtime calls, revealSessionForMcpApproval) is surface-specific and stays with the store/UI port. SidebarView sessionRowActivitySpinnerCommand and RootView ActivityMenuSessions overlay consumers belong to the Dart/SidebarView and Dart/RootView ports."
 
+  native/SupercliNative/Sources/SupercliNative/MCPApprovalPanel.swift:
+    destination: "Dart: clients/supercli-app/lib/screens/mcpapprovalpanel.dart"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "McpApprovalPaneOverlay — attention dot, title, tool line, summary, detail, N-more-waiting, Allow/Deny/Edit"
+        target: "lib/screens/mcpapprovalpanel.dart (McpApprovalPanel)"
+        test: "clients/supercli-app/test/approvals_panel_test.dart"
+      - swift: "Keyboard — Return approve, Escape deny, E edit (scoped to overlay)"
+        target: "lib/screens/mcpapprovalpanel.dart (actions, Keymap.approvalAllow/approvalDeny)"
+        test: "clients/supercli-app/test/approvals_panel_test.dart"
+      - swift: "Approvals list panel — all pending, newest first, empty state"
+        target: "lib/screens/mcpapprovalpanel.dart (ApprovalsPanel)"
+        test: "clients/supercli-app/test/approvals_panel_test.dart"
+    tests:
+      - file: clients/supercli-app/test/approvals_panel_test.dart
+        count: 30
+    notes: "Porter panels: UI panel fully ported with 30 tests. Glass-card
+      styling dropped: needs gpuidart UiApprovalCard (P0-1)."
+
   native/SupercliNative/Sources/SupercliNative/HostManagementState.swift:
     destination: "Rust: supercli-core::store_policies"
     status: partial

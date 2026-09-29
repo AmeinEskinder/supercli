@@ -242,6 +242,28 @@ files:
     tests: []
     notes: 'Worker D2: SessionGalleryMarkup in sessiongallerypanel.dart. Porter K:
       pure math extracted to gallery_markup_math.dart with tests.'
+  native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryPanel.swift:
+    destination: 'Dart: clients/supercli-app/lib/screens/sessiongallerypanel.dart'
+    status: partial
+    checklist: ''
+    behaviours:
+      - swift: "Grid/detail state machine (selected artifact, markup mode)"
+        target: "lib/screens/sessiongallerypanel.dart (GalleryView, selected)"
+        test: "clients/supercli-app/test/session_gallery_panel_test.dart"
+      - swift: "Artifact actions (add to prompt, reveal, delete)"
+        target: "lib/screens/sessiongallerypanel.dart (_detail actions)"
+        test: null
+      - swift: "SwiftUI rendering (GalleryTile, GalleryAnnotatableImage, NSImage loading)"
+        target: null
+        test: null
+      - swift: "Title-bar SessionGalleryButton chip"
+        target: null
+        test: null
+    tests:
+      - file: clients/supercli-app/test/session_gallery_panel_test.dart
+        count: 5
+    notes: 'Porter panels: grid/detail state ported with tests. SwiftUI/NSImage
+      rendering dropped: AppKit-only. Image widget needs gpuidart P0-6.'
   native/SupercliNative/Sources/SupercliNative/Views/SessionScreenshotCapture.swift:
     destination: 'Dart: clients/supercli-app/lib/screens/sessionscreenshotcapture.dart
       (UI stub) + screenshot_capture_mode.dart'

@@ -107,23 +107,34 @@ files:
     behaviours:
       - swift: "Integration controls list"
         target: "lib/screens/pluginsettingspanel.dart"
-        test: null
+        test: "clients/supercli-app/test/plugin_settings_panel_test.dart"
       - swift: "MCP connect flow"
-        target: null
+        target: "lib/screens/pluginsettingspanel.dart (actions)"
         test: null
       - swift: "Command/draft editor"
         target: null
         test: null
       - swift: "Row expand/collapse with agent details"
+        target: "lib/screens/pluginsettingspanel.dart (expanded set)"
+        test: "clients/supercli-app/test/plugin_settings_panel_test.dart"
+      - swift: "Install flows"
         target: null
         test: null
-      - swift: "Install flows"
+      - swift: "Search + PluginFilter (overview/installed/available)"
+        target: "lib/screens/pluginsettingspanel.dart (PluginFilter, filterPluginItems)"
+        test: "clients/supercli-app/test/plugin_settings_panel_test.dart"
+      - swift: "Section grouping (Active/Inactive/Available)"
+        target: "lib/screens/pluginsettingspanel.dart (sectionPluginItems)"
+        test: "clients/supercli-app/test/plugin_settings_panel_test.dart"
+      - swift: "SwiftUI rendering (ViewBuilder, drag controllers, installation terminal)"
         target: null
         test: null
     tests:
       - file: clients/supercli-app/test/settings_test.dart
         count: 2
-    notes: "Behaviour-level audit pending: 2 tests for 5 behaviours."
+      - file: clients/supercli-app/test/plugin_settings_panel_test.dart
+        count: 12
+    notes: "Portable logic (filter, sections, expand) in Dart with tests. SwiftUI rendering dropped: AppKit-only."
 
   native/SupercliNative/Sources/SupercliNative/Views/BrowserAccessSections.swift:
     destination: "Dart: clients/supercli-app"
