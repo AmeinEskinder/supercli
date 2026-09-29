@@ -48,9 +48,9 @@ One function, one home. If a duplicate is found, delete your copy and re-point y
 | # | What was duplicated | Existing on `next` | Fix |
 |---|---|---|---|
 | 1 | `feature_flags.rs` second copy | first copy already in `crates/` | one file, remove duplicate sidecar entry |
-| 2 | `git_head_reader::current_branch` | `supercli-core/src/controller_host.rs:1796` `git_head_branch` (private, matches native `GitHeadReader`) | make core's `pub`, reuse |
-| 3 | `stable_hash` (FNV-1a) | `supercli-core/src/worktrees.rs:39` `fnv1a` (private, same constants) | make core's `pub`, reuse |
-| 4 | `remote_direct_transport.rs` (whole file) | `crates/supercli-client/src/direct_transport.rs` (`RemoteServerVersion`, `direct_transport_decision`, `bootstrap_deadline`, `PushTokenRegistrationRoute`) | `git revert`; point sidecar rows at existing files. **This copy also reintroduced the no-plaintext-fallback security fix — never re-port security-critical code without diffing against the current implementation.** |
+| 2 | `git_head_reader::current_branch` | `supercli-core/src/controller_host.rs:1796` `git_head_branch` (private, matches native `GitHeadReader`) | canonical home is `supercli-shared::git::head_branch` — reuse it, do NOT re-add a core copy |
+| 3 | `stable_hash` (FNV-1a) | `supercli-core/src/worktrees.rs:39` `fnv1a` (private, same constants) | canonical home is `supercli-shared::hash::fnv1a` — reuse it, do NOT re-add a core copy |
+| 4 | `remote_direct_transport.rs` (whole file) | `crates/supercli-client/src/direct_transport.rs` (`RemoteServerVersion`, `direct_transport_decision`, `bootstrap_deadline`, `PushTokenRegistrationRoute`) | `git revert`; point sidecar rows at existing files. **This copy also reintroduced the PLAINTEXT FALLBACK, undoing the no-plaintext-fallback security fix — never re-port security-critical code without diffing against the current implementation.** |
 | 5 | `remote_terminal_stream.rs` (whole file) | `crates/supercli-client/src/terminal_stream.rs` (`RemoteServerEndpoint`, `RemoteTerminalWebSocketCandidate`, `RemoteTerminalWsHello`, `web_socket_output_url`) | `git revert`; point sidecar rows at existing files |
 | 6 | `host_binary()` resolver | `supercli-core/src/session_ops.rs:2196` `resolve_host_binary` (same `SUPERCLI_HOST_CMD` env var, same concept) | reconcile into one function |
 | 7 | `MAX_INPUT_BYTES_PER_FRAME` 16KiB vs 32KiB | `crates/supercli-client/src/terminal_stream.rs:311` | one constant; verify the value against the Swift original |
