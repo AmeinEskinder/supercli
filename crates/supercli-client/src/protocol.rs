@@ -29,6 +29,9 @@ pub mod capabilities {
     pub const INTEGRATIONS_INSTALL: &str = "integrations.install";
     pub const PROJECT_ADD: &str = "project.add";
     pub const HOST_MOBILE_TLS: &str = "host.mobile.tls";
+    /// Minimum server version serving TLS on `/mobile`
+    /// (`RemoteControlProtocol.mobileTLSMinimumServerVersion`).
+    pub const MOBILE_TLS_MINIMUM_SERVER_VERSION: &str = "0.5.3";
     pub const FILESYSTEM_DIRECTORIES_LIST: &str = "filesystem.directories.list";
     pub const FILESYSTEM_DIRECTORIES_CREATE: &str = "filesystem.directories.create";
     pub const FILESYSTEM_FILE_READ: &str = "filesystem.file.read";
