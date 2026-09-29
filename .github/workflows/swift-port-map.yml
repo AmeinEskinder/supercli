@@ -11,13 +11,13 @@ on:
     paths:
       - 'docs/parity/**'
       - 'scripts/generate-swift-port-map.py'
-      - 'clients/legacy/**/*.swift'
+      - '**/*.swift'
       - '.github/workflows/swift-port-map.yml'
   pull_request:
     paths:
       - 'docs/parity/**'
       - 'scripts/generate-swift-port-map.py'
-      - 'clients/legacy/**/*.swift'
+      - '**/*.swift'
       - '.github/workflows/swift-port-map.yml'
   workflow_dispatch:
 
