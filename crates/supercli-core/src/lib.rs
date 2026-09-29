@@ -190,6 +190,8 @@ pub mod settings_resolve;
 #[cfg(feature = "native-host")]
 pub mod setup;
 #[cfg(feature = "native-host")]
+pub mod shared_markers;
+#[cfg(feature = "native-host")]
 pub mod skills_mcp;
 #[cfg(feature = "native-host")]
 pub mod ssh_connection;

@@ -199,7 +199,7 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPaneWindow.swift | 39 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Theme.swift | 1758 | Dart: clients/supercli-app/lib/theme.dart | ported |  | 20 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ToolIcons.swift | 100 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift | 16559 | Rust: supercli-core + supercli-client | partial |  | 59 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift | 16559 | Rust: supercli-core + supercli-client | partial |  | 72 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/AgentAccessSettingsPanel.swift | 52 | Dart: clients/supercli-app | partial | 202, 204, 205 | 3 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/ArchivedSessionsView.swift | 324 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/BrowserAccessSections.swift | 390 | Dart: clients/supercli-app | partial | 204, 205 | 2 |

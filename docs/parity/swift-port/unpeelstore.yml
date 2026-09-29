@@ -53,6 +53,24 @@ files:
       - swift: "RemoteArchivedSessionSummaryCache — per-project archived session summary cache (replaceProject drops stale rows, retainProjects prunes, removeAll clears)"
         target: "crates/supercli-client/src/remote_session_cache.rs::RemoteArchivedSessionSummaryCache"
         test: "remote_session_cache::tests (8 tests)"
+      - swift: "SharedMarker file I/O — sharedMarkerURL (+explicit-home twin), writeSharedMarker (only when the session dir exists, atomic temp+rename), readSharedMarker (conservative object-only), removeSharedMarker, sharedMarkerExists"
+        target: "crates/supercli-core/src/shared_markers.rs::SharedMarker, shared_marker_path(_at), write_shared_marker, read_shared_marker, remove_shared_marker, shared_marker_exists"
+        test: "shared_markers::tests::write_read_remove_round_trip, write_refuses_missing_session_dir, read_returns_none_for_foreign_body, marker_paths_match_swift_layout"
+      - swift: "replacementRestartAllowsState — fail-closed: non-stopped-only always true; exited safe; running safe only when the child is definitely absent or the pid is recycled (PidIdentity::NotOurs); unknown identity fails closed"
+        target: "crates/supercli-core/src/shared_markers.rs::replacement_restart_allows_state (reuses session_host::PidIdentity)"
+        test: "shared_markers::tests::restart_allows_state_fails_closed"
+      - swift: "resolvedLastRealActivityAtMs — hook-capable agents return only the hook seed (TUI repaint must not make them recent); hookless tools use screen_changed_at, falling back to output.bin"
+        target: "crates/supercli-core/src/shared_markers.rs::resolved_last_real_activity_at_ms"
+        test: "shared_markers::tests::hook_agent_activity_ignores_tui_repaint"
+      - swift: "sessionLastRealActivityAtMs — filesystem-backed read: hook seed mtime for hook agents (missing seed = None); manifest screen_changed_at (> 0) then output.bin mtime for hookless tools"
+        target: "crates/supercli-core/src/shared_markers.rs::session_last_real_activity_at_ms, file_modification_at_ms"
+        test: "shared_markers::tests::session_last_activity_hook_agent_uses_seed_mtime, session_last_activity_hook_agent_missing_seed_is_none, session_last_activity_hookless_prefers_manifest_stamp, session_last_activity_hookless_falls_back_to_output_bin, session_last_activity_nothing_present_is_none"
+      - swift: "resolvedLifecycleAtMs — creation is the floor; max with last real activity and the final exited stamp (while running, updated_at is a heartbeat and must not float the row)"
+        target: "crates/supercli-core/src/shared_markers.rs::resolved_lifecycle_at_ms"
+        test: "shared_markers::tests::lifecycle_at_uses_creation_floor_and_exited_heartbeat"
+      - swift: "sessionRecencyMs — max of createdAt, lifecycleAtMs, latest alert (read receipts are not activity); missing session resolves to 0 at the call site"
+        target: "crates/supercli-core/src/shared_markers.rs::session_recency_ms"
+        test: "shared_markers::tests::recency_uses_latest_of_created_lifecycle_and_alert"
     tests:
       - file: crates/supercli-core/src/store_policies.rs
         count: 23
@@ -66,4 +84,6 @@ files:
         count: 5
       - file: crates/supercli-client/src/remote_session_cache.rs
         count: 8
-    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 6 pure-logic sections ported with 59 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8). The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
+      - file: crates/supercli-core/src/shared_markers.rs
+        count: 13
+    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 7 pure-logic sections ported with 72 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8), shared markers + restart eligibility + recency (13). The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active(). Already ported elsewhere: hostedChildProcessExists (workspace_move::hosted_child_process_exists), sessionLifecycleLockURL + lease acquire (session_ops::lifecycle_lock_target_at + lock_session_lifecycle via app_state::FileLock), manifestPidIdentity (session_host::manifest_pid_identity -> PidIdentity)."
