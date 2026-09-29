@@ -23,50 +23,81 @@ Behaviour-level detail lives in the per-area sidecars under
 
 ## Summary
 
-- Total Swift files: 348
-- Total Swift LOC: 148,667
+- Total Swift files: 317
+- Total Swift LOC: 144,051
 - Deleted: 18,961 of 167,628 baseline LOC (11.3%)
-- Verified: 0.0% of LOC (0 / 148,667 lines)
-- Status breakdown: partial: 47 files (52,912 LOC) · ported: 74 files (27,310 LOC) · todo: 227 files (68,445 LOC)
-- Destination breakdown: Dart: appkit_widgets: 17 files (10,330 LOC) · Dart: clients/supercli-app: 77 files (37,210 LOC) · Dart: clients/supercli-app/lib/screens/session_artifacts.dart: 1 files (159 LOC) · Dart: clients/supercli-app/lib/screens/session_move_rules.dart: 1 files (97 LOC) · Dart: clients/supercli-app/lib/screens/sessiongallerypanel.dart (SessionGalleryMarkup) + gallery_markup_math.dart: 1 files (246 LOC) · Dart: clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (UI stub) + screenshot_capture_mode.dart: 1 files (186 LOC) · Dart: clients/supercli-app/lib/screens/workspace_open_target.dart: 1 files (353 LOC) · Dart: clients/supercli-app/lib/theme.dart: 1 files (1,758 LOC) · Rust: supercli-client: 12 files (3,864 LOC) · Rust: supercli-client (mouse_mode): 2 files (243 LOC) · Rust: supercli-client (pane_layout): 1 files (1,394 LOC) · Rust: supercli-client/core (iOS non-UI): 16 files (7,500 LOC) · Rust: supercli-client::crypto (KAT tests): 1 files (106 LOC) · Rust: supercli-client::dto (unit tests): 1 files (66 LOC) · Rust: supercli-client::dto, supercli-client::pairing: 1 files (947 LOC) · Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend: 1 files (2,739 LOC) · Rust: supercli-client::pairing: 1 files (138 LOC) · Rust: supercli-client::pairing (e2e tests): 1 files (329 LOC) · Rust: supercli-client::relay (e2e tests): 1 files (400 LOC) · Rust: supercli-client::relay, supercli-client::crypto: 1 files (608 LOC) · Rust: supercli-client::relay_conn: 1 files (601 LOC) · Rust: supercli-client::relay_conn (e2e tests): 1 files (172 LOC) · Rust: supercli-client::resume_command: 1 files (68 LOC) · Rust: supercli-client::startup_presentation_cache: 1 files (50 LOC) · Rust: supercli-client::stream_frame_reconciler: 1 files (46 LOC) · Rust: supercli-client::terminal_query_filter: 1 files (158 LOC) · Rust: supercli-client::transport: 1 files (64 LOC) · Rust: supercli-core + supercli-client: 1 files (16,559 LOC) · Rust: supercli-core/client: 23 files (9,667 LOC) · Rust: supercli-core::app_runtime: 1 files (172 LOC) · Rust: supercli-core::app_runtime (generated): 1 files (887 LOC) · Rust: supercli-core::host_hardware: 1 files (70 LOC) · Rust: supercli-core::mcp_approval_center: 1 files (358 LOC) · Rust: supercli-core::mcp_approval_center::tests: 1 files (140 LOC) · Rust: supercli-core::preset_state_file: 1 files (142 LOC) · Rust: supercli-core::provider_theme: 1 files (1,093 LOC) · Rust: supercli-core::state: 1 files (1,263 LOC) · Rust: supercli-core::store_policies: 1 files (33 LOC) · Rust: supercli-core::store_policies::tests: 6 files (795 LOC) · Rust: supercli-native-bridge: 4 files (1,031 LOC) · Rust: supercli-native-bridge::macos::app_shell: 1 files (28 LOC) · Rust: supercli-native-bridge::macos::app_shell (+ Dart menu model): 1 files (1,048 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::hook_server::tests: 1 files (278 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::launchd::tests: 1 files (149 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::license::tests: 1 files (167 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::notifications::tests: 1 files (308 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_identity::tests: 1 files (182 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · Rust: supercli-native-bridge::macos::service_manager::tests: 1 files (33 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 2 files (618 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 2 files (956 LOC) · dropped: Host does it (crates/supercli-serve/src/pairing.rs): 1 files (1,298 LOC) · dropped: vendored libghostty-spm, deleted with app: 111 files (19,967 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 8 files (823 LOC)
+- Verified: 0.0% of LOC (0 / 144,051 lines)
+- Status breakdown: partial: 47 files (52,912 LOC) · ported: 43 files (22,694 LOC) · todo: 227 files (68,445 LOC)
+- Destination breakdown: Dart: appkit_widgets: 16 files (10,273 LOC) · Dart: clients/supercli-app: 72 files (36,874 LOC) · Dart: clients/supercli-app/lib/screens/session_artifacts.dart: 1 files (159 LOC) · Dart: clients/supercli-app/lib/screens/session_move_rules.dart: 1 files (97 LOC) · Dart: clients/supercli-app/lib/screens/sessiongallerypanel.dart (SessionGalleryMarkup) + gallery_markup_math.dart: 1 files (246 LOC) · Dart: clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (UI stub) + screenshot_capture_mode.dart: 1 files (186 LOC) · Dart: clients/supercli-app/lib/screens/workspace_open_target.dart: 1 files (353 LOC) · Dart: clients/supercli-app/lib/theme.dart: 1 files (1,758 LOC) · Rust: supercli-client: 11 files (3,692 LOC) · Rust: supercli-client (pane_layout): 1 files (1,394 LOC) · Rust: supercli-client/core (iOS non-UI): 16 files (7,500 LOC) · Rust: supercli-client::crypto (KAT tests): 1 files (106 LOC) · Rust: supercli-client::dto, supercli-client::pairing: 1 files (947 LOC) · Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend: 1 files (2,739 LOC) · Rust: supercli-client::pairing: 1 files (138 LOC) · Rust: supercli-client::relay, supercli-client::crypto: 1 files (608 LOC) · Rust: supercli-client::relay_conn: 1 files (601 LOC) · Rust: supercli-client::resume_command: 1 files (68 LOC) · Rust: supercli-client::startup_presentation_cache: 1 files (50 LOC) · Rust: supercli-client::stream_frame_reconciler: 1 files (46 LOC) · Rust: supercli-client::terminal_query_filter: 1 files (158 LOC) · Rust: supercli-core + supercli-client: 1 files (16,559 LOC) · Rust: supercli-core/client: 23 files (9,667 LOC) · Rust: supercli-core::app_runtime (generated): 1 files (887 LOC) · Rust: supercli-core::mcp_approval_center: 1 files (358 LOC) · Rust: supercli-core::preset_state_file: 1 files (142 LOC) · Rust: supercli-core::provider_theme: 1 files (1,093 LOC) · Rust: supercli-core::state: 1 files (1,263 LOC) · Rust: supercli-core::store_policies: 1 files (33 LOC) · Rust: supercli-core::store_policies::tests: 1 files (140 LOC) · Rust: supercli-native-bridge: 4 files (1,031 LOC) · Rust: supercli-native-bridge::macos::app_shell (+ Dart menu model): 1 files (1,048 LOC) · Rust: supercli-native-bridge::macos::hook_server: 1 files (961 LOC) · Rust: supercli-native-bridge::macos::keychain: 1 files (64 LOC) · Rust: supercli-native-bridge::macos::launchd: 1 files (190 LOC) · Rust: supercli-native-bridge::macos::license: 1 files (599 LOC) · Rust: supercli-native-bridge::macos::local_host_control: 1 files (170 LOC) · Rust: supercli-native-bridge::macos::menu_bar: 1 files (319 LOC) · Rust: supercli-native-bridge::macos::notifications: 1 files (269 LOC) · Rust: supercli-native-bridge::macos::service_identity: 1 files (221 LOC) · Rust: supercli-native-bridge::macos::service_manager: 1 files (342 LOC) · dropped: Host does it (crates/supercli-core/src/host_git.rs): 1 files (484 LOC) · dropped: Host does it (crates/supercli-serve/src/activity.rs): 1 files (495 LOC) · dropped: Host does it (crates/supercli-serve/src/pairing.rs): 1 files (1,298 LOC) · dropped: vendored libghostty-spm, deleted with app: 111 files (19,967 LOC) · gpuidart gap: iOS UI (waits for gpuidart mobile): 18 files (17,635 LOC) · tbd: 8 files (823 LOC)
 - Unresolved (`tbd`) destinations: 8 files
 
 ### By worker area
 
 | Area | Files | LOC |
 |---|---|---|
-| shared | 15 | 7,435 |
-| macos-services | 66 | 35,837 |
-| terminal | 139 | 33,936 |
-| sidebar | 36 | 18,768 |
-| settings | 10 | 6,243 |
-| remote | 21 | 9,242 |
-| appkit | 17 | 10,330 |
-| ios | 44 | 26,876 |
+| shared | 9 | 6,232 |
+| macos-services | 53 | 33,917 |
+| terminal | 138 | 33,902 |
+| sidebar | 32 | 18,009 |
+| settings | 8 | 6,105 |
+| remote | 19 | 8,980 |
+| appkit | 16 | 10,273 |
+| ios | 42 | 26,633 |
 
-_Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, excluded from the table):_
+_Note: 53 sidecar entr(ies) reference files not on disk (kept in the yml, excluded from the table):_
+  - clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift
   - clients/legacy/ios/SupercliIOS/Sources/SupercliIOS/DevSettings.swift
+  - clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteMouseWheelPreferenceTests.swift
+  - clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalMouseModeTrackerTests.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/ActivityLog.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/ClickablePath.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift
+  - clients/legacy/native/SupercliNative/Sources/SupercliNative/HostHardware.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/ModuleResources.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/Presets.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift
+  - clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteUnpeelClient.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift
   - clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift
+  - clients/legacy/native/SupercliNative/Sources/SupercliNative/main.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ActivityLogHostConsumerTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ClickablePathTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ComputerContainmentTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HookServerParsingTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceIdentityTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceManagerTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/LicenseManagerTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/MCPApprovalPresentationTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/NotificationDeliveryTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PhoneFitProjectionTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PluginListDragTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PluginSettingsListTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PresetsTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteResumePlacementTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RestartGhostTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionActivityTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionMoveRulesTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionTitleDefaultsTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SharedOrganizationReconciliationTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalDropTargetMapTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneClosePolicyTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPathDragMapTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/UnpeelWorkspaceRegistryTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift
   - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift
+  - clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/WorktreeGitTests.swift
   - clients/legacy/secure-credential-store (Rust, no Swift source — new security requirement)
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/PluginProtocolTests.swift
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RelayProtocolTests.swift
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemotePairingClientTests.swift
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemoteRelayConnectionTests.swift
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemoteTransportContractTests.swift
+  - clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RuntimeCatalogTests.swift
 
 ## Files
 
@@ -76,7 +107,6 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/FooterActionsView.swift | 118 | Dart: appkit_widgets | partial |  | 1 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/ListNavigation.swift | 47 | Dart: appkit_widgets | ported |  | 9 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/MarkdownEditorView.swift | 989 | Dart: appkit_widgets | partial |  | 0 |
-| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/MarkdownInsertMenu.swift | 57 | Dart: appkit_widgets | ported |  | 12 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/MediaView.swift | 196 | Dart: appkit_widgets | partial |  | 0 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/PageView.swift | 1231 | Dart: appkit_widgets | partial |  | 1 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/ReadOnlyContentView.swift | 131 | Dart: appkit_widgets | partial |  | 0 |
@@ -125,10 +155,8 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/PairedMacStorageTests.swift | 1349 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/PushManagerTests.swift | 22 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteDirectTransportTests.swift | 549 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
-| clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteMouseWheelPreferenceTests.swift | 128 | Rust: supercli-client (mouse_mode) | ported |  | 7 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemotePreviewStoreTests.swift | 2108 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalCanvasLayoutTests.swift | 403 | gpuidart gap: iOS UI (waits for gpuidart mobile) | todo |  | 0 |
-| clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalMouseModeTrackerTests.swift | 115 | Rust: supercli-client (mouse_mode) | ported |  | 11 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalPredictionEngineTests.swift | 119 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalScrollPredictionEngineTests.swift | 259 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
 | clients/legacy/ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalStreamTransportTests.swift | 584 | Rust: supercli-client/core (iOS non-UI) | todo |  | 0 |
@@ -144,7 +172,6 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift | 2618 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/GlobalActivityMenu.swift | 281 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HookServer.swift | 961 | Rust: supercli-native-bridge::macos::hook_server | partial |  | 4 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/HostHardware.swift | 70 | Rust: supercli-core::host_hardware | ported |  | 10 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostManagementState.swift | 33 | Rust: supercli-core::store_policies | partial |  | 4 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostServiceAgent.swift | 190 | Rust: supercli-native-bridge::macos::launchd | ported |  | 9 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift | 221 | Rust: supercli-native-bridge::macos::service_identity | partial |  | 9 |
@@ -174,7 +201,6 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift | 769 | Rust: supercli-client | ported |  | 11 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift | 247 | Rust: supercli-client | partial |  | 7 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift | 627 | Rust: supercli-client | partial |  | 9 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteUnpeelClient.swift | 172 | Rust: supercli-client | ported |  | 19 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ResumeCommand.swift | 68 | Rust: supercli-client::resume_command | ported |  | 7 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/SessionActivity.swift | 495 | dropped: Host does it (crates/supercli-serve/src/activity.rs) | ported |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/SessionArtifacts.swift | 159 | Dart: clients/supercli-app/lib/screens/session_artifacts.dart | ported |  | 0 |
@@ -225,23 +251,15 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/WorktreesSettingsPanel.swift | 312 | Dart: clients/supercli-app | partial | 212 | 3 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspaceOpenTarget.swift | 353 | Dart: clients/supercli-app/lib/screens/workspace_open_target.dart | ported |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/WorktreeGit.swift | 484 | dropped: Host does it (crates/supercli-core/src/host_git.rs) | ported |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/main.swift | 28 | Rust: supercli-native-bridge::macos::app_shell | ported |  | 5 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ActivityMenuSessionsTests.swift | 187 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/AgentWorktreeAdoptionTests.swift | 104 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/AppStateFileTests.swift | 289 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ComputerContainmentTests.swift | 111 | Rust: supercli-core::store_policies::tests | ported |  | 6 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ControllerPairingProxyTests.swift | 115 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/GhosttySurfaceKeybindTests.swift | 34 | tbd | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/GlobalActivityMenuProjectionTests.swift | 79 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HookServerParsingTests.swift | 278 | Rust: supercli-native-bridge::macos::hook_server::tests | ported |  | 4 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift | 149 | Rust: supercli-native-bridge::macos::launchd::tests | ported |  | 9 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceIdentityTests.swift | 182 | Rust: supercli-native-bridge::macos::service_identity::tests | ported |  | 9 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostServiceManagerTests.swift | 33 | Rust: supercli-native-bridge::macos::service_manager::tests | ported |  | 6 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/HostedSessionManifestTests.swift | 429 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/LaunchConfigAttachCommandTests.swift | 31 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/LicenseManagerTests.swift | 167 | Rust: supercli-native-bridge::macos::license::tests | ported |  | 11 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/LocalHostClientFeatureTests.swift | 158 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/MCPApprovalPresentationTests.swift | 140 | Rust: supercli-core::mcp_approval_center::tests | ported |  | 5 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/MobilePairingStoreTests.swift | 825 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/MobilePaneGroupProjectionTests.swift | 48 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/MobileSessionControlTests.swift | 185 | Dart: clients/supercli-app | todo |  | 0 |
@@ -250,16 +268,12 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/NativeRelayBridgeTests.swift | 31 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/NativeRemoteBackendTests.swift | 228 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/NearbyHostBrowserTests.swift | 40 | tbd | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/NotificationDeliveryTests.swift | 308 | Rust: supercli-native-bridge::macos::notifications::tests | ported |  | 8 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/OpenURLSanitizerTests.swift | 138 | tbd | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PaneLayoutControllerTests.swift | 411 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PaneLayoutOperationsConformanceTests.swift | 291 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PaneLayoutStateTests.swift | 253 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PaneWorkingDirectoryTests.swift | 106 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PhoneFitProjectionTests.swift | 90 | Rust: supercli-core::store_policies::tests | ported |  | 3 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PlatformAdapterCallbackTests.swift | 69 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PluginListDragTests.swift | 64 | Dart: clients/supercli-app | ported | 203 | 1 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PluginSettingsListTests.swift | 74 | Dart: clients/supercli-app | ported | 203 | 1 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PresetStateFileTests.swift | 72 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ProviderCapabilitiesTests.swift | 243 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ProviderThemeRefreshTests.swift | 53 | Rust: supercli-core/client | todo |  | 0 |
@@ -268,14 +282,8 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteDTOAdaptersTests.swift | 274 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteGhosttyPaneRetentionTests.swift | 166 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteHostStoreTests.swift | 458 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteResumePlacementTests.swift | 90 | Rust: supercli-core::store_policies::tests | ported |  | 4 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RestartGhostTests.swift | 103 | Rust: supercli-core::store_policies::tests | ported |  | 3 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ResumeCommandTests.swift | 53 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionActivityTests.swift | 461 | dropped: Host does it (crates/supercli-serve/src/activity.rs) | ported |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionMoveRulesTests.swift | 129 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionSelectionPerformanceTests.swift | 126 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SessionTitleDefaultsTests.swift | 35 | Dart: clients/supercli-app | ported |  | 1 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SharedOrganizationReconciliationTests.swift | 261 | Rust: supercli-core::store_policies::tests | ported |  | 13 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SidebarGroupDropTests.swift | 332 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SidebarLocalPageSourceTests.swift | 32 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SidebarPagerMathTests.swift | 334 | Dart: clients/supercli-app | todo |  | 0 |
@@ -286,11 +294,9 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/SurfaceCacheEvictionTests.swift | 64 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalFontModelTests.swift | 124 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalLinkRegressionTests.swift | 92 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneClosePolicyTests.swift | 34 | Dart: clients/supercli-app | ported |  | 3 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneDropTargetTests.swift | 285 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneWindowTests.swift | 168 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ThemeColorTests.swift | 83 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/WorktreeGitTests.swift | 134 | dropped: Host does it (crates/supercli-core/src/host_git.rs) | ported |  | 0 |
 | clients/legacy/native/dmg-background.swift | 122 | Rust: supercli-native-bridge | todo |  | 0 |
 | clients/legacy/native/vendor/libghostty-spm/Package.local.swift | 55 | dropped: vendored libghostty-spm, deleted with app | todo |  | 0 |
 | clients/legacy/native/vendor/libghostty-spm/Package.swift | 56 | dropped: vendored libghostty-spm, deleted with app | todo |  | 0 |
@@ -410,13 +416,7 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/shared/SupercliShared/Sources/SupercliShared/RemotePairingClient.swift | 138 | Rust: supercli-client::pairing | ported |  | 14 |
 | clients/legacy/shared/SupercliShared/Sources/SupercliShared/RemoteRelayConnection.swift | 601 | Rust: supercli-client::relay_conn | ported |  | 10 |
 | clients/legacy/shared/SupercliShared/Sources/SupercliShared/ToolIcons.swift | 163 | Dart: clients/supercli-app | ported |  | 1 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/PluginProtocolTests.swift | 66 | Rust: supercli-client::dto (unit tests) | ported |  | 1 |
 | clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RelayCryptoVectorTests.swift | 106 | Rust: supercli-client::crypto (KAT tests) | ported |  | 2 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RelayProtocolTests.swift | 400 | Rust: supercli-client::relay (e2e tests) | ported |  | 8 |
 | clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemoteControlProtocolTests.swift | 947 | Rust: supercli-client::dto, supercli-client::pairing | partial |  | 20 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemotePairingClientTests.swift | 329 | Rust: supercli-client::pairing (e2e tests) | ported |  | 6 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemoteRelayConnectionTests.swift | 172 | Rust: supercli-client::relay_conn (e2e tests) | ported |  | 8 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RemoteTransportContractTests.swift | 64 | Rust: supercli-client::transport | ported |  | 4 |
-| clients/legacy/shared/SupercliShared/Tests/SupercliSharedTests/RuntimeCatalogTests.swift | 172 | Rust: supercli-core::app_runtime | ported |  | 1 |
 | crates/supercli-cli/tests/pairclient/main.swift | 42 | Rust: supercli-core/client | todo |  | 0 |
 | crates/supercli-cli/tests/relayclient/main.swift | 64 | Rust: supercli-core/client | todo |  | 0 |
