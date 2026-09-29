@@ -913,6 +913,576 @@ mod serde_bytes_option {
     }
 }
 
+// MARK: - RemoteControlProtocol batch 2 (porter T)
+//
+// Remaining `Remote*` types from `RemoteControlProtocol.swift` not covered by
+// the first DTO pass. Same wire rules: every field optional or defaulted so
+// bootstrap snapshots decode from both older and newer Hosts, unknown JSON
+// fields ignored.
+
+/// A plain organizational folder in the project tree.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectFolderSummary {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(rename = "parentFolderID", default)]
+    pub parent_folder_id: Option<String>,
+    #[serde(rename = "colorID", default)]
+    pub color_id: Option<String>,
+    #[serde(rename = "sortOrder", default)]
+    pub sort_order: Option<i32>,
+}
+
+/// GET /mobile/archive?project_id= — one project's archived sessions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchivedSessionsResponse {
+    #[serde(rename = "projectID", default)]
+    pub project_id: String,
+    #[serde(default)]
+    pub sessions: Vec<SessionSummary>,
+}
+
+/// The kind of a transcript content block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TranscriptBlockKind {
+    Text,
+    Reasoning,
+    ToolCall,
+    ToolResult,
+    Permission,
+    Info,
+    FileChange,
+    Diff,
+    PlanUpdate,
+    Usage,
+    Attachment,
+}
+
+/// One offset-addressed slice of a live transcript stream.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptStreamChunk {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(rename = "providerID", default)]
+    pub provider_id: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub resolved: bool,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(rename = "nextOffset", default)]
+    pub next_offset: u64,
+    #[serde(default)]
+    pub partial: String,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub entries: Vec<TranscriptEntry>,
+    #[serde(rename = "fallbackReason", default)]
+    pub fallback_reason: Option<String>,
+    #[serde(rename = "updatedAtUnixMs", default)]
+    pub updated_at_unix_ms: i64,
+}
+
+/// One page of transcript history.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptHistoryPage {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(rename = "providerID", default)]
+    pub provider_id: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub resolved: bool,
+    #[serde(rename = "startOffset", default)]
+    pub start_offset: u64,
+    #[serde(rename = "endOffset", default)]
+    pub end_offset: u64,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub entries: Vec<TranscriptEntry>,
+    #[serde(rename = "fallbackReason", default)]
+    pub fallback_reason: Option<String>,
+    #[serde(rename = "updatedAtUnixMs", default)]
+    pub updated_at_unix_ms: i64,
+}
+
+/// A group of panes shown together.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PaneGroupSummary {
+    pub id: String,
+    #[serde(rename = "representativeSessionID", default)]
+    pub representative_session_id: String,
+    #[serde(rename = "sessionIDs", default)]
+    pub session_ids: Vec<String>,
+}
+
+/// One official App advertised by the Host.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppSummary {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub tint: Option<String>,
+    #[serde(rename = "iconSvg", default)]
+    pub icon_svg: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(rename = "installedVersion", default)]
+    pub installed_version: Option<String>,
+    #[serde(rename = "updateAvailable", default)]
+    pub update_available: bool,
+    #[serde(rename = "installCommand", default)]
+    pub install_command: Option<String>,
+    #[serde(default)]
+    pub command: String,
+    #[serde(rename = "mediaTypes", default)]
+    pub media_types: Vec<String>,
+    #[serde(rename = "fileExtensions", default)]
+    pub file_extensions: std::collections::HashMap<String, String>,
+    #[serde(rename = "resourceKinds", default)]
+    pub resource_kinds: Vec<String>,
+    #[serde(rename = "defaultFor", default)]
+    pub default_for: Vec<String>,
+    #[serde(default)]
+    pub installed: bool,
+}
+
+impl AppSummary {
+    /// Whether this App handles a `file:<media-type>` or
+    /// `resource:<kind>` selector. Mirrors Swift
+    /// `RemoteAppSummary.handles(selector:)`.
+    pub fn handles(&self, selector: &str) -> bool {
+        if let Some(media_type) = selector.strip_prefix("file:") {
+            if media_type.is_empty() {
+                return false;
+            }
+            return self
+                .media_types
+                .iter()
+                .any(|m| m.eq_ignore_ascii_case(media_type));
+        }
+        if let Some(kind) = selector.strip_prefix("resource:") {
+            if kind.is_empty() {
+                return false;
+            }
+            return self
+                .resource_kinds
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case(kind));
+        }
+        false
+    }
+
+    /// The media type for a file path, from the first App whose
+    /// `fileExtensions` map contains the path's extension. Mirrors Swift
+    /// `RemoteAppSummary.mediaType(forPath:in:)`.
+    pub fn media_type_for_path(path: &str, apps: &[AppSummary]) -> Option<String> {
+        let ext = std::path::Path::new(path)
+            .extension()?
+            .to_str()?
+            .to_lowercase();
+        if ext.is_empty() {
+            return None;
+        }
+        apps.iter()
+            .find_map(|a| a.file_extensions.get(&ext).cloned())
+    }
+}
+
+/// Host-owned semantic App companions and their caller-relative reveal
+/// intents. Nested coding keys match the app-state envelope (`app_id`,
+/// `companion_session_id`, …).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppPresentationsFile {
+    #[serde(default)]
+    pub version: i32,
+    #[serde(default)]
+    pub instances: Vec<AppPresentationInstance>,
+    #[serde(default)]
+    pub presentations: Vec<AppPresentation>,
+}
+
+/// One App companion instance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppPresentationInstance {
+    pub id: String,
+    #[serde(rename = "app_id", default)]
+    pub app_id: String,
+    #[serde(rename = "companion_session_id", default)]
+    pub companion_session_id: String,
+}
+
+/// One caller-relative reveal intent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppPresentation {
+    pub id: String,
+    #[serde(rename = "caller_session_id", default)]
+    pub caller_session_id: String,
+    #[serde(rename = "instance_id", default)]
+    pub instance_id: String,
+    #[serde(default)]
+    pub target: String,
+    #[serde(rename = "reveal_revision", default)]
+    pub reveal_revision: u64,
+}
+
+/// What the entry is on the connected Host: "local", "ssh", or "paired".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostEnvironment {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub id: String,
+}
+
+impl HostEnvironment {
+    /// A short host-row label, e.g. "Box · bx_1a2b…". Mirrors Swift
+    /// `RemoteHostEnvironment.rowLabel`.
+    pub fn row_label(&self) -> String {
+        let short_id: String = if self.id.chars().count() > 10 {
+            format!("{}…", self.id.chars().take(9).collect::<String>())
+        } else {
+            self.id.clone()
+        };
+        if self.kind == "box" {
+            format!("Box · {short_id}")
+        } else {
+            format!("{} · {short_id}", self.kind)
+        }
+    }
+}
+
+/// A controller asking a connected Host to serve a different local
+/// workspace over the same connection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceSelectRequest {
+    #[serde(rename = "workspaceId", default)]
+    pub workspace_id: String,
+}
+
+/// Acknowledgement of a workspace switch, echoing the selected workspace.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceSelectResponse {
+    #[serde(default)]
+    pub workspace: Option<WorkspaceSummary>,
+}
+
+/// Controller → Host: resize a desktop session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DesktopResizeRequest {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub columns: Option<i32>,
+    #[serde(default)]
+    pub rows: Option<i32>,
+    #[serde(default)]
+    pub clear: Option<bool>,
+}
+
+/// Named keys a controller can send to a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyName {
+    Enter,
+    Escape,
+    Tab,
+    ArrowUp,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    ControlC,
+    ControlD,
+    ControlZ,
+}
+
+/// Controller → Host: send named keys to a session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionKeyInput {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub keys: Vec<KeyName>,
+}
+
+/// Terminal dimensions and view state for one session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TerminalMetrics {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub columns: i32,
+    #[serde(default)]
+    pub rows: i32,
+    #[serde(rename = "capturedAtUnixMs", default)]
+    pub captured_at_unix_ms: i64,
+    /// Whether the desktop app is actively viewing this session.
+    /// Nil on older Macs.
+    #[serde(rename = "desktopViewing", default)]
+    pub desktop_viewing: Option<bool>,
+}
+
+/// One file the browser MCP produced for a session — a screenshot or a
+/// download. Metadata only; bytes are fetched via [`BrowserArtifactChunk`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BrowserArtifact {
+    /// `"screenshots"` or `"downloads"` — also the on-disk subdirectory.
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(rename = "modifiedAtUnixMs", default)]
+    pub modified_at_unix_ms: i64,
+}
+
+/// The gallery listing for one session, newest-first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BrowserArtifactList {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub artifacts: Vec<BrowserArtifact>,
+    #[serde(rename = "capturedAtUnixMs", default)]
+    pub captured_at_unix_ms: i64,
+}
+
+/// One offset-addressed slice of an artifact's bytes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BrowserArtifactChunk {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(rename = "contentType", default)]
+    pub content_type: String,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(rename = "nextOffset", default)]
+    pub next_offset: u64,
+    #[serde(rename = "totalSize", default)]
+    pub total_size: u64,
+    #[serde(rename = "dataBase64", default)]
+    pub data_base64: String,
+    #[serde(rename = "capturedAtUnixMs", default)]
+    pub captured_at_unix_ms: i64,
+}
+
+/// Patch for the Host-advertised transcript rendering values.
+/// Nil fields are left unchanged.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct TranscriptSettingsUpdate {
+    #[serde(rename = "includeUser", default)]
+    pub include_user: Option<bool>,
+    #[serde(rename = "includeAssistant", default)]
+    pub include_assistant: Option<bool>,
+    #[serde(rename = "includeReasoning", default)]
+    pub include_reasoning: Option<bool>,
+    #[serde(rename = "includeTools", default)]
+    pub include_tools: Option<bool>,
+    #[serde(rename = "includeFileChanges", default)]
+    pub include_file_changes: Option<bool>,
+    #[serde(rename = "includePlanUpdates", default)]
+    pub include_plan_updates: Option<bool>,
+    #[serde(rename = "includeSessionInfo", default)]
+    pub include_session_info: Option<bool>,
+    #[serde(rename = "maxEntries", default)]
+    pub max_entries: Option<i32>,
+}
+
+/// The Host-advertised transcript rendering values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptSettings {
+    #[serde(rename = "includeUser", default)]
+    pub include_user: bool,
+    #[serde(rename = "includeAssistant", default)]
+    pub include_assistant: bool,
+    #[serde(rename = "includeReasoning", default)]
+    pub include_reasoning: bool,
+    #[serde(rename = "includeTools", default)]
+    pub include_tools: bool,
+    #[serde(rename = "includeFileChanges", default)]
+    pub include_file_changes: bool,
+    #[serde(rename = "includePlanUpdates", default)]
+    pub include_plan_updates: bool,
+    #[serde(rename = "includeSessionInfo", default)]
+    pub include_session_info: bool,
+    #[serde(rename = "maxEntries", default)]
+    pub max_entries: i32,
+}
+
+/// Patch for appearance values owned by the Host workspace.
+/// Nil fields are left unchanged.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct AppearanceSettingsUpdate {
+    #[serde(default)]
+    pub theme: Option<String>,
+    #[serde(rename = "appTint", default)]
+    pub app_tint: Option<String>,
+    #[serde(rename = "backgroundOpacity", default)]
+    pub background_opacity: Option<f64>,
+    #[serde(rename = "surfaceOpacity", default)]
+    pub surface_opacity: Option<f64>,
+    #[serde(rename = "backgroundTone", default)]
+    pub background_tone: Option<f64>,
+    #[serde(rename = "surfaceTone", default)]
+    pub surface_tone: Option<f64>,
+    #[serde(rename = "sessionTitleMode", default)]
+    pub session_title_mode: Option<String>,
+}
+
+/// Appearance values owned by the Host workspace but rendered by
+/// whichever Controller is currently scoped to it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppearanceSettings {
+    #[serde(default)]
+    pub theme: String,
+    #[serde(rename = "appTint", default)]
+    pub app_tint: String,
+    #[serde(rename = "backgroundOpacity", default)]
+    pub background_opacity: f64,
+    #[serde(rename = "surfaceOpacity", default)]
+    pub surface_opacity: f64,
+    #[serde(rename = "backgroundTone", default)]
+    pub background_tone: f64,
+    #[serde(rename = "surfaceTone", default)]
+    pub surface_tone: f64,
+    #[serde(rename = "sessionTitleMode", default)]
+    pub session_title_mode: String,
+}
+
+/// Patch for Host-owned attention behavior.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct NotificationSettingsUpdate {
+    #[serde(rename = "menuAttentionDetection", default)]
+    pub menu_attention_detection: Option<bool>,
+}
+
+/// Host-owned attention behavior.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NotificationSettings {
+    #[serde(rename = "menuAttentionDetection", default)]
+    pub menu_attention_detection: bool,
+}
+
+/// Patch for Host feature toggles (Settings ▸ Features).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ExperimentalSettingsUpdate {
+    #[serde(default)]
+    pub worktrees: Option<bool>,
+    #[serde(rename = "sessionsMcp", default)]
+    pub sessions_mcp: Option<bool>,
+    #[serde(rename = "browserMcp", default)]
+    pub browser_mcp: Option<bool>,
+    #[serde(rename = "computerUse", default)]
+    pub computer_use: Option<bool>,
+    #[serde(default)]
+    pub workspaces: Option<bool>,
+}
+
+/// Host feature toggles.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentalSettings {
+    #[serde(default)]
+    pub worktrees: bool,
+    #[serde(rename = "sessionsMcp", default)]
+    pub sessions_mcp: bool,
+    #[serde(rename = "browserMcp", default)]
+    pub browser_mcp: bool,
+    #[serde(rename = "computerUse", default)]
+    pub computer_use: bool,
+    /// Nil is an older Host and must not be guessed from hardware kind.
+    #[serde(rename = "computerUseAvailable", default)]
+    pub computer_use_available: Option<bool>,
+    #[serde(rename = "computerUseReady", default)]
+    pub computer_use_ready: Option<bool>,
+    #[serde(rename = "computerUseUnavailableReason", default)]
+    pub computer_use_unavailable_reason: Option<String>,
+    #[serde(default)]
+    pub workspaces: bool,
+}
+
+/// The selected Host's agent inventory; no Controller-side PATH guesses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentSummary {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub installed: bool,
+    #[serde(rename = "installCommand", default)]
+    pub install_command: Option<String>,
+    #[serde(rename = "websiteURL", default)]
+    pub website_url: Option<String>,
+    #[serde(rename = "integrationInstallable", default)]
+    pub integration_installable: Option<bool>,
+    #[serde(rename = "integrationInstalled", default)]
+    pub integration_installed: Option<bool>,
+    #[serde(rename = "integrationSummary", default)]
+    pub integration_summary: Option<String>,
+    #[serde(rename = "integrationManualCommand", default)]
+    pub integration_manual_command: Option<String>,
+}
+
+/// Host → Controller: the workspace's current Host-owned settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceSettings {
+    #[serde(rename = "pluginOrder", default)]
+    pub plugin_order: Option<Vec<String>>,
+    #[serde(rename = "pluginActivation", default)]
+    pub plugin_activation: Option<std::collections::HashMap<String, bool>>,
+    #[serde(rename = "availableAgents", default)]
+    pub available_agents: Option<Vec<AgentSummary>>,
+    #[serde(rename = "mcpShimPath", default)]
+    pub mcp_shim_path: Option<String>,
+    #[serde(rename = "transcriptSettings", default)]
+    pub transcript_settings: Option<TranscriptSettings>,
+    #[serde(rename = "appearanceSettings", default)]
+    pub appearance_settings: Option<AppearanceSettings>,
+    #[serde(rename = "notificationSettings", default)]
+    pub notification_settings: Option<NotificationSettings>,
+    #[serde(rename = "experimentalSettings", default)]
+    pub experimental_settings: Option<ExperimentalSettings>,
+    #[serde(rename = "autoStopArchiveMinutes", default)]
+    pub auto_stop_archive_minutes: i64,
+    #[serde(rename = "sidebarStoppedLimit", default)]
+    pub sidebar_stopped_limit: i64,
+    #[serde(rename = "browserDefaultAccess", default)]
+    pub browser_default_access: String,
+    #[serde(rename = "mcpNonchildWriteAccess", default)]
+    pub mcp_nonchild_write_access: String,
+    #[serde(rename = "computerAccess", default)]
+    pub computer_access: String,
+    #[serde(rename = "mcpWorktreeAccess", default)]
+    pub mcp_worktree_access: bool,
+    #[serde(rename = "mcpAutoAddBrowserScreenshots", default)]
+    pub mcp_auto_add_browser_screenshots: bool,
+}
+
+/// Controller → Host: replace one project's hand-ordered sidebar session
+/// ranks (capability `session.order.set`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionOrderRequest {
+    #[serde(rename = "projectID", default)]
+    pub project_id: String,
+    #[serde(rename = "orderedSessionIDs", default)]
+    pub ordered_session_ids: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1383,5 +1953,387 @@ mod tests {
         let rgb = TerminalColor::rgb(255, 0, 0);
         assert_eq!(rgb.red, Some(255));
         assert_eq!(rgb.green, Some(0));
+    }
+
+    // MARK: - RemoteControlProtocol batch 2 (porter T)
+
+    #[test]
+    fn project_folder_summary_decodes() {
+        let f: ProjectFolderSummary = serde_json::from_value(serde_json::json!({
+            "id": "f1",
+            "name": "Work",
+            "parentFolderID": null,
+            "colorID": "sky",
+            "sortOrder": 2,
+        }))
+        .unwrap();
+        assert_eq!(f.id, "f1");
+        assert_eq!(f.color_id.as_deref(), Some("sky"));
+        assert_eq!(f.sort_order, Some(2));
+        assert_eq!(f.parent_folder_id, None);
+    }
+
+    #[test]
+    fn archived_sessions_response_decodes() {
+        let r: ArchivedSessionsResponse = serde_json::from_value(serde_json::json!({
+            "projectID": "p1",
+            "sessions": [{"id": "s1", "status": "running", "activity": "idle"}],
+        }))
+        .unwrap();
+        assert_eq!(r.project_id, "p1");
+        assert_eq!(r.sessions.len(), 1);
+        assert_eq!(r.sessions[0].id, "s1");
+    }
+
+    #[test]
+    fn transcript_block_kind_round_trips() {
+        let k: TranscriptBlockKind = serde_json::from_value(serde_json::json!("toolCall")).unwrap();
+        assert_eq!(k, TranscriptBlockKind::ToolCall);
+        let k2: TranscriptBlockKind =
+            serde_json::from_value(serde_json::json!("fileChange")).unwrap();
+        assert_eq!(k2, TranscriptBlockKind::FileChange);
+        assert_eq!(
+            serde_json::to_value(TranscriptBlockKind::PlanUpdate).unwrap(),
+            serde_json::json!("planUpdate")
+        );
+    }
+
+    #[test]
+    fn transcript_stream_chunk_decodes() {
+        let c: TranscriptStreamChunk = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "resolved": true,
+            "offset": 10,
+            "nextOffset": 20,
+            "partial": "hel",
+            "truncated": false,
+            "entries": [],
+            "updatedAtUnixMs": 123,
+        }))
+        .unwrap();
+        assert_eq!(c.session_id, "s1");
+        assert_eq!(c.offset, 10);
+        assert_eq!(c.next_offset, 20);
+        assert_eq!(c.partial, "hel");
+        assert!(c.entries.is_empty());
+    }
+
+    #[test]
+    fn transcript_history_page_decodes() {
+        let p: TranscriptHistoryPage = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "resolved": false,
+            "startOffset": 0,
+            "endOffset": 50,
+            "truncated": true,
+            "entries": [],
+            "updatedAtUnixMs": 7,
+        }))
+        .unwrap();
+        assert_eq!(p.start_offset, 0);
+        assert_eq!(p.end_offset, 50);
+        assert!(p.truncated);
+    }
+
+    #[test]
+    fn pane_group_summary_decodes() {
+        let g: PaneGroupSummary = serde_json::from_value(serde_json::json!({
+            "id": "g1",
+            "representativeSessionID": "s1",
+            "sessionIDs": ["s1", "s2"],
+        }))
+        .unwrap();
+        assert_eq!(g.representative_session_id, "s1");
+        assert_eq!(g.session_ids, vec!["s1", "s2"]);
+    }
+
+    #[test]
+    fn app_summary_handles_selectors() {
+        let a: AppSummary = serde_json::from_value(serde_json::json!({
+            "id": "a1",
+            "command": "open",
+            "mediaTypes": ["image/png"],
+            "resourceKinds": ["folder"],
+            "fileExtensions": {"png": "image/png"},
+        }))
+        .unwrap();
+        assert!(a.handles("file:image/png"));
+        assert!(a.handles("file:IMAGE/PNG"));
+        assert!(!a.handles("file:text/plain"));
+        assert!(a.handles("resource:folder"));
+        assert!(!a.handles("resource:file"));
+        assert!(!a.handles("file:"));
+        assert!(!a.handles("bogus"));
+        // Swift defaults: description "", updateAvailable false, installed false.
+        assert_eq!(a.description, "");
+        assert!(!a.update_available);
+        assert!(!a.installed);
+    }
+
+    #[test]
+    fn app_summary_media_type_for_path() {
+        let apps = vec![AppSummary {
+            id: "a1".into(),
+            name: "Img".into(),
+            description: String::new(),
+            tint: None,
+            icon_svg: None,
+            version: None,
+            installed_version: None,
+            update_available: false,
+            install_command: None,
+            command: "open".into(),
+            media_types: vec![],
+            file_extensions: [("png".to_string(), "image/png".to_string())]
+                .into_iter()
+                .collect(),
+            resource_kinds: vec![],
+            default_for: vec![],
+            installed: false,
+        }];
+        assert_eq!(
+            AppSummary::media_type_for_path("/tmp/photo.PNG", &apps).as_deref(),
+            Some("image/png")
+        );
+        assert_eq!(AppSummary::media_type_for_path("/tmp/noext", &apps), None);
+        assert_eq!(AppSummary::media_type_for_path("/tmp/f.txt", &apps), None);
+    }
+
+    #[test]
+    fn app_presentations_file_decodes_snake_keys() {
+        let f: AppPresentationsFile = serde_json::from_value(serde_json::json!({
+            "version": 1,
+            "instances": [{"id": "i1", "app_id": "a1", "companion_session_id": "s9"}],
+            "presentations": [{
+                "id": "p1",
+                "caller_session_id": "s1",
+                "instance_id": "i1",
+                "target": "main",
+                "reveal_revision": 3,
+            }],
+        }))
+        .unwrap();
+        assert_eq!(f.version, 1);
+        assert_eq!(f.instances[0].app_id, "a1");
+        assert_eq!(f.presentations[0].reveal_revision, 3);
+    }
+
+    #[test]
+    fn app_presentations_file_tolerates_missing() {
+        // Swift init(from:) defaults version 0 and empty arrays.
+        let f: AppPresentationsFile = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(f.version, 0);
+        assert!(f.instances.is_empty());
+        assert!(f.presentations.is_empty());
+    }
+
+    #[test]
+    fn host_environment_row_label() {
+        let b = HostEnvironment {
+            kind: "box".into(),
+            id: "bx_1a2b3c4d5e6f".into(),
+        };
+        assert_eq!(b.row_label(), "Box · bx_1a2b3c…");
+        let short = HostEnvironment {
+            kind: "box".into(),
+            id: "bx_1".into(),
+        };
+        assert_eq!(short.row_label(), "Box · bx_1");
+        let other = HostEnvironment {
+            kind: "nas".into(),
+            id: "abc".into(),
+        };
+        assert_eq!(other.row_label(), "nas · abc");
+    }
+
+    #[test]
+    fn workspace_summary_decodes() {
+        let w: WorkspaceSummary = serde_json::from_value(serde_json::json!({
+            "id": "w1",
+            "name": "Main",
+            "tintHue": 210.5,
+            "isCurrent": true,
+            "isRunning": true,
+            "kind": "local",
+        }))
+        .unwrap();
+        assert_eq!(w.tint_hue, Some(210.5));
+        assert!(w.is_current);
+        assert_eq!(w.kind.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn workspace_select_round_trips() {
+        let req = WorkspaceSelectRequest {
+            workspace_id: "w2".into(),
+        };
+        let v = serde_json::to_value(&req).unwrap();
+        assert_eq!(v["workspaceId"], "w2");
+        let resp: WorkspaceSelectResponse =
+            serde_json::from_value(serde_json::json!({"workspace": null})).unwrap();
+        assert!(resp.workspace.is_none());
+    }
+
+    #[test]
+    fn desktop_resize_request_decodes() {
+        let r: DesktopResizeRequest = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "columns": 120,
+            "rows": 40,
+            "clear": true,
+        }))
+        .unwrap();
+        assert_eq!(r.columns, Some(120));
+        assert_eq!(r.clear, Some(true));
+    }
+
+    #[test]
+    fn key_name_round_trips_camel() {
+        let k: KeyName = serde_json::from_value(serde_json::json!("arrowUp")).unwrap();
+        assert_eq!(k, KeyName::ArrowUp);
+        let c: KeyName = serde_json::from_value(serde_json::json!("controlC")).unwrap();
+        assert_eq!(c, KeyName::ControlC);
+        let input: SessionKeyInput = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "keys": ["enter", "controlC"],
+        }))
+        .unwrap();
+        assert_eq!(input.keys, vec![KeyName::Enter, KeyName::ControlC]);
+    }
+
+    #[test]
+    fn terminal_metrics_decodes() {
+        let m: TerminalMetrics = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "columns": 80,
+            "rows": 24,
+            "capturedAtUnixMs": 99,
+            "desktopViewing": true,
+        }))
+        .unwrap();
+        assert_eq!(m.columns, 80);
+        assert_eq!(m.desktop_viewing, Some(true));
+    }
+
+    #[test]
+    fn browser_artifact_decodes() {
+        let a: BrowserArtifact = serde_json::from_value(serde_json::json!({
+            "kind": "screenshots",
+            "name": "shot.png",
+            "size": 12345,
+            "modifiedAtUnixMs": 5,
+        }))
+        .unwrap();
+        assert_eq!(a.size, 12345);
+        let l: BrowserArtifactList = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "artifacts": [],
+            "capturedAtUnixMs": 5,
+        }))
+        .unwrap();
+        assert!(l.artifacts.is_empty());
+        let c: BrowserArtifactChunk = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "kind": "screenshots",
+            "name": "shot.png",
+            "contentType": "image/png",
+            "offset": 0,
+            "nextOffset": 1024,
+            "totalSize": 2048,
+            "dataBase64": "aGk=",
+            "capturedAtUnixMs": 5,
+        }))
+        .unwrap();
+        assert_eq!(c.next_offset, 1024);
+        assert_eq!(c.total_size, 2048);
+    }
+
+    #[test]
+    fn settings_updates_are_all_optional() {
+        let t: TranscriptSettingsUpdate =
+            serde_json::from_value(serde_json::json!({"maxEntries": 50})).unwrap();
+        assert_eq!(t.max_entries, Some(50));
+        assert_eq!(t.include_user, None);
+        let a: AppearanceSettingsUpdate =
+            serde_json::from_value(serde_json::json!({"theme": "midnight"})).unwrap();
+        assert_eq!(a.theme.as_deref(), Some("midnight"));
+        assert_eq!(a.app_tint, None);
+        let n: NotificationSettingsUpdate = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(n.menu_attention_detection, None);
+        let e: ExperimentalSettingsUpdate =
+            serde_json::from_value(serde_json::json!({"worktrees": true})).unwrap();
+        assert_eq!(e.worktrees, Some(true));
+        assert_eq!(e.computer_use, None);
+    }
+
+    #[test]
+    fn experimental_settings_decodes_adapter_state() {
+        let e: ExperimentalSettings = serde_json::from_value(serde_json::json!({
+            "worktrees": true,
+            "sessionsMcp": false,
+            "browserMcp": false,
+            "computerUse": true,
+            "computerUseAvailable": true,
+            "computerUseReady": false,
+            "computerUseUnavailableReason": "no driver",
+            "workspaces": true,
+        }))
+        .unwrap();
+        assert_eq!(e.computer_use_available, Some(true));
+        assert_eq!(
+            e.computer_use_unavailable_reason.as_deref(),
+            Some("no driver")
+        );
+    }
+
+    #[test]
+    fn agent_summary_decodes() {
+        let a: AgentSummary = serde_json::from_value(serde_json::json!({
+            "id": "claude",
+            "name": "Claude",
+            "command": "claude",
+            "installed": true,
+            "integrationInstallable": true,
+        }))
+        .unwrap();
+        assert!(a.installed);
+        assert_eq!(a.integration_installable, Some(true));
+        assert_eq!(a.website_url, None);
+    }
+
+    #[test]
+    fn workspace_settings_decodes() {
+        let w: WorkspaceSettings = serde_json::from_value(serde_json::json!({
+            "autoStopArchiveMinutes": 30,
+            "sidebarStoppedLimit": 10,
+            "browserDefaultAccess": "ask",
+            "mcpNonchildWriteAccess": "deny",
+            "computerAccess": "ask",
+            "mcpWorktreeAccess": true,
+            "mcpAutoAddBrowserScreenshots": false,
+            "transcriptSettings": {"includeUser": true, "includeAssistant": true,
+                "includeReasoning": false, "includeTools": true,
+                "includeFileChanges": true, "includePlanUpdates": true,
+                "includeSessionInfo": false, "maxEntries": 100},
+        }))
+        .unwrap();
+        assert_eq!(w.auto_stop_archive_minutes, 30);
+        assert!(w.mcp_worktree_access);
+        let ts = w.transcript_settings.unwrap();
+        assert_eq!(ts.max_entries, 100);
+        assert!(ts.include_user);
+        assert!(w.plugin_order.is_none());
+        assert!(w.available_agents.is_none());
+    }
+
+    #[test]
+    fn session_order_request_decodes() {
+        let r: SessionOrderRequest = serde_json::from_value(serde_json::json!({
+            "projectID": "p1",
+            "orderedSessionIDs": ["s2", "s1"],
+        }))
+        .unwrap();
+        assert_eq!(r.project_id, "p1");
+        assert_eq!(r.ordered_session_ids, vec!["s2", "s1"]);
     }
 }
