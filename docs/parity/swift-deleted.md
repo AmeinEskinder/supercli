@@ -32,9 +32,15 @@ and sums LOC for rows with Status `merged` into the map headline
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift | 75 | e76c3d2 (feat/verify-delete-batch5) | pending | clients/supercli-app/lib/terminal/terminal_drop_maps.dart — path drag maps | (same 7 Dart tests) |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift | 327 | e76c3d2 (feat/verify-delete-batch5) | pending | supercli-client/src/viewer_presence.rs — has_viewers + GridReassertTracker | 11 Rust tests pass |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift | 220 | e76c3d2 (feat/verify-delete-batch5) | pending | supercli-core/src/provider_theme.rs::resolve_frame_background — 3 XCTest cases ported | 29 provider_theme tests pass |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift | 716 | TBD (feat/verify-delete-batch5) | pending | supercli-client/src/workspace_pool.rs — superseded by Rust tests | (same 34) |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/PresetsTests.swift | 248 | TBD (feat/verify-delete-batch5) | pending | supercli-core/src/presets.rs — superseded by Rust tests | (same 16) |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift | 148 | TBD (feat/verify-delete-batch5) | pending | supercli-client/src/viewer_presence.rs — superseded by Rust tests | (same 11) |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/UnpeelWorkspaceRegistryTests.swift | 117 | TBD (feat/verify-delete-batch5) | pending | supercli-core/src/workspace_registry.rs — superseded by Rust tests | (same 13) |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalDropTargetMapTests.swift | 55 | TBD (feat/verify-delete-batch5) | pending | supercli-core/src/terminal_drop_maps.rs — superseded by Rust tests | (same 7) |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/TerminalPathDragMapTests.swift | 80 | TBD (feat/verify-delete-batch5) | pending | supercli-core/src/terminal_drop_maps.rs::PathDragMap::load_from_dir — oversized marker loader case ported via std::fs::metadata gate | 7 terminal_drop_maps tests pass (incl. loader_rejects_oversized_markers) |
 
 ## Totals
 
 - Merged into `next`: **887 LOC** (1 file) — 0.5% of baseline
-- Pending merge: **9,025 LOC** (8 files)
-- All verified deletions: **9,912 LOC** (9 files) — 5.9% of baseline
+- Pending merge: **10,389 LOC** (14 files)
+- All verified deletions: **11,276 LOC** (15 files) — 6.7% of baseline

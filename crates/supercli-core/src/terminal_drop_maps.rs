@@ -9,8 +9,8 @@
 //!
 //! Ports of `TerminalDropTargetMap.swift` / `TerminalPathDragMap.swift`.
 //! Only the portable logic is here (region hit tests, JSON wire codecs, TTL
-//! validation). Platform I/O (reading the session directory, wall clock) is
-//! injected by the caller.
+//! validation, and the session-directory loader with its 64 KiB fail-closed
+//! gate via `std::fs::metadata`). Wall-clock time is injected by the caller.
 
 use serde::{Deserialize, Serialize};
 
@@ -153,6 +153,22 @@ impl PathDragMap {
             )));
         }
         serde_json::from_slice(bytes)
+    }
+
+    /// Loads the map from the session directory, failing closed when the
+    /// marker file is missing, oversized, or malformed.
+    ///
+    /// Mirrors `TerminalPathDragMap.load(from:)`: the 64 KiB gate is enforced
+    /// via `std::fs::metadata` before reading, so an oversized marker is
+    /// rejected without loading it into memory.
+    pub fn load_from_dir(dir: &std::path::Path) -> Option<Self> {
+        let marker = dir.join(Self::FILENAME);
+        let meta = std::fs::metadata(&marker).ok()?;
+        if meta.len() > MAXIMUM_BYTES as u64 {
+            return None;
+        }
+        let bytes = std::fs::read(&marker).ok()?;
+        Self::from_json_bytes(&bytes).ok()
     }
 
     /// Resolves the Host-local path for the given cell, or None when the map
@@ -310,5 +326,34 @@ mod tests {
         let m = PathDragMap::from_json_bytes(json).unwrap();
         assert_eq!(m.rows.len(), 1);
         assert_eq!(m.rows[0].path, "/x");
+    }
+
+    #[test]
+    fn loader_rejects_oversized_markers() {
+        // Mirrors TerminalPathDragMapTests.testLoaderRejectsOversizedMarkers:
+        // a marker file larger than 64 KiB fails closed via the metadata gate.
+        let dir = std::env::temp_dir().join(format!(
+            "supercli-path-drag-map-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock before epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join(PathDragMap::FILENAME);
+        std::fs::write(&marker, vec![b' '; MAXIMUM_BYTES + 1]).unwrap();
+        assert!(PathDragMap::load_from_dir(&dir).is_none());
+
+        // A valid marker loads fine.
+        std::fs::write(
+            &marker,
+            br#"{"version":1,"pid":7,"updated_at":50,"rows":[]}"#,
+        )
+        .unwrap();
+        let loaded = PathDragMap::load_from_dir(&dir).expect("valid marker loads");
+        assert_eq!(loaded.process_id, 7);
+        assert!(loaded.rows.is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
