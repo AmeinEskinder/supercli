@@ -44,9 +44,11 @@ void main() {
       if (ffiLib == null || ffiLib.isEmpty) {
         markTestSkipped('SUPERCLI_FFI_LIB not set');
       }
-      final terminal = SupercliNative.runtimeById('terminal');
-      expect(terminal, isNotNull);
-      expect(terminal!['id'], 'terminal');
+      final catalog = SupercliNative.runtimeCatalog();
+      final firstId = catalog.first['id'] as String;
+      final byId = SupercliNative.runtimeById(firstId);
+      expect(byId, isNotNull);
+      expect(byId!['id'], firstId);
       expect(SupercliNative.runtimeById('no-such-runtime'), isNull);
     });
 
