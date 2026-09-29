@@ -197,8 +197,8 @@ mod tests {
     #[test]
     fn scope_id_local_prefix() {
         assert_eq!(
-            MobilePaneGroupProjection::scope_id(Some("local:/Users/amein")),
-            Some("workspace:/Users/amein".to_string())
+            MobilePaneGroupProjection::scope_id(Some("local:/Users/me")),
+            Some("workspace:/Users/me".to_string())
         );
         // Empty home → None.
         assert_eq!(MobilePaneGroupProjection::scope_id(Some("local:")), None);

@@ -212,6 +212,8 @@ fn dirs_home() -> PathBuf {
 /// `SUPERCLI_HOME=home`. `None`/empty returns `None` (use `.standard`).
 ///
 /// Port of `AppDefaults.suite(forSupercliHome:)` from `LaunchConfig.swift`.
+/// The reversed-domain prefix follows the workspace bundle-ID rename to
+/// `li.superc`; the FNV-1a derivation is unchanged.
 pub fn defaults_suite_name(for_supercli_home: Option<&str>) -> Option<String> {
     match for_supercli_home {
         Some(home) if !home.trim().is_empty() => {
@@ -219,7 +221,7 @@ pub fn defaults_suite_name(for_supercli_home: Option<&str>) -> Option<String> {
             // `String.hashValue` is salted per process, which would change
             // the derived suite name every launch.
             Some(format!(
-                "com.supercli.devhome.{:x}",
+                "li.superc.devhome.{:x}",
                 supercli_shared::hash::fnv1a(home)
             ))
         }
@@ -245,7 +247,7 @@ mod tests {
     #[test]
     fn defaults_suite_name_derives_from_home() {
         let name = defaults_suite_name(Some("/tmp/test-home")).unwrap();
-        assert!(name.starts_with("com.supercli.devhome."));
+        assert!(name.starts_with("li.superc.devhome."));
         // Deterministic across calls.
         assert_eq!(name, defaults_suite_name(Some("/tmp/test-home")).unwrap());
         // Different home → different suite.
