@@ -912,6 +912,14 @@ impl ToolAvailability {
 mod tests {
     use super::*;
 
+    /// Portable current time in ms for tests (avoids the native-host-only state module).
+    fn test_now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
     #[cfg(feature = "native-host")]
     fn test_catalog() -> &'static RuntimeCatalog {
         crate::runtime_catalog::builtin_runtime_catalog()
@@ -1130,7 +1138,7 @@ mod tests {
         let home = std::env::temp_dir().join(format!(
             "supercli-usage-test-{}-{}",
             std::process::id(),
-            crate::state::current_timestamp_ms()
+            test_now_ms()
         ));
         let root = home.join(&store.root);
         fs::create_dir_all(&root).unwrap();
@@ -1145,7 +1153,7 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         fs::write(nested.join("session-c.jsonl"), "{}").unwrap();
 
-        let now_ms = crate::state::current_timestamp_ms();
+        let now_ms = test_now_ms();
         let stats = tool_usage_scanner::stats_for_tool(catalog, &tool, &home, now_ms);
         assert_eq!(stats.session_count, 3);
         assert_eq!(stats.recent_count, 3);
@@ -1175,14 +1183,14 @@ mod tests {
         let home = std::env::temp_dir().join(format!(
             "supercli-usage-cap-test-{}-{}",
             std::process::id(),
-            crate::state::current_timestamp_ms()
+            test_now_ms()
         ));
         let root = home.join(".claude/projects");
         fs::create_dir_all(&root).unwrap();
         for i in 0..5 {
             fs::write(root.join(format!("s{i}.jsonl")), "{}").unwrap();
         }
-        let now_ms = crate::state::current_timestamp_ms();
+        let now_ms = test_now_ms();
         let stats = tool_usage_scanner::stats_for_tool_with_cap(catalog, &tool, &home, now_ms, 2);
         assert_eq!(stats.session_count, 2);
         fs::remove_dir_all(&home).ok();
@@ -1251,7 +1259,7 @@ mod tests {
         let home = std::env::temp_dir().join(format!(
             "supercli-usage-pkg-test-{}-{}",
             std::process::id(),
-            crate::state::current_timestamp_ms()
+            test_now_ms()
         ));
         let root = home.join(".claude/projects");
         fs::create_dir_all(&root).unwrap();
@@ -1266,7 +1274,7 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         fs::write(nested.join("session.jsonl"), "{}").unwrap();
 
-        let now_ms = crate::state::current_timestamp_ms();
+        let now_ms = test_now_ms();
         let stats = tool_usage_scanner::stats_for_tool(catalog, &tool, &home, now_ms);
         assert_eq!(stats.session_count, 2);
         fs::remove_dir_all(&home).ok();
@@ -1294,7 +1302,7 @@ mod tests {
         let bin = std::env::temp_dir().join(format!(
             "supercli-avail-test-{}-{}",
             std::process::id(),
-            crate::state::current_timestamp_ms()
+            test_now_ms()
         ));
         fs::create_dir_all(&bin).unwrap();
         // Fake the claude tool's primary command alias as an executable.
@@ -1309,13 +1317,13 @@ mod tests {
         let home = std::env::temp_dir().join(format!(
             "supercli-avail-home-{}-{}",
             std::process::id(),
-            crate::state::current_timestamp_ms()
+            test_now_ms()
         ));
         fs::create_dir_all(&home).unwrap();
-        let now_ms = crate::state::current_timestamp_ms();
+        let now_ms = test_now_ms();
 
         let mut avail = ToolAvailability::new();
-        let report = avail.scan_with_dirs(catalog, &[bin.clone()], &home, now_ms);
+        let report = avail.scan_with_dirs(catalog, std::slice::from_ref(&bin), &home, now_ms);
         let status = report.status_for(&tool).expect("claude status");
         assert!(status.installed());
         assert_eq!(status.path.as_deref(), Some(exe.to_string_lossy().as_ref()));

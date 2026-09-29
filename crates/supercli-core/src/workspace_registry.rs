@@ -470,7 +470,7 @@ pub mod launcher {
 
     /// Pid of the live instance owning `home`, or None (missing/stale/
     /// unverifiable pidfile). `process_start_time_ms` is injected for
-    /// testability — pass `crate::session_host::process_start_time_ms` in
+    /// testability — pass the host's process-start-time lookup in
     /// production. Mirrors `SupercliWorkspaceLauncher.runningPid`.
     pub fn running_pid(
         home: &Path,
@@ -857,6 +857,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native-host")]
     fn pid_file_liveness_verifies_start_time() {
         use launcher::*;
         let home = std::env::temp_dir().join(format!(
@@ -972,6 +973,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native-host")]
     fn launch_refuses_while_running() {
         use launcher::*;
         let home = std::env::temp_dir().join(format!(
