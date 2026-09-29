@@ -10,6 +10,7 @@ import 'dart:io' show Platform;
 import 'package:test/test.dart';
 
 import 'package:supercli_app/platform_keys.dart';
+import 'package:supercli_app/keymap.dart';
 
 void main() {
   group('primaryModifier', () {
@@ -55,11 +56,11 @@ void main() {
 
   group('settings shortcut chord', () {
     test('resolves to meta+, on macOS (Cmd+,)', () {
-      expect('${primaryModifier(isMacOS: true)},', 'meta+,');
+      expect(Keymap.settings(isMacOS: true), 'meta+,');
     });
 
     test('resolves to ctrl+, on Linux/Windows', () {
-      expect('${primaryModifier(isMacOS: false)},', 'ctrl+,');
+      expect(Keymap.settings(isMacOS: false), 'ctrl+,');
     });
   });
 }

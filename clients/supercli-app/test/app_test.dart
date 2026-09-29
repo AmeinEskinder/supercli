@@ -46,23 +46,25 @@ void main() {
       expect(dataset.columns, ['Session', 'Details', 'Updated']);
     });
 
-    test('session dataset shows human titles with command as secondary text',
-        () {
-      final app = SupercliApp()
-        ..sessions = [
-          SessionSummary(
-            id: 's1',
-            title: 'claude',
-            updatedAt: DateTime.now(),
-            command: 'claude',
-            cwd: '/home/osman/proj',
-            agentId: 'claude',
-          ),
-        ];
-      final dataset = app.sessionDataset;
-      expect(dataset.row(0)[0], 'Claude · ~/proj');
-      expect(dataset.row(0)[1], contains('claude'));
-    });
+    test(
+      'session dataset shows human titles with command as secondary text',
+      () {
+        final app = SupercliApp()
+          ..sessions = [
+            SessionSummary(
+              id: 's1',
+              title: 'claude',
+              updatedAt: DateTime.now(),
+              command: 'claude',
+              cwd: '/home/osman/proj',
+              agentId: 'claude',
+            ),
+          ];
+        final dataset = app.sessionDataset;
+        expect(dataset.row(0)[0], 'Claude · ~/proj');
+        expect(dataset.row(0)[1], contains('claude'));
+      },
+    );
 
     test('no drag overlay mounted when idle', () {
       final app = SupercliApp();
@@ -151,8 +153,6 @@ void main() {
       expect(byName['composer.focus']!.keys, Keymap.composerFocus());
       // Platform primary modifier: meta (Cmd) on macOS, ctrl on Linux/Windows.
       expect(byName['sidebar.toggle']!.keys, Keymap.sidebarToggle());
-      // Settings overlay: meta+, (Cmd+,) on macOS, ctrl+, on Linux/Windows.
-      expect(byName['settings.open']!.keys, Keymap.settings());
     });
 
     test('list navigation is scoped to the sidebar node', () {
