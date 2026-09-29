@@ -13,8 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use super::provider_theme::{
-    dominant_background_in_data, grok_background, opencode_background, ThemeBackground,
-    SAMPLER_SAMPLE_BYTES,
+    dominant_background_in_data, provider_background, resolve_frame_background,
+    ResolvedFrameBackground, ThemeBackground, SAMPLER_SAMPLE_BYTES,
 };
 
 /// One provider-theme read request for a session.
@@ -65,22 +65,17 @@ impl ProviderThemeReadRequest {
     }
 }
 
-/// Mirrors `TerminalFrameStyle.providerBackground(command:workingDirectory:)`:
-/// detect the provider tool from the command head and resolve its theme
-/// background; any other command yields no provider background.
-fn provider_background(command: &str, working_directory: Option<&str>) -> Option<ThemeBackground> {
-    let head = command
-        .split([' ', '\t'])
-        .next()
-        .unwrap_or("")
-        .rsplit('/')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-    match head.as_str() {
-        "opencode" => opencode_background(working_directory),
-        "grok" => grok_background(command),
-        _ => None,
+impl ProviderThemeReadResult {
+    /// Resolve the terminal frame background for this read, with the live
+    /// canvas sample (if any) winning over the config-derived background.
+    /// Mirrors `TerminalFrameStyle.resolved(command:workingDirectory:canvasOverride:)`
+    /// as called from `SurfaceCache` with `result.canvas`.
+    pub fn resolve_frame(
+        &self,
+        command: &str,
+        working_directory: Option<&str>,
+    ) -> ResolvedFrameBackground {
+        resolve_frame_background(command, working_directory, self.canvas)
     }
 }
 
@@ -162,6 +157,40 @@ mod tests {
         );
         // No output.bin under a missing dir → no canvas.
         assert_eq!(result.canvas, None);
+    }
+
+    #[test]
+    fn resolve_frame_prefers_canvas_over_config_background() {
+        // `ProviderThemeReadResult.resolve_frame` wires the live canvas sample
+        // through `resolve_frame_background` (port of
+        // `TerminalFrameStyle.resolved(command:workingDirectory:canvasOverride:)`
+        // as called from SurfaceCache with `result.canvas`).
+        let result = ProviderThemeReadResult {
+            background: Some(ThemeBackground::new(Some(0xFAFAFA), Some(0xFAFAFA))),
+            canvas: Some(0x0A0A12),
+        };
+        let frame = result.resolve_frame("grok --light", None);
+        // Canvas override wins over the config-derived background.
+        assert_eq!(
+            frame.background,
+            Some(ThemeBackground::new(Some(0x0A0A12), Some(0x0A0A12)))
+        );
+        assert_eq!(frame.pane_dark_hex.as_deref(), Some("#0A0A12"));
+        assert_eq!(frame.pane_light_hex.as_deref(), Some("#0A0A12"));
+    }
+
+    #[test]
+    fn resolve_frame_falls_back_to_config_without_canvas() {
+        let result = ProviderThemeReadResult {
+            background: Some(ThemeBackground::new(Some(0xFAFAFA), Some(0xFAFAFA))),
+            canvas: None,
+        };
+        let frame = result.resolve_frame("grok --light", None);
+        assert_eq!(
+            frame.background,
+            Some(ThemeBackground::new(Some(0xFAFAFA), Some(0xFAFAFA)))
+        );
+        assert_eq!(frame.pane_dark_hex.as_deref(), Some("#FAFAFA"));
     }
 
     #[test]

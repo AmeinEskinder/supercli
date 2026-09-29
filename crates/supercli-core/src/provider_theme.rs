@@ -780,6 +780,74 @@ fn grok_auto_background(config: &GrokUiConfig) -> ThemeBackground {
     ThemeBackground::new(Some(light), Some(dark))
 }
 
+/// Resolve the provider background for a launch command.
+/// Mirrors `TerminalFrameStyle.providerBackground(command:workingDirectory:)`:
+/// detect the provider tool from the command head and resolve its theme
+/// background; any other command yields no provider background.
+pub fn provider_background(
+    command: &str,
+    working_directory: Option<&str>,
+) -> Option<ThemeBackground> {
+    let head = command
+        .split([' ', '\t'])
+        .next()
+        .unwrap_or("")
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    match head.as_str() {
+        "opencode" => opencode_background(working_directory),
+        "grok" => grok_background(command),
+        _ => None,
+    }
+}
+
+/// Resolved terminal frame background with pane hex strings.
+/// Mirrors the portable parts of `TerminalFrameStyle` produced by
+/// `resolved(command:workingDirectory:canvasOverride:)` (the AppKit
+/// `NSColor` is not portable; the background + pane `#RRGGBB` values are).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedFrameBackground {
+    /// The resolved background (`None` = Supercli default, no provider theme).
+    pub background: Option<ThemeBackground>,
+    /// Pane background hex (`#RRGGBB`) for dark appearance.
+    pub pane_dark_hex: Option<String>,
+    /// Pane background hex (`#RRGGBB`) for light appearance.
+    pub pane_light_hex: Option<String>,
+}
+
+/// Resolve the terminal frame background for a launch command, with an
+/// optional live canvas override (0xRRGGBB sampled from the TUI's truecolor
+/// paint).
+///
+/// Mirrors `TerminalFrameStyle.resolved(command:workingDirectory:canvasOverride:)`:
+/// the canvas override wins over the config-derived provider background
+/// (`canvasOverride.map { Background(light: $0, dark: $0) } ?? background`);
+/// when neither is present the frame uses Supercli's default (`None`).
+pub fn resolve_frame_background(
+    command: &str,
+    working_directory: Option<&str>,
+    canvas_override: Option<u32>,
+) -> ResolvedFrameBackground {
+    let background = canvas_override
+        .map(|v| ThemeBackground::new(Some(v), Some(v)))
+        .or_else(|| provider_background(command, working_directory));
+    match background {
+        None => ResolvedFrameBackground {
+            background: None,
+            pane_dark_hex: None,
+            pane_light_hex: None,
+        },
+        Some(bg) => ResolvedFrameBackground {
+            background: Some(bg),
+            // Mirrors Swift: `paneStyle.dark.background = hexString(dark)` etc.
+            pane_dark_hex: bg.dark.map(|v| format!("#{v:06X}")),
+            pane_light_hex: bg.light.map(|v| format!("#{v:06X}")),
+        },
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Provider canvas sampler
 // ---------------------------------------------------------------------------
@@ -1201,24 +1269,37 @@ mod tests {
         // Mirrors OpenCodeThemeTests.testFixedBackgroundOverrideWinsOverConfig:
         // a fixed canvas override (e.g. live-sampled from the TUI's truecolor
         // paint) takes precedence over the config-derived background.
+        // Calls the real `resolve_frame_background` production resolver
+        // (port of `TerminalFrameStyle.resolved(command:workingDirectory:canvasOverride:)`).
         let _guard = grok_env_lock().lock().unwrap();
         let dir = temp_dir("grok-fixed-override");
         // SAFETY: serialized by grok_env_lock; restored after.
         unsafe { std::env::set_var("GROK_HOME", dir.to_str().unwrap()) };
         write_temp_config(&dir, "config.toml", "[ui]\ntheme = \"groknight\"\n");
-        let base = grok_background("grok --always-approve").unwrap();
-        assert_eq!(base.dark, Some(0x141414));
+        let command = "grok --always-approve";
 
-        // Mirrors `canvasOverride.map { Background(light: $0, dark: $0) } ?? background`:
-        // the override replaces the config background for both light and dark.
-        let canvas_override: Option<u32> = Some(0x0A0A12);
-        let resolved = canvas_override
-            .map(|v| ThemeBackground::new(Some(v), Some(v)))
-            .unwrap_or(base);
-        assert_eq!(resolved.light, Some(0x0A0A12));
-        assert_eq!(resolved.dark, Some(0x0A0A12));
+        // Baseline: no override → config-derived groknight background
+        // (fixed "groknight" theme → 0x141414 for both appearances).
+        let baseline = resolve_frame_background(command, None, None);
+        assert_eq!(
+            baseline.background,
+            Some(ThemeBackground::new(Some(0x141414), Some(0x141414)))
+        );
+
+        // With override: the fixed canvas color wins for both appearances.
+        let resolved = resolve_frame_background(command, None, Some(0x0A0A12));
+        assert_eq!(
+            resolved.background,
+            Some(ThemeBackground::new(Some(0x0A0A12), Some(0x0A0A12)))
+        );
         // Pane style hex form matches Swift's `style.paneStyle.dark.background`.
-        assert_eq!(format!("#{:06X}", resolved.dark.unwrap()), "#0A0A12");
+        assert_eq!(resolved.pane_dark_hex.as_deref(), Some("#0A0A12"));
+        assert_eq!(resolved.pane_light_hex.as_deref(), Some("#0A0A12"));
+
+        // No provider command and no override → Supercli default (None).
+        let plain = resolve_frame_background("bash", None, None);
+        assert_eq!(plain.background, None);
+        assert_eq!(plain.pane_dark_hex, None);
 
         unsafe { std::env::remove_var("GROK_HOME") };
         let _ = std::fs::remove_dir_all(&dir);
