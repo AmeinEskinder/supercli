@@ -123,6 +123,85 @@ reason = "0.26 vs 1.x: rustls ecosystem split; both are CA bundles."
 name = "windows-sys"
 reason = "0.52 vs 0.59: Windows API bindings split; platform-only."
 
+# --- Queue #16 credential-stack duplicates (2026-09-29) --------------------
+# The wire-remote-runtime merge (queue #16) enabled keyring's
+# `async-secret-service` feature, pulling in secret-service v4 + the zbus v4
+# D-Bus stack. That stack legitimately requires different major versions of
+# crates the rest of the workspace pins differently (classic ecosystem split,
+# same class as the skips above). Unifying would require breaking upgrades of
+# third-party crates (portable-pty's nix 0.25 pin, keyring's
+# security-framework 2.x requirement, zbus's nix 0.29 requirement) and is out
+# of scope. cargo-deny does not cascade skips to a crate's dependencies, so
+# each duplicated platform sub-crate needs its own entry.
+
+[[bans.skip]]
+name = "memoffset"
+reason = "0.6.5 vs 0.9.1: 0.6.5 via nix 0.25.1 (portable-pty); 0.9.1 via nix 0.29.0 (zbus/keyring credential stack). Different majors, no shared state."
+
+[[bans.skip]]
+name = "nix"
+reason = "0.25.1 vs 0.29.0: portable-pty pins 0.25; zbus 4.x requires 0.29. Different majors, no shared state."
+
+[[bans.skip]]
+name = "rand"
+reason = "0.8 vs 0.9: secret-service/zbus credential stack requires 0.8; workspace (tungstenite, supercli-serve) uses 0.9. Different majors, no shared state."
+
+[[bans.skip]]
+name = "rand_chacha"
+reason = "0.3 vs 0.9: follows the rand 0.8/0.9 credential-stack split."
+
+[[bans.skip]]
+name = "security-framework"
+reason = "2.x vs 3.x: keyring 3.x requires 2.x on macOS; workspace uses 3.x. Different majors, no shared state."
+
+[[bans.skip]]
+name = "toml_datetime"
+reason = "0.6 vs 1.1: workspace toml 0.8 uses 0.6; zbus's zvariant/toml_parser chain uses 1.1. Different majors, build-time parsing only."
+
+[[bans.skip]]
+name = "toml_edit"
+reason = "0.22 vs 0.25: workspace toml 0.8 uses 0.22; zbus's zvariant/toml_parser chain uses 0.25. Different majors, build-time only."
+
+[[bans.skip]]
+name = "winnow"
+reason = "0.7 vs 1.0: follows the toml_edit 0.22/0.25 credential-stack split."
+
+[[bans.skip]]
+name = "windows-targets"
+reason = "0.52.6 vs 0.53.5: platform sub-crate of the windows-sys 0.52/0.59 split (companion to the windows-sys skip above). Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_aarch64_gnullvm"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_aarch64_msvc"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_gnu"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_gnullvm"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_msvc"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_gnu"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_gnullvm"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_msvc"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
 # cargo-deny 0.20 denies vulnerabilities, unmaintained, unsound, and yanked
