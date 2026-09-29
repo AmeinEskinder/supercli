@@ -916,15 +916,15 @@ mod serde_bytes_option {
 // MARK: - RemoteControlProtocol batch 2 (porter T)
 //
 // Remaining `Remote*` types from `RemoteControlProtocol.swift` not covered by
-// the first DTO pass. Same wire rules: every field optional or defaulted so
-// bootstrap snapshots decode from both older and newer Hosts, unknown JSON
-// fields ignored.
+// the first DTO pass. Wire rules: fields Swift declares non-optional are
+// REQUIRED (no `#[serde(default)]`) so wire drift surfaces as a decode error
+// instead of a silent zero value; Swift `Optional` fields are `Option<T>`
+// with `#[serde(default)]`. Unknown JSON fields are ignored.
 
 /// A plain organizational folder in the project tree.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectFolderSummary {
     pub id: String,
-    #[serde(default)]
     pub name: String,
     #[serde(rename = "parentFolderID", default)]
     pub parent_folder_id: Option<String>,
@@ -937,9 +937,8 @@ pub struct ProjectFolderSummary {
 /// GET /mobile/archive?project_id= — one project's archived sessions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArchivedSessionsResponse {
-    #[serde(rename = "projectID", default)]
+    #[serde(rename = "projectID")]
     pub project_id: String,
-    #[serde(default)]
     pub sessions: Vec<SessionSummary>,
 }
 
@@ -963,52 +962,44 @@ pub enum TranscriptBlockKind {
 /// One offset-addressed slice of a live transcript stream.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptStreamChunk {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     #[serde(rename = "providerID", default)]
     pub provider_id: Option<String>,
     #[serde(default)]
     pub source: Option<String>,
-    #[serde(default)]
     pub resolved: bool,
-    #[serde(default)]
     pub offset: u64,
-    #[serde(rename = "nextOffset", default)]
+    #[serde(rename = "nextOffset")]
     pub next_offset: u64,
-    #[serde(default)]
     pub partial: String,
-    #[serde(default)]
     pub truncated: bool,
-    #[serde(default)]
     pub entries: Vec<TranscriptEntry>,
     #[serde(rename = "fallbackReason", default)]
     pub fallback_reason: Option<String>,
-    #[serde(rename = "updatedAtUnixMs", default)]
+    #[serde(rename = "updatedAtUnixMs")]
     pub updated_at_unix_ms: i64,
 }
 
 /// One page of transcript history.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptHistoryPage {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     #[serde(rename = "providerID", default)]
     pub provider_id: Option<String>,
     #[serde(default)]
     pub source: Option<String>,
-    #[serde(default)]
     pub resolved: bool,
-    #[serde(rename = "startOffset", default)]
+    #[serde(rename = "startOffset")]
     pub start_offset: u64,
-    #[serde(rename = "endOffset", default)]
+    #[serde(rename = "endOffset")]
     pub end_offset: u64,
-    #[serde(default)]
     pub truncated: bool,
-    #[serde(default)]
     pub entries: Vec<TranscriptEntry>,
     #[serde(rename = "fallbackReason", default)]
     pub fallback_reason: Option<String>,
-    #[serde(rename = "updatedAtUnixMs", default)]
+    #[serde(rename = "updatedAtUnixMs")]
     pub updated_at_unix_ms: i64,
 }
 
@@ -1016,9 +1007,9 @@ pub struct TranscriptHistoryPage {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaneGroupSummary {
     pub id: String,
-    #[serde(rename = "representativeSessionID", default)]
+    #[serde(rename = "representativeSessionID")]
     pub representative_session_id: String,
-    #[serde(rename = "sessionIDs", default)]
+    #[serde(rename = "sessionIDs")]
     pub session_ids: Vec<String>,
 }
 
@@ -1026,9 +1017,7 @@ pub struct PaneGroupSummary {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSummary {
     pub id: String,
-    #[serde(default)]
     pub name: String,
-    #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub tint: Option<String>,
@@ -1038,21 +1027,19 @@ pub struct AppSummary {
     pub version: Option<String>,
     #[serde(rename = "installedVersion", default)]
     pub installed_version: Option<String>,
-    #[serde(rename = "updateAvailable", default)]
+    #[serde(rename = "updateAvailable")]
     pub update_available: bool,
     #[serde(rename = "installCommand", default)]
     pub install_command: Option<String>,
-    #[serde(default)]
     pub command: String,
-    #[serde(rename = "mediaTypes", default)]
+    #[serde(rename = "mediaTypes")]
     pub media_types: Vec<String>,
-    #[serde(rename = "fileExtensions", default)]
+    #[serde(rename = "fileExtensions")]
     pub file_extensions: std::collections::HashMap<String, String>,
-    #[serde(rename = "resourceKinds", default)]
+    #[serde(rename = "resourceKinds")]
     pub resource_kinds: Vec<String>,
-    #[serde(rename = "defaultFor", default)]
+    #[serde(rename = "defaultFor")]
     pub default_for: Vec<String>,
-    #[serde(default)]
     pub installed: bool,
 }
 
@@ -1103,11 +1090,8 @@ impl AppSummary {
 /// `companion_session_id`, …).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppPresentationsFile {
-    #[serde(default)]
     pub version: i32,
-    #[serde(default)]
     pub instances: Vec<AppPresentationInstance>,
-    #[serde(default)]
     pub presentations: Vec<AppPresentation>,
 }
 
@@ -1115,9 +1099,9 @@ pub struct AppPresentationsFile {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppPresentationInstance {
     pub id: String,
-    #[serde(rename = "app_id", default)]
+    #[serde(rename = "app_id")]
     pub app_id: String,
-    #[serde(rename = "companion_session_id", default)]
+    #[serde(rename = "companion_session_id")]
     pub companion_session_id: String,
 }
 
@@ -1125,22 +1109,19 @@ pub struct AppPresentationInstance {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppPresentation {
     pub id: String,
-    #[serde(rename = "caller_session_id", default)]
+    #[serde(rename = "caller_session_id")]
     pub caller_session_id: String,
-    #[serde(rename = "instance_id", default)]
+    #[serde(rename = "instance_id")]
     pub instance_id: String,
-    #[serde(default)]
     pub target: String,
-    #[serde(rename = "reveal_revision", default)]
+    #[serde(rename = "reveal_revision")]
     pub reveal_revision: u64,
 }
 
 /// What the entry is on the connected Host: "local", "ssh", or "paired".
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostEnvironment {
-    #[serde(default)]
     pub kind: String,
-    #[serde(default)]
     pub id: String,
 }
 
@@ -1165,21 +1146,23 @@ impl HostEnvironment {
 /// workspace over the same connection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceSelectRequest {
-    #[serde(rename = "workspaceId", default)]
+    #[serde(rename = "workspaceId")]
     pub workspace_id: String,
 }
 
 /// Acknowledgement of a workspace switch, echoing the selected workspace.
+/// `workspace` is required: Swift's `RemoteWorkspaceSelectResponse` declares
+/// it non-optional with a synthesized decoder, so a missing/null value is
+/// a wire error, not an empty selection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceSelectResponse {
-    #[serde(default)]
-    pub workspace: Option<WorkspaceSummary>,
+    pub workspace: WorkspaceSummary,
 }
 
 /// Controller → Host: resize a desktop session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DesktopResizeRequest {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     #[serde(default)]
     pub columns: Option<i32>,
@@ -1208,22 +1191,19 @@ pub enum KeyName {
 /// Controller → Host: send named keys to a session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionKeyInput {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
-    #[serde(default)]
     pub keys: Vec<KeyName>,
 }
 
 /// Terminal dimensions and view state for one session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerminalMetrics {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
-    #[serde(default)]
     pub columns: i32,
-    #[serde(default)]
     pub rows: i32,
-    #[serde(rename = "capturedAtUnixMs", default)]
+    #[serde(rename = "capturedAtUnixMs")]
     pub captured_at_unix_ms: i64,
     /// Whether the desktop app is actively viewing this session.
     /// Nil on older Macs.
@@ -1236,47 +1216,40 @@ pub struct TerminalMetrics {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BrowserArtifact {
     /// `"screenshots"` or `"downloads"` — also the on-disk subdirectory.
-    #[serde(default)]
     pub kind: String,
-    #[serde(default)]
     pub name: String,
-    #[serde(default)]
     pub size: u64,
-    #[serde(rename = "modifiedAtUnixMs", default)]
+    #[serde(rename = "modifiedAtUnixMs")]
     pub modified_at_unix_ms: i64,
 }
 
 /// The gallery listing for one session, newest-first.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BrowserArtifactList {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
-    #[serde(default)]
     pub artifacts: Vec<BrowserArtifact>,
-    #[serde(rename = "capturedAtUnixMs", default)]
+    #[serde(rename = "capturedAtUnixMs")]
     pub captured_at_unix_ms: i64,
 }
 
 /// One offset-addressed slice of an artifact's bytes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BrowserArtifactChunk {
-    #[serde(rename = "sessionID", default)]
+    #[serde(rename = "sessionID")]
     pub session_id: String,
-    #[serde(default)]
     pub kind: String,
-    #[serde(default)]
     pub name: String,
-    #[serde(rename = "contentType", default)]
+    #[serde(rename = "contentType")]
     pub content_type: String,
-    #[serde(default)]
     pub offset: u64,
-    #[serde(rename = "nextOffset", default)]
+    #[serde(rename = "nextOffset")]
     pub next_offset: u64,
-    #[serde(rename = "totalSize", default)]
+    #[serde(rename = "totalSize")]
     pub total_size: u64,
-    #[serde(rename = "dataBase64", default)]
+    #[serde(rename = "dataBase64")]
     pub data_base64: String,
-    #[serde(rename = "capturedAtUnixMs", default)]
+    #[serde(rename = "capturedAtUnixMs")]
     pub captured_at_unix_ms: i64,
 }
 
@@ -1305,21 +1278,21 @@ pub struct TranscriptSettingsUpdate {
 /// The Host-advertised transcript rendering values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptSettings {
-    #[serde(rename = "includeUser", default)]
+    #[serde(rename = "includeUser")]
     pub include_user: bool,
-    #[serde(rename = "includeAssistant", default)]
+    #[serde(rename = "includeAssistant")]
     pub include_assistant: bool,
-    #[serde(rename = "includeReasoning", default)]
+    #[serde(rename = "includeReasoning")]
     pub include_reasoning: bool,
-    #[serde(rename = "includeTools", default)]
+    #[serde(rename = "includeTools")]
     pub include_tools: bool,
-    #[serde(rename = "includeFileChanges", default)]
+    #[serde(rename = "includeFileChanges")]
     pub include_file_changes: bool,
-    #[serde(rename = "includePlanUpdates", default)]
+    #[serde(rename = "includePlanUpdates")]
     pub include_plan_updates: bool,
-    #[serde(rename = "includeSessionInfo", default)]
+    #[serde(rename = "includeSessionInfo")]
     pub include_session_info: bool,
-    #[serde(rename = "maxEntries", default)]
+    #[serde(rename = "maxEntries")]
     pub max_entries: i32,
 }
 
@@ -1347,19 +1320,18 @@ pub struct AppearanceSettingsUpdate {
 /// whichever Controller is currently scoped to it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppearanceSettings {
-    #[serde(default)]
     pub theme: String,
-    #[serde(rename = "appTint", default)]
+    #[serde(rename = "appTint")]
     pub app_tint: String,
-    #[serde(rename = "backgroundOpacity", default)]
+    #[serde(rename = "backgroundOpacity")]
     pub background_opacity: f64,
-    #[serde(rename = "surfaceOpacity", default)]
+    #[serde(rename = "surfaceOpacity")]
     pub surface_opacity: f64,
-    #[serde(rename = "backgroundTone", default)]
+    #[serde(rename = "backgroundTone")]
     pub background_tone: f64,
-    #[serde(rename = "surfaceTone", default)]
+    #[serde(rename = "surfaceTone")]
     pub surface_tone: f64,
-    #[serde(rename = "sessionTitleMode", default)]
+    #[serde(rename = "sessionTitleMode")]
     pub session_title_mode: String,
 }
 
@@ -1373,7 +1345,7 @@ pub struct NotificationSettingsUpdate {
 /// Host-owned attention behavior.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotificationSettings {
-    #[serde(rename = "menuAttentionDetection", default)]
+    #[serde(rename = "menuAttentionDetection")]
     pub menu_attention_detection: bool,
 }
 
@@ -1395,13 +1367,12 @@ pub struct ExperimentalSettingsUpdate {
 /// Host feature toggles.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExperimentalSettings {
-    #[serde(default)]
     pub worktrees: bool,
-    #[serde(rename = "sessionsMcp", default)]
+    #[serde(rename = "sessionsMcp")]
     pub sessions_mcp: bool,
-    #[serde(rename = "browserMcp", default)]
+    #[serde(rename = "browserMcp")]
     pub browser_mcp: bool,
-    #[serde(rename = "computerUse", default)]
+    #[serde(rename = "computerUse")]
     pub computer_use: bool,
     /// Nil is an older Host and must not be guessed from hardware kind.
     #[serde(rename = "computerUseAvailable", default)]
@@ -1410,7 +1381,6 @@ pub struct ExperimentalSettings {
     pub computer_use_ready: Option<bool>,
     #[serde(rename = "computerUseUnavailableReason", default)]
     pub computer_use_unavailable_reason: Option<String>,
-    #[serde(default)]
     pub workspaces: bool,
 }
 
@@ -1418,11 +1388,8 @@ pub struct ExperimentalSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentSummary {
     pub id: String,
-    #[serde(default)]
     pub name: String,
-    #[serde(default)]
     pub command: String,
-    #[serde(default)]
     pub installed: bool,
     #[serde(rename = "installCommand", default)]
     pub install_command: Option<String>,
@@ -1457,19 +1424,19 @@ pub struct WorkspaceSettings {
     pub notification_settings: Option<NotificationSettings>,
     #[serde(rename = "experimentalSettings", default)]
     pub experimental_settings: Option<ExperimentalSettings>,
-    #[serde(rename = "autoStopArchiveMinutes", default)]
+    #[serde(rename = "autoStopArchiveMinutes")]
     pub auto_stop_archive_minutes: i64,
-    #[serde(rename = "sidebarStoppedLimit", default)]
+    #[serde(rename = "sidebarStoppedLimit")]
     pub sidebar_stopped_limit: i64,
-    #[serde(rename = "browserDefaultAccess", default)]
+    #[serde(rename = "browserDefaultAccess")]
     pub browser_default_access: String,
-    #[serde(rename = "mcpNonchildWriteAccess", default)]
+    #[serde(rename = "mcpNonchildWriteAccess")]
     pub mcp_nonchild_write_access: String,
-    #[serde(rename = "computerAccess", default)]
+    #[serde(rename = "computerAccess")]
     pub computer_access: String,
-    #[serde(rename = "mcpWorktreeAccess", default)]
+    #[serde(rename = "mcpWorktreeAccess")]
     pub mcp_worktree_access: bool,
-    #[serde(rename = "mcpAutoAddBrowserScreenshots", default)]
+    #[serde(rename = "mcpAutoAddBrowserScreenshots")]
     pub mcp_auto_add_browser_screenshots: bool,
 }
 
@@ -1477,9 +1444,9 @@ pub struct WorkspaceSettings {
 /// ranks (capability `session.order.set`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionOrderRequest {
-    #[serde(rename = "projectID", default)]
+    #[serde(rename = "projectID")]
     pub project_id: String,
-    #[serde(rename = "orderedSessionIDs", default)]
+    #[serde(rename = "orderedSessionIDs")]
     pub ordered_session_ids: Vec<String>,
 }
 
@@ -2051,10 +2018,15 @@ mod tests {
     fn app_summary_handles_selectors() {
         let a: AppSummary = serde_json::from_value(serde_json::json!({
             "id": "a1",
+            "name": "TestApp",
+            "description": "test app",
             "command": "open",
+            "updateAvailable": false,
             "mediaTypes": ["image/png"],
             "resourceKinds": ["folder"],
             "fileExtensions": {"png": "image/png"},
+            "defaultFor": [],
+            "installed": true,
         }))
         .unwrap();
         assert!(a.handles("file:image/png"));
@@ -2064,10 +2036,10 @@ mod tests {
         assert!(!a.handles("resource:file"));
         assert!(!a.handles("file:"));
         assert!(!a.handles("bogus"));
-        // Swift defaults: description "", updateAvailable false, installed false.
-        assert_eq!(a.description, "");
+        // Required fields decode as provided (no silent defaults).
+        assert_eq!(a.description, "test app");
         assert!(!a.update_available);
-        assert!(!a.installed);
+        assert!(a.installed);
     }
 
     #[test]
@@ -2119,12 +2091,15 @@ mod tests {
     }
 
     #[test]
-    fn app_presentations_file_tolerates_missing() {
-        // Swift init(from:) defaults version 0 and empty arrays.
-        let f: AppPresentationsFile = serde_json::from_value(serde_json::json!({})).unwrap();
-        assert_eq!(f.version, 0);
-        assert!(f.instances.is_empty());
-        assert!(f.presentations.is_empty());
+    fn app_presentations_file_rejects_missing_required() {
+        // Swift declares version/instances/presentations non-optional, so a
+        // Host that omits them is a wire error (Swift's own custom-decoder
+        // leniency is a client-side fallback, not the wire contract).
+        assert!(serde_json::from_value::<AppPresentationsFile>(serde_json::json!({})).is_err());
+        assert!(serde_json::from_value::<AppPresentationsFile>(
+            serde_json::json!({"version": 1, "instances": []})
+        )
+        .is_err());
     }
 
     #[test]
@@ -2169,9 +2144,28 @@ mod tests {
         };
         let v = serde_json::to_value(&req).unwrap();
         assert_eq!(v["workspaceId"], "w2");
-        let resp: WorkspaceSelectResponse =
-            serde_json::from_value(serde_json::json!({"workspace": null})).unwrap();
-        assert!(resp.workspace.is_none());
+        // `workspace` is required (Swift declares it non-optional): a full
+        // payload round-trips, and a missing workspace is a decode error.
+        let resp: WorkspaceSelectResponse = serde_json::from_value(serde_json::json!({
+            "workspace": {
+                "id": "w2",
+                "name": "Work",
+                "displayName": "Work",
+                "kind": "local",
+                "isCurrent": true,
+                "isRunning": true,
+            }
+        }))
+        .unwrap();
+        assert_eq!(resp.workspace.id, "w2");
+        assert!(resp.workspace.is_current);
+        let v = serde_json::to_value(&resp).unwrap();
+        assert_eq!(v["workspace"]["id"], "w2");
+        assert!(serde_json::from_value::<WorkspaceSelectResponse>(serde_json::json!({})).is_err());
+        assert!(serde_json::from_value::<WorkspaceSelectResponse>(
+            serde_json::json!({"workspace": null})
+        )
+        .is_err());
     }
 
     #[test]
@@ -2335,5 +2329,194 @@ mod tests {
         .unwrap();
         assert_eq!(r.project_id, "p1");
         assert_eq!(r.ordered_session_ids, vec!["s2", "s1"]);
+    }
+
+    // MARK: - Protocol fixtures: remaining batch-2 DTOs
+    //
+    // Every batch-2 DTO without a dedicated test above gets a wire fixture
+    // here: a representative JSON payload decodes, the value round-trips,
+    // and a payload with one required field removed fails to decode.
+    // Required Swift fields are required on the wire (no `#[serde(default)]`),
+    // so missing fields must surface as decode errors, not silent zeros.
+
+    /// Decode `T` from the fixture `v`, assert the value round-trips
+    /// unchanged, then assert decoding fails with `field` removed.
+    fn assert_fixture_required<T>(v: serde_json::Value, field: &str)
+    where
+        T: for<'de> serde::Deserialize<'de> + serde::Serialize + PartialEq + std::fmt::Debug,
+    {
+        let t: T = serde_json::from_value(v.clone()).expect("fixture should decode");
+        let rt: T = serde_json::from_value(serde_json::to_value(&t).unwrap())
+            .expect("round-trip should decode");
+        assert_eq!(t, rt, "round-trip should preserve the value");
+        let mut obj = v.as_object().cloned().expect("fixture must be an object");
+        obj.remove(field);
+        assert!(
+            serde_json::from_value::<T>(serde_json::Value::Object(obj)).is_err(),
+            "missing required field `{field}` should fail to decode"
+        );
+    }
+
+    #[test]
+    fn app_presentation_instance_fixture() {
+        assert_fixture_required::<AppPresentationInstance>(
+            serde_json::json!({
+                "id": "i1",
+                "app_id": "a1",
+                "companion_session_id": "s9",
+            }),
+            "app_id",
+        );
+    }
+
+    #[test]
+    fn app_presentation_fixture() {
+        assert_fixture_required::<AppPresentation>(
+            serde_json::json!({
+                "id": "p1",
+                "caller_session_id": "s1",
+                "instance_id": "i1",
+                "target": "main",
+                "reveal_revision": 3,
+            }),
+            "reveal_revision",
+        );
+    }
+
+    #[test]
+    fn session_key_input_fixture() {
+        let k: SessionKeyInput = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "keys": ["enter", "arrowUp", "controlC"],
+        }))
+        .unwrap();
+        assert_eq!(k.session_id, "s1");
+        assert_eq!(
+            k.keys,
+            vec![KeyName::Enter, KeyName::ArrowUp, KeyName::ControlC]
+        );
+        assert_fixture_required::<SessionKeyInput>(
+            serde_json::json!({
+                "sessionID": "s1",
+                "keys": ["enter"],
+            }),
+            "keys",
+        );
+    }
+
+    #[test]
+    fn browser_artifact_list_fixture() {
+        assert_fixture_required::<BrowserArtifactList>(
+            serde_json::json!({
+                "sessionID": "s1",
+                "artifacts": [{
+                    "kind": "screenshots",
+                    "name": "shot-1.png",
+                    "size": 1234,
+                    "modifiedAtUnixMs": 1700000000000i64,
+                }],
+                "capturedAtUnixMs": 1700000000001i64,
+            }),
+            "capturedAtUnixMs",
+        );
+    }
+
+    #[test]
+    fn browser_artifact_chunk_fixture() {
+        assert_fixture_required::<BrowserArtifactChunk>(
+            serde_json::json!({
+                "sessionID": "s1",
+                "kind": "screenshots",
+                "name": "shot-1.png",
+                "contentType": "image/png",
+                "offset": 0,
+                "nextOffset": 4096,
+                "totalSize": 8192,
+                "dataBase64": "aGVsbG8=",
+                "capturedAtUnixMs": 1700000000000i64,
+            }),
+            "dataBase64",
+        );
+    }
+
+    #[test]
+    fn transcript_settings_fixture() {
+        assert_fixture_required::<TranscriptSettings>(
+            serde_json::json!({
+                "includeUser": true,
+                "includeAssistant": true,
+                "includeReasoning": false,
+                "includeTools": true,
+                "includeFileChanges": true,
+                "includePlanUpdates": true,
+                "includeSessionInfo": false,
+                "maxEntries": 100,
+            }),
+            "maxEntries",
+        );
+    }
+
+    #[test]
+    fn transcript_settings_update_stays_all_optional() {
+        // Patch DTO: every field is Option, so an empty object decodes and
+        // only the provided fields are set.
+        let u: TranscriptSettingsUpdate = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(u, TranscriptSettingsUpdate::default());
+        let u: TranscriptSettingsUpdate = serde_json::from_value(serde_json::json!({
+            "includeUser": false,
+            "maxEntries": 50,
+        }))
+        .unwrap();
+        assert_eq!(u.include_user, Some(false));
+        assert_eq!(u.max_entries, Some(50));
+        assert_eq!(u.include_tools, None);
+    }
+
+    #[test]
+    fn appearance_settings_fixture() {
+        assert_fixture_required::<AppearanceSettings>(
+            serde_json::json!({
+                "theme": "midnight",
+                "appTint": "blue",
+                "backgroundOpacity": 0.9,
+                "surfaceOpacity": 0.95,
+                "backgroundTone": 0.1,
+                "surfaceTone": 0.2,
+                "sessionTitleMode": "auto",
+            }),
+            "theme",
+        );
+    }
+
+    #[test]
+    fn appearance_settings_update_stays_all_optional() {
+        let u: AppearanceSettingsUpdate =
+            serde_json::from_value(serde_json::json!({"theme": "midnight"})).unwrap();
+        assert_eq!(u.theme.as_deref(), Some("midnight"));
+        assert_eq!(u.app_tint, None);
+    }
+
+    #[test]
+    fn notification_settings_fixture() {
+        assert_fixture_required::<NotificationSettings>(
+            serde_json::json!({"menuAttentionDetection": true}),
+            "menuAttentionDetection",
+        );
+    }
+
+    #[test]
+    fn notification_settings_update_stays_all_optional() {
+        let u: NotificationSettingsUpdate = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(u.menu_attention_detection, None);
+    }
+
+    #[test]
+    fn experimental_settings_update_stays_all_optional() {
+        let u: ExperimentalSettingsUpdate = serde_json::from_value(serde_json::json!({
+            "computerUse": true,
+        }))
+        .unwrap();
+        assert_eq!(u.computer_use, Some(true));
+        assert_eq!(u.worktrees, None);
     }
 }
