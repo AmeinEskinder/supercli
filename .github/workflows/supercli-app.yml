@@ -23,6 +23,9 @@ on:
       - 'clients/gpuidart/**'
       - 'crates/supercli-host/**'
       - 'crates/supercli-cli/**'
+      - 'crates/supercli-client-ffi/**'
+      - 'crates/supercli-client/**'
+      - 'crates/supercli-core/**'
       - '.github/workflows/supercli-app.yml'
   pull_request:
     paths:
@@ -30,6 +33,9 @@ on:
       - 'clients/gpuidart/**'
       - 'crates/supercli-host/**'
       - 'crates/supercli-cli/**'
+      - 'crates/supercli-client-ffi/**'
+      - 'crates/supercli-client/**'
+      - 'crates/supercli-core/**'
       - '.github/workflows/supercli-app.yml'
 
 jobs:
