@@ -423,3 +423,27 @@ files:
       - file: crates/supercli-client/src/terminal_stream.rs
         count: 24
     notes: "263 LOC. Ported as terminal_stream.rs (remote-transport merge): fingerprint normalization, endpoint/candidate selection, WS URL building, hello/error frame parsing, binary frame parsing (8-byte BE offset), input frame chunking on char boundaries. Supersedes the reverted duplicate remote_terminal_stream.rs."
+  native/SupercliNative/Sources/SupercliNative/RemoteUnpeelClient.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteSupercliPeer.parse — remote key JSON parsing (url/token required, http(s) scheme, non-empty token)"
+        target: "crates/supercli-client/src/remote_supercli_peer.rs::RemoteSupercliPeer::parse"
+        test: "crates/supercli-client/src/remote_supercli_peer.rs::tests::parse_valid_remote_key"
+      - swift: "RemoteSupercliSession.fromRow — hand-built JSON session row decoding with defaults"
+        target: "crates/supercli-client/src/remote_supercli_peer.rs::RemoteSupercliSession::from_row"
+        test: "crates/supercli-client/src/remote_supercli_peer.rs::tests::session_from_row_full"
+      - swift: "Certificate pinning — SHA-256 fingerprint verification via tls::leaf_fingerprint_hex"
+        target: "crates/supercli-client/src/remote_supercli_peer.rs::verify_peer_fingerprint"
+        test: "crates/supercli-client/src/remote_supercli_peer.rs::tests::fingerprint_match_accepts"
+      - swift: "RemoteSupercliError — 401 token hint vs generic HTTP status message"
+        target: "crates/supercli-client/src/remote_supercli_peer.rs::RemoteSupercliError::from_status"
+        test: "crates/supercli-client/src/remote_supercli_peer.rs::tests::error_401_is_unauthorized"
+      - swift: "RemoteSupercliPeerStore — atomic peer file write with 0600 permissions, load, clear"
+        target: "crates/supercli-client/src/remote_supercli_peer.rs::save_peer"
+        test: "crates/supercli-client/src/remote_supercli_peer.rs::tests::peer_file_roundtrip"
+    tests:
+      - file: crates/supercli-client/src/remote_supercli_peer.rs
+        count: 19
+    notes: "172 LOC. Ported as remote_supercli_peer.rs: peer credential parsing, session row decoding, SHA-256 cert pinning verification (reuses tls::), error mapping, and owner-only peer file persistence. The URLSession-based fetchSessions HTTP call is not ported (Apple-specific networking); the pure request-building and response-parsing logic is covered."
