@@ -171,7 +171,7 @@ final class SessionSummary {
   static DateTime _parseUpdatedAt(Map<String, dynamic> json) {
     final ms = json['updatedAtUnixMs'];
     if (ms is num) {
-      return DateTime.fromMillisecondsSinceEpoch(ms.toInt());
+      return DateTime.fromMillisecondsSinceEpoch(ms.toInt(), isUtc: true);
     }
     return DateTime.tryParse(json['updated_at'] as String? ?? '') ??
         DateTime.fromMillisecondsSinceEpoch(0);

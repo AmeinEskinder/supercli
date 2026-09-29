@@ -14,10 +14,13 @@
 //! | `hook_server` | `HookServer.swift` — parsing + protocol types |
 //! | `updater` | `AppDelegate.swift` (Sparkle) — signed updater |
 //! | `local_host_control` | `LocalHostControl.swift` — bridge client types |
+//! | `app_shell` | `AppDelegate.swift` + `main.swift` + `ModuleResources.swift`
+//!   — launch lifecycle, window chrome, NSMenu contract, menu validation |
 //!
 //! Pure logic is cross-platform and tested everywhere. Actual macOS API
 //! calls (objc2) are `#[cfg(target_os = "macos")]` gated.
 
+pub mod app_shell;
 pub mod hook_server;
 pub mod keychain;
 pub mod launchd;

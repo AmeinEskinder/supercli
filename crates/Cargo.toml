@@ -11,10 +11,12 @@ members = [
     "supercli-cli",
     "supercli-native-bridge",
     "supercli-client",
+    "supercli-client-ffi",
     "supercli-connector",
     "supercli-device",
     "supercli-load",
     "supercli-events",
+    "supercli-shared",
 ]
 # The first-party Apps and the App Kit are their own workspace
 # (`crates/apps/Cargo.toml`): separate cadence, separate versions, and a

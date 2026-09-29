@@ -33,7 +33,7 @@ function fixture(binaries = ['supercli', 'supercli-host'], { withProtocol = fals
     mkdirSync(resolve(payload, 'protocol'))
     writeFileSync(resolve(payload, 'protocol', 'host-capabilities-v1.json'), '{}\n')
     mkdirSync(resolve(payload, 'generated'))
-    writeFileSync(resolve(payload, 'generated', 'GeneratedRuntimeCatalog.swift'), '// fixture\n')
+    writeFileSync(resolve(payload, 'generated', 'runtime-catalog.json'), '{"fixture":true}\n')
   }
 
   const archive = resolve(root, 'supercli.tar.gz')

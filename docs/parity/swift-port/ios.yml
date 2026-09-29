@@ -3,4 +3,55 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: ios
-files: {}
+files:
+  ios/SupercliIOS/Sources/SupercliIOS/DevSettings.swift:
+    destination: "Rust: supercli-client::dev_settings"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "DevSettings.showTerminalBounds — debug toggle persisted to UserDefaults on every change (didSet)"
+        target: "crates/supercli-client/src/dev_settings.rs::DevSettings::set_show_terminal_bounds"
+        test: "dev_settings::tests::toggle_persists_to_store, dev_settings::tests::toggle_off_clears_persisted_value"
+      - swift: "DevSettings.init() — load persisted toggle, default off"
+        target: "crates/supercli-client/src/dev_settings.rs::DevSettings::load"
+        test: "dev_settings::tests::defaults_to_off, dev_settings::tests::toggle_persists_to_store"
+      - swift: "DevSettings.boundsKey — stable defaults key"
+        target: "crates/supercli-client/src/dev_settings.rs::SHOW_TERMINAL_BOUNDS_KEY"
+        test: "dev_settings::tests::uses_stable_defaults_key"
+    tests:
+      - file: crates/supercli-client/src/dev_settings.rs
+        count: 4
+    notes: "Ported from DevSettings.swift (29 LOC). UserDefaults abstracted behind the DevSettingsStore trait; the @Observable/@MainActor UI wrapper stays in Swift/Dart."
+  ios/SupercliIOS/Sources/SupercliIOS/StreamFrameReconciler.swift:
+    destination: "Rust: supercli-client::stream_frame_reconciler"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "StreamFrameReconciler.action(held:frameOffset:frameLength:) — pure resync decision: feed / feedSuffix / skip / fillGap, never restart"
+        target: "crates/supercli-client/src/stream_frame_reconciler.rs::action"
+        test: "stream_frame_reconciler::tests::exact_continuation_feeds_whole_frame, stream_frame_reconciler::tests::ahead_frame_requests_gap_fill, stream_frame_reconciler::tests::fully_stale_frame_is_skipped, stream_frame_reconciler::tests::overlapping_frame_feeds_suffix"
+      - swift: "StreamFrameAction — feed, feedSuffix(dropLeading:), skip, fillGap(from:upTo:)"
+        target: "crates/supercli-client/src/stream_frame_reconciler.rs::StreamFrameAction"
+        test: "stream_frame_reconciler::tests::one_byte_overlap_feeds_rest, stream_frame_reconciler::tests::frame_ending_exactly_at_held_is_skipped"
+    tests:
+      - file: crates/supercli-client/src/stream_frame_reconciler.rs
+        count: 12
+    notes: "Ported from StreamFrameReconciler.swift (46 LOC). Pure decision logic; saturating add guards the u64 frame-end computation. Includes the real disconnect-trace gap cases from StreamFrameReconcilerTests.swift."
+  ios/SupercliIOS/Sources/SupercliIOS/TerminalQueryFilter.swift:
+    destination: "Rust: supercli-client::terminal_query_filter"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "TerminalQueryFilter.stripRequests — strips CSI DA/DSR/XTVERSION/DECRQM and DCS XTGETTCAP/DECRQSS queries; preserves RIS and DECSCUSR"
+        target: "crates/supercli-client/src/terminal_query_filter.rs::TerminalQueryFilter::strip_requests"
+        test: "terminal_query_filter::tests::csi_device_attributes_stripped, terminal_query_filter::tests::xtversion_stripped_but_decscusr_preserved, terminal_query_filter::tests::decrqm_stripped_but_decstr_preserved, terminal_query_filter::tests::dcs_xtgettcap_stripped"
+      - swift: "Chunk-boundary state — withholds incomplete trailing sequences, 96-byte carry cap, DCS discard flag"
+        target: "crates/supercli-client/src/terminal_query_filter.rs::TerminalQueryFilter"
+        test: "terminal_query_filter::tests::split_csi_query_across_chunks_withheld, terminal_query_filter::tests::split_dcs_query_discarded_across_chunks, terminal_query_filter::tests::oversized_withheld_prefix_dropped"
+      - swift: "TerminalQueryFilter.reset() — clears carry and discard state on stream restart"
+        target: "crates/supercli-client/src/terminal_query_filter.rs::TerminalQueryFilter::reset"
+        test: "terminal_query_filter::tests::reset_clears_carry_and_discard_state"
+    tests:
+      - file: crates/supercli-client/src/terminal_query_filter.rs
+        count: 15
+    notes: "Ported from TerminalQueryFilter.swift (158 LOC). NSLock replaced by a Mutex-guarded state struct; Send-safe like the Swift @unchecked Sendable."

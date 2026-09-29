@@ -25,21 +25,38 @@
 //! - [`pairing`] — one-time sealed pairing: QR codes, pairing crypto, exchange
 //! - [`tls`] — certificate-pinned TLS for the Direct `https://` endpoint
 //! - [`credentials`] — platform keychain storage for pairing secrets
+//! - [`direct_transport`] — Direct `/mobile` transport decisions: pinned-HTTPS
+//!   vs plaintext policy, bootstrap deadlines, push-token routes
+//! - [`terminal_stream`] — terminal output WebSocket wire contract: hello/error
+//!   frame decoding, binary frame parsing, WS transport selection
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod credentials;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
+pub mod dev_settings;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod direct_transport;
 pub mod dto;
 pub mod events;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_routing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
+pub mod launch_config;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod link_authority;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod local_host_client;
+pub mod mouse_mode;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod pairing_proxy;
 pub mod protocol;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay;
@@ -48,14 +65,32 @@ pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod remote_connection;
+pub mod remote_dto_adapters;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
+pub mod remote_session_cache;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_supercli_peer;
+pub mod remote_terminal_websocket;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_ws_transport;
+pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
+pub mod stream_frame_reconciler;
+pub mod terminal_query_filter;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod terminal_stream;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
 pub mod types;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod viewer_presence;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod workspace_pool;
 
 pub use types::{ArtifactMeta, PairedHostRecord, TransportKind};
 
@@ -68,9 +103,13 @@ pub use credentials::{
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use host_store::{
-    HostCredentialStore, HostStoreError, MemoryHostCredentialStore, OsKeychainCredentialStore,
-    RemoteHostStore, SshHostRecord,
+    HostCredentialStore, HostStoreError, OsKeychainCredentialStore, RemoteHostStore, SshHostRecord,
 };
+// MemoryHostCredentialStore is test-only: gated so production code cannot
+// import it by mistake. Available under `cargo test` or with the
+// `test-util` feature.
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "test-util")))]
+pub use host_store::MemoryHostCredentialStore;
 #[cfg(not(target_arch = "wasm32"))]
 pub use hosts::{HostRegistry, LiveHost};
 #[cfg(not(target_arch = "wasm32"))]
@@ -83,6 +122,10 @@ pub use pairing::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use relay_conn::{
     DeliveryState, PerformParams, RelayConnection, RelayError, RelayTransportResponse,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_connection::{
+    ConnectOutcome, ReconnectPolicy, RemoteHostConnection, RemoteHostConnector,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use remote_runtime::{
