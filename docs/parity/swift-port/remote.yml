@@ -6,22 +6,46 @@ area: remote
 files:
   native/SupercliNative/Sources/SupercliNative/ControllerPairingProxy.swift:
     destination: "Rust: supercli-client"
-    status: todo
+    status: ported
     checklist: ""
-    behaviours: []
+    behaviours:
+      - swift: "ControllerPairingProxy strict Content-Length parsing (4 MiB cap, decimal digits only, single header, required)"
+        target: "crates/supercli-client/src/pairing_proxy.rs::parse_content_length"
+        test: "crates/supercli-client/src/pairing_proxy.rs::tests::content_length_rejects_non_decimal"
+      - swift: "ControllerPairingProxy ephemeral reservation (single active, 5-min TTL + 30s grace, endpoint URL with invitation id)"
+        target: "crates/supercli-client/src/pairing_proxy.rs::ControllerPairingProxy::reserve"
+        test: "crates/supercli-client/src/pairing_proxy.rs::tests::reserve_returns_endpoint_with_id"
+      - swift: "ControllerPairingProxy single-flight forwarding (one POST per invitation, 410 after success, retry on provider error)"
+        target: "crates/supercli-client/src/pairing_proxy.rs::forward"
+        test: "crates/supercli-client/src/pairing_proxy.rs::tests::proxy_maps_provider_error_status"
+      - swift: "ControllerPairingProxy minimal strict HTTP (request line, Content-Length body, minimal reason-phrase response)"
+        target: "crates/supercli-client/src/pairing_proxy.rs::read_http_request"
+        test: "crates/supercli-client/src/pairing_proxy.rs::tests::proxy_serves_pair_and_consumes_invitation"
+      - swift: "ControllerPairingProxy LAN IPv4 selection (en0, then en*, then others, loopback last)"
+        target: "crates/supercli-client/src/pairing_proxy.rs::select_lan_ipv4"
+        test: "crates/supercli-client/src/pairing_proxy.rs::tests::lan_selection_prefers_en0_over_loopback"
     tests:
       - file: native/SupercliNative/Tests/SupercliNativeTests/ControllerPairingProxyTests.swift
-        count: 0
-    notes: "Controller-side ephemeral LAN listener for pairing-proxy (adds a phone to an already-selected remote Host). BSD-socket transport; portable to Rust std::net::TcpListener. Not yet ported."
+        count: 2
+    notes: "Ported to Rust supercli-client (pairing_proxy.rs). BSD-socket transport uses std::net::TcpListener. 13 Rust tests cover strict parsing, reservation, single-flight, HTTP, and LAN selection."
   native/SupercliNative/Sources/SupercliNative/LocalHostClientFeature.swift:
-    destination: "Rust: supercli-core/client"
-    status: todo
+    destination: "Rust: supercli-client"
+    status: ported
     checklist: ""
-    behaviours: []
+    behaviours:
+      - swift: "LocalHostClientFeature launch policy (poll probe until answers or 5s deadline, 100ms interval, fail-closed client)"
+        target: "crates/supercli-client/src/local_host_client.rs::resolve_launch"
+        test: "crates/supercli-client/src/local_host_client.rs::tests::resolve_returns_unavailable_after_deadline_with_probe_count"
+      - swift: "LocalHostClientFeature controllerOwnerHeaderValue (\"serve\" advertised on native loopback responses)"
+        target: "crates/supercli-client/src/local_host_client.rs::CONTROLLER_OWNER_HEADER_VALUE"
+        test: "crates/supercli-client/src/local_host_client.rs::tests::controller_owner_header_value_is_serve"
+      - swift: "LaunchTrace.append (timestamped lines to hooks/trace.log)"
+        target: "crates/supercli-client/src/local_host_client.rs::append_launch_trace"
+        test: "crates/supercli-client/src/local_host_client.rs::tests::launch_trace_appends_timestamped_lines"
     tests:
       - file: native/SupercliNative/Tests/SupercliNativeTests/LocalHostClientFeatureTests.swift
-        count: 0
-    notes: "Local client feature flags. Verify against Rust; port if missing."
+        count: 9
+    notes: "Portable core ported to Rust supercli-client (local_host_client.rs). 9 Rust tests. The @MainActor resolveForLaunch orchestration and HostServiceManager stay Swift-side (AppKit-specific)."
   native/SupercliNative/Sources/SupercliNative/MobilePairingStore.swift:
     destination: "dropped: Host does it (crates/supercli-serve/src/pairing.rs)"
     status: ported
@@ -69,16 +93,46 @@ files:
     notes: "Catalog logic ported by worker F (2af9778). NWBrowser itself is AppKit-specific and stays Swift-side."
   native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift:
     destination: "Rust: supercli-client"
-    status: todo
+    status: ported
     checklist: ""
-    behaviours: []
+    behaviours:
+      - swift: "RelayConfig relayURL (ws/wss override wins, else production wss://relay.superc.li)"
+        target: "crates/supercli-client/src/link_authority.rs::relay_config::relay_url"
+        test: "crates/supercli-client/src/link_authority.rs::tests::relay_url_prefers_ws_wss_override"
+      - swift: "LinkAuthorityStore suppress (durable deny marker before cache removal, 0600, atomic write)"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::suppress"
+        test: "crates/supercli-client/src/link_authority.rs::tests::durable_suppression_precedes_and_survives_cache_removal_failure"
+      - swift: "LinkAuthorityStore malformed/non-regular marker fails closed"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::local_state"
+        test: "crates/supercli-client/src/link_authority.rs::tests::malformed_suppression_fails_closed"
+      - swift: "LinkAuthorityStore generation race (late entitlement cannot clear newer suppression, deactivation during activation wins)"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::commit"
+        test: "crates/supercli-client/src/link_authority.rs::tests::late_entitlement_cannot_clear_newer_suppression_generation"
+      - swift: "LinkAuthorityStore authorization rejection cannot weaken user disable"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::suppress"
+        test: "crates/supercli-client/src/link_authority.rs::tests::late_authorization_rejection_cannot_weaken_user_disable"
+      - swift: "LinkAuthorityStore activation pending (survives restart, needs fresh entitlement, blocks legacy bearer)"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::mark_activation_pending"
+        test: "crates/supercli-client/src/link_authority.rs::tests::activation_pending_survives_restart_and_needs_fresh_entitlement"
+      - swift: "LinkAuthorityStore commit (cache before marker removal, crash-point fail-closed)"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::commit"
+        test: "crates/supercli-client/src/link_authority.rs::tests::fresh_entitlement_clears_only_captured_suppression"
+      - swift: "LinkCachedEntitlement macID gating (cache only for matching Host identity)"
+        target: "crates/supercli-client/src/link_authority.rs::LinkAuthorityStore::local_state"
+        test: "crates/supercli-client/src/link_authority.rs::tests::cached_entitlement_is_mac_id_gated"
+      - swift: "RelayUplinkManager isAuthorizationRejection (401/403)"
+        target: "crates/supercli-client/src/link_authority.rs::is_authorization_rejection"
+        test: "crates/supercli-client/src/link_authority.rs::tests::authorization_rejection_statuses"
+      - swift: "RelayUplinkManager pushFailureLabel (operator-actionable push failure labels)"
+        target: "crates/supercli-client/src/link_authority.rs::push_failure_label"
+        test: "crates/supercli-client/src/link_authority.rs::tests::push_failure_labels_distinguish_operator_actions"
     tests:
       - file: native/SupercliNative/Tests/SupercliNativeTests/RelayUplinkManagerTests.swift
-        count: 0
-    notes: "App-side Link authority record, entitlement fetch, APNs push. Heavily AppKit/Keychain-dependent; portable core (authority record, entitlement cache) to be extracted to Rust."
+        count: 11
+    notes: "Portable core ported to Rust supercli-client (link_authority.rs). 15 Rust tests cover all 11 Swift authority tests plus config, labels, and JSON compatibility. The @MainActor ObservableObject manager, entitlement HTTP fetch, and APNs push stay Swift-side."
   native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift:
     destination: "Rust: supercli-client"
-    status: partial
+    status: ported
     checklist: ""
     behaviours:
       - swift: "RemoteHostConnectionState enum (idle/connecting/connected/reconnecting/repairRequired/incompatible/failed)"
@@ -90,10 +144,40 @@ files:
       - swift: "PairedHostConnectionPlan Direct->Link fallback (link disabled => no relay; cert pin validation)"
         target: "crates/supercli-client/src/remote_runtime.rs::PairedHostConnectionPlan::build"
         test: "crates/supercli-client/src/remote_runtime.rs::tests::direct_first_then_link_fallback"
+      - swift: "Capability-gated session verbs (title/pin/notify/project/archive/stop/remove/restart/reload)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::set_session_title"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::organization_verbs_record_backend_calls"
+      - swift: "Generation-based stale-result rejection after disconnect/reconnect"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::complete_verb"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::stale_verb_after_disconnect_is_rejected"
+      - swift: "EffectQueue: UTF-8 stitching, 64KiB chunking, 4MiB backpressure bound"
+        target: "crates/supercli-client/src/remote_runtime.rs::EffectQueue"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::write_batches_split_at_64kib_on_utf8_boundaries"
+      - swift: "resourceRequest(operation:capability:...) per-operation capability gating (not a generic gate)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::resource_request"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::resource_request_requires_per_operation_capability"
+      - swift: "disconnect() closes the backend connection"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime::disconnect"
+        test: "crates/supercli-client/src/remote_runtime.rs::port_tests::disconnect_closes_backend"
+      - swift: "connectPairedHost: Direct first, Link only on classified reachability failure, never on hard failures"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::connect"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
+      - swift: "reconnection keeps last valid state visible; backoff; 401 => repairRequired (re-pair, not retry)"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::reconnect"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_reconnect_after_host_death, live_wrong_token_requires_repair_not_retry"
+      - swift: "disconnect tears down to idle; health check re-runs bootstrap on the live client"
+        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::disconnect, health_check"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
     tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/RemoteHostRuntimeTests.swift
+        count: 81
       - file: crates/supercli-client/src/remote_runtime.rs
-        count: 6
-    notes: "Porting connection-state enums and Direct->Link fallback plan. The @MainActor ObservableObject UI runtime (session verbs, pane state) stays Swift/Dart-side; verbs ride HostClient which is already Rust."
+        count: 89
+      - file: crates/supercli-client/src/remote_connection.rs
+        count: 5
+      - file: crates/supercli-client/tests/remote_runtime_live.rs
+        count: 3
+    notes: "Ported all 81 XCTest cases to Rust (89 tests total including 6 pre-existing + 2 review fixes). Covers: capability-gated verbs, stale-result rejection, session selection, replacement correlation, transport identity, retirement barriers, output pages, pane pumps, terminal effects, outcome-unknown semantics, UTF-8 batching. Review fixes (v2): disconnect() now calls backend.close() (was missing); resource_request() now takes per-operation capability matching Swift's resourceRequest(operation:capability:...) (was using invented generic 'resource.request' gate, now removed). HONEST GAP: Swift's async/MainActor Task model (retirement barriers, continuations, MainActor isolation) is modeled as a synchronous deterministic state machine with generation counters; real async interleavings are not tested. WIRED (feat/wire-remote-runtime): the connection lifecycle is mounted against a live Host via the authenticated API — connect/disconnect/reconnect/health_check integration-tested against a real `supercli serve` (pinned TLS + bearer). Direct->Link gating unit-tested; the Link leg itself needs the app's live relay connection (row 217). Verified: cargo fmt --check, clippy -D warnings, cargo test."
   native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
     destination: "Rust: supercli-client"
     status: partial
@@ -114,6 +198,9 @@ files:
       - swift: "RemoteHostStore::adoptSSH (upsert by target)"
         target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::adopt_ssh"
         test: "crates/supercli-client/src/host_store.rs::tests::adopt_ssh_upserts_by_target"
+      - swift: "RemoteHostStore::adopt persists RemoteHostCredentials (authToken + relayCredentials), not the bare token"
+        target: "crates/supercli-client/src/host_store.rs::RemoteHostStore::adopt, secrets_for"
+        test: "crates/supercli-client/tests/remote_runtime_live.rs::connected_store (bundle assertion)"
     tests:
       - file: crates/supercli-client/src/host_store.rs
         count: 9

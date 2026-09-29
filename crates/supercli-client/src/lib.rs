@@ -33,13 +33,22 @@ pub mod crypto;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod host_routing;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod link_authority;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod local_host_client;
+pub mod mouse_mode;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod pairing_proxy;
 pub mod protocol;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay;
@@ -47,6 +56,8 @@ pub mod relay;
 pub mod relay_conn;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay_transport;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_connection;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
 #[cfg(not(target_arch = "wasm32"))]
@@ -87,6 +98,10 @@ pub use pairing::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use relay_conn::{
     DeliveryState, PerformParams, RelayConnection, RelayError, RelayTransportResponse,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use remote_connection::{
+    ConnectOutcome, ReconnectPolicy, RemoteHostConnection, RemoteHostConnector,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use remote_runtime::{

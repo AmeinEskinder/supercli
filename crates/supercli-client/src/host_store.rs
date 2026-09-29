@@ -208,9 +208,34 @@ impl<S: HostCredentialStore> RemoteHostStore<S> {
     }
 
     /// Credentials for a paired host, if stored.
+    ///
+    /// This is the bearer auth token the Host expects on its Direct
+    /// endpoint. It is parsed out of the stored secret bundle; see
+    /// [`RemoteHostStore::secrets_for`].
     pub fn credentials_for(&self, host_id: &str) -> Option<String> {
-        self.credential_store
-            .load(&self.credential_account(host_id))
+        self.secrets_for(host_id).map(|s| s.auth_token)
+    }
+
+    /// The full secret bundle for a paired host, if stored: bearer token
+    /// plus the relay credentials needed for the Link fallback. Mirrors
+    /// Swift `RemoteHostCredentials` (authToken + relayCredentials).
+    ///
+    /// Records adopted before the bundle format existed stored the bare
+    /// auth token; those still parse as auth-token-only secrets (no Link
+    /// fallback until re-pair).
+    pub fn secrets_for(&self, host_id: &str) -> Option<crate::credentials::HostSecrets> {
+        let raw = self
+            .credential_store
+            .load(&self.credential_account(host_id))?;
+        match serde_json::from_str::<crate::credentials::HostSecrets>(&raw) {
+            Ok(secrets) => Some(secrets),
+            Err(_) => Some(crate::credentials::HostSecrets {
+                auth_token: raw,
+                relay_token: String::new(),
+                e2e_key_b64: String::new(),
+                relay_url: None,
+            }),
+        }
     }
 
     /// Persist a successfully authenticated pairing response.
@@ -244,7 +269,13 @@ impl<S: HostCredentialStore> RemoteHostStore<S> {
         self.credential_store
             .save(
                 &self.credential_account(&response.mac_id),
-                &response.auth_token,
+                &serde_json::to_string(&crate::credentials::HostSecrets {
+                    auth_token: response.auth_token.clone(),
+                    relay_token: relay.relay_token.clone(),
+                    e2e_key_b64: relay.e2e_key_b64.clone(),
+                    relay_url: Some(relay.relay_url.clone()),
+                })
+                .map_err(|e| HostStoreError::Credential(e.to_string()))?,
             )
             .map_err(HostStoreError::Credential)?;
         let record = PairedHostRecord::from_pairing_response(response, certificate_fingerprint);
@@ -387,6 +418,21 @@ impl<S: HostCredentialStore> RemoteHostStore<S> {
         if self.selected_host_id.as_deref() == Some(host_id) {
             self.selected_host_id = None;
         }
+    }
+
+    /// Seed a full secret bundle for tests without going through pairing.
+    /// Test-only: production code must pair through [`RemoteHostStore::adopt`].
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn seed_secrets_for_test(
+        &mut self,
+        host_id: &str,
+        secrets: crate::credentials::HostSecrets,
+    ) -> Result<(), HostStoreError> {
+        let blob = serde_json::to_string(&secrets)
+            .map_err(|e| HostStoreError::Credential(e.to_string()))?;
+        self.credential_store
+            .save(&self.credential_account(host_id), &blob)
+            .map_err(HostStoreError::Credential)
     }
 }
 
@@ -622,6 +668,55 @@ mod tests {
         assert_eq!(store.records.len(), 0);
         // The type itself is the assertion — MemoryHostCredentialStore would
         // not satisfy the type annotation above.
+    }
+
+    #[test]
+    fn production_constructor_uses_os_store_at_runtime() {
+        // Build the host store exactly the way production code does:
+        // `with_os_keychain` is the only non-test constructor. Every other
+        // path goes through `new` with an explicitly injected store (the
+        // memory store in tests).
+        let store = RemoteHostStore::with_os_keychain("controller-1".to_string(), None);
+        // Runtime check on the constructed value — not just a type
+        // annotation: the credential backend inside must be the OS native
+        // keychain store. If the production constructor is ever rewired to
+        // the in-memory test store, this fails.
+        let backend = std::any::type_name_of_val(&store.credential_store);
+        assert!(
+            backend.contains("OsKeychainCredentialStore"),
+            "production host store backend is not the OS keychain store: {backend}"
+        );
+        assert!(
+            !backend.contains("MemoryHostCredentialStore"),
+            "production host store leaked the in-memory test backend: {backend}"
+        );
+    }
+
+    #[test]
+    fn os_store_save_failure_is_explicit_never_silent() {
+        // HostSecrets saved through the production backend must land in the
+        // OS keychain. Where no keyring exists (headless CI), the save must
+        // fail loudly — it must never silently land in an in-memory store.
+        let mut backend = OsKeychainCredentialStore::with_service("li.superc.test.nosilent");
+        let account = format!("__nosilent_{}__", std::process::id());
+        match backend.save(&account, "s3cr3t") {
+            Ok(()) => {
+                // Keyring available: the secret round-trips through the OS
+                // store, and cleanup removes it again.
+                assert_eq!(backend.load(&account), Some("s3cr3t".to_string()));
+                backend.delete(&account);
+                assert_eq!(backend.load(&account), None);
+            }
+            Err(e) => {
+                // Headless: the failure is explicit, and the secret is not
+                // retrievable — nothing was silently stashed in memory.
+                assert!(
+                    e.contains("OS keychain store failed"),
+                    "unexpected error shape: {e}"
+                );
+                assert_eq!(backend.load(&account), None);
+            }
+        }
     }
 
     #[test]
