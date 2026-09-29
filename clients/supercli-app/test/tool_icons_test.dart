@@ -1,10 +1,11 @@
 /// Tests for tool_icons.dart
 /// 
 /// Port of RuntimeCatalogTests.swift icon-related behaviors.
+library;
 import 'package:test/test.dart';
-import '../lib/tool_icons.dart';
-import '../lib/plugin_settings_list.dart';
-import '../lib/runtime_catalog.dart';
+import 'package:supercli_app/tool_icons.dart';
+import 'package:supercli_app/plugin_settings_list.dart';
+import 'package:supercli_app/runtime_catalog.dart';
 
 void main() {
   group('SupercliToolIcon', () {

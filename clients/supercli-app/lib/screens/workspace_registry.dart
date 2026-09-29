@@ -12,7 +12,7 @@
 /// The released registry lives in the REAL home (~/.supercli/profiles.json), never
 /// the instance's supercliDir: every instance, whatever its SUPERCLI_HOME, must
 /// see one shared registry. Workspace homes remain permanently under the legacy
-/// ~/.supercli/profiles/<slug> path — permanence matters, because provider hook
+/// ~/.supercli/profiles/`\<slug\>` path — permanence matters, because provider hook
 /// configs (~/.claude/settings.json, …) bake absolute script paths into
 /// whichever home installed hooks last.
 ///

@@ -1,8 +1,9 @@
 /// Tests for plugin_list_drag.dart
 /// 
 /// Port of PluginListDragTests.swift pure function behaviors.
+library;
 import 'package:test/test.dart';
-import '../lib/plugin_list_drag.dart';
+import 'package:supercli_app/plugin_list_drag.dart';
 
 void main() {
   group('PluginListDrag.reordered', () {

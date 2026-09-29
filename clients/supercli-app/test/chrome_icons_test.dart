@@ -1,8 +1,9 @@
 /// Tests for chrome_icons.dart
 /// 
 /// Port of ChromeIcons behavior verification.
+library;
 import 'package:test/test.dart';
-import '../lib/chrome_icons.dart';
+import 'package:supercli_app/chrome_icons.dart';
 
 void main() {
   group('SupercliChromeIcon', () {
