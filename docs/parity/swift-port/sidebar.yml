@@ -162,13 +162,19 @@ files:
       count: 3
     notes: 'Worker D: 3 tests in approvals_panel_test.dart. D2 auditing.'
   native/SupercliNative/Sources/SupercliNative/MobileSessionControl.swift:
-    destination: 'Dart: clients/supercli-app'
-    status: todo
+    destination: 'Rust: supercli-shared::validation (partial)'
+    status: partial
     checklist: ''
-    behaviours: []
-    tests: []
-    notes: 'BLOCKED: depends on RemoteBrowserArtifact/MobilePairingStore/NativeControllerRouter
-      (SupercliShared) not yet ported to Dart.'
+    behaviours:
+      - swift: "requiredSessionID (trim, reject empty/traversal)"
+        target: "crates/supercli-shared/src/validation.rs::required_session_id"
+        test: "crates/supercli-shared/src/validation.rs::tests::required_session_id_*"
+      - swift: "safeArtifactSegment (trim, reject empty/traversal)"
+        target: "crates/supercli-shared/src/validation.rs::safe_artifact_segment"
+        test: "crates/supercli-shared/src/validation.rs::tests::safe_artifact_segment_*"
+    tests:
+      - "crates/supercli-shared validation tests (7 tests)"
+    notes: 'Porter D: validation logic ported to supercli-shared. BLOCKED: browserArtifacts/browserArtifactChunk/deleteArtifact depend on SessionArtifactStore/MobilePairingStore/NativeControllerRouter not yet in Rust; thumbnailData needs ImageIO (Apple-only).'
   native/SupercliNative/Sources/SupercliNative/SessionArtifacts.swift:
     destination: 'Dart: clients/supercli-app/lib/screens/session_artifacts.dart'
     status: ported

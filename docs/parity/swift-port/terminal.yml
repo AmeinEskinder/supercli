@@ -128,12 +128,16 @@ files:
     notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_drop_target_map.dart deleted. File I/O (load/writeEvent) not portable — uses FileManager. Codec producer is app-kit drop_target.rs."
 
   native/SupercliNative/Sources/SupercliNative/TerminalFindBar.swift:
-    destination: "Dart: clients/supercli-app"
-    status: todo
+    destination: "Rust: supercli-shared::find_bar (partial)"
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: "OVERCLAIM REVERTED 2026-09-27: was marked 'ported' against a 35-line Dart file with 0 tests ported (Swift: 176 lines). Dart port exists at lib/screens/terminalfindbar.dart but has 0 tests. The AppKit NSView (NSTextField, NSStackView, focus management) is not portable; the updateCounts(total:selected:) display logic ('3 of 17' / 'No results' / bare total) is portable and needs tests. Needs behaviour-level audit before any status above todo."
+    behaviours:
+      - swift: "updateCounts(total:selected:) ('3 of 17' / 'No results' / bare total)"
+        target: "crates/supercli-shared/src/find_bar.rs::update_counts"
+        test: "crates/supercli-shared/src/find_bar.rs::tests"
+    tests:
+      - "crates/supercli-shared find_bar tests (6 tests)"
+    notes: "Porter D: updateCounts display logic ported to supercli-shared with tests. The AppKit NSView (NSTextField, NSStackView, focus management) is not portable. Dart port exists at lib/screens/terminalfindbar.dart but has 0 tests."
 
   native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift:
     destination: "Rust: supercli-core::terminal_drop_maps"
