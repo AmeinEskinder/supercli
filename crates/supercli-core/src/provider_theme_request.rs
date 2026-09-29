@@ -86,14 +86,23 @@ fn provider_background(command: &str, working_directory: Option<&str>) -> Option
 
 /// Mirrors `ProviderCanvasSampler.dominantBackground(sessionID:sessionsDir:)`:
 /// sample the tail of `<sessionsDir>/<sessionID>/output.bin`.
+///
+/// The journal is append-only and can be hundreds of MB, so only the last
+/// [`SAMPLER_SAMPLE_BYTES`] are read (seek from the end, no full read).
 fn dominant_canvas_background(sessions_dir: &Path, session_id: &str) -> Option<u32> {
+    use std::io::{Read, Seek, SeekFrom};
+
     let path = sessions_dir.join(session_id).join("output.bin");
-    let data = std::fs::read(&path).ok()?;
-    if data.is_empty() {
+    let mut f = std::fs::File::open(&path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let start = len.saturating_sub(SAMPLER_SAMPLE_BYTES as u64);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut tail = Vec::new();
+    f.read_to_end(&mut tail).ok()?;
+    if tail.is_empty() {
         return None;
     }
-    let start = data.len().saturating_sub(SAMPLER_SAMPLE_BYTES);
-    dominant_background_in_data(&data[start..])
+    dominant_background_in_data(&tail)
 }
 
 #[cfg(test)]
@@ -185,6 +194,38 @@ mod tests {
         std::fs::create_dir_all(&session_dir).unwrap();
         std::fs::File::create(session_dir.join("output.bin")).unwrap();
         assert_eq!(request(&dir).read().canvas, None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_samples_only_the_tail_for_large_output_bin() {
+        // The journal is append-only and can be hundreds of MB; read() must
+        // only touch the last SAMPLER_SAMPLE_BYTES. The head of the file is
+        // painted a dominant color (far more hits than the tail); if the
+        // whole file were read, the head color would win.
+        let dir = std::env::temp_dir().join(format!("ptr-large-{}", std::process::id()));
+        let session_dir = dir.join("s1");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let head_frame = b"\x1b[48;2;200;10;10m ";
+        let tail_frame = b"\x1b[48;2;20;20;20m ";
+        let mut f = std::fs::File::create(session_dir.join("output.bin")).unwrap();
+        let head_frames = (SAMPLER_SAMPLE_BYTES * 2) / head_frame.len();
+        for _ in 0..head_frames {
+            f.write_all(head_frame).unwrap();
+        }
+        // The tail region alone fills the whole sample window, so a correct
+        // tail-only read sees nothing but the tail color. If the whole file
+        // were read, the head color would win (ratio 2.0 > 1.6 dominance).
+        let tail_frames = SAMPLER_SAMPLE_BYTES / tail_frame.len();
+        for _ in 0..tail_frames {
+            f.write_all(tail_frame).unwrap();
+        }
+        drop(f);
+        let len = std::fs::metadata(session_dir.join("output.bin"))
+            .unwrap()
+            .len();
+        assert!(len > SAMPLER_SAMPLE_BYTES as u64);
+        assert_eq!(request(&dir).read().canvas, Some(0x141414));
         std::fs::remove_dir_all(&dir).ok();
     }
 }
