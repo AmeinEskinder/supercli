@@ -376,8 +376,10 @@ final class SupercliApp {
     if (cached != null) return cached;
     final created = TableDataset(
       'sessions',
-      columns: const ['Title', 'Updated'],
-      rows: sessions.map((s) => [s.title, formatTime(s.updatedAt)]).toList(),
+      columns: const ['Session', 'Details', 'Updated'],
+      rows: sessions
+          .map((s) => [s.displayTitle, s.subtitle, formatTime(s.updatedAt)])
+          .toList(),
     );
     _sessionDataset = created;
     return created;
