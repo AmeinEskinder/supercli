@@ -97,11 +97,14 @@ pub enum RemoteDirectTransportDecision {
     /// Stay on whatever the record already uses; never send the bearer to
     /// an unpinned TLS endpoint, and never assume plaintext is acceptable.
     TlsUnpinnable,
-    /// The Host conclusively predates TLS on `/mobile` (a version below the
-    /// minimum). Plaintext is the only transport it accepts.
+    /// Legacy plaintext transport. `direct_transport_decision` never produces
+    /// this: supercli restarted versioning at 0.1.0 and every Host advertises
+    /// `host.mobile.tls`, so a missing capability means `Unknown`, never
+    /// plaintext. The variant is retained so `apply_direct_transport_decision`
+    /// can still clear a stale pin from an authenticated source.
     Plaintext,
-    /// The Host said nothing either way (pre-version, pre-ledger). Keep the
-    /// record's current transport.
+    /// The Host said nothing either way (no `host.mobile.tls` capability).
+    /// Keep the record's current transport.
     Unknown,
 }
 
@@ -113,9 +116,12 @@ pub struct DirectTransportPin {
     pub direct_tls_fingerprint: Option<String>,
 }
 
-/// The capability flag wins outright; otherwise a reported server version
-/// at/after [`capabilities::MOBILE_TLS_MINIMUM_SERVER_VERSION`] means TLS
-/// and a lower one means plaintext. No signal keeps the current transport.
+/// The capability flag is the only signal. Supercli restarted versioning at
+/// 0.1.0 and every Host advertises `host.mobile.tls`, so the old
+/// version-gated plaintext fallback is gone: capability present means TLS
+/// (pinned when a fingerprint was advertised), a missing capability means
+/// `Unknown` — never plaintext, no matter what the server version looks
+/// like. No signal keeps the current transport.
 pub fn direct_transport_decision(
     advertisement: &RemoteDirectTransportAdvertisement,
 ) -> RemoteDirectTransportDecision {
@@ -136,20 +142,7 @@ pub fn direct_transport_decision(
     {
         return tls_or_unpinnable();
     }
-    let version = match advertisement
-        .server_version
-        .as_deref()
-        .and_then(|v| RemoteServerVersion::parse(Some(v)))
-    {
-        Some(v) => v,
-        None => return RemoteDirectTransportDecision::Unknown,
-    };
-    let minimum = RemoteServerVersion::parse(Some(capabilities::MOBILE_TLS_MINIMUM_SERVER_VERSION))
-        .expect("MOBILE_TLS_MINIMUM_SERVER_VERSION is a valid version");
-    if version < minimum {
-        return RemoteDirectTransportDecision::Plaintext;
-    }
-    tls_or_unpinnable()
+    RemoteDirectTransportDecision::Unknown
 }
 
 /// Fold a decision into the stored pin. Returns `true` when something
@@ -348,14 +341,21 @@ mod tests {
     }
 
     #[test]
-    fn server_version_at_or_after_minimum_selects_tls_without_capability() {
+    fn server_version_without_capability_selects_unknown_never_plaintext() {
+        // The version-gated plaintext fallback is gone: without the
+        // host.mobile.tls capability the decision is Unknown no matter what
+        // the server version looks like (old, new, or garbage).
         for version in [
+            "0.5.2",
+            "0.4.9",
+            "0.5",
             "0.5.3",
             "0.5.10",
             "0.6.0",
             "1.0.0",
             "v0.5.3",
             "0.5.3-beta.1",
+            "garbage",
         ] {
             let decision = direct_transport_decision(&advertisement(
                 Some(&fingerprint()),
@@ -364,25 +364,7 @@ mod tests {
             ));
             assert_eq!(
                 decision,
-                RemoteDirectTransportDecision::Tls {
-                    fingerprint: fingerprint()
-                },
-                "version {version}"
-            );
-        }
-    }
-
-    #[test]
-    fn older_server_version_selects_plaintext() {
-        for version in ["0.5.2", "0.4.9", "0.5"] {
-            let decision = direct_transport_decision(&advertisement(
-                Some(&fingerprint()),
-                Some(version),
-                None,
-            ));
-            assert_eq!(
-                decision,
-                RemoteDirectTransportDecision::Plaintext,
+                RemoteDirectTransportDecision::Unknown,
                 "version {version}"
             );
         }
@@ -404,7 +386,11 @@ mod tests {
 
     #[test]
     fn tls_signal_without_fingerprint_is_unpinnable_and_changes_nothing() {
-        let decision = direct_transport_decision(&advertisement(Some("  "), Some("0.5.3"), None));
+        let decision = direct_transport_decision(&advertisement(
+            Some("  "),
+            Some("0.5.3"),
+            Some(vec![capabilities::HOST_MOBILE_TLS]),
+        ));
         assert_eq!(decision, RemoteDirectTransportDecision::TlsUnpinnable);
         let mut pin = DirectTransportPin::default();
         assert!(!apply_direct_transport_decision(&decision, &mut pin, true));
