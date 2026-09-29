@@ -6,7 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Simple rectangle replacing `CGRect` for layout calculations.
@@ -46,7 +45,8 @@ impl Rect {
 // Core types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum PaneContent {
     Session { id: String },
     Launcher { project_id: String },
@@ -65,7 +65,7 @@ impl PaneContent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pane {
     pub id: String,
     pub content: PaneContent,
@@ -88,7 +88,8 @@ pub enum SplitDirection {
     Vertical,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PaneEdge {
     Left,
     Right,
@@ -141,7 +142,7 @@ impl PaneSplitPath {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaneSplit {
     pub direction: SplitDirection,
     pub ratio: f64,
@@ -163,13 +164,15 @@ impl PaneSplit {
         if !ratio.is_finite() {
             return 0.5;
         }
-        ratio
-            .max(PaneLayoutState::MINIMUM_SPLIT_RATIO)
-            .min(PaneLayoutState::MAXIMUM_SPLIT_RATIO)
+        ratio.clamp(
+            PaneLayoutState::MINIMUM_SPLIT_RATIO,
+            PaneLayoutState::MAXIMUM_SPLIT_RATIO,
+        )
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum PaneNode {
     Leaf(Pane),
     Split(Box<PaneSplit>),
@@ -370,13 +373,14 @@ impl PaneNode {
     /// content — deliberately excluding ratios.
     pub fn structural_identity(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         let mut hasher = DefaultHasher::new();
         self.hash_structure(&mut hasher);
         hasher.finish()
     }
 
     fn hash_structure<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        use std::hash::Hash;
         match self {
             PaneNode::Leaf(pane) => {
                 0u8.hash(hasher);
@@ -384,7 +388,7 @@ impl PaneNode {
                 match &pane.content {
                     PaneContent::Session { id } => id.hash(hasher),
                     PaneContent::Launcher { project_id } => {
-                        format!("launcher:{}", project_id).hash(hasher)
+                        format!("launcher:{project_id}").hash(hasher)
                     }
                 }
             }
@@ -491,13 +495,14 @@ impl PaneNode {
 // PaneGroup
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaneGroup {
     pub id: String,
     pub representative_pane_id: String,
     pub root: PaneNode,
     /// The exact tree from before a transient launcher was inserted.
     /// Presentation-only; never durable.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub pre_launcher_root: Option<PaneNode>,
 }
 
@@ -579,7 +584,7 @@ pub enum PaneLayoutError {
 // PaneLayoutState
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaneLayoutState {
     pub groups: Vec<PaneGroup>,
 }
@@ -1547,8 +1552,7 @@ impl<'de> Deserialize<'de> for DurablePaneNode {
             "vertical" => SplitDirection::Vertical,
             other => {
                 return Err(serde::de::Error::custom(format!(
-                    "Unknown split direction {}",
-                    other
+                    "Unknown split direction {other}",
                 )))
             }
         };
@@ -1666,7 +1670,7 @@ impl PaneStableId {
     /// to avoid collisions with caller-supplied UUIDs.
     pub fn make() -> String {
         let n = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        format!("pane-{:016x}", n)
+        format!("pane-{n:016x}")
     }
 
     /// Returns the lowercased UUID when `value` parses as one, else None.
@@ -1946,7 +1950,7 @@ mod tests {
 
     #[test]
     fn spatial_neighbor_finds_adjacent() {
-        let mut state = make_state();
+        let state = make_state();
         // p1 | p2 (horizontal split, p2 on right)
         let neighbor = state.spatial_neighbor(P1, PaneEdge::Right);
         assert_eq!(neighbor.map(|p| p.id), Some(P2.to_string()));

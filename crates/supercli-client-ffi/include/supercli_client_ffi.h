@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* ABI version. Dart checks this at load time and fails fast on mismatch. */
-#define SUPERCLI_FFI_ABI_VERSION 1
+#define SUPERCLI_FFI_ABI_VERSION 2
 uint32_t supercli_ffi_abi_version(void);
 
 /* Last recorded error message (caller-owned, free with
@@ -85,6 +85,45 @@ uint8_t supercli_drop_map_accepts(const uint8_t *json, size_t len,
 char *supercli_path_drag_map_path_at(const uint8_t *json, size_t len,
                                      uint32_t row, uint32_t column,
                                      uint64_t now_ms);
+
+/* Pane layout (JSON snapshots). All take a snapshot JSON string; mutation
+ * results return a JSON object with the updated "snapshot" plus relevant
+ * ids ("pane_id", "group_id"). NULL on failure; check
+ * supercli_last_error(). */
+
+/* Create a single-pane layout for session_id with the requested pane id
+ * (used when UUID-shaped; otherwise a generated stable id is returned in
+ * "pane_id"). Returns {snapshot, pane_id, group_id}. */
+char *supercli_pane_layout_single(const char *session_id, const char *pane_id);
+/* Insert session_id at edge of target pane. Returns
+ * {snapshot, pane_id, group_id}. */
+char *supercli_pane_layout_insert(const char *snapshot, const char *session_id,
+                                  const char *target_pane_id, const char *edge);
+/* Close a pane. Returns {snapshot, pane_id, group_id} or NULL when it would
+ * leave zero panes (last pane cannot be closed). */
+char *supercli_pane_layout_close(const char *snapshot, const char *pane_id);
+/* Set the split ratio of the split containing pane_id (0.1..0.9, clamped).
+ * Returns {snapshot, group_id}. */
+char *supercli_pane_layout_resize(const char *snapshot, const char *group_id,
+                                  const char *pane_id, double ratio);
+/* Equalize all split ratios in the group. Returns {snapshot, group_id}. */
+char *supercli_pane_layout_equalize(const char *snapshot, const char *group_id);
+/* Swap two panes. Returns {snapshot, group_id}. */
+char *supercli_pane_layout_swap(const char *snapshot, const char *pane_a,
+                                const char *pane_b);
+/* Pane id adjacent to pane_id toward edge, or JSON null when none. */
+char *supercli_pane_layout_neighbor(const char *snapshot, const char *pane_id,
+                                    const char *edge);
+/* Drop sessions not in eligible_ids (JSON array). A lone surviving session
+ * is re-homed as a single-pane group; zero eligible sessions empties the
+ * groups. Returns {snapshot, pane_id, group_id}. */
+char *supercli_pane_layout_reconcile(const char *snapshot,
+                                     const char *eligible_ids_json);
+/* Per-leaf geometry for hit-testing: JSON array of
+ * {pane_id, x, y, width, height} over (x, y, width, height). */
+char *supercli_pane_layout_leaf_boxes(const char *snapshot, const char *group_id,
+                                      double x, double y, double width,
+                                      double height);
 
 #ifdef __cplusplus
 }

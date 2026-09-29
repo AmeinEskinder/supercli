@@ -40,9 +40,11 @@ use std::path::PathBuf;
 use supercli_client::{viewer_presence, workspace_pool};
 use supercli_core::{presets, runtime_catalog, terminal_drop_maps, workspace_registry};
 
+mod pane_layout;
+
 /// ABI version of this C surface. Bump when adding/removing/changing any
 /// exported symbol's signature. Dart checks this at load time.
-pub const SUPERCLI_FFI_ABI_VERSION: u32 = 1;
+pub const SUPERCLI_FFI_ABI_VERSION: u32 = 2;
 
 // ---------------------------------------------------------------------------
 // Error reporting
@@ -572,9 +574,10 @@ mod ffi_tests {
     }
 
     #[test]
-    fn abi_version_is_one() {
+    fn abi_version_is_two() {
         assert_eq!(supercli_ffi_abi_version(), SUPERCLI_FFI_ABI_VERSION);
-        assert_eq!(SUPERCLI_FFI_ABI_VERSION, 1);
+        // Bumped from 1 when the pane-layout snapshot API was added.
+        assert_eq!(SUPERCLI_FFI_ABI_VERSION, 2);
     }
 
     #[test]

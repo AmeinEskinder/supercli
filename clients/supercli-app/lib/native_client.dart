@@ -41,7 +41,7 @@ import 'package:ffi/ffi.dart';
 final class SupercliNativeBindings {
   /// ABI version this Dart code was written against. Must match
   /// `SUPERCLI_FFI_ABI_VERSION` in `supercli_client_ffi.h`.
-  static const int kExpectedAbiVersion = 1;
+  static const int kExpectedAbiVersion = 2;
 
   static DynamicLibrary? _lib;
   static bool _abiChecked = false;
@@ -217,6 +217,114 @@ final class SupercliNativeBindings {
         >
       >('supercli_path_drag_map_path_at')
       .asFunction<Pointer<Char> Function(Pointer<Uint8>, int, int, int, int)>();
+
+  late final _paneLayoutSingle = lib
+      .lookup<
+        NativeFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>
+      >('supercli_pane_layout_single')
+      .asFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>();
+
+  late final _paneLayoutInsert = lib
+      .lookup<
+        NativeFunction<
+          Pointer<Char> Function(
+            Pointer<Char>,
+            Pointer<Char>,
+            Pointer<Char>,
+            Pointer<Char>,
+          )
+        >
+      >('supercli_pane_layout_insert')
+      .asFunction<
+        Pointer<Char> Function(
+          Pointer<Char>,
+          Pointer<Char>,
+          Pointer<Char>,
+          Pointer<Char>,
+        )
+      >();
+
+  late final _paneLayoutClose = lib
+      .lookup<
+        NativeFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>
+      >('supercli_pane_layout_close')
+      .asFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>();
+
+  late final _paneLayoutResize = lib
+      .lookup<
+        NativeFunction<
+          Pointer<Char> Function(
+            Pointer<Char>,
+            Pointer<Char>,
+            Pointer<Char>,
+            Double,
+          )
+        >
+      >('supercli_pane_layout_resize')
+      .asFunction<
+        Pointer<Char> Function(
+          Pointer<Char>,
+          Pointer<Char>,
+          Pointer<Char>,
+          double,
+        )
+      >();
+
+  late final _paneLayoutEqualize = lib
+      .lookup<
+        NativeFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>
+      >('supercli_pane_layout_equalize')
+      .asFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>();
+
+  late final _paneLayoutSwap = lib
+      .lookup<
+        NativeFunction<
+          Pointer<Char> Function(Pointer<Char>, Pointer<Char>, Pointer<Char>)
+        >
+      >('supercli_pane_layout_swap')
+      .asFunction<
+        Pointer<Char> Function(Pointer<Char>, Pointer<Char>, Pointer<Char>)
+      >();
+
+  late final _paneLayoutNeighbor = lib
+      .lookup<
+        NativeFunction<
+          Pointer<Char> Function(Pointer<Char>, Pointer<Char>, Pointer<Char>)
+        >
+      >('supercli_pane_layout_neighbor')
+      .asFunction<
+        Pointer<Char> Function(Pointer<Char>, Pointer<Char>, Pointer<Char>)
+      >();
+
+  late final _paneLayoutReconcile = lib
+      .lookup<
+        NativeFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>
+      >('supercli_pane_layout_reconcile')
+      .asFunction<Pointer<Char> Function(Pointer<Char>, Pointer<Char>)>();
+
+  late final _paneLayoutLeafBoxes = lib
+      .lookup<
+        NativeFunction<
+          Pointer<Char> Function(
+            Pointer<Char>,
+            Pointer<Char>,
+            Double,
+            Double,
+            Double,
+            Double,
+          )
+        >
+      >('supercli_pane_layout_leaf_boxes')
+      .asFunction<
+        Pointer<Char> Function(
+          Pointer<Char>,
+          Pointer<Char>,
+          double,
+          double,
+          double,
+          double,
+        )
+      >();
 }
 
 /// Typed Dart API over the Rust client logic. No decision logic lives here.
@@ -368,6 +476,197 @@ final class SupercliNative {
       return (path == null || path.isEmpty) ? null : path;
     } finally {
       malloc.free(jsonPtr);
+    }
+  }
+
+  static Map<String, dynamic>? _paneLayoutResult(Pointer<Char> ptr) {
+    final json = _b._takeNullableString(ptr);
+    if (json == null || json.isEmpty) return null;
+    final decoded = jsonDecode(json);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  /// Pane layout: create a single-pane snapshot. Returns the decoded result
+  /// JSON (`snapshot`, `pane_id`, `group_id`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutSingle({
+    required String sessionId,
+    required String paneId,
+  }) {
+    final sidPtr = sessionId.toNativeUtf8().cast<Char>();
+    final pidPtr = paneId.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(_b._paneLayoutSingle(sidPtr, pidPtr));
+    } finally {
+      malloc.free(sidPtr);
+      malloc.free(pidPtr);
+    }
+  }
+
+  /// Pane layout: split [targetPaneId] on [edge] (`left`|`right`|`up`|`down`),
+  /// inserting a new session pane. Returns the decoded result JSON
+  /// (`snapshot`, `pane_id`, `group_id`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutInsert({
+    required String snapshot,
+    required String sessionId,
+    required String targetPaneId,
+    required String edge,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final sidPtr = sessionId.toNativeUtf8().cast<Char>();
+    final targetPtr = targetPaneId.toNativeUtf8().cast<Char>();
+    final edgePtr = edge.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(
+        _b._paneLayoutInsert(snapPtr, sidPtr, targetPtr, edgePtr),
+      );
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(sidPtr);
+      malloc.free(targetPtr);
+      malloc.free(edgePtr);
+    }
+  }
+
+  /// Pane layout: close [paneId]. Returns the decoded result JSON
+  /// (`snapshot`, `pane_id`, `group_id`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutClose({
+    required String snapshot,
+    required String paneId,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final pidPtr = paneId.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(_b._paneLayoutClose(snapPtr, pidPtr));
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(pidPtr);
+    }
+  }
+
+  /// Pane layout: set the divider ratio of the innermost split containing
+  /// [paneId]. Returns the decoded result JSON (`snapshot`,
+  /// `applied_ratio`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutResize({
+    required String snapshot,
+    required String groupId,
+    required String paneId,
+    required double ratio,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final gidPtr = groupId.toNativeUtf8().cast<Char>();
+    final pidPtr = paneId.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(
+        _b._paneLayoutResize(snapPtr, gidPtr, pidPtr, ratio),
+      );
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(gidPtr);
+      malloc.free(pidPtr);
+    }
+  }
+
+  /// Pane layout: reset every divider ratio in [groupId] to equal shares.
+  /// Returns the decoded result JSON (`snapshot`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutEqualize({
+    required String snapshot,
+    required String groupId,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final gidPtr = groupId.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(_b._paneLayoutEqualize(snapPtr, gidPtr));
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(gidPtr);
+    }
+  }
+
+  /// Pane layout: exchange the positions of two panes in the same group.
+  /// Returns the decoded result JSON (`snapshot`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutSwap({
+    required String snapshot,
+    required String paneIdA,
+    required String paneIdB,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final aPtr = paneIdA.toNativeUtf8().cast<Char>();
+    final bPtr = paneIdB.toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(_b._paneLayoutSwap(snapPtr, aPtr, bPtr));
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(aPtr);
+      malloc.free(bPtr);
+    }
+  }
+
+  /// Pane layout: the spatially adjacent pane id in [direction]
+  /// (`left`|`right`|`up`|`down`), or null when there is no neighbor
+  /// (or on FFI failure).
+  static String? paneLayoutNeighbor({
+    required String snapshot,
+    required String paneId,
+    required String direction,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final pidPtr = paneId.toNativeUtf8().cast<Char>();
+    final dirPtr = direction.toNativeUtf8().cast<Char>();
+    try {
+      final json = _b._takeNullableString(
+        _b._paneLayoutNeighbor(snapPtr, pidPtr, dirPtr),
+      );
+      if (json == null || json.isEmpty) return null;
+      final decoded = jsonDecode(json);
+      return decoded is String ? decoded : null;
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(pidPtr);
+      malloc.free(dirPtr);
+    }
+  }
+
+  /// Pane layout: drop sessions not in [eligibleSessionIds], collapsing and
+  /// dissolving as the model dictates. Returns the decoded result JSON
+  /// (`snapshot`), or null on FFI failure.
+  static Map<String, dynamic>? paneLayoutReconcile({
+    required String snapshot,
+    required List<String> eligibleSessionIds,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final eligPtr = jsonEncode(eligibleSessionIds).toNativeUtf8().cast<Char>();
+    try {
+      return _paneLayoutResult(_b._paneLayoutReconcile(snapPtr, eligPtr));
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(eligPtr);
+    }
+  }
+
+  /// Pane layout: leaf geometry for rendering/hit-testing in the given
+  /// bounds. Returns the list of `{pane_id, x, y, width, height}` maps,
+  /// or the empty list on FFI failure.
+  static List<Map<String, dynamic>> paneLayoutLeafBoxes({
+    required String snapshot,
+    required String groupId,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+  }) {
+    final snapPtr = snapshot.toNativeUtf8().cast<Char>();
+    final gidPtr = groupId.toNativeUtf8().cast<Char>();
+    try {
+      final json = _b._takeNullableString(
+        _b._paneLayoutLeafBoxes(snapPtr, gidPtr, x, y, width, height),
+      );
+      if (json == null || json.isEmpty) return const [];
+      final decoded = jsonDecode(json);
+      if (decoded is! List) return const [];
+      return decoded.whereType<Map<String, dynamic>>().toList();
+    } finally {
+      malloc.free(snapPtr);
+      malloc.free(gidPtr);
     }
   }
 }
