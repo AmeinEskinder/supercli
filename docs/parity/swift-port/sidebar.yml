@@ -197,10 +197,25 @@ files:
       - swift: 'WorkspaceListOrder (list order keys, apply)'
         target: crates/supercli-core/src/workspace_registry.rs::create_workspace
         test: crates/supercli-core/src/workspace_registry.rs::list_order_keys_and_apply
+      - swift: 'Default workspace display alias (get/set, trims, rejects empty)'
+        target: crates/supercli-core/src/workspace_registry.rs::default_workspace_name
+        test: crates/supercli-core/src/workspace_registry.rs::default_workspace_name_trims_and_rejects_empty
+      - swift: 'Persisted workspace ordering (load/save order)'
+        target: crates/supercli-core/src/workspace_registry.rs::load_workspace_order
+        test: crates/supercli-core/src/workspace_registry.rs::workspace_order_persists_round_trip
+      - swift: 'LaunchConfig context: SUPERCLI_HOME instance detection, current-workspace resolution, advertised host-name precedence'
+        target: crates/supercli-core/src/workspace_registry.rs::context
+        test: crates/supercli-core/src/workspace_registry.rs::advertised_host_name_precedence
+      - swift: 'Single-instance PID file with kernel start-time verification (stale/corrupt pidfiles fail closed)'
+        target: crates/supercli-core/src/workspace_registry.rs::launcher::AppPidFile
+        test: crates/supercli-core/src/workspace_registry.rs::pid_file_liveness_verifies_start_time
+      - swift: 'Workspace launcher: sanitized environment, SUPERCLI_HOME set, no-wait spawn; refuses while a live instance owns the home'
+        target: crates/supercli-core/src/workspace_registry.rs::launcher
+        test: crates/supercli-core/src/workspace_registry.rs::launch_refuses_while_running
     tests:
       - file: crates/supercli-core/src/workspace_registry.rs
-        count: 6
-    notes: 'Logic moved to Rust per Amein''s one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_registry.dart deleted. AppKit/Process/UserDefaults parts not portable.'
+        count: 13
+    notes: 'Logic moved to Rust per Amein''s one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_registry.dart deleted. showWindow(home:) is AppKit/UI-only — dropped, not ported. The launcher ''open the app'' path is ported as a direct child-process spawn (SUPERCLI_HOME, sanitized env, null stdio, no wait); macOS open -b bundle semantics stay platform-side.'
   native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryMarkup.swift:
     destination: 'Dart: clients/supercli-app/lib/screens/sessiongallerypanel.dart
       (SessionGalleryMarkup) + gallery_markup_math.dart'
@@ -254,10 +269,28 @@ files:
       - swift: "Optimistic project/session reorder holds pinned over stale bootstraps, released by host confirmation or the 15s timeout (applyingOrganizationHolds, holdProjectOrder, holdSessionOrder)"
         target: "crates/supercli-client/src/workspace_pool.rs::OrganizationHolds"
         test: "crates/supercli-client/src/workspace_pool.rs::relative_order_replaces_only_named_positions"
+      - swift: "runEntryLoop as a host-driven state machine: AcquireSlot -> Connect -> Bootstrap -> PollSleep/BackoffSleep; remote slot reacquired after backoff (PoolEntryDriver/PoolLoopAction)"
+        target: "crates/supercli-client/src/workspace_pool.rs::PoolEntryDriver"
+        test: "crates/supercli-client/src/workspace_pool.rs::driver_remote_happy_path_poll_loop"
+      - swift: "Interruptible entry sleep with sticky wake (entry.wake/resumeWake); immediate-refresh throttle"
+        target: "crates/supercli-client/src/workspace_pool.rs::WakeSignal"
+        test: "crates/supercli-client/src/workspace_pool.rs::wake_signal_is_sticky_and_consumed_once"
+      - swift: "Slot release grants the next waiter; failing hosts free their slot during backoff so one dead host never starves a live one"
+        target: "crates/supercli-client/src/workspace_pool.rs::DriverStepOutcome"
+        test: "crates/supercli-client/src/workspace_pool.rs::driver_connect_failure_releases_slot_and_backs_off"
+      - swift: "Identity mismatch in the loop releases the slot and closes the backend exactly once (retireEntry path)"
+        target: "crates/supercli-client/src/workspace_pool.rs::PoolEntryDriver::on_bootstrap"
+        test: "crates/supercli-client/src/workspace_pool.rs::driver_identity_mismatch_fails_closed"
+      - swift: "PooledBackend.claimClose — close-once guard, re-armed per reconnect"
+        target: "crates/supercli-client/src/workspace_pool.rs::PoolEntryDriver::claim_close"
+        test: "crates/supercli-client/src/workspace_pool.rs::driver_close_guard_rearms_on_reconnect"
+      - swift: "AttentionNotifier hook: attention notifications with titles"
+        target: "crates/supercli-client/src/workspace_pool.rs::attention_notifications"
+        test: "crates/supercli-client/src/workspace_pool.rs::attention_notifications_carry_titles_and_dedupe_order"
     tests:
       - file: crates/supercli-client/src/workspace_pool.rs
-        count: 20
-    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_pool.dart deleted; FFI exposes via supercli-client-ffi. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and MainActor orchestration are platform runtime machinery with no portable equivalent — not ported."
+        count: 34
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_pool.dart deleted; FFI exposes via supercli-client-ffi. The async entry loop is ported as a host-driven state machine (WakeSignal + PoolEntryDriver + PoolLoopAction + DriverStepOutcome): the host owns the async runtime, executes the returned actions, and feeds results back. @Published publishing, UNUserNotificationCenter delivery and MainActor orchestration are platform runtime machinery with no portable equivalent — not ported."
 
   native/SupercliNative/Tests/SupercliNativeTests/AgentWorktreeAdoptionTests.swift:
     destination: 'Dart: clients/supercli-app'

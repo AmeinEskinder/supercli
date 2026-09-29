@@ -16,6 +16,8 @@
 //! not modeled: the host drives the same decisions through these functions.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::{Condvar, Mutex};
+use std::time::Duration;
 
 /// Tunables mirroring `WorkspacePool`'s initializer defaults.
 pub mod policy {
@@ -653,6 +655,472 @@ pub fn identity_mismatch_fingerprint(
     }
 }
 
+// MARK: - Async polling / wake primitives + notification hooks
+//
+// The entry loops (`runEntryLoop`, `entrySleep`, `resumeWake`) are Swift
+// structured-concurrency machinery. This crate is runtime-free by design
+// (wasm32 web-safe), so the portable equivalent is:
+//   - `WakeSignal`: the `entry.wake` / `resumeWake(_:)` primitive —
+//     `requestImmediateRefresh()` wakes every entry's signal;
+//   - `PoolEntryDriver`: the loop's control flow as a host-driven state
+//     machine. The host (which owns a real async runtime) executes the
+//     returned `PoolLoopAction`s and feeds results back;
+//   - `AttentionNotification` / `AttentionNotificationSink`: the
+//     `AttentionNotifier` hook that turns attention edges into real
+//     notifications.
+
+/// Thread-safe wake primitive for one pool entry's interruptible sleep.
+///
+/// Mirrors `WorkspacePool.Entry.wake` + `resumeWake(_:)`: the host's sleep
+/// task waits on this signal with a timeout and returns early when
+/// `requestImmediateRefresh()` (or retirement) wakes it. The flag is sticky —
+/// a wake that races the start of the sleep still interrupts it — and each
+/// completed wait consumes one pending wake.
+#[derive(Debug, Default)]
+pub struct WakeSignal {
+    state: Mutex<WakeState>,
+    cvar: Condvar,
+}
+
+#[derive(Debug, Default)]
+struct WakeState {
+    woken: bool,
+}
+
+impl WakeSignal {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Signal the sleeper to return early. Mirrors `resumeWake(_:)`.
+    pub fn wake(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.woken = true;
+        self.cvar.notify_all();
+    }
+
+    /// Returns true when a wake is pending, without consuming it.
+    pub fn is_woken(&self) -> bool {
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).woken
+    }
+
+    /// Clears any pending wake without sleeping.
+    pub fn reset(&self) {
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).woken = false;
+    }
+
+    /// Block up to `ms` milliseconds. Returns true when woken early,
+    /// false on timeout. Mirrors the `entrySleep` wait: the host's async
+    /// runtime waits on the same signal instead of blocking.
+    pub fn wait_ms(&self, ms: u64) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.woken {
+            state.woken = false;
+            return true;
+        }
+        let mut guard = self
+            .cvar
+            .wait_timeout(state, Duration::from_millis(ms))
+            .unwrap_or_else(|e| e.into_inner());
+        let woken = guard.0.woken;
+        guard.0.woken = false;
+        woken
+    }
+}
+
+/// Throttle for caller-initiated immediate refreshes, so hover-adjacent call
+/// sites cannot hammer remote hosts. Mirrors `requestImmediateRefresh()`'s
+/// `immediateRefreshThrottleSeconds` guard.
+#[derive(Debug, Default)]
+pub struct ImmediateRefreshThrottle {
+    last_ms: Option<u64>,
+}
+
+impl ImmediateRefreshThrottle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true when a refresh is allowed now, recording the attempt.
+    /// Mirrors the `timeIntervalSince(lastImmediateRefreshAt) > throttle` check.
+    pub fn poll(&mut self, now_ms: u64) -> bool {
+        let allowed = self
+            .last_ms
+            .is_none_or(|last| now_ms.saturating_sub(last) > throttle_ms());
+        if allowed {
+            self.last_ms = Some(now_ms);
+        }
+        allowed
+    }
+}
+
+fn throttle_ms() -> u64 {
+    (policy::IMMEDIATE_REFRESH_THROTTLE_SECS * 1000.0).round() as u64
+}
+
+/// Host-executed actions for one pooled workspace entry.
+///
+/// The host runs the loop: call [`PoolEntryDriver::next_action`], execute the
+/// action on its own async runtime (connect via its backend factory,
+/// read-only bootstrap, interruptible sleep on the entry's [`WakeSignal`]),
+/// then feed the result back into the driver. Mirrors the control flow of
+/// `WorkspacePool.runEntryLoop(_:)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PoolLoopAction {
+    /// Remote targets only: wait for a remote connection slot, then call
+    /// `on_slot_acquired`. The host grants slots through [`RemoteSlotPool`].
+    AcquireSlot,
+    /// Create the read-only backend via the host's backend factory, then
+    /// call `on_connected` (or `on_connect_failed`).
+    Connect,
+    /// Perform one read-only bootstrap, then call `on_bootstrap` (or
+    /// `on_bootstrap_failed`).
+    Bootstrap,
+    /// Interruptible poll sleep: wait on the entry's [`WakeSignal`] up to
+    /// `ms`, then call `on_poll_sleep_done`.
+    PollSleep { ms: u64 },
+    /// Backoff sleep after a failed contact: the remote slot (if held) is
+    /// already released, so one dead host never starves a live one. Wait on
+    /// the [`WakeSignal`] up to `ms`, then call `on_backoff_sleep_done`.
+    BackoffSleep { ms: u64 },
+    /// Entry retired: claim the close-once guard and stop the loop.
+    Close,
+}
+
+/// What the host must do after feeding an event into [`PoolEntryDriver`].
+///
+/// The driver owns the loop's decisions; the host owns the [`RemoteSlotPool`]
+/// and the actual backend. One step can free the remote slot (granting the
+/// next waiter — the host calls `on_slot_acquired()` on that entry's
+/// driver), drop the backend (the close-once claim fired), or fail closed on
+/// identity mismatch (latch the fingerprint and close). Returning everything
+/// in one value keeps the host from forgetting a step.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DriverStepOutcome {
+    /// Waiter key granted the freed remote slot, if any.
+    pub granted_waiter: Option<String>,
+    /// The close-once claim fired: the host must close the backend now.
+    pub close_backend: bool,
+    /// Identity mismatch: latch this fingerprint. The entry is closed and
+    /// its slot is released.
+    pub mismatch_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DriverState {
+    AwaitingSlot,
+    NeedsConnect,
+    NeedsBootstrap,
+    Sleeping,
+    BackingOff,
+    Closed,
+}
+
+/// Host-driven state machine for one pooled workspace entry.
+///
+/// Owns the loop's decisions — slot acquisition, (re)connect, bootstrap,
+/// poll/backoff sleeps, identity fail-close, retirement, and the close-once
+/// backend guard — exactly like `runEntryLoop` / `retireEntry` /
+/// `PooledBackend.claimClose`. The host owns the `RemoteSlotPool` and the
+/// actual backend; the driver never touches the network.
+#[derive(Debug)]
+pub struct PoolEntryDriver {
+    target: WorkspacePoolTarget,
+    poll_interval_ms: u64,
+    backoff_base_ms: u64,
+    backoff_cap_ms: u64,
+    state: DriverState,
+    consecutive_failures: u32,
+    retired: bool,
+    /// A backend exists that has not been closed yet.
+    backend_live: bool,
+    close_claimed: bool,
+    wake: WakeSignal,
+}
+
+impl PoolEntryDriver {
+    pub fn new(target: WorkspacePoolTarget) -> Self {
+        Self::with_tuning(
+            target,
+            policy::POLL_INTERVAL_MS,
+            policy::BACKOFF_BASE_MS,
+            policy::BACKOFF_CAP_MS,
+        )
+    }
+
+    pub fn with_tuning(
+        target: WorkspacePoolTarget,
+        poll_interval_ms: u64,
+        backoff_base_ms: u64,
+        backoff_cap_ms: u64,
+    ) -> Self {
+        let state = if target.is_remote {
+            DriverState::AwaitingSlot
+        } else {
+            DriverState::NeedsConnect
+        };
+        Self {
+            target,
+            poll_interval_ms,
+            backoff_base_ms,
+            backoff_cap_ms,
+            state,
+            consecutive_failures: 0,
+            retired: false,
+            backend_live: false,
+            close_claimed: false,
+            wake: WakeSignal::new(),
+        }
+    }
+
+    pub fn target(&self) -> &WorkspacePoolTarget {
+        &self.target
+    }
+
+    pub fn key(&self) -> &str {
+        &self.target.key
+    }
+
+    /// The entry's wake primitive: `requestImmediateRefresh()` wakes every
+    /// entry's signal; the host's sleep task waits on it.
+    pub fn wake_signal(&self) -> &WakeSignal {
+        &self.wake
+    }
+
+    pub fn consecutive_failures(&self) -> u32 {
+        self.consecutive_failures
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.state == DriverState::Closed
+    }
+
+    /// The next host-executed action. Pure function of the driver state.
+    pub fn next_action(&self) -> PoolLoopAction {
+        if self.retired {
+            return PoolLoopAction::Close;
+        }
+        match self.state {
+            DriverState::AwaitingSlot => PoolLoopAction::AcquireSlot,
+            DriverState::NeedsConnect => PoolLoopAction::Connect,
+            DriverState::NeedsBootstrap => PoolLoopAction::Bootstrap,
+            DriverState::Sleeping => PoolLoopAction::PollSleep {
+                ms: self.poll_interval_ms,
+            },
+            DriverState::BackingOff => PoolLoopAction::BackoffSleep {
+                ms: backoff_delay_ms(
+                    self.consecutive_failures,
+                    self.backoff_base_ms,
+                    self.backoff_cap_ms,
+                ),
+            },
+            DriverState::Closed => PoolLoopAction::Close,
+        }
+    }
+
+    /// The host granted the entry a remote slot.
+    pub fn on_slot_acquired(&mut self) {
+        if self.state == DriverState::AwaitingSlot && !self.retired {
+            self.state = DriverState::NeedsConnect;
+        }
+    }
+
+    /// The read-only backend connected. Re-arms the close-once guard for the
+    /// new backend.
+    pub fn on_connected(&mut self) {
+        if !self.retired && self.state == DriverState::NeedsConnect {
+            self.backend_live = true;
+            self.close_claimed = false;
+            self.state = DriverState::NeedsBootstrap;
+        }
+    }
+
+    /// Backend construction threw: release the slot for the backoff wait
+    /// (mirrors `backOff(_:)`) and sleep the exponential delay.
+    pub fn on_connect_failed(&mut self, slots: &mut RemoteSlotPool) -> DriverStepOutcome {
+        let granted_waiter = self.release_slot(slots);
+        if !self.retired {
+            self.state = DriverState::BackingOff;
+        }
+        DriverStepOutcome {
+            granted_waiter,
+            close_backend: self.claim_close(),
+            mismatch_fingerprint: None,
+        }
+    }
+
+    /// One bootstrap completed. On identity mismatch the driver fails closed
+    /// exactly like the runtime — the Swift loop calls `retireEntry`, which
+    /// releases the remote slot and closes the backend — and returns the
+    /// fingerprint to latch. Mirrors the `expectedHostID` check in
+    /// `runEntryLoop`.
+    pub fn on_bootstrap(
+        &mut self,
+        reported_host_id: &str,
+        slots: &mut RemoteSlotPool,
+    ) -> DriverStepOutcome {
+        if self.retired || self.state != DriverState::NeedsBootstrap {
+            return DriverStepOutcome::default();
+        }
+        if let Some(fingerprint) = identity_mismatch_fingerprint(
+            self.target.expected_host_id.as_deref(),
+            reported_host_id,
+            &self.target.fingerprint,
+        ) {
+            let granted_waiter = self.release_slot(slots);
+            let close_backend = self.claim_close();
+            self.state = DriverState::Closed;
+            return DriverStepOutcome {
+                granted_waiter,
+                close_backend,
+                mismatch_fingerprint: Some(fingerprint),
+            };
+        }
+        self.consecutive_failures = 0;
+        self.state = DriverState::Sleeping;
+        DriverStepOutcome::default()
+    }
+
+    /// Bootstrap threw: drop the backend (the outcome's `close_backend`
+    /// tells the host to close it exactly once), release the remote slot,
+    /// back off. Mirrors the catch block in `runEntryLoop`.
+    pub fn on_bootstrap_failed(&mut self, slots: &mut RemoteSlotPool) -> DriverStepOutcome {
+        if self.retired {
+            return DriverStepOutcome::default();
+        }
+        self.consecutive_failures += 1;
+        let granted_waiter = self.release_slot(slots);
+        let close_backend = self.claim_close();
+        if self.state == DriverState::NeedsBootstrap {
+            self.state = DriverState::BackingOff;
+        }
+        DriverStepOutcome {
+            granted_waiter,
+            close_backend,
+            mismatch_fingerprint: None,
+        }
+    }
+
+    /// The interruptible poll sleep finished (elapsed or woken early).
+    /// The host then re-reads `next_action`.
+    pub fn on_poll_sleep_done(&mut self) {
+        if self.retired {
+            self.state = DriverState::Closed;
+        } else if self.state == DriverState::Sleeping {
+            self.state = DriverState::NeedsBootstrap;
+        }
+    }
+
+    /// The backoff sleep finished. The backend was dropped on failure, so
+    /// the loop reconnects — but Swift's loop continues at the top, where a
+    /// remote entry that released its slot for the backoff wait must
+    /// reacquire it before reconnecting.
+    pub fn on_backoff_sleep_done(&mut self) {
+        if self.retired {
+            self.state = DriverState::Closed;
+        } else if self.state == DriverState::BackingOff {
+            self.state = if self.target.is_remote {
+                DriverState::AwaitingSlot
+            } else {
+                DriverState::NeedsConnect
+            };
+        }
+    }
+
+    /// Retire the entry: cancel any slot wait, release a held slot, wake a
+    /// pending sleep, and move to `Close`. Mirrors `retireEntry(forKey:)`.
+    /// The outcome tells the host which waiter was granted the freed slot
+    /// and whether the backend must be closed now (the close-once claim
+    /// fired here rather than in the loop's own exit path).
+    pub fn retire(&mut self, slots: &mut RemoteSlotPool) -> DriverStepOutcome {
+        if self.retired {
+            return DriverStepOutcome::default();
+        }
+        self.retired = true;
+        slots.cancel_waiter(self.key());
+        let granted_waiter = self.release_slot(slots);
+        self.wake.wake();
+        self.state = DriverState::Closed;
+        DriverStepOutcome {
+            granted_waiter,
+            close_backend: self.claim_close(),
+            mismatch_fingerprint: None,
+        }
+    }
+
+    /// Close-once guard for the pooled backend: retirement can race an
+    /// in-flight (possibly blocking) bootstrap, so close must be callable
+    /// from both paths exactly once — and only when a backend actually
+    /// exists. Mirrors `PooledBackend.claimClose` (`if let pooled = ...`).
+    pub fn claim_close(&mut self) -> bool {
+        if self.close_claimed || !self.backend_live {
+            return false;
+        }
+        self.close_claimed = true;
+        self.backend_live = false;
+        true
+    }
+
+    /// Releases this entry's held remote slot, granting the next waiter if
+    /// any. Returns the granted waiter key so the host can call
+    /// `on_slot_acquired()` on that entry's driver.
+    fn release_slot(&mut self, slots: &mut RemoteSlotPool) -> Option<String> {
+        slots.release(self.key(), &HashSet::new())
+    }
+}
+
+/// One attention notification: a background workspace session needs input.
+/// Mirrors `WorkspacePool.AttentionNotifier`'s four parameters
+/// (sessionTitle, workspaceName, workspaceKey, sessionID).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttentionNotification {
+    pub session_title: String,
+    pub workspace_name: String,
+    pub workspace_key: String,
+    pub session_id: String,
+}
+
+/// Host-provided hook that turns attention edges into real user-visible
+/// notifications. Mirrors `WorkspacePool.AttentionNotifier` (whose default
+/// posts one deduplicated macOS notification via `DesktopNotifier`).
+pub trait AttentionNotificationSink {
+    fn notify_attention(&mut self, notification: AttentionNotification);
+}
+
+impl<F: FnMut(AttentionNotification)> AttentionNotificationSink for F {
+    fn notify_attention(&mut self, notification: AttentionNotification) {
+        self(notification);
+    }
+}
+
+/// Builds the notifications for one accepted snapshot, in deterministic
+/// (sorted session-id) order, with the empty-title-falls-back-to-command
+/// rule. Sessions in the notify set but missing from the snapshot are
+/// skipped. Mirrors the notify loop inside `acceptSnapshot`.
+pub fn attention_notifications(
+    advance: &AttentionAdvance,
+    snapshot: &PooledSnapshot,
+    workspace_name: &str,
+    workspace_key: &str,
+) -> Vec<AttentionNotification> {
+    advance
+        .notify_session_ids
+        .iter()
+        .filter_map(|id| {
+            snapshot
+                .sessions
+                .iter()
+                .find(|s| &s.id == id)
+                .map(|s| AttentionNotification {
+                    session_title: s.attention_title().to_string(),
+                    workspace_name: workspace_name.to_string(),
+                    workspace_key: workspace_key.to_string(),
+                    session_id: id.clone(),
+                })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1073,5 +1541,350 @@ mod tests {
         assert_eq!(policy::IMMEDIATE_REFRESH_THROTTLE_SECS, 2.0);
         assert_eq!(policy::MAX_LIVE_REMOTE_CONNECTIONS, 4);
         assert_eq!(policy::ORGANIZATION_HOLD_SECS, 15.0);
+    }
+
+    // ------------------------------------------------------------------
+    // Gap 2: async polling / wake primitives + notification hooks.
+    // ------------------------------------------------------------------
+
+    fn remote_target(key: &str) -> WorkspacePoolTarget {
+        WorkspacePoolTarget {
+            key: key.into(),
+            name: key.into(),
+            transport_kind: "direct".into(),
+            is_remote: true,
+            expected_host_id: Some("host-1".into()),
+            fingerprint: format!("fp:{key}"),
+        }
+    }
+
+    fn local_target(key: &str) -> WorkspacePoolTarget {
+        WorkspacePoolTarget {
+            key: key.into(),
+            name: key.into(),
+            transport_kind: "local".into(),
+            is_remote: false,
+            expected_host_id: None,
+            fingerprint: format!("fp:{key}"),
+        }
+    }
+
+    #[test]
+    fn wake_signal_wakes_a_sleeping_thread_early() {
+        use std::sync::Arc;
+        use std::time::Instant;
+        let signal = Arc::new(WakeSignal::new());
+        let woken_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let s2 = Arc::clone(&signal);
+        let f2 = Arc::clone(&woken_flag);
+        let start = Instant::now();
+        let handle = std::thread::spawn(move || {
+            let woken = s2.wait_ms(30_000);
+            f2.store(woken, std::sync::atomic::Ordering::SeqCst);
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        signal.wake();
+        handle.join().unwrap();
+        assert!(woken_flag.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "sleep returned early on wake"
+        );
+    }
+
+    #[test]
+    fn wake_signal_times_out_without_wake() {
+        let signal = WakeSignal::new();
+        assert!(!signal.wait_ms(50));
+        assert!(!signal.is_woken());
+    }
+
+    #[test]
+    fn wake_signal_is_sticky_and_consumed_once() {
+        let signal = WakeSignal::new();
+        signal.wake();
+        assert!(signal.is_woken());
+        // A wake racing the start of the sleep still interrupts it...
+        assert!(signal.wait_ms(30_000));
+        // ...but each wait consumes one pending wake.
+        assert!(!signal.wait_ms(20));
+        // reset() clears a pending wake without sleeping.
+        signal.wake();
+        signal.reset();
+        assert!(!signal.is_woken());
+        assert!(!signal.wait_ms(20));
+    }
+
+    #[test]
+    fn refresh_throttle_allows_first_then_blocks_within_window() {
+        let mut throttle = ImmediateRefreshThrottle::new();
+        assert!(throttle.poll(1_000), "first refresh allowed");
+        assert!(!throttle.poll(1_500), "within 2s window: throttled");
+        assert!(
+            !throttle.poll(3_000),
+            "exactly 2s: still throttled (strict >)"
+        );
+        assert!(throttle.poll(3_001), "past the window: allowed again");
+        assert!(
+            !throttle.poll(3_500),
+            "window restarts at the allowed attempt"
+        );
+    }
+
+    #[test]
+    fn driver_remote_happy_path_poll_loop() {
+        // Swift runEntryLoop: AcquireSlot -> Connect -> Bootstrap ->
+        // PollSleep -> Bootstrap -> ...
+        let mut slots = RemoteSlotPool::new(4);
+        let mut driver = PoolEntryDriver::new(remote_target("a"));
+        assert_eq!(driver.next_action(), PoolLoopAction::AcquireSlot);
+        assert!(slots.try_acquire("a"));
+        driver.on_slot_acquired();
+        assert_eq!(driver.next_action(), PoolLoopAction::Connect);
+        driver.on_connected();
+        assert_eq!(driver.next_action(), PoolLoopAction::Bootstrap);
+        let outcome = driver.on_bootstrap("host-1", &mut slots);
+        assert_eq!(outcome, DriverStepOutcome::default());
+        assert_eq!(driver.consecutive_failures(), 0);
+        assert_eq!(
+            driver.next_action(),
+            PoolLoopAction::PollSleep {
+                ms: policy::POLL_INTERVAL_MS
+            }
+        );
+        driver.on_poll_sleep_done();
+        assert_eq!(driver.next_action(), PoolLoopAction::Bootstrap);
+    }
+
+    #[test]
+    fn driver_local_target_skips_slot_acquisition() {
+        let driver = PoolEntryDriver::new(local_target("l"));
+        assert_eq!(driver.next_action(), PoolLoopAction::Connect);
+    }
+
+    #[test]
+    fn driver_connect_failure_releases_slot_and_backs_off() {
+        let mut slots = RemoteSlotPool::new(1);
+        let mut driver = PoolEntryDriver::new(remote_target("a"));
+        assert!(slots.try_acquire("a"));
+        driver.on_slot_acquired();
+        driver.on_connected();
+        // Connect failure on the NEXT loop (backend was dropped): simulate
+        // by failing before connect completes.
+        let mut driver2 = PoolEntryDriver::new(remote_target("b"));
+        assert!(!slots.try_acquire("b"), "slot held by a");
+        // a's bootstrap fails: slot released, waiter b granted.
+        let outcome = driver.on_bootstrap_failed(&mut slots);
+        assert_eq!(driver.consecutive_failures(), 1);
+        assert!(
+            !slots.holds_slot("a"),
+            "failing host releases its slot during backoff"
+        );
+        assert!(slots.holds_slot("b"), "next waiter granted the slot");
+        assert_eq!(
+            outcome.granted_waiter.as_deref(),
+            Some("b"),
+            "host calls on_slot_acquired on the granted waiter's driver"
+        );
+        assert!(outcome.close_backend, "dropped backend closes exactly once");
+        assert_eq!(outcome.mismatch_fingerprint, None);
+        assert!(
+            !driver.claim_close(),
+            "close claimed exactly once via the outcome"
+        );
+        // The host hands the granted slot to b's driver.
+        driver2.on_slot_acquired();
+        assert_eq!(driver2.next_action(), PoolLoopAction::Connect);
+        assert_eq!(
+            driver.next_action(),
+            PoolLoopAction::BackoffSleep {
+                ms: policy::BACKOFF_BASE_MS
+            }
+        );
+        // ...then the loop reacquires the remote slot after the backoff
+        // sleep (Swift's loop continues at the top, where the slot is
+        // reacquired) before reconnecting.
+        driver.on_backoff_sleep_done();
+        assert_eq!(driver.next_action(), PoolLoopAction::AcquireSlot);
+        driver.on_slot_acquired();
+        assert_eq!(driver.next_action(), PoolLoopAction::Connect);
+    }
+
+    #[test]
+    fn driver_local_backoff_reconnects_without_slot() {
+        let mut slots = RemoteSlotPool::new(1);
+        let mut driver = PoolEntryDriver::new(local_target("l"));
+        driver.on_connected();
+        let outcome = driver.on_bootstrap_failed(&mut slots);
+        assert!(outcome.close_backend);
+        assert_eq!(outcome.granted_waiter, None);
+        assert!(matches!(
+            driver.next_action(),
+            PoolLoopAction::BackoffSleep { .. }
+        ));
+        driver.on_backoff_sleep_done();
+        assert_eq!(
+            driver.next_action(),
+            PoolLoopAction::Connect,
+            "local loop reconnects directly, no slot to reacquire"
+        );
+    }
+
+    #[test]
+    fn driver_close_guard_rearms_on_reconnect() {
+        let mut slots = RemoteSlotPool::new(4);
+        let mut driver = PoolEntryDriver::new(remote_target("a"));
+        driver.on_slot_acquired();
+        driver.on_connected();
+        let outcome = driver.on_bootstrap_failed(&mut slots);
+        assert!(outcome.close_backend, "first backend closes");
+        driver.on_backoff_sleep_done();
+        driver.on_slot_acquired();
+        driver.on_connected();
+        // A NEW backend connected: the close-once guard is re-armed, so a
+        // later failure still closes the new backend exactly once.
+        let outcome = driver.on_bootstrap_failed(&mut slots);
+        assert!(outcome.close_backend, "second backend also closes");
+        assert!(!driver.claim_close(), "still exactly once per backend");
+    }
+
+    #[test]
+    fn driver_backoff_delay_grows_with_consecutive_failures() {
+        let mut slots = RemoteSlotPool::new(4);
+        let mut driver = PoolEntryDriver::with_tuning(remote_target("a"), 25_000, 5_000, 300_000);
+        driver.on_slot_acquired();
+        driver.on_connected();
+        driver.on_bootstrap_failed(&mut slots);
+        driver.on_backoff_sleep_done();
+        driver.on_slot_acquired();
+        driver.on_connected();
+        driver.on_bootstrap_failed(&mut slots);
+        assert_eq!(driver.consecutive_failures(), 2);
+        assert_eq!(
+            driver.next_action(),
+            PoolLoopAction::BackoffSleep { ms: 10_000 }
+        );
+        // A successful bootstrap resets the failure count.
+        driver.on_backoff_sleep_done();
+        driver.on_slot_acquired();
+        driver.on_connected();
+        assert_eq!(
+            driver.on_bootstrap("host-1", &mut slots),
+            DriverStepOutcome::default()
+        );
+        assert_eq!(driver.consecutive_failures(), 0);
+    }
+
+    #[test]
+    fn driver_identity_mismatch_fails_closed() {
+        let mut slots = RemoteSlotPool::new(4);
+        let mut driver = PoolEntryDriver::new(remote_target("a"));
+        assert!(slots.try_acquire("a"));
+        driver.on_slot_acquired();
+        driver.on_connected();
+        let outcome = driver.on_bootstrap("host-IMPOSTOR", &mut slots);
+        assert_eq!(outcome.mismatch_fingerprint.as_deref(), Some("fp:a"));
+        assert!(driver.is_closed());
+        assert_eq!(driver.next_action(), PoolLoopAction::Close);
+        // Like Swift's retireEntry: the remote slot is released and the
+        // backend still gets its exactly-once close on the way out.
+        assert!(!slots.holds_slot("a"), "mismatch releases the remote slot");
+        assert_eq!(outcome.granted_waiter, None);
+        assert!(outcome.close_backend);
+        assert!(!driver.claim_close(), "close claimed exactly once");
+    }
+
+    #[test]
+    fn driver_retire_cancels_waiter_releases_slot_and_closes_once() {
+        let mut slots = RemoteSlotPool::new(1);
+        assert!(slots.try_acquire("holder"));
+        let mut driver = PoolEntryDriver::new(remote_target("a"));
+        // Still waiting for a slot: retire cancels the waiter.
+        assert_eq!(driver.next_action(), PoolLoopAction::AcquireSlot);
+        assert!(!slots.try_acquire("a"), "queued behind holder");
+        let outcome = driver.retire(&mut slots);
+        assert!(!outcome.close_backend, "no backend yet: nothing to close");
+        assert_eq!(outcome.granted_waiter, None);
+        assert_eq!(outcome.mismatch_fingerprint, None);
+        assert!(driver.is_closed());
+        assert_eq!(driver.next_action(), PoolLoopAction::Close);
+        // A second retire is a no-op.
+        assert_eq!(driver.retire(&mut slots), DriverStepOutcome::default());
+
+        // Connected entry: retire wakes the sleep and claims the close.
+        let mut driver2 = PoolEntryDriver::new(local_target("b"));
+        driver2.on_connected();
+        driver2.on_bootstrap("host-x", &mut slots);
+        assert_eq!(
+            driver2.next_action(),
+            PoolLoopAction::PollSleep {
+                ms: policy::POLL_INTERVAL_MS
+            }
+        );
+        let outcome = driver2.retire(&mut slots);
+        assert!(outcome.close_backend, "live backend: host must close it");
+        assert!(
+            driver2.wake_signal().wait_ms(10),
+            "retire wakes a pending sleep"
+        );
+        assert!(!driver2.claim_close(), "close claimed exactly once");
+    }
+
+    #[test]
+    fn attention_notifications_carry_titles_and_dedupe_order() {
+        let snapshot = PooledSnapshot {
+            projects: vec![],
+            sessions: vec![
+                pooled_session("s2", "blocked", "running", false, ""),
+                pooled_session("s1", "blocked", "running", false, "Build"),
+            ],
+            captured_at_unix_ms: 0,
+        };
+        let blocked: HashSet<String> = ["s1".into(), "s2".into()].into_iter().collect();
+        let advance = advance_attention(&AttentionLatch::default(), &blocked, false);
+        // First contact seeds silently: no notifications.
+        assert!(attention_notifications(&advance, &snapshot, "WS", "k").is_empty());
+
+        // Both clear, then both re-block: two notifications, sorted by
+        // session id, with the empty-title-falls-back-to-command rule.
+        let cleared = advance_attention(&advance.latch, &HashSet::new(), false);
+        assert!(attention_notifications(&cleared, &snapshot, "WS", "k").is_empty());
+        let reblocked = advance_attention(&cleared.latch, &blocked, false);
+        let notifications = attention_notifications(&reblocked, &snapshot, "My Workspace", "wk:1");
+        assert_eq!(notifications.len(), 2);
+        assert_eq!(
+            notifications[0],
+            AttentionNotification {
+                session_title: "Build".into(),
+                workspace_name: "My Workspace".into(),
+                workspace_key: "wk:1".into(),
+                session_id: "s1".into(),
+            }
+        );
+        assert_eq!(notifications[1].session_id, "s2");
+        assert_eq!(notifications[1].session_title, "claude");
+
+        // Sessions missing from the snapshot are skipped, not panicked on.
+        let mut snap_missing = snapshot.clone();
+        snap_missing.sessions.retain(|s| s.id != "s2");
+        let partial = attention_notifications(&reblocked, &snap_missing, "WS", "k");
+        assert_eq!(partial.len(), 1);
+        assert_eq!(partial[0].session_id, "s1");
+    }
+
+    #[test]
+    fn attention_sink_fn_mut_closure_works() {
+        let mut received: Vec<AttentionNotification> = Vec::new();
+        {
+            let mut sink = |n: AttentionNotification| received.push(n);
+            sink.notify_attention(AttentionNotification {
+                session_title: "T".into(),
+                workspace_name: "W".into(),
+                workspace_key: "K".into(),
+                session_id: "s1".into(),
+            });
+        }
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].session_id, "s1");
     }
 }

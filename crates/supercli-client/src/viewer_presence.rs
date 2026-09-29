@@ -16,7 +16,7 @@
 //! watching, timers, and toast callbacks are platform runtime machinery and
 //! stay on the caller side.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::Deserialize;
 
@@ -195,6 +195,75 @@ pub fn is_device_viewing(
     })
 }
 
+/// Whether any viewer is currently on this session's terminal.
+/// Both output feeds count as presence, including mobile viewers that may
+/// resize the shared PTY. Mirrors `ViewerPresenceStore.hasViewers(sessionID:)`.
+pub fn has_viewers(merged: &BTreeMap<String, Vec<ViewerInfo>>, session_id: &str) -> bool {
+    merged
+        .get(session_id)
+        .is_some_and(|viewers| !viewers.is_empty())
+}
+
+/// Grid re-assert candidacy: session ids a remote viewer has been seen on at
+/// some point this app run.
+///
+/// A remote controller can resize the *shared hosted PTY* while the Mac's
+/// own surface stays put (no local resize event ever fires), so the desktop
+/// keeps rendering the diverged grid. The desktop grid re-assert
+/// (`TerminalArea.normalizeShownTerminalSize`) consumes one candidacy per
+/// session to run the forced resize path exactly once, keeping ordinary
+/// never-remote-viewed switches free of refit churn.
+///
+/// File watching, timers, and the re-assert itself are platform runtime
+/// machinery and stay on the caller side; this tracker is the portable
+/// candidacy state.
+#[derive(Debug, Default)]
+pub struct GridReassertTracker {
+    candidates: HashSet<String>,
+}
+
+impl GridReassertTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Latch candidacy for every session with merged viewers. Call after each
+    /// presence rebuild: whoever is viewing now may resize the shared PTY at
+    /// any point while present, so candidacy is set on sight and only
+    /// cleared by the consuming re-assert.
+    /// Mirrors `gridReassertCandidates.formUnion(merged.keys)`.
+    pub fn note_viewed_sessions<'a>(&mut self, session_ids: impl Iterator<Item = &'a str>) {
+        self.candidates.extend(session_ids.map(str::to_string));
+    }
+
+    /// Whether a candidacy is currently latched (for tests/debugging).
+    pub fn is_candidate(&self, session_id: &str) -> bool {
+        self.candidates.contains(session_id)
+    }
+
+    /// Consume one candidacy for the forced grid re-assert path. Returns
+    /// `true` exactly once per session, after which the caller runs the
+    /// re-assert.
+    ///
+    /// The repair is preserved until all viewers have left and the Host's
+    /// explicit fit has cleared: a present device must never lose its grid
+    /// merely because another viewer disconnected, and an active fit already
+    /// keeps the grid correct. A declined consume leaves the candidacy
+    /// latched for later.
+    /// Mirrors `ViewerPresenceStore.consumeGridReassertCandidate(_:hasActiveFit:)`.
+    pub fn consume_candidate(
+        &mut self,
+        session_id: &str,
+        has_active_fit: bool,
+        has_viewers_now: bool,
+    ) -> bool {
+        if has_active_fit || has_viewers_now {
+            return false;
+        }
+        self.candidates.remove(session_id)
+    }
+}
+
 /// Computes newly-arrived viewer ids since `announced` (for one-shot
 /// connection toasts). The first call seeds silently.
 pub fn connection_arrivals(
@@ -318,6 +387,59 @@ mod tests {
         assert!(is_device_viewing(&merged, "s1", "phone-1"));
         assert!(!is_device_viewing(&merged, "s1", "other"));
         assert!(!is_device_viewing(&merged, "nope", "phone-1"));
+    }
+
+    #[test]
+    fn has_viewers_reflects_merged_presence() {
+        let file = parse_presence(presence_json(), "terminal");
+        let merged = merge_presence(&file, &HashMap::new(), 100_000);
+        assert!(has_viewers(&merged, "s1"));
+        assert!(!has_viewers(&merged, "no-such-session"));
+        // All viewers expired: no viewers on the session.
+        let gone = merge_presence(&file, &HashMap::new(), 1_000_000);
+        assert!(!has_viewers(&gone, "s1"));
+    }
+
+    #[test]
+    fn grid_reassert_consumes_exactly_once_per_session() {
+        let mut tracker = GridReassertTracker::new();
+        tracker.note_viewed_sessions(["s1", "s2"].into_iter());
+        assert!(tracker.is_candidate("s1"));
+        assert!(tracker.is_candidate("s2"));
+        // Consumes exactly once per session.
+        assert!(tracker.consume_candidate("s1", false, false));
+        assert!(!tracker.is_candidate("s1"));
+        assert!(!tracker.consume_candidate("s1", false, false));
+        // Never latched: false.
+        assert!(!tracker.consume_candidate("s9", false, false));
+        // The other session's candidacy is unaffected.
+        assert!(tracker.is_candidate("s2"));
+        assert!(tracker.consume_candidate("s2", false, false));
+    }
+
+    #[test]
+    fn grid_reassert_preserved_while_viewers_present_or_fit_active() {
+        let mut tracker = GridReassertTracker::new();
+        tracker.note_viewed_sessions(["s1"].into_iter());
+        // Viewers still present: no consume, candidacy preserved.
+        assert!(!tracker.consume_candidate("s1", false, true));
+        assert!(tracker.is_candidate("s1"));
+        // Host fit active: no consume, candidacy preserved.
+        assert!(!tracker.consume_candidate("s1", true, false));
+        assert!(tracker.is_candidate("s1"));
+        // All clear: consumes.
+        assert!(tracker.consume_candidate("s1", false, false));
+        assert!(!tracker.is_candidate("s1"));
+    }
+
+    #[test]
+    fn grid_reassert_relatches_when_viewer_returns() {
+        let mut tracker = GridReassertTracker::new();
+        tracker.note_viewed_sessions(["s1"].into_iter());
+        assert!(tracker.consume_candidate("s1", false, false));
+        // A viewer seen again re-arms the repair.
+        tracker.note_viewed_sessions(["s1"].into_iter());
+        assert!(tracker.consume_candidate("s1", false, false));
     }
 
     #[test]

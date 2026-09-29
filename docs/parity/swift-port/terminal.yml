@@ -122,10 +122,15 @@ files:
       - swift: "TerminalDropTargetEvent JSON wire contract"
         target: "crates/supercli-core/src/terminal_drop_maps.rs::DropTargetEvent"
         test: "crates/supercli-core/src/terminal_drop_maps.rs::drop_map_json_wire_contract"
+      - swift: "TerminalDropTargetMap file wiring — TerminalPaneView reads terminal-drop-target-map.json (64 KiB fail-closed gate) from the session dir and queries the Rust FFI"
+        target: "clients/supercli-app/lib/terminal/terminal_drop_maps.dart::TerminalDropMaps.acceptsDropAt"
+        test: "clients/supercli-app/test/terminal_drop_maps_test.dart"
     tests:
       - file: crates/supercli-core/src/terminal_drop_maps.rs
         count: 6
-    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_drop_target_map.dart deleted. File I/O (load/writeEvent) not portable — uses FileManager. Codec producer is app-kit drop_target.rs."
+      - file: clients/supercli-app/test/terminal_drop_maps_test.dart
+        count: 7
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_drop_target_map.dart deleted. File reads are wired on the Dart side (TerminalDropMaps: session-dir resolution, 64 KiB gate, fail-closed) over the existing supercli_drop_map_accepts FFI; the decision logic stays in Rust. Codec producer is app-kit drop_target.rs."
 
   native/SupercliNative/Sources/SupercliNative/TerminalFindBar.swift:
     destination: "Dart: clients/supercli-app"
@@ -146,10 +151,15 @@ files:
       - swift: "Stale/future/relative maps fail closed"
         target: "crates/supercli-core/src/terminal_drop_maps.rs::PathDragMap::path_at"
         test: "crates/supercli-core/src/terminal_drop_maps.rs::path_drag_map_json_wire_contract"
+      - swift: "TerminalPathDragMap file wiring — TerminalPaneView reads terminal-drag-map.json (64 KiB fail-closed gate) from the session dir and queries the Rust FFI"
+        target: "clients/supercli-app/lib/terminal/terminal_drop_maps.dart::TerminalDropMaps.dragPathAt"
+        test: "clients/supercli-app/test/terminal_drop_maps_test.dart"
     tests:
       - file: crates/supercli-core/src/terminal_drop_maps.rs
         count: 6
-    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_path_drag_map.dart deleted. File I/O (load) not portable — uses FileManager. Codec producer is app-kit drop_target.rs."
+      - file: clients/supercli-app/test/terminal_drop_maps_test.dart
+        count: 7
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart terminal_path_drag_map.dart deleted. File reads are wired on the Dart side (TerminalDropMaps: session-dir resolution, 64 KiB gate, fail-closed) over the existing supercli_path_drag_map_path_at FFI; the decision logic stays in Rust. Codec producer is app-kit drop_target.rs."
 
   native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift:
     destination: "Dart: clients/supercli-app"

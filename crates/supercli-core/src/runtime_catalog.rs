@@ -13,7 +13,7 @@ pub use schema::{
     RuntimeInstall, RuntimeIntegrationInfo, RuntimeKind, RuntimeLifecycle,
     RuntimeLifecycleAuthority, RuntimeLifecycleFallback, RuntimeLifecycleSource, RuntimePlatform,
     RuntimeScreenRules, RuntimeScriptPathSignature, RuntimeSuggestedPreset, RuntimeUpdates,
-    RUNTIME_DESCRIPTOR_SCHEMA_VERSION,
+    RuntimeUsageStore, RUNTIME_DESCRIPTOR_SCHEMA_VERSION,
 };
 
 use std::path::Path;

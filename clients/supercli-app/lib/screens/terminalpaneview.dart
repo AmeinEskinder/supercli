@@ -14,9 +14,11 @@ import 'package:gpuidart/gpuidart.dart';
 
 import '../host_client.dart';
 import '../terminal/session_output_stream.dart';
+import '../terminal/terminal_drop_maps.dart';
 import '../terminal/terminal_pane.dart';
 import '../terminal/terminal_state.dart';
 
+export '../terminal/terminal_drop_maps.dart' show TerminalDropMaps;
 export '../terminal/terminal_pane.dart' show TerminalPane, TerminalKeymap;
 export '../terminal/terminal_state.dart' show TerminalState, TerminalCellUpdate;
 export '../terminal/session_output_stream.dart' show SessionOutputStream;
@@ -32,6 +34,7 @@ final class TerminalPaneView {
     this.onInput,
     this.onResize,
     this.onCopy,
+    this.sessionDirectory,
   }) : state = state ?? _stateFromLines(lines),
        stream = null,
        onStreamError = null,
@@ -45,6 +48,13 @@ final class TerminalPaneView {
   /// `POST /mobile/write` with a per-batch idempotency id; resize forwards
   /// to `POST /mobile/resize`. All traffic goes through the authenticated
   /// [HostClient] — the view never reads Host journal files directly.
+  ///
+  /// [appSessionsDir] is the Host's local `app-sessions` directory
+  /// (`~/.supercli/app-sessions`). When provided, the pane reads the
+  /// session's drop-target / path-drag map files through the Rust FFI
+  /// ([acceptsDropAt]/[dragPathAt]). Leave it null for remote/paired Hosts,
+  /// where the session directory is not on this machine and the maps stay
+  /// disabled.
   factory TerminalPaneView.hosted({
     required HostClient client,
     required String sessionId,
@@ -55,6 +65,7 @@ final class TerminalPaneView {
     void Function(Object error)? onStreamError,
     int cols = 80,
     int rows = 24,
+    String? appSessionsDir,
   }) {
     final state = TerminalState(cols: cols, rows: rows);
     final stream = SessionOutputStream(
@@ -69,6 +80,9 @@ final class TerminalPaneView {
       state: state,
       stream: stream,
       sessionId: sessionId,
+      sessionDirectory: appSessionsDir == null
+          ? null
+          : TerminalDropMaps.sessionDir(appSessionsDir, sessionId),
       findBarVisible: findBarVisible,
       onCopy: onCopy,
       onStreamError: onStreamError,
@@ -94,6 +108,7 @@ final class TerminalPaneView {
     required this.onCopy,
     required this.onStreamError,
     this.sessionId,
+    this.sessionDirectory,
   });
 
   final String paneId;
@@ -102,6 +117,40 @@ final class TerminalPaneView {
 
   /// The Host session id this pane streams, or null for static/demo panes.
   final String? sessionId;
+
+  /// Local session directory (`~/.supercli/app-sessions/<id>`), or null
+  /// when the maps are unavailable (static/demo panes, remote Hosts).
+  /// The drop-target and path-drag maps are read from here.
+  final String? sessionDirectory;
+
+  /// Whether the terminal drop/drag maps are available for this pane.
+  bool get hasDropMaps => sessionDirectory != null;
+
+  /// Whether the session's drop-target map accepts a drop at (row, column).
+  /// Fails closed (false) when the maps are unavailable or the map file is
+  /// missing/stale/unreadable. Reads through the Rust FFI.
+  bool acceptsDropAt(int row, int column) {
+    final dir = sessionDirectory;
+    if (dir == null) return false;
+    return TerminalDropMaps.acceptsDropAt(
+      sessionDir: dir,
+      row: row,
+      column: column,
+    );
+  }
+
+  /// Host-local path for the session's path-drag map at (row, column), or
+  /// null when unmapped. Fails closed when the maps are unavailable or the
+  /// map file is missing/stale/unreadable. Reads through the Rust FFI.
+  String? dragPathAt(int row, int column) {
+    final dir = sessionDirectory;
+    if (dir == null) return null;
+    return TerminalDropMaps.dragPathAt(
+      sessionDir: dir,
+      row: row,
+      column: column,
+    );
+  }
 
   /// Non-null for [TerminalPaneView.hosted]: the live Host stream feeding
   /// [state]. Null for static/demo panes.
