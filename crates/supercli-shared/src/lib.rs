@@ -7,10 +7,11 @@
 //!
 //! - [`git`] — read a checkout's current git branch without spawning `git`;
 //! - [`hash`] — deterministic 64-bit FNV-1a for stable identifiers;
-//! - [`validation`] — session ID and artifact path-segment validation;
-//! - [`find_bar`] — terminal find-bar match counter display logic.
+//! - [`validation`] — session ID and artifact path-segment validation.
+//!
+//! UI display formatting (e.g. find-bar count labels) lives in
+//! `supercli-client`, not here: this crate is for std-only primitives.
 
-pub mod find_bar;
 pub mod git;
 pub mod hash;
 pub mod validation;

@@ -1219,9 +1219,8 @@ fn panic_payload_message(panic: &Box<dyn std::any::Any + Send + 'static>) -> Str
     }
 }
 
-fn safe_session_id(id: &str) -> bool {
-    !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
-}
+// Session ID validation uses the single strict implementation in
+// `supercli_shared::validation::is_safe_id`.
 
 fn session_dir(id: &str) -> std::path::PathBuf {
     app_paths::app_sessions_root().join(id)
@@ -1271,7 +1270,7 @@ fn handle_output(request: &Request) -> (u16, String) {
         .query
         .get("session_id")
         .or_else(|| request.query.get("sessionID"))
-        .filter(|s| safe_session_id(s))
+        .filter(|s| supercli_shared::validation::is_safe_id(s))
     else {
         return (400, error_body("invalid session id"));
     };
@@ -1366,7 +1365,9 @@ static TURN_CANCEL_RACE_HOOK: std::sync::Mutex<Option<Box<dyn Fn() + Send>>> =
 
 fn handle_turn_cancel(request: &Request, principal: &ControllerPrincipal) -> (u16, String) {
     let body = body_json(request);
-    let Some(session_id) = body_session_id(&body).filter(|s| safe_session_id(s)) else {
+    let Some(session_id) =
+        body_session_id(&body).filter(|s| supercli_shared::validation::is_safe_id(s))
+    else {
         return (400, error_body("invalid session id"));
     };
     let reason = body
@@ -1595,7 +1596,7 @@ fn handle_events(request: &Request) -> (u16, String) {
         .query
         .get("session_id")
         .or_else(|| request.query.get("sessionID"))
-        .filter(|s| safe_session_id(s))
+        .filter(|s| supercli_shared::validation::is_safe_id(s))
     else {
         return (400, error_body("invalid session id"));
     };
@@ -1667,7 +1668,7 @@ fn controller_body(request: &Request) -> (serde_json::Value, Option<String>) {
 
 fn body_session_id(body: &serde_json::Value) -> Option<String> {
     let session_id = body.get("sessionID")?.as_str()?.trim();
-    safe_session_id(session_id).then(|| session_id.to_owned())
+    supercli_shared::validation::is_safe_id(session_id).then(|| session_id.to_owned())
 }
 
 fn paired_device_id(principal: &ControllerPrincipal) -> Option<&str> {
@@ -2606,7 +2607,7 @@ fn handle_authenticated_with_effects(
                 .query
                 .get("session_id")
                 .or_else(|| request.query.get("sessionID"))
-                .filter(|session_id| safe_session_id(session_id))
+                .filter(|session_id| supercli_shared::validation::is_safe_id(session_id))
                 .cloned()
         })
         .flatten();
@@ -4381,7 +4382,10 @@ mod tests {
                 body_session_id(&body).is_none(),
                 "body_session_id accepted {evil:?}"
             );
-            assert!(!safe_session_id(evil), "safe_session_id accepted {evil:?}");
+            assert!(
+                !supercli_shared::validation::is_safe_id(evil),
+                "is_safe_id accepted {evil:?}"
+            );
         }
         // Sane ids still pass.
         let body = serde_json::json!({"sessionID": "9f2c1a77-0000-4000-8000-000000000000"});

@@ -20,7 +20,6 @@ controller-core = [
     "dep:serde_json",
     "dep:sha2",
     "dep:uuid",
-    "dep:supercli-shared",
 ]
 native-host = [
     "controller-core",
@@ -44,10 +43,12 @@ native-host = [
 ]
 
 [dependencies]
-# Shared pure-logic leaf crate (git::head_branch, hash::fnv1a): std only,
-# so the portable Controller core stays free of the client's dependency
-# tree (tungstenite, rustls, keyring, ...).
-supercli-shared = { version = "0.9.0", path = "../supercli-shared", optional = true }
+# Shared pure-logic leaf crate (git::head_branch, hash::fnv1a, validation::is_safe_id):
+# std only, so the portable Controller core stays free of the client's
+# dependency tree (tungstenite, rustls, keyring, ...). Non-optional: the
+# session-ID validators in controller_host, session_artifacts,
+# remote_session_backend, and app_presentations all use it.
+supercli-shared = { version = "0.9.0", path = "../supercli-shared" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }

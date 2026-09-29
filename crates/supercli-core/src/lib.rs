@@ -78,6 +78,10 @@ pub mod grant_store;
 pub mod grant_writer;
 #[cfg(feature = "controller-core")]
 pub use supercli_shared::hash;
+// Validation is std-only and non-optional; the session-ID validators in
+// controller_host, session_artifacts, remote_session_backend, and
+// app_presentations all use `validation::is_safe_id`.
+pub use supercli_shared::validation;
 #[cfg(feature = "native-host")]
 pub mod hook_assets;
 #[cfg(feature = "native-host")]

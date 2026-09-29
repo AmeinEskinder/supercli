@@ -3863,13 +3863,8 @@ fn validate_bootstrap(snapshot: &RemoteBootstrapSnapshot) -> Result<(), RemoteSe
 }
 
 fn validate_session_id(session_id: &str) -> Result<(), RemoteSessionBackendError> {
-    if session_id.is_empty()
-        || session_id.len() > MAX_SESSION_ID_BYTES
-        || session_id.contains('/')
-        || session_id.contains('\\')
-        || session_id.contains("..")
-        || session_id.contains('\0')
-    {
+    // Single strict implementation: supercli_shared::validation::is_safe_id.
+    if !crate::validation::is_safe_id(session_id) {
         return Err(RemoteSessionBackendError::InvalidSessionId);
     }
     Ok(())

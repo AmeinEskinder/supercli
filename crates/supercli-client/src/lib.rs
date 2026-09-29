@@ -39,6 +39,7 @@ pub mod dev_settings;
 pub mod direct_transport;
 pub mod dto;
 pub mod events;
+pub mod find_bar;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod host_routing;
 #[cfg(not(target_arch = "wasm32"))]

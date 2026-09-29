@@ -2924,6 +2924,7 @@ dependencies = [
  "supercli-core",
  "supercli-device",
  "supercli-events",
+ "supercli-shared",
  "tempfile",
  "uuid",
 ]

@@ -30,7 +30,6 @@ const OUTPUT_WAIT_POLL_MS: u64 = 20;
 // again inside the transport envelope. Keep enough room for both expansions
 // plus envelope metadata under the shared 512 KiB plaintext ceiling.
 const OUTPUT_MAX_BYTES: usize = 256 * 1024;
-const MAX_SESSION_ID_BYTES: usize = 128;
 
 pub type ProjectColorWriter<'a> = &'a dyn Fn(&str, Option<&str>) -> Result<(), String>;
 
@@ -2324,7 +2323,7 @@ fn query_session_id(request: &ControllerRequest) -> Option<&str> {
         .get("session_id")
         .or_else(|| request.query.get("sessionID"))
         .map(String::as_str)
-        .filter(|value| safe_session_id(value))
+        .filter(|value| crate::validation::is_safe_id(value))
 }
 
 fn body_session_id(request: &ControllerRequest) -> Option<&str> {
@@ -2334,16 +2333,11 @@ fn body_session_id(request: &ControllerRequest) -> Option<&str> {
         .or_else(|| request.body.get("session_id"))
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|value| safe_session_id(value))
+        .filter(|value| crate::validation::is_safe_id(value))
 }
 
-fn safe_session_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAX_SESSION_ID_BYTES
-        && !value.contains('/')
-        && !value.contains('\\')
-        && !value.contains("..")
-}
+// Session ID validation uses the single strict implementation in
+// `supercli_shared::validation::is_safe_id` (see `crate::validation`).
 
 fn output(request: &ControllerRequest, cancelled: &AtomicBool) -> (u16, Value) {
     let Some(session_id) = query_session_id(request) else {

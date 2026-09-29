@@ -172,7 +172,7 @@ fn publish_local_image_at(
 ) -> Result<PublishedSessionImage, String> {
     use std::io::Read;
 
-    if !safe_segment(session_id) {
+    if !crate::validation::is_safe_id(session_id) {
         return Err("invalid session id".into());
     }
     let extension = source
@@ -391,7 +391,7 @@ fn validate_upload_request_with_file<'a>(
             ));
         }
     }
-    if !safe_segment(request.session_id) {
+    if !crate::validation::is_safe_id(request.session_id) {
         return Err(upload_error(
             400,
             "invalid_session_id",
@@ -965,7 +965,7 @@ pub fn sweep_incomplete_uploads(now_unix_ms: u64) -> Result<usize, String> {
         let Ok(name) = String::from_utf8(name) else {
             continue;
         };
-        if !safe_segment(&name) {
+        if !crate::validation::is_safe_segment(&name) {
             continue;
         }
         let Ok(session) = secure_fs::open_dir_at(&sessions, &name) else {
@@ -1004,7 +1004,7 @@ fn enforce_host_upload_quota(
         let Ok(name) = String::from_utf8(name) else {
             continue;
         };
-        if !safe_segment(&name) {
+        if !crate::validation::is_safe_segment(&name) {
             continue;
         }
         let Ok(session) = secure_fs::open_dir_at(&sessions, &name) else {
@@ -1350,10 +1350,10 @@ pub fn read_chunk(
     offset: u64,
     limit: usize,
 ) -> Result<SessionArtifactChunk, SessionArtifactReadError> {
-    if !safe_segment(session_id) {
+    if !crate::validation::is_safe_id(session_id) {
         return Err(read_error(400, "invalid session id"));
     }
-    if !safe_segment(name) {
+    if !crate::validation::is_safe_segment(name) {
         return Err(read_error(400, "invalid artifact path"));
     }
     let Some(components) = kind_components(kind) else {
@@ -1482,7 +1482,7 @@ fn artifacts_root(session_id: &str) -> PathBuf {
 }
 
 pub fn kind_dir(session_id: &str, kind: &str) -> Option<PathBuf> {
-    if !safe_segment(session_id) {
+    if !crate::validation::is_safe_id(session_id) {
         return None;
     }
     kind_dir_at(&artifacts_root(session_id), kind)
@@ -1506,24 +1506,16 @@ fn kind_components(kind: &str) -> Option<&'static [&'static str]> {
     }
 }
 
-fn safe_segment(value: &str) -> bool {
-    !value.is_empty()
-        && !value.contains('/')
-        && !value.contains('\\')
-        && !value.contains("..")
-        && !value.contains('\0')
-}
-
-/// Every stored artifact name must pass `safe_segment` to be listed or read
+/// Every stored artifact name must pass `is_safe_segment` to be listed or read
 /// back, so an upload name is validated with that same rule plus the stricter
-/// authoring bounds. Accepting a name here that `safe_segment` rejects would
+/// authoring bounds. Accepting a name here that `is_safe_segment` rejects would
 /// store a file no artifact route could ever serve.
 pub(crate) fn safe_upload_filename(name: &str) -> bool {
-    safe_segment(name) && name != "." && name.len() <= 180 && !name.chars().any(char::is_control)
+    crate::validation::is_safe_segment(name) && name != "." && name.len() <= 180
 }
 
 pub fn list(session_id: &str) -> Vec<SessionArtifactMetadata> {
-    if !safe_segment(session_id) {
+    if !crate::validation::is_safe_id(session_id) {
         return Vec::new();
     }
     #[cfg(unix)]
@@ -1641,10 +1633,10 @@ fn sort_artifacts(artifacts: &mut [SessionArtifactMetadata]) {
 
 /// Idempotently remove one artifact and every cached native thumbnail variant.
 pub fn delete(session_id: &str, kind: &str, name: &str) -> Result<(), String> {
-    if !safe_segment(session_id) {
+    if !crate::validation::is_safe_id(session_id) {
         return Err("invalid session id".into());
     }
-    if !safe_segment(name) {
+    if !crate::validation::is_safe_segment(name) {
         return Err("invalid artifact path".into());
     }
     let Some(components) = kind_components(kind) else {
@@ -1700,7 +1692,7 @@ fn delete_at(root: &Path, kind: &str, name: &str) -> Result<(), String> {
 
 #[cfg(all(unix, test))]
 fn delete_at(root: &Path, kind: &str, name: &str) -> Result<(), String> {
-    if !safe_segment(name) {
+    if !crate::validation::is_safe_segment(name) {
         return Err("invalid artifact path".into());
     }
     let components = kind_components(kind).ok_or_else(|| "unknown artifact kind".to_owned())?;
@@ -1753,7 +1745,7 @@ pub(crate) mod secure_fs {
     use std::os::unix::fs::OpenOptionsExt;
     use std::path::Path;
 
-    use super::{app_paths, safe_segment};
+    use super::app_paths;
 
     pub struct Metadata {
         pub regular_file: bool,
@@ -1781,7 +1773,7 @@ pub(crate) mod secure_fs {
     }
 
     pub fn open_dir_at(parent: &File, component: &str) -> io::Result<File> {
-        if !safe_segment(component) {
+        if !crate::validation::is_safe_segment(component) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "unsafe path component",
@@ -1829,7 +1821,7 @@ pub(crate) mod secure_fs {
     }
 
     pub fn open_or_create_dir_at(parent: &File, component: &str) -> io::Result<File> {
-        if !safe_segment(component) {
+        if !crate::validation::is_safe_segment(component) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "unsafe path component",
@@ -1847,7 +1839,7 @@ pub(crate) mod secure_fs {
     }
 
     pub fn open_session_artifact_root(session_id: &str) -> io::Result<File> {
-        if !safe_segment(session_id) {
+        if !crate::validation::is_safe_id(session_id) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid session id",
@@ -3491,12 +3483,13 @@ mod tests {
 #[cfg(test)]
 mod upload_filename_tests {
     use super::*;
+    use crate::validation::is_safe_segment;
 
     #[test]
     fn upload_names_round_trip_through_the_artifact_read_rules() {
         for accepted in ["report.pdf", "Screen Shot 2026.png", "notes.v2.final.txt"] {
             assert!(safe_upload_filename(accepted), "{accepted}");
-            assert!(safe_segment(accepted), "{accepted}");
+            assert!(is_safe_segment(accepted), "{accepted}");
         }
         for rejected in [
             "v2..final.pdf",

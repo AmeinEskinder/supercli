@@ -343,9 +343,10 @@ fn validate_opaque(field: &str, value: &str, max_bytes: usize) -> Result<(), Str
 /// Session ids become filesystem directory names elsewhere in the Host. Keep
 /// unsafe path syntax out of this registry even though this module itself
 /// never joins one onto a path.
+///
+/// Uses the single strict [`crate::validation::is_safe_id`] implementation.
 pub fn validate_app_presentation_session_id(field: &str, value: &str) -> Result<(), String> {
-    validate_opaque(field, value, SESSION_ID_MAX_BYTES)?;
-    if value.contains('/') || value.contains('\\') || value.contains("..") {
+    if !crate::validation::is_safe_id(value) {
         return Err(format!("{field} is not a safe Session id"));
     }
     Ok(())
