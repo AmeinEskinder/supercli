@@ -68,7 +68,10 @@ pub fn parse_presence(data: &[u8], source: &str) -> HashMap<String, Vec<ViewerIn
     for (session_id, entries) in file.sessions {
         let mut list = Vec::new();
         for raw in entries {
-            let device_id = raw.device.as_deref().and_then(|d| device_id_from_device(Some(d)));
+            let device_id = raw
+                .device
+                .as_deref()
+                .and_then(|d| device_id_from_device(Some(d)));
             let identity = raw
                 .device
                 .as_deref()
@@ -83,10 +86,7 @@ pub fn parse_presence(data: &[u8], source: &str) -> HashMap<String, Vec<ViewerIn
             list.push(ViewerInfo {
                 id,
                 device_id: device_id.map(str::to_string),
-                display_name: display_name_from_device(
-                    raw.device.as_deref(),
-                    raw.ip.as_deref(),
-                ),
+                display_name: display_name_from_device(raw.device.as_deref(), raw.ip.as_deref()),
                 last_seen_ms: raw.last_seen,
             });
         }
@@ -188,9 +188,11 @@ pub fn is_device_viewing(
     session_id: &str,
     device_id: &str,
 ) -> bool {
-    merged
-        .get(session_id)
-        .is_some_and(|viewers| viewers.iter().any(|v| v.device_id.as_deref() == Some(device_id)))
+    merged.get(session_id).is_some_and(|viewers| {
+        viewers
+            .iter()
+            .any(|v| v.device_id.as_deref() == Some(device_id))
+    })
 }
 
 /// Computes newly-arrived viewer ids since `announced` (for one-shot
@@ -235,7 +237,10 @@ mod tests {
         let parsed = parse_presence(presence_json(), "terminal");
         let viewers = &parsed["s1"];
         assert_eq!(viewers.len(), 3);
-        let alex = viewers.iter().find(|v| v.device_id.as_deref() == Some("phone-1")).unwrap();
+        let alex = viewers
+            .iter()
+            .find(|v| v.device_id.as_deref() == Some("phone-1"))
+            .unwrap();
         assert_eq!(alex.id, "device:phone-1");
         assert_eq!(alex.display_name, "Alex");
         let legacy = viewers.iter().find(|v| v.device_id.is_none()).unwrap();
@@ -248,9 +253,15 @@ mod tests {
 
     #[test]
     fn display_name_parsing() {
-        assert_eq!(display_name_from_device(Some("Alex (phone-1)"), None), "Alex");
+        assert_eq!(
+            display_name_from_device(Some("Alex (phone-1)"), None),
+            "Alex"
+        );
         assert_eq!(display_name_from_device(Some("NoParens"), None), "NoParens");
-        assert_eq!(display_name_from_device(Some(""), Some("1.2.3.4")), "1.2.3.4");
+        assert_eq!(
+            display_name_from_device(Some(""), Some("1.2.3.4")),
+            "1.2.3.4"
+        );
         assert_eq!(display_name_from_device(None, None), "Remote viewer");
         // "Name ()" with empty name falls back to the full string
         assert_eq!(display_name_from_device(Some(" ()"), None), " ()");
@@ -258,7 +269,10 @@ mod tests {
 
     #[test]
     fn device_id_parsing() {
-        assert_eq!(device_id_from_device(Some("Alex (phone-1)")), Some("phone-1"));
+        assert_eq!(
+            device_id_from_device(Some("Alex (phone-1)")),
+            Some("phone-1")
+        );
         assert_eq!(device_id_from_device(Some("NoParens")), None);
         assert_eq!(device_id_from_device(Some("Bad ()")), None);
         assert_eq!(device_id_from_device(None), None);
@@ -270,14 +284,18 @@ mod tests {
     fn merge_expires_per_feed_and_newest_wins() {
         let file = parse_presence(presence_json(), "terminal");
         // Mobile feed: same device with a NEWER lease
-        let mobile_json = br#"{"version":1,"sessions":{"s1":[{"device":"Alex (phone-1)","last_seen":99500}]}}"#;
+        let mobile_json =
+            br#"{"version":1,"sessions":{"s1":[{"device":"Alex (phone-1)","last_seen":99500}]}}"#;
         let mobile = parse_presence(mobile_json, "direct-link");
         // now = 100000: file entries at 99000/99001 live (20s TTL), stale at 1000 expired
         let merged = merge_presence(&file, &mobile, 100_000);
         let viewers = &merged["s1"];
         // Stale file entry gone; Alex newest-wins from mobile feed
         assert_eq!(viewers.len(), 2);
-        let alex = viewers.iter().find(|v| v.device_id.as_deref() == Some("phone-1")).unwrap();
+        let alex = viewers
+            .iter()
+            .find(|v| v.device_id.as_deref() == Some("phone-1"))
+            .unwrap();
         assert_eq!(alex.last_seen_ms, 99_500);
         // Sorted by display name: "10.0.0.2" < "alex" case-insensitively
         assert_eq!(viewers[0].display_name, "10.0.0.2");
@@ -285,7 +303,8 @@ mod tests {
 
     #[test]
     fn merge_applies_mobile_ttl() {
-        let mobile_json = br#"{"version":1,"sessions":{"s1":[{"device":"M (m-1)","last_seen":80000}]}}"#;
+        let mobile_json =
+            br#"{"version":1,"sessions":{"s1":[{"device":"M (m-1)","last_seen":80000}]}}"#;
         let mobile = parse_presence(mobile_json, "direct-link");
         // 20s after last_seen: mobile 15s TTL expired, file feed empty
         let merged = merge_presence(&HashMap::new(), &mobile, 100_000);

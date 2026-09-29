@@ -134,11 +134,7 @@ impl PooledSnapshot {
 
     /// Replace only the relative positions named by `ordered_ids`.
     /// Mirrors `applyingProjectOrder(parentID:orderedIDs:)`.
-    pub fn applying_project_order(
-        &self,
-        parent_id: Option<&str>,
-        ordered_ids: &[String],
-    ) -> Self {
+    pub fn applying_project_order(&self, parent_id: Option<&str>, ordered_ids: &[String]) -> Self {
         let sibling_ids: HashSet<&str> = self
             .projects
             .iter()
@@ -181,8 +177,7 @@ impl PooledSnapshot {
             .map(|p| {
                 if p.id == project_id {
                     if let Some(order) = &p.session_order {
-                        let reordered =
-                            applying_relative_order(&preferred, order, |s| s.as_str());
+                        let reordered = applying_relative_order(&preferred, order, |s| s.as_str());
                         return p.with_session_order(reordered);
                     }
                 }
@@ -228,11 +223,7 @@ pub fn applying_relative_order<T: Clone>(
 /// consecutive failure, exponent clamped to 16, result capped.
 ///
 /// Mirrors `backoffDelayNanoseconds(_:)` (units converted to milliseconds).
-pub fn backoff_delay_ms(
-    consecutive_failures: u32,
-    base_ms: u64,
-    cap_ms: u64,
-) -> u64 {
+pub fn backoff_delay_ms(consecutive_failures: u32, base_ms: u64, cap_ms: u64) -> u64 {
     let exponent = (consecutive_failures.saturating_sub(1)).min(16);
     let multiplier: u64 = 1 << exponent;
     let uncapped = base_ms.saturating_mul(multiplier);
@@ -249,8 +240,7 @@ pub fn backoff_delay_ms(
 
 /// Per-(workspace, session) notification latch: a session notifies once per
 /// blocked EDGE. Mirrors `WorkspacePool.AttentionLatch`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AttentionLatch {
     /// True once the first snapshot has been observed.
     pub seeded: bool,
@@ -730,11 +720,17 @@ mod tests {
 
     #[test]
     fn reconcile_retires_vanished_and_fingerprint_changed() {
-        let entries: HashMap<String, String> =
-            [("k1".to_string(), "fp1".to_string()), ("k2".to_string(), "old".to_string())]
-                .into_iter()
-                .collect();
-        let targets = vec![target("k1", "fp1"), target("k2", "new"), target("k3", "fp3")];
+        let entries: HashMap<String, String> = [
+            ("k1".to_string(), "fp1".to_string()),
+            ("k2".to_string(), "old".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let targets = vec![
+            target("k1", "fp1"),
+            target("k2", "new"),
+            target("k3", "fp3"),
+        ];
         let result = reconcile_pool_targets(
             &entries,
             &targets,
@@ -802,8 +798,16 @@ mod tests {
     fn organization_hold_pins_reorder_until_confirmed() {
         let snap = PooledSnapshot {
             projects: vec![
-                PooledProject { id: "p1".into(), parent_project_id: None, session_order: None },
-                PooledProject { id: "p2".into(), parent_project_id: None, session_order: None },
+                PooledProject {
+                    id: "p1".into(),
+                    parent_project_id: None,
+                    session_order: None,
+                },
+                PooledProject {
+                    id: "p2".into(),
+                    parent_project_id: None,
+                    session_order: None,
+                },
             ],
             sessions: vec![],
             captured_at_unix_ms: 0,
@@ -822,8 +826,12 @@ mod tests {
         assert_eq!(projected.projects[0].id, "p2");
         assert!(holds.project_hold.is_none());
         // Timeout releases host truth
-        let (holds, _) =
-            OrganizationHolds::default().hold_project_order(&snap, None, vec!["p2".into(), "p1".into()], 1000);
+        let (holds, _) = OrganizationHolds::default().hold_project_order(
+            &snap,
+            None,
+            vec!["p2".into(), "p1".into()],
+            1000,
+        );
         let timeout_ms = 1000 + (policy::ORGANIZATION_HOLD_SECS * 1000.0) as u64 + 1;
         let (projected, holds) = holds.apply_to(&snap, timeout_ms);
         assert_eq!(projected.projects[0].id, "p1");
@@ -835,7 +843,13 @@ mod tests {
     // (23 Dart tests; the 9 above covered a subset — these close the gap).
     // ------------------------------------------------------------------
 
-    fn pooled_session(id: &str, activity: &str, status: &str, archived: bool, title: &str) -> PooledSession {
+    fn pooled_session(
+        id: &str,
+        activity: &str,
+        status: &str,
+        archived: bool,
+        title: &str,
+    ) -> PooledSession {
         PooledSession {
             id: id.into(),
             project_id: "project".into(),
@@ -865,7 +879,12 @@ mod tests {
         );
         assert!(result.published);
         assert_eq!(
-            result.snapshot.sessions.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            result
+                .snapshot
+                .sessions
+                .iter()
+                .map(|s| s.id.as_str())
+                .collect::<Vec<_>>(),
             vec!["s1"]
         );
         assert!(result.attention.has_attention);
@@ -877,15 +896,24 @@ mod tests {
         // custom base/cap: [30, 60, 120, 240, 240].
         let delays: Vec<u64> = (1..=5).map(|f| backoff_delay_ms(f, 30, 240)).collect();
         assert_eq!(delays, vec![30, 60, 120, 240, 240]);
-        assert!(delays[2] > delays[0] * 3 / 2, "backoff grows faster than linear");
+        assert!(
+            delays[2] > delays[0] * 3 / 2,
+            "backoff grows faster than linear"
+        );
         // Default policy constants.
-        assert_eq!(backoff_delay_ms(100, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS), policy::BACKOFF_CAP_MS);
+        assert_eq!(
+            backoff_delay_ms(100, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
+            policy::BACKOFF_CAP_MS
+        );
         assert_eq!(
             backoff_delay_ms(17, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
             backoff_delay_ms(100, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
             "exponent clamped at 16"
         );
-        assert_eq!(backoff_delay_ms(1, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS), policy::BACKOFF_BASE_MS);
+        assert_eq!(
+            backoff_delay_ms(1, policy::BACKOFF_BASE_MS, policy::BACKOFF_CAP_MS),
+            policy::BACKOFF_BASE_MS
+        );
     }
 
     #[test]
@@ -896,10 +924,20 @@ mod tests {
         let mut slots = RemoteSlotPool::new(1);
         assert!(slots.try_acquire("ssh-b"), "one remote holds the only slot");
         let acquire_if_remote = |slots: &mut RemoteSlotPool, key: &str, is_remote: bool| {
-            if is_remote { slots.try_acquire(key) } else { true }
+            if is_remote {
+                slots.try_acquire(key)
+            } else {
+                true
+            }
         };
-        assert!(acquire_if_remote(&mut slots, "local-a", false), "local targets never queue");
-        assert!(!acquire_if_remote(&mut slots, "ssh-c", true), "second remote waits");
+        assert!(
+            acquire_if_remote(&mut slots, "local-a", false),
+            "local targets never queue"
+        );
+        assert!(
+            !acquire_if_remote(&mut slots, "ssh-c", true),
+            "second remote waits"
+        );
     }
 
     #[test]
@@ -947,15 +985,22 @@ mod tests {
     #[test]
     fn attention_title_falls_back_to_command() {
         // Dart: 'empty title falls back to command for notification text'.
-        assert_eq!(pooled_session("s1", "blocked", "running", false, "").attention_title(), "claude");
-        assert_eq!(pooled_session("s1", "blocked", "running", false, "My title").attention_title(), "My title");
+        assert_eq!(
+            pooled_session("s1", "blocked", "running", false, "").attention_title(),
+            "claude"
+        );
+        assert_eq!(
+            pooled_session("s1", "blocked", "running", false, "My title").attention_title(),
+            "My title"
+        );
     }
 
     #[test]
     fn reconcile_lend_retires_entry_but_keeps_cache() {
         // Dart: 'lend retires the pool entry but keeps the cache'.
-        let entries: HashMap<String, String> =
-            [("a".to_string(), "fp:a".to_string())].into_iter().collect();
+        let entries: HashMap<String, String> = [("a".to_string(), "fp:a".to_string())]
+            .into_iter()
+            .collect();
         let targets = vec![WorkspacePoolTarget {
             key: "a".into(),
             name: "Workspace a".into(),
@@ -966,14 +1011,34 @@ mod tests {
         }];
         let excluded: HashSet<String> = ["a".into()].into_iter().collect();
         let cached: HashSet<String> = ["a".into()].into_iter().collect();
-        let result = reconcile_pool_targets(&entries, &targets, &excluded, &HashSet::new(), &cached);
+        let result =
+            reconcile_pool_targets(&entries, &targets, &excluded, &HashSet::new(), &cached);
         assert_eq!(result.retire_keys, vec!["a".to_string()]);
-        assert!(result.drop_cache_keys.is_empty(), "excluded (runtime-served) keys keep their cache");
-        assert!(result.start_targets.is_empty(), "lent workspace must not be re-polled");
+        assert!(
+            result.drop_cache_keys.is_empty(),
+            "excluded (runtime-served) keys keep their cache"
+        );
+        assert!(
+            result.start_targets.is_empty(),
+            "lent workspace must not be re-polled"
+        );
 
         // The runtime lets go: pooling resumes on the next reconcile.
-        let resumed = reconcile_pool_targets(&HashMap::new(), &targets, &HashSet::new(), &HashSet::new(), &cached);
-        assert_eq!(resumed.start_targets.iter().map(|t| t.key.as_str()).collect::<Vec<_>>(), vec!["a"]);
+        let resumed = reconcile_pool_targets(
+            &HashMap::new(),
+            &targets,
+            &HashSet::new(),
+            &HashSet::new(),
+            &cached,
+        );
+        assert_eq!(
+            resumed
+                .start_targets
+                .iter()
+                .map(|t| t.key.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a"]
+        );
     }
 
     #[test]
@@ -988,7 +1053,13 @@ mod tests {
             fingerprint: "fp:a".into(),
         }];
         let latched: HashSet<String> = ["fp:a".into()].into_iter().collect();
-        let result = reconcile_pool_targets(&HashMap::new(), &targets, &HashSet::new(), &latched, &HashSet::new());
+        let result = reconcile_pool_targets(
+            &HashMap::new(),
+            &targets,
+            &HashSet::new(),
+            &latched,
+            &HashSet::new(),
+        );
         assert!(result.start_targets.is_empty());
     }
 

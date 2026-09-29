@@ -124,7 +124,9 @@ pub unsafe extern "C" fn supercli_string_free(s: *mut c_char) {
 }
 
 fn to_c_string(s: String) -> *mut c_char {
-    CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+    CString::new(s)
+        .map(|c| c.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 /// Borrow a C string. Null pointers and invalid UTF-8 are errors, NOT
@@ -258,7 +260,9 @@ pub unsafe extern "C" fn supercli_runtime_detect_tool(command: *const c_char) ->
 ///
 /// `command` must be either null or point to a valid NUL-terminated C string.
 #[no_mangle]
-pub unsafe extern "C" fn supercli_preset_tool_is_quick_launchable(command: *const c_char) -> c_uchar {
+pub unsafe extern "C" fn supercli_preset_tool_is_quick_launchable(
+    command: *const c_char,
+) -> c_uchar {
     ffi_guard(0, || {
         let command = match unsafe { c_str_or_none(command) } {
             Some(s) => s,
@@ -455,7 +459,11 @@ pub unsafe extern "C" fn supercli_presence_display_name(
             Some(s) => s,
             None => return std::ptr::null_mut(),
         };
-        let device = if device.is_empty() { None } else { Some(device) };
+        let device = if device.is_empty() {
+            None
+        } else {
+            Some(device)
+        };
         let ip = if ip.is_empty() { None } else { Some(ip) };
         to_c_string(viewer_presence::display_name_from_device(device, ip))
     })
@@ -474,7 +482,11 @@ pub unsafe extern "C" fn supercli_presence_has_device_id(device: *const c_char) 
             Some(s) => s,
             None => return 0,
         };
-        let device = if device.is_empty() { None } else { Some(device) };
+        let device = if device.is_empty() {
+            None
+        } else {
+            Some(device)
+        };
         u8::from(viewer_presence::device_id_from_device(device).is_some())
     })
 }
@@ -600,7 +612,10 @@ mod ffi_tests {
             let catalog_s = peek(catalog_p);
             let v: serde_json::Value = serde_json::from_str(&catalog_s).unwrap();
             let first_id = v.as_array().unwrap()[0]["id"].as_str().unwrap().to_string();
-            let first_slug = v.as_array().unwrap()[0]["legacy_slug"].as_str().unwrap().to_string();
+            let first_slug = v.as_array().unwrap()[0]["legacy_slug"]
+                .as_str()
+                .unwrap()
+                .to_string();
 
             let id = c(&first_id);
             let p = supercli_runtime_by_id_json(id.as_ptr());
@@ -646,7 +661,10 @@ mod ffi_tests {
     fn quick_launchable_null_is_zero_with_error() {
         unsafe {
             supercli_clear_error();
-            assert_eq!(supercli_preset_tool_is_quick_launchable(std::ptr::null()), 0);
+            assert_eq!(
+                supercli_preset_tool_is_quick_launchable(std::ptr::null()),
+                0
+            );
             assert!(!supercli_last_error().is_null());
             supercli_string_free(supercli_last_error());
         }
@@ -772,10 +790,7 @@ mod ffi_tests {
                 0
             );
             // Null bytes -> 0.
-            assert_eq!(
-                supercli_drop_map_accepts(std::ptr::null(), 0, 0, 0, 0),
-                0
-            );
+            assert_eq!(supercli_drop_map_accepts(std::ptr::null(), 0, 0, 0, 0), 0);
         }
     }
 

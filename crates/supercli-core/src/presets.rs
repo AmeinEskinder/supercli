@@ -203,11 +203,7 @@ impl SetupTool {
     }
 
     pub fn install_command<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a str> {
-        self.metadata(catalog)?
-            .install
-            .as_ref()?
-            .command
-            .as_deref()
+        self.metadata(catalog)?.install.as_ref()?.command.as_deref()
     }
 
     pub fn website_url<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a str> {
@@ -644,7 +640,10 @@ mod tests {
             recent_count: 1,
             last_used_ms: Some(1_000_000),
         };
-        assert_eq!(s.summary(1_000_000), Some("342 sessions · used today".into()));
+        assert_eq!(
+            s.summary(1_000_000),
+            Some("342 sessions · used today".into())
+        );
         assert_eq!(
             s.summary(1_000_000 + 86_400_000),
             Some("342 sessions · used yesterday".into())
