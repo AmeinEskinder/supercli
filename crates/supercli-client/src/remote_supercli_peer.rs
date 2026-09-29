@@ -1,4 +1,6 @@
-//! Port of `RemoteUnpeelClient.swift` (Mac-as-client v1).
+//! Port of the macOS remote peer client v1. (The Swift source filename is recorded
+//! in docs/parity/swift-port/remote.yml; it is redacted here because the rename
+//! guard forbids the old product name in Rust sources.)
 //!
 //! Connect THIS Supercli to another Supercli's remote server
 //! (`supercli-host __remote__`) and open its sessions as local terminal panes.
