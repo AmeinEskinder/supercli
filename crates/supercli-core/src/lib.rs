@@ -128,6 +128,7 @@ pub mod plugins;
 mod portable_gating_tests;
 #[cfg(feature = "native-host")]
 pub mod preset_overlay;
+pub mod preset_state_file;
 pub mod presets;
 #[cfg(feature = "native-host")]
 pub mod profile;
