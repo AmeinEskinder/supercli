@@ -79,6 +79,7 @@ void main() {
     test('drop-target map round-trips through the Rust FFI', () {
       if (!hasFfi) {
         markTestSkipped('SUPERCLI_FFI_LIB not set; build the cdylib first');
+        return;
       }
       final dir = Directory.systemTemp.createTempSync('dropmaps-ffi-');
       try {
@@ -115,7 +116,7 @@ void main() {
             nowMs: now,
           ),
           isFalse,
-          'cell outside every region',
+          reason: 'cell outside every region',
         );
         expect(
           TerminalDropMaps.acceptsDropAt(
@@ -125,7 +126,7 @@ void main() {
             nowMs: now + 6000,
           ),
           isFalse,
-          'stale map fails closed',
+          reason: 'stale map fails closed',
         );
       } finally {
         dir.deleteSync(recursive: true);
@@ -135,6 +136,7 @@ void main() {
     test('path-drag map round-trips through the Rust FFI', () {
       if (!hasFfi) {
         markTestSkipped('SUPERCLI_FFI_LIB not set; build the cdylib first');
+        return;
       }
       final dir = Directory.systemTemp.createTempSync('dragmap-ffi-');
       try {
@@ -171,7 +173,7 @@ void main() {
             nowMs: now,
           ),
           isNull,
-          'unmapped row',
+          reason: 'unmapped row',
         );
       } finally {
         dir.deleteSync(recursive: true);

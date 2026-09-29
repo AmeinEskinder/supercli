@@ -489,6 +489,9 @@ def main():
     ap = argparse.ArgumentParser(description="Generate docs/parity/swift-port-map.md")
     ap.add_argument("--root", default=None,
                     help="Repo root (default: parent of the scripts/ dir holding this file)")
+    ap.add_argument("--check", action="store_true",
+                    help="Check mode: exit 1 if the committed map differs from a fresh "
+                         "generation (for CI); exit 0 if identical. Does not write.")
     args = ap.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -517,8 +520,29 @@ def main():
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     deleted_loc = deleted_loc_from_ledger(root)
+    new_content = render_map(files, rows, [], stale_sidecars, deleted_loc)
+
+    if args.check:
+        # Check mode: compare fresh generation against the committed file.
+        # Used in CI so the map can never go stale again.
+        try:
+            with open(out_path, "r", encoding="utf-8") as fh:
+                committed = fh.read()
+        except FileNotFoundError:
+            print(f"CHECK FAILED: {out_path} does not exist; "
+                  f"run without --check to generate it.", file=sys.stderr)
+            sys.exit(1)
+        if committed != new_content:
+            print(f"CHECK FAILED: {out_path} is stale.", file=sys.stderr)
+            print("Regenerate with: python3 scripts/generate-swift-port-map.py",
+                  file=sys.stderr)
+            print("Then commit the regenerated map.", file=sys.stderr)
+            sys.exit(1)
+        print(f"CHECK OK: {out_path} is up to date.")
+        return
+
     with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(render_map(files, rows, [], stale_sidecars, deleted_loc))
+        fh.write(new_content)
 
     total_loc = sum(files.values())
     n_claimed = len(claimed) - len(stale_sidecars)

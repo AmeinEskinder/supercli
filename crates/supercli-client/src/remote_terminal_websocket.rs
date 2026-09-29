@@ -2,8 +2,9 @@
 //! (SupercliIOS).
 //!
 //! The Swift file owns the live WebSocket (certificate-pinned URLSession,
-//! ping watchdog, input router). The socket itself is platform-specific and
-//! not portable. What IS portable and ported here:
+//! ping watchdog, input router). The live socket is now ported in
+//! [`crate::remote_ws_transport`] (native targets only, via tungstenite +
+//! rustls with exact leaf pinning). What IS portable and ported here:
 //!
 //! - [`RemoteTerminalWebSocketError`] — the error enum;
 //! - [`InputRoute`] / [`route_input`] — the input router's transport
@@ -51,7 +52,11 @@ pub const WS_SEND_TIMEOUT_SECS: f64 = 0.5;
 ///
 /// Port of `RemoteTerminalWSClientMessage.maxInputBytesPerFrame` as used in
 /// `RemoteTerminalInputRouter.send(_:)`.
-pub const MAX_INPUT_BYTES_PER_FRAME: usize = 16 * 1024;
+///
+/// The Swift value is `32 * 1024` (see
+/// `RemoteTerminalStreamTransport.swift:211`); this matches
+/// [`crate::terminal_stream::RemoteTerminalWsClientMessage::MAX_INPUT_BYTES_PER_FRAME`].
+pub const MAX_INPUT_BYTES_PER_FRAME: usize = 32 * 1024;
 
 /// Where a unit of PTY input should be sent.
 ///

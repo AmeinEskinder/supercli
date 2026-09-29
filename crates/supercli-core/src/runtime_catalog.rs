@@ -313,4 +313,40 @@ mod tests {
             1
         );
     }
+
+    #[test]
+    fn runtime_descriptor_controls_horizontal_pane_padding() {
+        // Mirrors OpenCodeThemeTests.testRuntimeDescriptorControlsHorizontalPanePadding:
+        // `TerminalPaneStyle.resolved()` sets `windowPaddingX` from the matched
+        // runtime descriptor (`runtime?.windowPaddingX ?? 0`). The descriptor
+        // is the source of truth for horizontal pane padding.
+        let catalog = builtin_runtime_catalog();
+
+        // Helper mirrors Swift's `style.windowPaddingX = runtime?.windowPaddingX ?? 0`.
+        let padding_for_alias = |alias: &str| {
+            catalog
+                .by_command_alias(alias)
+                .map(|runtime| runtime.display.window_padding_x)
+                .unwrap_or(0)
+        };
+
+        // claude (`claude --session-id example`) and codex opt into 8px padding.
+        assert_eq!(padding_for_alias("claude"), 8);
+        assert_eq!(padding_for_alias("codex"), 8);
+        // Explicit runtime ID lookup (Swift: `runtimeID: "com.anthropic.claude-code"`).
+        assert_eq!(
+            catalog
+                .by_id("com.anthropic.claude-code")
+                .map(|runtime| runtime.display.window_padding_x),
+            Some(8)
+        );
+        // grok and opencode leave the default: edge-to-edge (0).
+        assert_eq!(padding_for_alias("grok"), 0);
+        assert_eq!(padding_for_alias("opencode"), 0);
+        // Unknown commands (e.g. `/bin/zsh --login`) match no runtime: 0.
+        assert_eq!(padding_for_alias("zsh"), 0);
+        assert!(catalog
+            .by_command_alias("definitely-not-a-runtime")
+            .is_none());
+    }
 }

@@ -1,0 +1,44 @@
+name: swift-port-map
+
+# The generated docs/parity/swift-port-map.md must never go stale.
+# Workers edit their docs/parity/swift-port/<area>.yml sidecar and re-run
+# scripts/generate-swift-port-map.py; this check fails the build if the
+# committed map differs from a fresh generation.
+
+on:
+  push:
+    branches: ['main', 'next', 'feat/**']
+    paths:
+      - 'docs/parity/**'
+      - 'scripts/generate-swift-port-map.py'
+      - 'clients/legacy/**/*.swift'
+      - '.github/workflows/swift-port-map.yml'
+  pull_request:
+    paths:
+      - 'docs/parity/**'
+      - 'scripts/generate-swift-port-map.py'
+      - 'clients/legacy/**/*.swift'
+      - '.github/workflows/swift-port-map.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  map-fresh:
+    name: swift-port-map is fresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Check map is up to date
+        run: python3 scripts/generate-swift-port-map.py --check
