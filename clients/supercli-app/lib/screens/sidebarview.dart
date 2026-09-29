@@ -31,6 +31,7 @@ import 'package:gpuidart/gpuidart.dart';
 
 import '../keymap.dart';
 import '../models.dart';
+import '../native_client.dart';
 
 /// A session as the sidebar sees it: the host summary plus sidebar-local
 /// state (pin, group, worktree, attention, busy).
@@ -978,15 +979,99 @@ final class QuickPresetStrip {
   /// Whether preset group at [index] renders as a menu chip (2+ starred
   /// presets) rather than a single quick-launch button.
   static bool isMenuChip(int presetCount) => presetCount > 1;
+
+  /// Builds the strip for FFI-loaded [groups] (see [quickPresetGroups]).
+  factory QuickPresetStrip.fromGroups(
+    List<QuickPresetGroupView> groups, {
+    bool hovering = false,
+    bool forceExpanded = false,
+  }) =>
+      QuickPresetStrip(
+        quickGroupCount: groups.length,
+        hovering: hovering,
+        forceExpanded: forceExpanded,
+      );
 }
 
-/// One launch preset for the new-session menu.
+/// One quick-preset group from the Rust `collect_quick_preset_groups`
+/// (via FFI). Grouping logic lives in Rust; this is the UI-side view used
+/// to render the [QuickPresetStrip] chips.
+final class QuickPresetGroupView {
+  const QuickPresetGroupView({
+    required this.id,
+    this.cliId,
+    this.appId,
+    this.appName,
+    this.presets = const [],
+  });
+
+  final String id;
+  final String? cliId;
+  final String? appId;
+  final String? appName;
+  final List<LaunchPreset> presets;
+
+  factory QuickPresetGroupView.fromJson(Map<String, dynamic> json) {
+    return QuickPresetGroupView(
+      id: json['id'] as String? ?? '',
+      cliId: json['cli_id'] as String?,
+      appId: json['app_id'] as String?,
+      appName: json['app_name'] as String?,
+      presets: [
+        for (final p
+            in (json['presets'] as List?)?.whereType<Map<String, dynamic>>() ??
+                const <Map<String, dynamic>>[])
+          LaunchPreset(
+            id: p['id'] as String? ?? '',
+            label: p['label'] as String? ?? '',
+            command: p['command'] as String? ?? '',
+            enabled: (p['enabled'] as bool?) ?? true,
+            quickLaunch: (p['quick_launch'] as bool?) ?? false,
+          ),
+      ],
+    );
+  }
+
+  /// Whether this group renders as a menu chip (2+ starred presets).
+  bool get isMenuChip => QuickPresetStrip.isMenuChip(presets.length);
+}
+
+/// Loads quick-preset groups through the Rust `collect_quick_preset_groups`
+/// (the single source of truth) via FFI. [pluginCommands] and [appCatalog]
+/// carry the Host App-catalog classifications ([appCatalog] maps executable
+/// head -> `[app_id, app_name]`). Only presets with `quickLaunch: true` can
+/// form groups, mirroring the Rust filter.
+List<QuickPresetGroupView> quickPresetGroups({
+  required List<LaunchPreset> presets,
+  Set<String> pluginCommands = const {},
+  Map<String, List<String>> appCatalog = const {},
+}) {
+  final raw = SupercliNative.quickPresetGroups(
+    presets: [
+      for (final p in presets)
+        {
+          'id': p.id,
+          'label': p.label,
+          'command': p.command,
+          'enabled': p.enabled,
+          'quick_launch': p.quickLaunch,
+        },
+    ],
+    pluginCommands: pluginCommands,
+    appCatalog: appCatalog,
+  );
+  return [for (final g in raw) QuickPresetGroupView.fromJson(g)];
+}
+
+/// One launch preset for the new-session menu / quick-preset strip.
 final class LaunchPreset {
   const LaunchPreset({
     required this.id,
     required this.label,
     required this.command,
     this.pluginId,
+    this.enabled = true,
+    this.quickLaunch = false,
   });
 
   final String id;
@@ -996,29 +1081,57 @@ final class LaunchPreset {
   /// Set for plugin-backed presets; null for plain agent presets.
   final String? pluginId;
 
+  final bool enabled;
+  final bool quickLaunch;
+
   bool get isPlugin => pluginId != null && pluginId!.isNotEmpty;
 }
 
-/// Split presets into the Agents and Plugins sections of the new-session
-/// menu (SidebarView.swift: splitPresetsForNewSessionMenu — the definition
-/// is missing from the legacy tree, so the section rule is reconstructed
-/// from usage: plugin-backed presets go to Plugins, the rest to Agents).
-({List<LaunchPreset> agents, List<LaunchPreset> plugins}) splitLaunchPresets(
+/// Splits [presets] into the Agents and Plugins sections of the new-session
+/// menu through the Rust `split_presets_for_new_session_menu` (the single
+/// source of truth) via FFI. Plugin identity comes from the Host's App
+/// catalog, expressed here as each preset's [LaunchPreset.isPlugin]; the
+/// section rule itself lives in Rust.
+({List<LaunchPreset> agents, List<LaunchPreset> plugins}) splitPresetsForMenu(
   List<LaunchPreset> presets,
 ) {
-  final agents = <LaunchPreset>[];
-  final plugins = <LaunchPreset>[];
-  for (final preset in presets) {
-    if (preset.isPlugin) {
-      plugins.add(preset);
-    } else {
-      agents.add(preset);
-    }
-  }
-  return (agents: agents, plugins: plugins);
+  final split = SupercliNative.presetSplitForMenu(
+    presets: [
+      for (final p in presets)
+        {
+          'id': p.id,
+          'label': p.label,
+          'command': p.command,
+          'enabled': p.enabled,
+          'quick_launch': p.quickLaunch,
+        },
+    ],
+    pluginCommands: {for (final p in presets) if (p.isPlugin) p.command},
+  );
+  // Rust's Preset has no plugin_id field, so it cannot round-trip; recover the
+  // plugin tag from the input by stable ID.
+  final pluginIdById = {for (final p in presets) p.id: p.pluginId};
+  List<LaunchPreset> at(String key) => [
+    for (final j in split[key] ?? const <Map<String, dynamic>>[])
+      LaunchPreset(
+        id: j['id'] as String? ?? '',
+        label: j['label'] as String? ?? '',
+        command: j['command'] as String? ?? '',
+        pluginId: pluginIdById[j['id'] as String?],
+        enabled: (j['enabled'] as bool?) ?? true,
+        quickLaunch: (j['quick_launch'] as bool?) ?? false,
+      ),
+  ];
+  return (agents: at('agents'), plugins: at('plugins'));
 }
 
 /// New-session menu model (SidebarView.swift: newSessionMenuContent).
+///
+/// The Agents/Plugins split is computed by the Rust
+/// `split_presets_for_new_session_menu` (single source of truth) and passed
+/// in pre-split — see [splitPresetsForMenu] / [newSessionMenuModelFor].
+/// Section structure (order, manage buttons, archived row) is UI layout and
+/// stays here.
 ///
 /// Sections, in order:
 /// 1. Blank terminal ("New Terminal") — always first.
@@ -1028,35 +1141,36 @@ final class LaunchPreset {
 /// 4. Archived (count) — only when [archivedCount] > 0.
 final class NewSessionMenuModel {
   NewSessionMenuModel({
-    required this.menuPresets,
+    required this.agents,
+    required this.plugins,
     this.showsManagePresets = true,
     this.showsManagePlugins = false,
     this.archivedCount = 0,
   });
 
-  final List<LaunchPreset> menuPresets;
+  final List<LaunchPreset> agents;
+  final List<LaunchPreset> plugins;
   final bool showsManagePresets;
   final bool showsManagePlugins;
   final int archivedCount;
 
   List<NewSessionMenuSection> get sections {
-    final split = splitLaunchPresets(menuPresets);
     final sections = <NewSessionMenuSection>[
       const NewSessionMenuSection.blankTerminal(),
     ];
-    if (split.agents.isNotEmpty || showsManagePresets) {
+    if (agents.isNotEmpty || showsManagePresets) {
       sections.add(
         NewSessionMenuSection.agents(
-          split.agents,
+          agents,
           showManage: showsManagePresets,
         ),
       );
     }
-    if (split.plugins.isNotEmpty ||
+    if (plugins.isNotEmpty ||
         (showsManagePresets && showsManagePlugins)) {
       sections.add(
         NewSessionMenuSection.plugins(
-          split.plugins,
+          plugins,
           showManage: showsManagePresets && showsManagePlugins,
         ),
       );
@@ -1066,6 +1180,24 @@ final class NewSessionMenuModel {
     }
     return sections;
   }
+}
+
+/// Builds a [NewSessionMenuModel] by splitting [presets] through the Rust
+/// single source of truth ([splitPresetsForMenu]).
+NewSessionMenuModel newSessionMenuModelFor({
+  required List<LaunchPreset> presets,
+  bool showsManagePresets = true,
+  bool showsManagePlugins = false,
+  int archivedCount = 0,
+}) {
+  final split = splitPresetsForMenu(presets);
+  return NewSessionMenuModel(
+    agents: split.agents,
+    plugins: split.plugins,
+    showsManagePresets: showsManagePresets,
+    showsManagePlugins: showsManagePlugins,
+    archivedCount: archivedCount,
+  );
 }
 
 /// One section of the new-session menu.
@@ -1244,6 +1376,111 @@ final class SessionCommandIconSpec {
   final String? iconAsset;
 
   bool get visible => iconAsset != null && iconAsset!.isNotEmpty;
+}
+
+/// Spec for the pane-group icon stack (SidebarView.swift:
+/// SessionCommandIconStack/SessionCommandIconStackTile). A pane group is one
+/// sidebar row representing several sessions: up to 4 small opaque tiles
+/// overlap like an avatar stack (hairline keeps same-color marks distinct).
+/// Tiles after the 4th are not rendered.
+final class SessionCommandIconStackSpec {
+  const SessionCommandIconStackSpec({required this.itemCount});
+
+  final int itemCount;
+
+  /// Max tiles rendered; the rest are dropped, not paged.
+  static const maxVisibleTiles = 4;
+
+  int get visibleTileCount =>
+      itemCount < maxVisibleTiles ? itemCount : maxVisibleTiles;
+
+  /// Stack enter transition: scale 0.82 + opacity, spring(0.36, 0.76).
+  static const enterScale = 0.82;
+  static const springResponse = 0.36;
+  static const springDampingFraction = 0.76;
+}
+
+/// Inline rename field state (SidebarView.swift: SessionRowRenameField).
+/// The field edits a draft, claims focus once on appear, commits on
+/// confirm and cancels on escape; a commit triggered by focus loss right
+/// after cancel is suppressed.
+final class SessionRowRenameState {
+  SessionRowRenameState({required String initialLabel})
+      : draft = initialLabel;
+
+  String draft;
+  bool didClaimFocus = false;
+  bool suppressCommit = false;
+
+  /// Called once when the field appears; returns true when focus was claimed.
+  bool claimFocus() {
+    if (didClaimFocus) return false;
+    didClaimFocus = true;
+    return true;
+  }
+
+  /// Resolve the field: commit unless a cancel just suppressed it.
+  /// Returns the committed label, or null when suppressed/cancelled.
+  String? resolve({required bool cancelled}) {
+    if (cancelled) {
+      suppressCommit = true;
+      return null;
+    }
+    if (suppressCommit) {
+      suppressCommit = false;
+      return null;
+    }
+    return draft;
+  }
+}
+
+/// Selection wash spec (SidebarView.swift: SessionRowSelectionPaint).
+/// 9pt continuous rounded rect; selected rows take the glass tint (or the
+/// theme's active-row tint where glass is unavailable), hovered rows the
+/// hover tint. Selection is navigation, not an animated transition: the
+/// fill swaps with animations disabled. The Liquid Glass variant
+/// (SelectedRowGlass/WindowKeyState) is AppKit-only and not ported.
+final class SessionRowSelectionSpec {
+  const SessionRowSelectionSpec({
+    required this.isSelected,
+    this.isHovering = false,
+    this.glassAvailable = false,
+  });
+
+  final bool isSelected;
+  final bool isHovering;
+  final bool glassAvailable;
+
+  static const cornerRadius = 9.0;
+
+  /// Which fill the paint uses: 'glass', 'activeTint', 'hover', or 'clear'.
+  String get fillKind {
+    if (isSelected) return glassAvailable ? 'glass' : 'activeTint';
+    if (isHovering) return 'hover';
+    return 'clear';
+  }
+
+  /// Selection never animates the fill swap.
+  static const animatesFillSwap = false;
+}
+
+/// Quick-preset button spec (SidebarView.swift: QuickPresetButton/
+/// QuickPresetMenuChip). 22x22 icon chip; the icon rests at 72% opacity and
+/// goes full on hover over an 8pt-radius hover wash. Tooltip: "Start <label>"
+/// ("Start <group>…" for the menu chip).
+final class QuickPresetButtonSpec {
+  const QuickPresetButtonSpec({this.hovering = false});
+
+  final bool hovering;
+
+  static const size = 22.0;
+  static const cornerRadius = 8.0;
+  static const restingOpacity = 0.72;
+
+  double get iconOpacity => hovering ? 1.0 : restingOpacity;
+
+  static String tooltipForPreset(String label) => 'Start $label';
+  static String tooltipForGroup(String displayName) => 'Start $displayName…';
 }
 
 /// Inline confirm pill (SidebarView.swift: the confirm control used by the

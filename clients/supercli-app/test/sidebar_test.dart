@@ -12,12 +12,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:gpuidart/gpuidart.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:supercli_app/host_client.dart';
 import 'package:supercli_app/models.dart';
+import 'package:supercli_app/native_client.dart';
 import 'package:supercli_app/screens/globalactivitymenu.dart';
 import 'package:supercli_app/screens/projectsidebarview.dart';
 import 'package:supercli_app/screens/recentactivityview.dart';
@@ -1220,7 +1222,15 @@ void main() {
     });
   });
 
-  group('splitLaunchPresets', () {
+  // FFI-backed preset tests need the compiled cdylib; CI sets
+  // SUPERCLI_FFI_LIB, local runs without it skip these (the Rust side has
+  // its own unit tests for the same functions).
+  final String? skipWithoutFfiLib =
+      Platform.environment['SUPERCLI_FFI_LIB'] == null
+          ? 'needs SUPERCLI_FFI_LIB pointing at libsupercli_client_ffi'
+          : null;
+
+  group('splitPresetsForMenu (FFI: split_presets_for_new_session_menu)', () {
     test('plugin-backed presets go to Plugins, rest to Agents', () {
       const presets = [
         LaunchPreset(id: 'codex', label: 'codex', command: 'codex --yolo'),
@@ -1231,17 +1241,133 @@ void main() {
           pluginId: 'supercli.app.markdown',
         ),
       ];
-      final split = splitLaunchPresets(presets);
+      final split = splitPresetsForMenu(presets);
       expect(split.agents.map((p) => p.id), ['codex']);
       expect(split.plugins.map((p) => p.id), ['markdown']);
+      // The plugin tag round-trips through the Rust boundary.
+      expect(split.plugins.single.pluginId, 'supercli.app.markdown');
+    }, skip: skipWithoutFfiLib);
+
+    test('empty input yields empty sections', () {
+      final split = splitPresetsForMenu(const []);
+      expect(split.agents, isEmpty);
+      expect(split.plugins, isEmpty);
+    }, skip: skipWithoutFfiLib);
+  });
+
+  group('quickPresetGroups (FFI: collect_quick_preset_groups)', () {
+    test('groups quick-launch presets by CLI', () {
+      // Discover a real quick-launchable alias from the builtin catalog so
+      // the CLI-grouping path is exercised on any platform.
+      final alias = SupercliNative.runtimeCatalog()
+          .expand(
+            (d) =>
+                (d['command_aliases'] as List?)?.whereType<String>() ??
+                const <String>[],
+          )
+          .firstWhere(
+            SupercliNative.presetToolIsQuickLaunchable,
+            orElse: () => '',
+          );
+      expect(alias, isNotEmpty);
+      final groups = quickPresetGroups(
+        presets: [
+          LaunchPreset(
+            id: 'q1',
+            label: 'Q1',
+            command: alias,
+            quickLaunch: true,
+          ),
+          LaunchPreset(
+            id: 'q2',
+            label: 'Q2',
+            command: '$alias --flag',
+            quickLaunch: true,
+          ),
+          LaunchPreset(
+            id: 'nq',
+            label: 'NQ',
+            command: alias,
+            quickLaunch: false,
+          ),
+        ],
+      );
+      expect(groups, hasLength(1));
+      // Rust keeps a CLI group when any member is quick-launch; the non-quick
+      // nq shares the CLI so it rides along in the group.
+      expect(groups.single.presets.map((p) => p.id), ['q1', 'q2', 'nq']);
+      expect(groups.single.isMenuChip, isTrue);
+      expect(groups.single.cliId, isNotEmpty);
+    }, skip: skipWithoutFfiLib);
+
+    test('unknown commands fall back to per-preset custom groups', () {
+      final groups = quickPresetGroups(
+        presets: const [
+          LaunchPreset(
+            id: 'c1',
+            label: 'C1',
+            command: 'definitely-not-a-real-tool-xyz',
+            quickLaunch: true,
+          ),
+        ],
+      );
+      expect(groups, hasLength(1));
+      expect(groups.single.id, 'c1');
+      expect(groups.single.isMenuChip, isFalse);
+    }, skip: skipWithoutFfiLib);
+  });
+
+  group('QuickPresetGroupView', () {
+    test('fromJson parses the FFI group shape', () {
+      final view = QuickPresetGroupView.fromJson({
+        'id': 'codex',
+        'cli_id': 'codex',
+        'app_id': null,
+        'app_name': null,
+        'presets': [
+          {'id': 'q1', 'label': 'Q1', 'command': 'codex'},
+          {'id': 'q2', 'label': 'Q2', 'command': 'codex --flag'},
+        ],
+      });
+      expect(view.id, 'codex');
+      expect(view.cliId, 'codex');
+      expect(view.presets.map((p) => p.id), ['q1', 'q2']);
+      expect(view.isMenuChip, isTrue);
+    });
+
+    test('single-preset group is not a menu chip', () {
+      const view = QuickPresetGroupView(
+        id: 'custom:c1',
+        presets: [LaunchPreset(id: 'c1', label: 'C1', command: 'c1')],
+      );
+      expect(view.isMenuChip, isFalse);
+    });
+  });
+
+  group('QuickPresetStrip.fromGroups', () {
+    test('strip width follows the FFI group count', () {
+      const groups = [
+        QuickPresetGroupView(id: 'a'),
+        QuickPresetGroupView(id: 'b'),
+      ];
+      final strip = QuickPresetStrip.fromGroups(groups);
+      expect(strip.quickGroupCount, 2);
+      expect(strip.expandedWidth, (2 + 1) * 23 + 30);
+      expect(strip.expanded, isFalse);
+      expect(
+        QuickPresetStrip.fromGroups(groups, hovering: true).expanded,
+        isTrue,
+      );
     });
   });
 
   group('NewSessionMenuModel', () {
     test('sections: blank, agents, plugins, archived', () {
       final model = NewSessionMenuModel(
-        menuPresets: const [
+        agents: const [
           LaunchPreset(id: 'codex', label: 'codex', command: 'codex'),
+        ],
+        plugins: const [
           LaunchPreset(
             id: 'markdown',
             label: 'Markdown',
@@ -1258,14 +1384,14 @@ void main() {
     });
 
     test('agents section renders with manage entry even when empty', () {
-      final model = NewSessionMenuModel(menuPresets: const []);
+      final model = NewSessionMenuModel(agents: const [], plugins: const []);
       final kinds = model.sections.map((s) => s.kind).toList();
       expect(kinds, ['blank', 'agents']);
       expect(model.sections[1].showManage, isTrue);
     });
 
     test('no archived section when count is 0', () {
-      final model = NewSessionMenuModel(menuPresets: const []);
+      final model = NewSessionMenuModel(agents: const [], plugins: const []);
       expect(
         model.sections.map((s) => s.kind),
         isNot(contains('archived')),
@@ -1373,6 +1499,97 @@ void main() {
         isTrue,
       );
       expect(const SessionCommandIconSpec(kind: 'claude').visible, isFalse);
+    });
+  });
+
+  group('SessionCommandIconStackSpec', () {
+    test('caps visible tiles at 4', () {
+      expect(
+        const SessionCommandIconStackSpec(itemCount: 2).visibleTileCount,
+        2,
+      );
+      expect(
+        const SessionCommandIconStackSpec(itemCount: 7).visibleTileCount,
+        4,
+      );
+    });
+
+    test('enter transition constants', () {
+      expect(SessionCommandIconStackSpec.enterScale, 0.82);
+      expect(SessionCommandIconStackSpec.springResponse, 0.36);
+      expect(SessionCommandIconStackSpec.springDampingFraction, 0.76);
+    });
+  });
+
+  group('SessionRowRenameState', () {
+    test('claims focus once', () {
+      final state = SessionRowRenameState(initialLabel: 'old');
+      expect(state.claimFocus(), isTrue);
+      expect(state.claimFocus(), isFalse);
+    });
+
+    test('commit returns the draft; cancel suppresses the trailing commit', () {
+      final state = SessionRowRenameState(initialLabel: 'old');
+      state.draft = 'new';
+      expect(state.resolve(cancelled: false), 'new');
+
+      final cancelled = SessionRowRenameState(initialLabel: 'old');
+      expect(cancelled.resolve(cancelled: true), isNull);
+      // Focus-loss commit right after cancel is suppressed, once.
+      expect(cancelled.resolve(cancelled: false), isNull);
+      expect(cancelled.resolve(cancelled: false), 'old');
+    });
+  });
+
+  group('SessionRowSelectionSpec', () {
+    test('fill rule: glass/activeTint/hover/clear', () {
+      expect(
+        const SessionRowSelectionSpec(
+          isSelected: true,
+          glassAvailable: true,
+        ).fillKind,
+        'glass',
+      );
+      expect(
+        const SessionRowSelectionSpec(isSelected: true).fillKind,
+        'activeTint',
+      );
+      expect(
+        const SessionRowSelectionSpec(
+          isSelected: false,
+          isHovering: true,
+        ).fillKind,
+        'hover',
+      );
+      expect(
+        const SessionRowSelectionSpec(isSelected: false).fillKind,
+        'clear',
+      );
+    });
+
+    test('selection never animates the fill swap', () {
+      expect(SessionRowSelectionSpec.animatesFillSwap, isFalse);
+      expect(SessionRowSelectionSpec.cornerRadius, 9.0);
+    });
+  });
+
+  group('QuickPresetButtonSpec', () {
+    test('icon opacity rests at 0.72, full on hover', () {
+      expect(const QuickPresetButtonSpec().iconOpacity, 0.72);
+      expect(const QuickPresetButtonSpec(hovering: true).iconOpacity, 1.0);
+      expect(QuickPresetButtonSpec.size, 22.0);
+      expect(QuickPresetButtonSpec.cornerRadius, 8.0);
+    });
+
+    test('tooltips', () {
+      expect(
+        QuickPresetButtonSpec.tooltipForPreset('codex'),
+        'Start codex',
+      );
+      expect(
+        QuickPresetButtonSpec.tooltipForGroup('codex'),
+        'Start codex…',
+      );
     });
   });
 

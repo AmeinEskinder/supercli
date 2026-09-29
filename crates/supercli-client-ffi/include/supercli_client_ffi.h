@@ -53,6 +53,20 @@ char *supercli_runtime_detect_tool(const char *command);
 uint8_t supercli_preset_tool_is_quick_launchable(const char *command);
 /* Display name for a tool's legacy slug, or NULL when unknown. */
 char *supercli_preset_tool_display_name(const char *legacy_slug);
+/* Splits presets into the Agents/Plugins sections of the new-session menu
+ * (Rust `split_presets_for_new_session_menu`). Input JSON:
+ * {"presets": [{"id","label","command","enabled","quick_launch"}],
+ *  "plugin_commands": ["<command>", ...]}.
+ * Output JSON: {"agents": [...], "plugins": [...]}.
+ * NULL/invalid input -> NULL + recorded error. */
+char *supercli_preset_split_for_menu_json(const char *input);
+/* Groups quick-launch presets for the project-row strip
+ * (Rust `collect_quick_preset_groups`). Input JSON:
+ * {"presets": [...], "plugin_commands": [...],
+ *  "app_catalog": {"<head>": ["<app_id>", "<app_name>"]}}.
+ * Output JSON: [{"id","cli_id","app_id","app_name","presets":[...]}].
+ * NULL/invalid input -> NULL + recorded error. */
+char *supercli_quick_preset_groups_json(const char *input);
 
 /* Exponential backoff delay in ms for consecutive_failures (>= 1). */
 uint64_t supercli_pool_backoff_delay_ms(uint32_t consecutive_failures);

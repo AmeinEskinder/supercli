@@ -30,7 +30,7 @@ files:
     notes: ''
   native/SupercliNative/Sources/SupercliNative/Views/SidebarView.swift:
     destination: 'Dart: clients/supercli-app'
-    status: partial
+    status: ported
     checklist: '#151'
     behaviours:
     - Sidebar mounted in SupercliApp.build() (app.dart), fed by live Host bootstrap
@@ -113,9 +113,47 @@ files:
       target: lib/screens/sidebarview.dart (see header for full list)
       test: test/sidebar_test.dart::AttentionDot + GroupClusterBackground +
         ChevronGlyph + SessionCommandIconSpec groups
+    - swift: 'AUDIT 2026-09-29: splitLaunchPresets DUPLICATE of
+        supercli-core/src/presets.rs:571 split_presets_for_new_session_menu —
+        Dart copy DELETED, now calls Rust via FFI'
+      target: crates/supercli-client-ffi::supercli_preset_split_for_menu_json ->
+        lib/screens/sidebarview.dart::splitPresetsForMenu
+      test: test/sidebar_test.dart::splitPresetsForMenu (FFI, 2 tests) +
+        crates/supercli-client-ffi ffi_tests::preset_split_for_menu_json_* (2 tests)
+    - swift: 'AUDIT 2026-09-29: QuickPresetStrip grouping DUPLICATE of
+        supercli-core/src/presets.rs:500 collect_quick_preset_groups —
+        Dart regrouping DELETED, now calls Rust via FFI (strip geometry stays Dart)'
+      target: crates/supercli-client-ffi::supercli_quick_preset_groups_json ->
+        lib/screens/sidebarview.dart::quickPresetGroups
+      test: test/sidebar_test.dart::quickPresetGroups (FFI, 2 tests) +
+        crates/supercli-client-ffi ffi_tests::quick_preset_groups_json_* (2 tests)
+    - swift: 'AUDIT 2026-09-29 gaps: SessionCommandIconStack (max 4 tiles,
+        scale 0.82 + opacity, spring 0.36/0.76); SessionRowRenameField
+        (draft/focus-claim/commit-cancel state machine); SessionRowSelectionPaint
+        (9pt radius, glass/activeTint/hover/clear fill rule, no animated swap);
+        QuickPresetButton/QuickPresetMenuChip (22x22, 8pt radius, 0.72->1 opacity,
+        Start <label> tooltips)'
+      target: lib/screens/sidebarview.dart::SessionCommandIconStackSpec +
+        SessionRowRenameState + SessionRowSelectionSpec + QuickPresetButtonSpec
+      test: test/sidebar_test.dart::SessionCommandIconStackSpec +
+        SessionRowRenameState + SessionRowSelectionSpec + QuickPresetButtonSpec
+        groups (8 tests)
+    - swift: 'AUDIT 2026-09-29 dropped (AppKit-only, no portable behaviour):
+        SidebarReorderDropDelegate/SidebarContainerDropDelegate/EmptyDragPreview
+        (DropDelegate); SessionRowEnterModifier/SessionListContentModifier
+        (SwiftUI modifiers, timing in SidebarMotion); SidebarSelectionScrollObserver
+        (SwiftUI; cue logic ported); SidebarTopGlassOverlay/SelectedRowGlass/
+        WindowKeyState (Liquid Glass); HoverReporter/RemoveConfirmDismissMonitor
+        (NSViewRepresentable); FolderColorMenuSwatch/FolderColorMenuRow (NSImage);
+        ChevronGlyph CoreText metrics (direction ported); ObservedSessionRowSelectionBackground
+        (SwiftUI observation)'
+      target: 'dropped: AppKit-only rendering'
+      test: none
     tests:
     - file: clients/supercli-app/test/sidebar_test.dart
-      count: 112
+      count: 127
+    - file: crates/supercli-client-ffi (ffi_tests)
+      count: 4
     notes: 'Partial 2026-09-27 (feat/wire-sidebar): Host wiring done for session list,
       status signals and project tree (headless e2e against live Host, 2 real sessions).
       2026-09-29 (feat/port-sidebarview-b): ported remaining portable behaviours —
@@ -128,7 +166,20 @@ files:
       CoreText glyph metrics, NSImage icon pipelines) — see sidebarview.dart header.
       Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM);
       not verified. 2026-09-29: Dart tests EXECUTED — 112/112 pass
-      (dart test test/sidebar_test.dart, Dart SDK 3.13.4).'
+      (dart test test/sidebar_test.dart, Dart SDK 3.13.4).
+      2026-09-29 AUDIT (reviewer-mandated pattern): every Swift behaviour mapped to
+      an existing Rust/Dart target or a dropped reason — file flips to ported.
+      Reviewer duplicate fixed: Dart splitLaunchPresets DELETED; new-session menu
+      split now calls supercli-core split_presets_for_new_session_menu via new FFI
+      supercli_preset_split_for_menu_json (ABI v2); QuickPresetStrip grouping now
+      calls supercli-core collect_quick_preset_groups via new FFI
+      supercli_quick_preset_groups_json (strip geometry stays Dart UI).
+      plugin_id recovered client-side by stable ID (Rust Preset has no such field).
+      4 true gaps ported (icon-stack spec, rename state machine, selection spec,
+      preset-button spec). Dart tests EXECUTED — 127/127 pass with real cdylib
+      (SUPERCLI_FFI_LIB, no skips); Rust FFI tests 24/24 pass
+      (cargo +1.88.0 test -p supercli-client-ffi). Merge still waits for
+      supercli-app CI green.'
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: 'Dart: clients/supercli-app'
     status: ported

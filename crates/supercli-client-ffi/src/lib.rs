@@ -42,7 +42,7 @@ use supercli_core::{presets, runtime_catalog, terminal_drop_maps, workspace_regi
 
 /// ABI version of this C surface. Bump when adding/removing/changing any
 /// exported symbol's signature. Dart checks this at load time.
-pub const SUPERCLI_FFI_ABI_VERSION: u32 = 1;
+pub const SUPERCLI_FFI_ABI_VERSION: u32 = 2;
 
 // ---------------------------------------------------------------------------
 // Error reporting
@@ -294,6 +294,187 @@ pub unsafe extern "C" fn supercli_preset_tool_display_name(
             Some(t) => to_c_string(t.display_name(catalog)),
             None => std::ptr::null_mut(),
         }
+    })
+}
+
+// ---------------------------------------------------------------------------
+// New-session menu + quick-preset strip
+//
+// The section/group rules below are the single source of truth for the
+// SidebarView.swift ports in the Dart UI: the Dart side calls these over FFI
+// and keeps only rendering. (See docs/parity/swift-port/sidebar.yml.)
+// ---------------------------------------------------------------------------
+
+fn preset_from_json(v: &serde_json::Value) -> presets::Preset {
+    presets::Preset {
+        id: v
+            .get("id")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        label: v
+            .get("label")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        command: v
+            .get("command")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        enabled: v.get("enabled").and_then(|x| x.as_bool()).unwrap_or(true),
+        quick_launch: v
+            .get("quick_launch")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
+    }
+}
+
+fn preset_to_json(p: &presets::Preset) -> serde_json::Value {
+    serde_json::json!({
+        "id": p.id,
+        "label": p.label,
+        "command": p.command,
+        "enabled": p.enabled,
+        "quick_launch": p.quick_launch,
+    })
+}
+
+/// Shared parsed input for the preset section/group entries:
+/// the preset list, the Host App-catalog plugin classification
+/// (`plugin_commands`), and the App-catalog head -> (app_id, app_name) map.
+struct PresetFfiInput {
+    preset_list: Vec<presets::Preset>,
+    plugin_set: HashSet<String>,
+    app_map: HashMap<String, (String, String)>,
+}
+
+fn parse_preset_ffi_input(input: &str) -> Result<PresetFfiInput, String> {
+    let parsed: serde_json::Value = serde_json::from_str(input)
+        .map_err(|e| format!("invalid JSON in preset FFI input: {e}"))?;
+    let preset_list = parsed
+        .get("presets")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().map(preset_from_json).collect())
+        .unwrap_or_default();
+    let plugin_set: HashSet<String> = parsed
+        .get("plugin_commands")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut app_map = HashMap::new();
+    if let Some(obj) = parsed.get("app_catalog").and_then(|v| v.as_object()) {
+        for (head, v) in obj {
+            if let Some(pair) = v.as_array() {
+                if let (Some(id), Some(name)) = (
+                    pair.first().and_then(|x| x.as_str()),
+                    pair.get(1).and_then(|x| x.as_str()),
+                ) {
+                    app_map.insert(head.clone(), (id.to_string(), name.to_string()));
+                }
+            }
+        }
+    }
+    Ok(PresetFfiInput {
+        preset_list,
+        plugin_set,
+        app_map,
+    })
+}
+
+/// Splits presets into the Agents and Plugins sections of the new-session menu.
+///
+/// Single source of truth: `supercli_core::presets::split_presets_for_new_session_menu`.
+/// The caller supplies the Host App-catalog plugin classification as
+/// `plugin_commands`: a command is plugin-backed iff it is in this set.
+///
+/// Input JSON: `{"presets": [{"id","label","command","enabled","quick_launch"}],
+/// "plugin_commands": ["<command>", ...]}`.
+/// Output JSON: `{"agents": [<preset>, ...], "plugins": [<preset>, ...]}`.
+/// Null/invalid-UTF-8/invalid-JSON input -> null + recorded error.
+///
+/// # Safety
+///
+/// `input` must be null or point to a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn supercli_preset_split_for_menu_json(input: *const c_char) -> *mut c_char {
+    ffi_guard(std::ptr::null_mut(), || {
+        let input = match unsafe { c_str_or_none(input) } {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+        let parsed = match parse_preset_ffi_input(input) {
+            Ok(p) => p,
+            Err(e) => {
+                set_last_error(e);
+                return std::ptr::null_mut();
+            }
+        };
+        let (agents, plugins) =
+            presets::split_presets_for_new_session_menu(&parsed.preset_list, |c| {
+                parsed.plugin_set.contains(c)
+            });
+        let out = serde_json::json!({
+            "agents": agents.iter().map(preset_to_json).collect::<Vec<_>>(),
+            "plugins": plugins.iter().map(preset_to_json).collect::<Vec<_>>(),
+        });
+        to_c_string(out.to_string())
+    })
+}
+
+/// Groups quick-launch presets for the project-row quick-preset strip.
+///
+/// Single source of truth: `supercli_core::presets::collect_quick_preset_groups`.
+/// The caller supplies the Host App-catalog classifications: `plugin_commands`
+/// (as above) and `app_catalog` (`{"<executable head>": ["<app_id>", "<app_name>"]}`).
+///
+/// Input JSON: `{"presets": [...], "plugin_commands": [...],
+/// "app_catalog": {"<head>": ["<app_id>", "<app_name>"]}}`.
+/// Output JSON: `[{"id","cli_id","app_id","app_name","presets":[...]}]`.
+/// Null/invalid-UTF-8/invalid-JSON input -> null + recorded error.
+///
+/// # Safety
+///
+/// `input` must be null or point to a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn supercli_quick_preset_groups_json(input: *const c_char) -> *mut c_char {
+    ffi_guard(std::ptr::null_mut(), || {
+        let input = match unsafe { c_str_or_none(input) } {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+        let parsed = match parse_preset_ffi_input(input) {
+            Ok(p) => p,
+            Err(e) => {
+                set_last_error(e);
+                return std::ptr::null_mut();
+            }
+        };
+        let catalog = runtime_catalog::builtin_runtime_catalog();
+        let groups = presets::collect_quick_preset_groups(
+            &catalog,
+            &parsed.preset_list,
+            |c| parsed.plugin_set.contains(c),
+            |head| parsed.app_map.get(head).cloned(),
+        );
+        let out: Vec<serde_json::Value> = groups
+            .iter()
+            .map(|g| {
+                serde_json::json!({
+                    "id": g.id(),
+                    "cli_id": g.cli.as_ref().map(|tool| tool.id()),
+                    "app_id": g.app_id,
+                    "app_name": g.app_name,
+                    "presets": g.presets.iter().map(preset_to_json).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        to_c_string(serde_json::to_string(&out).unwrap_or_default())
     })
 }
 
@@ -572,9 +753,9 @@ mod ffi_tests {
     }
 
     #[test]
-    fn abi_version_is_one() {
+    fn abi_version_is_two() {
         assert_eq!(supercli_ffi_abi_version(), SUPERCLI_FFI_ABI_VERSION);
-        assert_eq!(SUPERCLI_FFI_ABI_VERSION, 1);
+        assert_eq!(SUPERCLI_FFI_ABI_VERSION, 2);
     }
 
     #[test]
@@ -828,6 +1009,81 @@ mod ffi_tests {
             supercli_string_free(supercli_last_error());
             supercli_clear_error();
             assert!(supercli_last_error().is_null());
+        }
+    }
+
+    #[test]
+    fn preset_split_for_menu_json_splits_agents_and_plugins() {
+        let input = c(r#"{"presets": [
+                {"id": "a1", "label": "Agent", "command": "my-agent --x"},
+                {"id": "p1", "label": "Plugin", "command": "my-plugin-cmd"}
+            ], "plugin_commands": ["my-plugin-cmd"]}"#);
+        let s = unsafe { peek(supercli_preset_split_for_menu_json(input.as_ptr())) };
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        let agents = v["agents"].as_array().unwrap();
+        let plugins = v["plugins"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["id"], "a1");
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0]["id"], "p1");
+    }
+
+    #[test]
+    fn preset_split_for_menu_json_null_and_bad_json() {
+        unsafe {
+            supercli_clear_error();
+            assert!(supercli_preset_split_for_menu_json(std::ptr::null()).is_null());
+            assert!(!supercli_last_error().is_null());
+            supercli_string_free(supercli_last_error());
+
+            supercli_clear_error();
+            let bad = c("{not json");
+            assert!(supercli_preset_split_for_menu_json(bad.as_ptr()).is_null());
+            assert!(!supercli_last_error().is_null());
+            supercli_string_free(supercli_last_error());
+        }
+    }
+
+    #[test]
+    fn quick_preset_groups_json_groups_by_cli() {
+        // Discover a real command alias from the builtin catalog so the CLI
+        // grouping path is exercised deterministically.
+        let catalog = runtime_catalog::builtin_runtime_catalog();
+        let alias = catalog
+            .current_platform_descriptors()
+            .find_map(|d| d.detection.command_aliases.first().cloned())
+            .expect("builtin catalog has a command alias");
+        let input = c(&format!(
+            r#"{{"presets": [
+                {{"id": "q1", "label": "Q1", "command": "{alias}", "enabled": true, "quick_launch": true}},
+                {{"id": "q2", "label": "Q2", "command": "{alias} --flag", "enabled": true, "quick_launch": true}},
+                {{"id": "c1", "label": "C1", "command": "definitely-not-a-real-tool-xyz", "enabled": true, "quick_launch": true}}
+            ], "plugin_commands": []}}"#,
+        ));
+        let s = unsafe { peek(supercli_quick_preset_groups_json(input.as_ptr())) };
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        let groups = v.as_array().unwrap();
+        // q1+q2 share one CLI group; c1 falls back to its own custom group.
+        assert_eq!(groups.len(), 2);
+        let cli_group = groups.iter().find(|g| !g["cli_id"].is_null()).unwrap();
+        assert_eq!(cli_group["presets"].as_array().unwrap().len(), 2);
+        let custom_group = groups.iter().find(|g| g["cli_id"].is_null()).unwrap();
+        assert_eq!(custom_group["id"], "c1");
+    }
+
+    #[test]
+    fn quick_preset_groups_json_null_and_bad_json() {
+        unsafe {
+            supercli_clear_error();
+            assert!(supercli_quick_preset_groups_json(std::ptr::null()).is_null());
+            assert!(!supercli_last_error().is_null());
+            supercli_string_free(supercli_last_error());
+
+            supercli_clear_error();
+            let bad = c("[1, 2");
+            assert!(supercli_quick_preset_groups_json(bad.as_ptr()).is_null());
+            assert!(!supercli_last_error().is_null());
+            supercli_string_free(supercli_last_error());
         }
     }
 }

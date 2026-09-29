@@ -41,7 +41,7 @@ import 'package:ffi/ffi.dart';
 final class SupercliNativeBindings {
   /// ABI version this Dart code was written against. Must match
   /// `SUPERCLI_FFI_ABI_VERSION` in `supercli_client_ffi.h`.
-  static const int kExpectedAbiVersion = 1;
+  static const int kExpectedAbiVersion = 2;
 
   static DynamicLibrary? _lib;
   static bool _abiChecked = false;
@@ -172,6 +172,18 @@ final class SupercliNativeBindings {
       )
       .asFunction<Pointer<Char> Function(Pointer<Char>)>();
 
+  late final _presetSplitForMenuJson = lib
+      .lookup<NativeFunction<Pointer<Char> Function(Pointer<Char>)>>(
+        'supercli_preset_split_for_menu_json',
+      )
+      .asFunction<Pointer<Char> Function(Pointer<Char>)>();
+
+  late final _quickPresetGroupsJson = lib
+      .lookup<NativeFunction<Pointer<Char> Function(Pointer<Char>)>>(
+        'supercli_quick_preset_groups_json',
+      )
+      .asFunction<Pointer<Char> Function(Pointer<Char>)>();
+
   late final _poolBackoffDelayMs = lib
       .lookup<NativeFunction<Uint64 Function(Uint32)>>(
         'supercli_pool_backoff_delay_ms',
@@ -273,6 +285,75 @@ final class SupercliNative {
       return (name == null || name.isEmpty) ? null : name;
     } finally {
       malloc.free(slugPtr);
+    }
+  }
+
+  /// Splits presets into the Agents/Plugins sections of the new-session menu.
+  ///
+  /// Single source of truth: Rust `split_presets_for_new_session_menu`.
+  /// [pluginCommands] carries the Host App-catalog plugin classification
+  /// (a command is plugin-backed iff in this set). Returns
+  /// `{'agents': [...], 'plugins': [...]}` (preset JSON objects, in order).
+  static Map<String, List<Map<String, dynamic>>> presetSplitForMenu({
+    required List<Map<String, dynamic>> presets,
+    required Set<String> pluginCommands,
+  }) {
+    final inputPtr = jsonEncode({
+      'presets': presets,
+      'plugin_commands': pluginCommands.toList(),
+    }).toNativeUtf8().cast<Char>();
+    try {
+      final json = _b._takeNullableString(
+        _b._presetSplitForMenuJson(inputPtr),
+      );
+      if (json == null || json.isEmpty) {
+        return const {
+          'agents': <Map<String, dynamic>>[],
+          'plugins': <Map<String, dynamic>>[],
+        };
+      }
+      final decoded = jsonDecode(json);
+      if (decoded is! Map<String, dynamic>) {
+        return const {
+          'agents': <Map<String, dynamic>>[],
+          'plugins': <Map<String, dynamic>>[],
+        };
+      }
+      List<Map<String, dynamic>> at(String key) =>
+          (decoded[key] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+      return {'agents': at('agents'), 'plugins': at('plugins')};
+    } finally {
+      malloc.free(inputPtr);
+    }
+  }
+
+  /// Groups quick-launch presets for the project-row quick-preset strip.
+  ///
+  /// Single source of truth: Rust `collect_quick_preset_groups`.
+  /// [pluginCommands] and [appCatalog] carry the Host App-catalog
+  /// classifications ([appCatalog] maps executable head ->
+  /// `[app_id, app_name]`). Returns the groups in strip order.
+  static List<Map<String, dynamic>> quickPresetGroups({
+    required List<Map<String, dynamic>> presets,
+    required Set<String> pluginCommands,
+    required Map<String, List<String>> appCatalog,
+  }) {
+    final inputPtr = jsonEncode({
+      'presets': presets,
+      'plugin_commands': pluginCommands.toList(),
+      'app_catalog': appCatalog,
+    }).toNativeUtf8().cast<Char>();
+    try {
+      final json = _b._takeNullableString(_b._quickPresetGroupsJson(inputPtr));
+      if (json == null || json.isEmpty) return const [];
+      final decoded = jsonDecode(json);
+      if (decoded is! List) return const [];
+      return decoded.whereType<Map<String, dynamic>>().toList();
+    } finally {
+      malloc.free(inputPtr);
     }
   }
 
