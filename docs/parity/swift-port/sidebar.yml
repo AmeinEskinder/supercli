@@ -253,11 +253,34 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "Background read-only polling and snapshot cache; equivalent (timestamp-only) snapshots never republish (acceptSnapshot, isEquivalent(to:))"
+        target: "lib/screens/workspace_pool.dart::acceptPooledSnapshot + PooledSnapshot.isEquivalentTo"
+        test: "test/workspace_pool_test.dart::poll caching (3)"
+      - swift: "Exponential backoff for unreachable hosts: base doubling, exponent clamp 16, cap 300ms (backoffDelayNanoseconds)"
+        target: "lib/screens/workspace_pool.dart::backoffDelayMs"
+        test: "test/workspace_pool_test.dart::backoff (2)"
+      - swift: "Remote concurrency cap with FIFO waiter queue; failing hosts release their slot during backoff (acquireRemoteSlot/releaseRemoteSlot/grantNextSlot)"
+        target: "lib/screens/workspace_pool.dart::RemoteSlotPool"
+        test: "test/workspace_pool_test.dart::remote concurrency cap (4)"
+      - swift: "Attention badge plus once-per-blocked-edge notification latch; silent initial seeding; foreground suppression"
+        target: "lib/screens/workspace_pool.dart::AttentionLatch + advanceAttention"
+        test: "test/workspace_pool_test.dart::attention edges and notification dedup (5)"
+      - swift: "Target reconciliation: fingerprint change retires/reopens, runtime-excluded keys retire but keep cache, forgotten keys drop cache (refreshTargets)"
+        target: "lib/screens/workspace_pool.dart::reconcilePoolTargets"
+        test: "test/workspace_pool_test.dart::reconciliation and lend handoff (5)"
+      - swift: "Identity mismatch fails closed and latches the fingerprint until the record changes"
+        target: "lib/screens/workspace_pool.dart::identityMismatchFingerprint"
+        test: "test/workspace_pool_test.dart::identity mismatch latches the fingerprint"
+      - swift: "Optimistic project/session reorder holds pinned over stale bootstraps, released by host confirmation or the 15s timeout (applyingOrganizationHolds, holdProjectOrder, holdSessionOrder)"
+        target: "lib/screens/workspace_pool.dart::OrganizationHolds"
+        test: "test/workspace_pool_test.dart::optimistic organization holds (3)"
+    tests:
+      - file: clients/supercli-app/test/workspace_pool_test.dart
+        count: 23
+    notes: "Ported 2026-09-29 (feat/port-workspace-pool): portable pool kernel in Dart. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and the MainActor orchestration are platform runtime machinery with no portable equivalent — not ported. Fidelity gaps: Swift async interleavings became a synchronous deterministic state machine; connection retirement/peek UI (lend/exclude/resume callsites) still to wire in the app shell. UNTESTED locally: no Dart SDK in this VM; count on CI."
 
   native/SupercliNative/Tests/SupercliNativeTests/AgentWorktreeAdoptionTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -345,8 +368,13 @@ files:
 
   native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "XCTest suite for the background workspace pool: poll caching, backoff/recovery, remote cap, attention edges, lend/exclude, organization holds"
+        target: "lib/screens/workspace_pool.dart::(whole portable kernel)"
+        test: "test/workspace_pool_test.dart::WorkspacePool (23) — same assertions against the pure functions/state machines; the async entry-loop tests have no portable Dart equivalent"
+    tests:
+      - file: clients/supercli-app/test/workspace_pool_test.dart
+        count: 23
+    notes: "Swift tests drive real async entry loops (Task poll loops, CheckedContinuation wakes) which are platform runtime machinery and intentionally not reproduced; every portable-behavior XCTest is mirrored against the Dart kernel. UNTESTED locally: no Dart SDK in this VM; count on CI."
