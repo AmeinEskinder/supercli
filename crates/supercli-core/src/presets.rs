@@ -9,6 +9,7 @@
 //! runtime catalog. Catalog-backed lookups are native-host only; the portable
 //! Controller core keeps the preset model, ordering, and grouping logic.
 
+#[cfg(feature = "native-host")]
 use std::collections::HashMap;
 
 #[cfg(feature = "native-host")]
@@ -482,6 +483,7 @@ impl QuickPresetGroup {
 /// `is_plugin_command` classifies a command as a plugin (from the Host's App
 /// catalog); `app_for_head` resolves an executable basename to an app
 /// `(id, name)` pair.
+#[cfg(feature = "native-host")]
 type PresetIdentity = (Option<SetupTool>, Option<(String, String)>);
 
 /// Native-host only: needs the generated runtime catalog.
@@ -604,6 +606,7 @@ impl GlobalPresetFile {
     }
 }
 
+#[cfg(feature = "native-host")]
 fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
     match chars.next() {
