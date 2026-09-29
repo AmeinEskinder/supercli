@@ -30,7 +30,6 @@
 pub mod credentials;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
-pub mod dev_settings;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
@@ -60,11 +59,9 @@ pub mod relay_conn;
 pub mod relay_transport;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_connection;
-pub mod remote_direct_transport;
 pub mod remote_dto_adapters;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
-pub mod remote_terminal_stream;
 pub mod remote_terminal_websocket;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;

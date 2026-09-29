@@ -338,3 +338,65 @@ files:
       - file: crates/supercli-client/src/launch_config.rs
         count: 9
     notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported. supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteServerVersion parsing (v-prefix, pre-release/build suffixes, 1-3 components)"
+        target: "crates/supercli-client/src/direct_transport.rs::RemoteServerVersion::parse"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::server_version_parsing_and_ordering"
+      - swift: "RemoteDirectTransportPolicy decision (capability flag wins; no capability -> Unknown, never plaintext)"
+        target: "crates/supercli-client/src/direct_transport.rs::direct_transport_decision"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::server_version_without_capability_selects_unknown_never_plaintext"
+      - swift: "isPlaintextRefusal (426, 401+https/tls)"
+        target: "crates/supercli-client/src/direct_transport.rs::is_plaintext_refusal"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::plaintext_refusal_is_recognized_from_426_and_from_a_401_that_names_https"
+      - swift: "canonicalStoredEndpoint (https->http)"
+        target: "crates/supercli-client/src/direct_transport.rs::canonical_stored_endpoint"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::https_advertised_endpoints_are_stored_canonically_as_http"
+      - swift: "RemoteBootstrapDeadline.seconds (4s direct, 10-20s relay scaled by RTT)"
+        target: "crates/supercli-client/src/direct_transport.rs::RemoteBootstrapDeadline::seconds"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::bootstrap_deadline_is_four_seconds_on_the_lan_and_ten_over_the_relay"
+      - swift: "PushTokenRegistrationRoute.plan (active-relay shortcut, direct+transient fallback)"
+        target: "crates/supercli-client/src/direct_transport.rs::PushTokenRegistrationRoute::plan"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::active_host_on_relay_registers_over_the_live_connection_only"
+    tests:
+      - file: crates/supercli-client/src/direct_transport.rs
+        count: 13
+    notes: "264 LOC. Ported as direct_transport.rs (remote-transport merge): version parsing/comparison, TLS decision with no-plaintext-fallback (missing capability -> Unknown), plaintext refusal detection, endpoint canonicalization, bootstrap deadlines, push token routes. Supersedes the reverted duplicate remote_direct_transport.rs."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "fingerprint normalization (sha256: prefix, colons, 64 hex)"
+        target: "crates/supercli-client/src/terminal_stream.rs::normalize_terminal_fingerprint"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::fingerprint_normalization_lowercases_and_strips_decoration"
+      - swift: "endpoint (port + fingerprint required)"
+        target: "crates/supercli-client/src/terminal_stream.rs::terminal_server_endpoint"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::endpoint_requires_port_and_valid_fingerprint"
+      - swift: "candidate (endpoint + host + token)"
+        target: "crates/supercli-client/src/terminal_stream.rs::terminal_stream_candidate"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::candidate_requires_endpoint_host_and_token"
+      - swift: "webSocketOutputURL (wss://.../output?token=&offset=)"
+        target: "crates/supercli-client/src/terminal_stream.rs::web_socket_output_url"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::web_socket_output_url_with_resume_offset"
+      - swift: "WSServerMessage.parse (hello/error/unknown)"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsServerMessage::parse"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::hello_decodes_full_spec_frame"
+      - swift: "WSHello modePreambleBase64 decoding"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsHello::mode_preamble"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::hello_carries_optional_mode_preamble"
+      - swift: "WSBinaryFrame.parse (8-byte big-endian offset prefix)"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsBinaryFrame::parse"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::binary_frame_parses_big_endian_offset_and_payload"
+      - swift: "WSClientMessage.inputFrames (char-boundary chunking)"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsClientMessage::input_frames"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::input_frames_chunk_large_input_on_character_boundaries"
+    tests:
+      - file: crates/supercli-client/src/terminal_stream.rs
+        count: 24
+    notes: "263 LOC. Ported as terminal_stream.rs (remote-transport merge): fingerprint normalization, endpoint/candidate selection, WS URL building, hello/error frame parsing, binary frame parsing (8-byte BE offset), input frame chunking on char boundaries. Supersedes the reverted duplicate remote_terminal_stream.rs."
