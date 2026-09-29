@@ -400,3 +400,27 @@ files:
       - file: crates/supercli-core/src/feature_flags.rs
         count: 26
     notes: "Foundation-only registry; no XCTest file existed in the legacy tree (0 tests upstream). 26 new Rust tests. UserDefaults persistence injected via DefaultsStore trait (native shell wires UserDefaults; tests use MemoryDefaults). RemoteHostFeature.pickerEnabled (remote half of workspace_picker_enabled) is not ported yet."
+  native/SupercliNative/Sources/SupercliNative/PresetStateFile.swift:
+    destination: "Rust: supercli-core::preset_state_file"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "PresetStateFile.migratedKey — 'native_preset_overlay_migrated' top-level marker"
+        target: "crates/supercli-core/src/preset_state_file.rs::MIGRATED_KEY"
+        test: "preset_state_file::tests::migrated_key_matches_swift"
+      - swift: "PresetStateFile.collapseExactDuplicates — dedup by (label, command, project), star carries over, empty command never deduped"
+        target: "crates/supercli-core/src/preset_state_file.rs::collapse_exact_duplicates"
+        test: "preset_state_file::tests::collapse_removes_exact_duplicates_keeping_first, preset_state_file::tests::collapse_carries_star_from_dropped_copy, preset_state_file::tests::collapse_ignores_label_and_command_whitespace, preset_state_file::tests::collapse_keeps_rows_with_different_project, preset_state_file::tests::collapse_never_dedups_empty_command"
+      - swift: "PresetStateFile.rawPresets(of:) — extract preset dicts, skip non-dicts"
+        target: "crates/supercli-core/src/preset_state_file.rs::raw_presets"
+        test: "preset_state_file::tests::raw_presets_extracts_dicts_and_skips_junk, preset_state_file::tests::raw_presets_empty_when_absent"
+      - swift: "PresetStateFile.apply(_:to:) — write modelled fields, keep unmodelled keys"
+        target: "crates/supercli-core/src/preset_state_file.rs::apply_preset"
+        test: "preset_state_file::tests::apply_preset_writes_modelled_fields_and_keeps_unknown_keys"
+      - swift: "PresetStateFile.withExclusiveLock / edit / edit(at:) — flock + atomic read-modify-write"
+        target: "crates/supercli-core/src/app_state.rs::lock_exclusive, crates/supercli-core/src/app_state.rs::edit, crates/supercli-core/src/app_state.rs::edit_at"
+        test: "app_state::tests::concurrent_edits_lose_nothing, app_state::tests::writes_are_atomic_and_leave_no_temp_behind"
+    tests:
+      - file: crates/supercli-core/src/preset_state_file.rs
+        count: 9
+    notes: "Ported from PresetStateFile.swift (142 LOC). Lock/edit discipline NOT duplicated — reuses the single app_state::{lock_exclusive, edit, edit_at} implementation. 9 new Rust tests for the preset-specific pieces."
