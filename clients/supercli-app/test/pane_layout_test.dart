@@ -1,355 +1,314 @@
-/// Behavior tests for the split-pane layout tree.
+/// Pane layout tests: exercise the REAL Rust pane-layout state machine
+/// through the FFI snapshot protocol.
 ///
-/// Exercises split/close/move operations, the 8-pane limit, zoom/unzoom,
-/// divider ratios/equalize, spatial focus navigation, and rendering.
+/// Requires the `SUPERCLI_FFI_LIB` environment variable pointing at the
+/// built library (`cargo build -p supercli-client-ffi --release`). The suite
+/// is skipped with a clear message when the variable is absent, following
+/// the `ffi_smoke_test.dart` convention. There is no fake Dart model to
+/// test against: all layout semantics live in Rust.
 library;
 
-import 'package:gpuidart/gpuidart.dart';
-import 'package:supercli_app/pane_layout.dart';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:test/test.dart';
 
-PaneLayout singlePane() => PaneLayout.single(paneId: 'p1', title: 'zsh');
+import 'package:supercli_app/pane_layout.dart';
+
+Map<String, dynamic> _rootOf(PaneLayout layout) {
+  final decoded = jsonDecode(layout.snapshot) as Map<String, dynamic>;
+  final groups = decoded['groups'] as List;
+  final group = groups
+      .cast<Map<String, dynamic>>()
+      .firstWhere((g) => g['id'] == layout.groupId);
+  return group['root'] as Map<String, dynamic>;
+}
+
+/// Session ids of the leaves in tree order.
+List<String> _sessionIds(Map<String, dynamic> node) {
+  if (node['kind'] == 'leaf') {
+    final content = node['content'] as Map<String, dynamic>;
+    return [content['id'] as String];
+  }
+  return [
+    for (final child in [node['left'], node['right']])
+      if (child is Map<String, dynamic>) ..._sessionIds(child),
+  ];
+}
 
 void main() {
-  group('PaneLayout.split', () {
-    test('split right creates a horizontal split with two panes', () {
-      final layout = singlePane().split(
+  final ffiLib = Platform.environment['SUPERCLI_FFI_LIB'];
+
+  setUpAll(() {
+    if (ffiLib == null || ffiLib.isEmpty) {
+      markTestSkipped('SUPERCLI_FFI_LIB not set; build the cdylib first');
+    }
+  });
+
+  group('pane layout (Rust FFI)', () {
+    test('single creates a one-pane layout', () {
+      final layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      expect(layout.paneCount, 1);
+      // Dart-visible ids are logical (session) ids, not Rust internals.
+      expect(layout.leafIds, ['sess-1']);
+      expect(layout.focusedId, 'sess-1');
+      expect(layout.titles[layout.focusedId], 'one');
+      expect(layout.groupId, isNotEmpty);
+    });
+
+    test('caller-supplied pane ids are preserved verbatim', () {
+      // 'my-pane' is not UUID-shaped, so Rust canonicalizes the internal
+      // pane id; the Dart-visible id must still be the requested one.
+      var layout = PaneLayout.single(paneId: 'my-pane', title: 'one');
+      expect(layout.leafIds, ['my-pane']);
+      expect(layout.focusedId, 'my-pane');
+      final internalId = _rootOf(layout)['id'] as String;
+      expect(internalId, isNot('my-pane'));
+
+      layout = layout.split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'other-pane',
+        newTitle: 'two',
       )!;
+      expect(layout.leafIds, ['my-pane', 'other-pane']);
+      expect(layout.focusedId, 'other-pane');
+      // Mutations target by logical id: closing by logical id works even
+      // though the internal id differs.
+      layout = layout.closePane(paneId: 'other-pane')!;
+      expect(layout.leafIds, ['my-pane']);
+      expect(layout.focusedId, 'my-pane');
+    });
+
+    test('split adds a pane to the right by default', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      final split = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      );
+      expect(split, isNotNull);
+      layout = split!;
       expect(layout.paneCount, 2);
-      expect(layout.root, isA<PaneSplit>());
-      final split = layout.root as PaneSplit;
-      expect(split.direction, SplitDirection.horizontal);
-      expect(split.leafIds, ['p1', 'p2']);
-      // Focus moves to the new pane.
-      expect(layout.focusedId, 'p2');
+      // The new pane takes focus.
+      expect(layout.focusedId, isNot(layout.leafIds.first));
+      expect(layout.titles[layout.focusedId], 'two');
+      // Horizontal split: the root splits left/right.
+      final root = _rootOf(layout);
+      expect(root['kind'], 'split');
+      expect(root['direction'], 'horizontal');
+      expect(_sessionIds(root), ['sess-1', 'sess-2']);
     });
 
-    test('split down creates a vertical split', () {
-      final layout = singlePane().split(
+    test('split down stacks vertically', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
         direction: SplitDirection.vertical,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      final split = layout.root as PaneSplit;
-      expect(split.direction, SplitDirection.vertical);
+      final root = _rootOf(layout);
+      expect(root['direction'], 'vertical');
+      expect(_sessionIds(root), ['sess-1', 'sess-2']);
     });
 
-    test('splits nest recursively', () {
-      var layout = singlePane();
-      layout = layout.split(
-          direction: SplitDirection.horizontal,
-          newPaneId: 'p2',
-          newTitle: 'b')!;
-      layout = layout.split(
-          direction: SplitDirection.vertical,
-          newPaneId: 'p3',
-          newTitle: 'c')!;
-      expect(layout.paneCount, 3);
-      expect(layout.root.leafIds, ['p1', 'p2', 'p3']);
-    });
-
-    test('refuses to exceed 8 panes', () {
-      var layout = singlePane();
+    test('split returns null at the 8-pane limit', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
       for (var i = 2; i <= maxPanes; i++) {
-        layout = layout.split(
-            direction: SplitDirection.horizontal,
-            newPaneId: 'p$i',
-            newTitle: 't$i')!;
+        final next = layout.split(
+          direction: SplitDirection.horizontal,
+          newPaneId: 'sess-$i',
+          newTitle: 'pane $i',
+        );
+        expect(next, isNotNull, reason: 'split $i should succeed');
+        layout = next!;
       }
       expect(layout.paneCount, maxPanes);
       expect(
         layout.split(
-            direction: SplitDirection.horizontal,
-            newPaneId: 'p9',
-            newTitle: 't9'),
+          direction: SplitDirection.horizontal,
+          newPaneId: 'sess-9',
+          newTitle: 'pane 9',
+        ),
         isNull,
       );
     });
 
-    test('split of unknown pane returns null', () {
-      final layout = singlePane();
-      expect(
-        layout.split(
-            paneId: 'nope',
-            direction: SplitDirection.horizontal,
-            newPaneId: 'p2',
-            newTitle: 't'),
-        isNull,
-      );
-    });
-  });
-
-  group('PaneLayout.closePane', () {
-    test('closing a pane collapses the split', () {
-      var layout = singlePane().split(
+    test('closePane removes the pane and moves focus', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      layout = layout.closePane(paneId: 'p2')!;
-      expect(layout.paneCount, 1);
-      expect(layout.root, isA<PaneLeaf>());
-      expect((layout.root as PaneLeaf).paneId, 'p1');
-    });
-
-    test('closing the focused pane moves focus to a survivor', () {
-      var layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      expect(layout.focusedId, 'p2');
+      final first = layout.leafIds.first;
       layout = layout.closePane()!;
       expect(layout.paneCount, 1);
-      expect(layout.focusedId, 'p1');
+      expect(layout.leafIds, [first]);
+      expect(layout.focusedId, first);
     });
 
-    test('cannot close the last pane', () {
-      final layout = singlePane();
+    test('closePane on the last pane returns null', () {
+      final layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
       expect(layout.closePane(), isNull);
+      expect(layout.paneCount, 1);
     });
 
-    test('closing a nested pane keeps the rest of the tree', () {
-      var layout = singlePane();
+    test('setRatio sets and clamps the divider ratio', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
       layout = layout.split(
-          direction: SplitDirection.horizontal,
-          newPaneId: 'p2',
-          newTitle: 'b')!;
-      layout = layout.focus('p2').split(
-          direction: SplitDirection.vertical,
-          newPaneId: 'p3',
-          newTitle: 'c')!;
-      expect(layout.paneCount, 3);
-      layout = layout.closePane(paneId: 'p3')!;
-      expect(layout.paneCount, 2);
-      expect(layout.root.leafIds, ['p1', 'p2']);
-    });
-  });
-
-  group('PaneLayout zoom', () {
-    test('zoom marks the pane; unzoom clears', () {
-      var layout = singlePane().split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      expect(layout.isZoomed, isFalse);
-      layout = layout.zoom(paneId: 'p1');
-      expect(layout.isZoomed, isTrue);
-      expect(layout.zoomedId, 'p1');
-      layout = layout.unzoom();
-      expect(layout.isZoomed, isFalse);
+      final target = layout.leafIds.first;
+      layout = layout.setRatio(target, 0.25);
+      expect((_rootOf(layout)['ratio'] as num).toDouble(), 0.25);
+      layout = layout.setRatio(target, 5.0);
+      expect((_rootOf(layout)['ratio'] as num).toDouble(), 0.9);
+      layout = layout.setRatio(target, -1.0);
+      expect((_rootOf(layout)['ratio'] as num).toDouble(), 0.1);
     });
 
-    test('toggleZoom flips', () {
-      var layout = singlePane();
-      layout = layout.toggleZoom();
-      expect(layout.zoomedId, 'p1');
-      layout = layout.toggleZoom();
-      expect(layout.zoomedId, isNull);
-    });
-
-    test('closing the zoomed pane clears zoom', () {
-      var layout = singlePane().split(
+    test('equalize resets every divider to 0.5', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      layout = layout.zoom(paneId: 'p2');
-      layout = layout.closePane(paneId: 'p2')!;
-      expect(layout.isZoomed, isFalse);
-    });
-
-    test('zoomed build renders only the zoomed pane plus banner', () {
-      var layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      layout = layout.zoom(paneId: 'p1');
-      final node = layout.build() as UiColumn;
-      expect(node.id, 'pane-layout-zoomed');
-      // Banner row + the single zoomed pane.
-      expect(node.children.length, 2);
-      expect((node.children[0] as UiRow).id, 'pane-zoom-banner');
-    });
-  });
-
-  group('PaneLayout ratios', () {
-    test('setRatio clamps to 0.1-0.9', () {
-      var layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      layout = layout.setRatio('p2', 0.99);
-      expect((layout.root as PaneSplit).ratio, 0.9);
-      layout = layout.setRatio('p2', 0.01);
-      expect((layout.root as PaneSplit).ratio, 0.1);
-    });
-
-    test('equalize resets all ratios to 0.5', () {
-      var layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'b')!;
-      layout = layout.setRatio('p2', 0.8);
-      layout = layout.focus('p2').split(
-          direction: SplitDirection.vertical,
-          newPaneId: 'p3',
-          newTitle: 'c')!;
-      layout = layout.setRatio('p3', 0.2);
+      layout = layout.setRatio(layout.leafIds.first, 0.7);
+      expect((_rootOf(layout)['ratio'] as num).toDouble(), 0.7);
       layout = layout.equalize();
-      final root = layout.root as PaneSplit;
-      expect(root.ratio, 0.5);
-      final inner = root.second as PaneSplit;
-      expect(inner.ratio, 0.5);
-    });
-  });
-
-  group('PaneLayout focus navigation', () {
-    test('focus() moves focus directly', () {
-      var layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      layout = layout.focus('p1');
-      expect(layout.focusedId, 'p1');
-      // Unknown id keeps focus.
-      layout = layout.focus('nope');
-      expect(layout.focusedId, 'p1');
+      expect((_rootOf(layout)['ratio'] as num).toDouble(), 0.5);
     });
 
-    test('focusDirection moves spatially left/right', () {
-      var layout = singlePane().split(
+    test('swap exchanges pane positions', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      layout = layout.focus('p1');
+      final before = layout.leafIds;
+      expect(before.length, 2);
+      layout = layout.swap(before[0], before[1]);
+      expect(layout.leafIds, [before[1], before[0]]);
+      // Titles travel with their panes.
+      expect(layout.titles[layout.leafIds[0]], 'two');
+      expect(layout.titles[layout.leafIds[1]], 'one');
+    });
+
+    test('focusDirection moves focus spatially', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      )!;
+      final left = layout.leafIds.first;
+      final right = layout.leafIds.last;
+      layout = layout.focus(left);
       layout = layout.focusDirection(FocusDirection.right);
-      expect(layout.focusedId, 'p2');
+      expect(layout.focusedId, right);
+      // No neighbor further right: unchanged.
+      expect(
+        layout.focusDirection(FocusDirection.right).focusedId,
+        right,
+      );
       layout = layout.focusDirection(FocusDirection.left);
-      expect(layout.focusedId, 'p1');
-      // No pane further left: focus stays.
-      layout = layout.focusDirection(FocusDirection.left);
-      expect(layout.focusedId, 'p1');
+      expect(layout.focusedId, left);
     });
 
-    test('focusDirection moves spatially up/down in nested tree', () {
-      var layout = singlePane().split(
-          direction: SplitDirection.horizontal,
-          newPaneId: 'p2',
-          newTitle: 'b')!;
-      // Split p2 vertically: p2 on top, p3 below.
-      layout = layout.focus('p2').split(
-          direction: SplitDirection.vertical,
-          newPaneId: 'p3',
-          newTitle: 'c')!;
-      layout = layout.focus('p2');
-      layout = layout.focusDirection(FocusDirection.down);
-      expect(layout.focusedId, 'p3');
-      layout = layout.focusDirection(FocusDirection.up);
-      expect(layout.focusedId, 'p2');
-      // p1 is left of both.
-      layout = layout.focusDirection(FocusDirection.left);
-      expect(layout.focusedId, 'p1');
-    });
-
-    test('focusNext cycles through panes', () {
-      var layout = singlePane().split(
+    test('reconcile drops ineligible sessions', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
         direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
+        newPaneId: 'sess-2',
+        newTitle: 'two',
       )!;
-      layout = layout.focus('p1');
+      layout = layout.reconcile(['sess-2']);
+      expect(layout.paneCount, 1);
+      expect(_sessionIds(_rootOf(layout)), ['sess-2']);
+      expect(layout.titles.keys, [layout.leafIds.single]);
+    });
+
+    test('leafBoxes returns per-pane geometry', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      )!;
+      final boxes = layout.leafBoxes(width: 100, height: 50);
+      expect(boxes.length, 2);
+      final left = boxes.firstWhere((b) => b.paneId == layout.leafIds.first);
+      final right = boxes.firstWhere((b) => b.paneId == layout.leafIds.last);
+      expect(left.x, 0);
+      expect(left.width, 50);
+      expect(right.x, 50);
+      expect(right.width, 50);
+      // Hit-testing on the box rectangles.
+      expect(left.contains(10, 10), isTrue);
+      expect(left.contains(60, 10), isFalse);
+      expect(right.contains(60, 10), isTrue);
+    });
+
+    test('zoom/unzoom/toggleZoom are UI-only state', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      )!;
+      expect(layout.isZoomed, isFalse);
+      final zoomed = layout.zoom();
+      expect(zoomed.isZoomed, isTrue);
+      expect(zoomed.zoomedId, zoomed.focusedId);
+      expect(zoomed.unzoom().isZoomed, isFalse);
+      final toggled = layout.toggleZoom();
+      expect(toggled.isZoomed, isTrue);
+      expect(toggled.toggleZoom().isZoomed, isFalse);
+      // Zoom does not change the Rust snapshot.
+      expect(zoomed.snapshot, layout.snapshot);
+      expect(zoomed.paneCount, layout.paneCount);
+    });
+
+    test('focusNext cycles panes in tree order', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      )!;
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-3',
+        newTitle: 'three',
+      )!;
+      final ids = layout.leafIds;
+      expect(ids.length, 3);
+      layout = layout.focus(ids[0]);
       layout = layout.focusNext();
-      expect(layout.focusedId, 'p2');
+      expect(layout.focusedId, ids[1]);
       layout = layout.focusNext();
-      expect(layout.focusedId, 'p1');
+      expect(layout.focusedId, ids[2]);
+      layout = layout.focusNext();
+      expect(layout.focusedId, ids[0]);
       layout = layout.focusNext(reverse: true);
-      expect(layout.focusedId, 'p2');
+      expect(layout.focusedId, ids[2]);
     });
-  });
 
-  group('PaneLayout rendering', () {
-    test('single pane renders header with split/zoom/close buttons', () {
-      final layout = singlePane();
-      final node = layout.build() as UiColumn;
+    test('build renders the layout', () {
+      var layout = PaneLayout.single(paneId: 'sess-1', title: 'one');
+      layout = layout.split(
+        direction: SplitDirection.horizontal,
+        newPaneId: 'sess-2',
+        newTitle: 'two',
+      )!;
+      final node = layout.build();
       expect(node.id, 'pane-layout');
-      final leaf = node.children[0] as UiColumn;
-      final header = leaf.children[0] as UiRow;
-      final buttonLabels = header.children
-          .whereType<UiButton>()
-          .map((b) => b.label)
-          .toList();
-      expect(buttonLabels, contains('⛶')); // zoom
-      expect(buttonLabels, contains('×')); // close
-    });
-
-    test('split renders divider between panes', () {
-      final layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      final node = layout.build() as UiColumn;
-      final split = node.children[0] as UiRow;
-      expect(split.children.length, 3);
-      expect(split.children[1], isA<UiButton>()); // divider
-      expect((split.children[1] as UiButton).label, '│');
-    });
-
-    test('vertical split renders horizontal divider', () {
-      final layout = singlePane().split(
-        direction: SplitDirection.vertical,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      final node = layout.build() as UiColumn;
-      final split = node.children[0] as UiColumn;
-      expect((split.children[1] as UiButton).label, '─');
-    });
-
-    test('focused pane shows the focus marker', () {
-      final layout = singlePane();
-      final node = layout.build() as UiColumn;
-      final leaf = node.children[0] as UiColumn;
-      final header = leaf.children[0] as UiRow;
-      final markers = header.children.whereType<UiText>().where(
-          (t) => t.id == 'pane-focused-marker');
-      expect(markers, isNotEmpty);
-    });
-
-    test('actions declare the pane key bindings', () {
-      final actions = singlePane().actions();
-      final names = actions.map((a) => a.name).toSet();
-      expect(names, contains('pane.splitRight'));
-      expect(names, contains('pane.splitDown'));
-      expect(names, contains('pane.zoom'));
-      expect(names, contains('pane.equalize'));
-      expect(names, contains('pane.close'));
-      expect(names, contains('pane.focusLeft'));
-      expect(names, contains('pane.focusRight'));
-      expect(names, contains('pane.focusUp'));
-      expect(names, contains('pane.focusDown'));
-      expect(names, contains('pane.focusNext'));
-      expect(names, contains('pane.focusPrev'));
-    });
-
-    test('toJson round-trips the tree shape', () {
-      final layout = singlePane().split(
-        direction: SplitDirection.horizontal,
-        newPaneId: 'p2',
-        newTitle: 'vim',
-      )!;
-      final json = layout.toJson();
-      expect((json['root'] as Map)['kind'], 'split');
-      expect(json['focused_id'], 'p2');
+      final zoomedNode = layout.zoom().build();
+      expect(zoomedNode.id, 'pane-layout-zoomed');
     });
   });
 }

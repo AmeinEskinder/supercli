@@ -59,8 +59,10 @@ struct Endpoint {
     host: String,
     port: u16,
     token: String,
-    /// Expected SHA-256 of the server's certificate (hex). None = accept
-    /// any certificate (printed as a warning; fine for loopback).
+    /// Expected SHA-256 of the server's certificate (hex). None is only
+    /// permitted for loopback hosts; run_cli refuses to contact any other
+    /// host without one (fail closed — the bearer token must never ride a
+    /// connection whose server certificate cannot be verified).
     fingerprint: Option<String>,
 }
 
@@ -153,8 +155,9 @@ pub fn run_cli(args: &[String]) -> i32 {
         eprintln!("invalid --url (expected https://host:port): {url}");
         return 2;
     };
-    if fingerprint.is_none() && host != "127.0.0.1" && host != "localhost" {
-        eprintln!("warning: no --fingerprint; accepting any TLS certificate for {host}");
+    if let Err(message) = require_fingerprint(&host, &fingerprint) {
+        eprintln!("{message}");
+        return 2;
     }
     let endpoint = Arc::new(Endpoint {
         host,
@@ -170,6 +173,34 @@ pub fn run_cli(args: &[String]) -> i32 {
             1
         }
     }
+}
+
+/// True for the loopback names/addresses that may attach without a pinned
+/// certificate fingerprint: 127.0.0.1, ::1 (bracketed or bare, as parsed
+/// out of an https:// URL), and localhost. Everything else is a network
+/// peer whose certificate must be pinned.
+fn is_loopback_host(host: &str) -> bool {
+    let bare = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    bare == "127.0.0.1" || bare == "::1" || bare.eq_ignore_ascii_case("localhost")
+}
+
+/// Fail-closed gate for the TLS fingerprint: a non-loopback host without
+/// --fingerprint would send the bearer token over a connection whose
+/// server certificate cannot be verified (any-certificate-accepted), so
+/// refuse before any socket is opened. Loopback is the sole exception —
+/// the same-machine demo path.
+fn require_fingerprint(host: &str, fingerprint: &Option<String>) -> Result<(), String> {
+    if fingerprint.is_some() || is_loopback_host(host) {
+        return Ok(());
+    }
+    Err(format!(
+        "refusing to attach to {host} without --fingerprint: the server's TLS \
+         certificate cannot be verified, so the bearer token could be exposed \
+         to a man-in-the-middle; pass --fingerprint <SHA-256 hex of the server certificate>"
+    ))
 }
 
 fn attach(endpoint: &Arc<Endpoint>, session_id: &str) -> Result<(), String> {
@@ -488,8 +519,8 @@ fn tls_config(fingerprint: Option<String>) -> Result<rustls::ClientConfig, Strin
 
 /// A rustls client config that pins the Host certificate to `fingerprint`
 /// (lowercase hex SHA-256 of the leaf DER, the value pairing and bootstrap
-/// advertise) instead of a CA chain. `None` accepts any certificate: loopback
-/// tests and unpinned dev use only.
+/// advertise) instead of a CA chain. `None` accepts any certificate, which
+/// run_cli permits for loopback hosts only.
 pub fn pinned_client_config(fingerprint: Option<String>) -> rustls::ClientConfig {
     let verifier = Arc::new(FingerprintVerifier { fingerprint });
     rustls::ClientConfig::builder()
@@ -500,8 +531,8 @@ pub fn pinned_client_config(fingerprint: Option<String>) -> rustls::ClientConfig
 
 /// Pins the server certificate to a SHA-256 fingerprint (the one the remote
 /// server prints at startup and stores in remote.json). Without a pin it
-/// accepts anything — self-signed dev certs — which run_cli warns about for
-/// non-loopback hosts.
+/// accepts anything; run_cli only allows that for loopback hosts, and
+/// refuses to contact any other host without --fingerprint.
 #[derive(Debug)]
 struct FingerprintVerifier {
     fingerprint: Option<String>,
@@ -595,7 +626,10 @@ fn read_local_remote_state() -> Option<(String, String, Option<String>)> {
     )
 }
 
-fn read_peer_file(path: &str) -> Option<(String, String, Option<String>)> {
+/// Reads a {url, token, fingerprint} JSON peer file: the --peer-file argument
+/// or this machine's own remote.json. Public so the peer-file compatibility
+/// test (and any future client writer) can prove the writer's shape parses.
+pub fn read_peer_file(path: &str) -> Option<(String, String, Option<String>)> {
     let raw = std::fs::read_to_string(path).ok()?;
     let value: Value = serde_json::from_str(&raw).ok()?;
     let url = value.get("url")?.as_str()?.to_string();
@@ -711,5 +745,117 @@ mod tests {
             server_with(&cert, certified.key_pair),
         )
         .expect("the pinned Host with its own key completes the handshake");
+    }
+
+    /// Fail-closed gate: non-loopback hosts without --fingerprint must be
+    /// refused; loopback spellings are the sole exception; any fingerprint
+    /// satisfies the gate.
+    #[test]
+    fn fingerprint_gate_fails_closed_for_non_loopback() {
+        for host in ["192.168.1.5", "10.0.0.9", "example.com", "[2001:db8::1]"] {
+            assert!(
+                require_fingerprint(host, &None).is_err(),
+                "{host} without --fingerprint must be refused"
+            );
+        }
+        for host in ["127.0.0.1", "::1", "[::1]", "localhost", "LOCALHOST"] {
+            assert!(
+                require_fingerprint(host, &None).is_ok(),
+                "loopback {host} without --fingerprint must pass the gate"
+            );
+        }
+        assert!(require_fingerprint("192.168.1.5", &Some("aa".into())).is_ok());
+    }
+
+    fn run_cli_args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// End-to-end through run_cli: a non-loopback URL without --fingerprint
+    /// exits 2 before any socket is opened (no server is listening — if the
+    /// gate were warn-and-continue we would see a connection error, exit 1).
+    #[test]
+    fn run_cli_refuses_non_loopback_without_fingerprint() {
+        std::env::set_var(REMOTE_ATTACH_ENV, "1");
+        let code = run_cli(&run_cli_args(&[
+            "--url",
+            "https://192.168.1.5:55280",
+            "--token",
+            "sekrit",
+            "sess-1",
+        ]));
+        std::env::remove_var(REMOTE_ATTACH_ENV);
+        assert_eq!(
+            code, 2,
+            "non-loopback attach without --fingerprint must fail closed"
+        );
+    }
+
+    /// The loopback exception passes the gate: with nothing listening on
+    /// 127.0.0.1:1 the attach attempt fails to connect (exit 1), proving the
+    /// fingerprint refusal did not fire.
+    #[test]
+    fn run_cli_allows_loopback_without_fingerprint() {
+        std::env::set_var(REMOTE_ATTACH_ENV, "1");
+        let code = run_cli(&run_cli_args(&[
+            "--url",
+            "https://127.0.0.1:1",
+            "--token",
+            "sekrit",
+            "sess-1",
+        ]));
+        std::env::remove_var(REMOTE_ATTACH_ENV);
+        assert_eq!(
+            code, 1,
+            "loopback without --fingerprint must pass the gate (then fail to connect)"
+        );
+    }
+
+    /// The peer-file reader accepts the writer's shape, with and without a
+    /// fingerprint, and rejects malformed files.
+    #[test]
+    fn read_peer_file_parses_writer_shape() {
+        let dir = std::env::temp_dir().join(format!("supercli-peer-read-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let with_fp = dir.join("with_fp.json");
+        std::fs::write(
+            &with_fp,
+            r#"{"url":"https://192.168.1.5:55280","token":"sekrit","fingerprint":"aabbcc"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            read_peer_file(with_fp.to_str().unwrap()),
+            Some((
+                "https://192.168.1.5:55280".to_string(),
+                "sekrit".to_string(),
+                Some("aabbcc".to_string())
+            ))
+        );
+
+        let without_fp = dir.join("without_fp.json");
+        std::fs::write(
+            &without_fp,
+            r#"{"url":"https://127.0.0.1:55280","token":"sekrit"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            read_peer_file(without_fp.to_str().unwrap()),
+            Some((
+                "https://127.0.0.1:55280".to_string(),
+                "sekrit".to_string(),
+                None
+            ))
+        );
+
+        let bad = dir.join("bad.json");
+        std::fs::write(&bad, "not json").unwrap();
+        assert_eq!(read_peer_file(bad.to_str().unwrap()), None);
+        assert_eq!(
+            read_peer_file(dir.join("missing.json").to_str().unwrap()),
+            None
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

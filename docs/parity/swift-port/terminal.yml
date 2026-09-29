@@ -99,6 +99,24 @@ files:
       - swift: "PaneFitToDesktopButton: help text names the fitted grid (cols×rows)"
         target: "lib/terminal/terminal_pane_drop_zones.dart::PaneFitToDesktopButton"
         test: "test/terminal_pane_drop_zones_test.dart::PaneFitToDesktopButton group"
+      - swift: "TerminalPaneTitleChip rename editing: double-click to begin, draft prefilled with label, commit trims and commits only when non-empty and changed, Esc cancels, blur commits, drag blocked while editing, tooltips"
+        target: "lib/terminal/terminal_pane_rename.dart::TerminalPaneRename"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneRename groups (tooltip/endEdit/dragAllowed)"
+      - swift: "TerminalPaneContainer focus resolution: effectiveActivePaneID (local -> store group-matched -> default), paneIsFocused (split vs solo/main-area vs project sidebar), paneShowsActiveBorder (multi-pane only, never zoomed), showsPaneSplitControls (focused or hovered only), paneIsWorking (starting/busy/restarting/resuming)"
+        target: "lib/terminal/terminal_pane_focus.dart::TerminalPaneFocus"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneFocus groups"
+      - swift: "requestPaneArchive: starting/busy/attention -> confirmation card, idle/exited -> direct archive request; isAgentTerminal (activeRuntimeID/activeApp/SetupTool) gates corner gallery controls"
+        target: "lib/terminal/terminal_pane_archive.dart::TerminalPaneArchive"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneArchive groups"
+      - swift: "Pane more menu content: copy-transcript submenu (20/50/whole), copy session ID text, pin/unpin project-sidebar verbs, resume/resume-agent/restart-app/notify-toggle/clear-attention, stop-and-archive vs archive, remove-session vs remove-from-list (direct vs confirm), launcher menu (new terminal, Agents/Plugins sections), Detach Pane, Exit Multi-Pane View"
+        target: "lib/terminal/terminal_pane_menu.dart::buildPaneSessionMenu/buildPaneLauncherMenu"
+        test: "test/terminal_pane_surface_test.dart::buildPaneSessionMenu/buildPaneLauncherMenu/copySessionIdText groups"
+      - swift: "Split layout: child extents (total - dividerWidth) split by ratio; divider path key (components joined with ','); existingSessionLeafCount (solo=1, group=max(1,sessionLeaves)); launcher titles (Starting…/New pane); unavailable-pane title"
+        target: "lib/terminal/terminal_pane_split.dart::TerminalPaneSplitLayout"
+        test: "test/terminal_pane_surface_test.dart::TerminalPaneSplitLayout/pane titles groups"
+      - swift: "AppKit-only surface NOT ported (platform): PanelPane/TerminalPane/TitleChip drag-source registrations (NSViewRepresentable click-through frames), drop-zone magnet spring, PaneMoreMenuButton/Controller/Anchor native menu plumbing, PaneSplitButton/DialogPillButton/PaneCardChrome/ProjectSidebarPinDropTarget rendering, window-drag gesture, zoom rule (only zoomed leaf renders)"
+        target: "dropped: AppKit/SwiftUI rendering plumbing — no portable logic"
+        test: "n/a"
     tests:
       - file: clients/supercli-app/test/terminal_pane_stream_test.dart
         count: 29
@@ -106,7 +124,9 @@ files:
         count: 20
       - file: clients/supercli-app/test/terminal_pane_drop_zones_test.dart
         count: 8
-    notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
+      - file: clients/supercli-app/test/terminal_pane_surface_test.dart
+        count: 52
+    notes: "PARTIAL 2026-09-29: data plane + container logic + full surface inventory ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content, title-chip rename editing, focus resolution incl. active border + split-button visibility + working spinner, archive-verb decision, agent-terminal gate, full pane more-menu model for session and launcher panes, split layout extents + divider path keys + session-leaf counts, launcher/unavailable titles, drop-zone preview rects, fit-to-desktop text). Single home: lib/screens/terminalpaneview.dart re-exports all surface modules (implementation in lib/terminal/terminal_pane_*.dart, following the area's existing pattern); PORTER_DUTY dup-check vs origin/next clean (only overlap: already-ported TerminalPaneDropPreviewGeometry, reused not duplicated). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. AppKit-only rendering plumbing deliberately dropped (drag-source NSViewRepresentable registrations, magnet spring, native menu plumbing, card chrome, pin preview rendering, window-drag gesture). GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Rust: supercli-core::terminal_drop_maps"
@@ -188,6 +208,67 @@ files:
       - file: clients/supercli-app/test/terminal_state_views_test.dart
         count: 14
     notes: "PARTIAL 2026-09-29 (feat/port-sidebar-terminal): discrete state views ported with tests. NOT ported: ContentArea composition (settings/content swap, workspace fade, delayed connecting banner — Host/store orchestration), WarmPaneHostView/TerminalHostView (AppKit/Metal, no Dart equivalent), PixelMascotView animation (assets not bundled). The 25 tests in pane_layout_test.dart cover layout, not TerminalArea."
+
+  native/SupercliNative/Sources/SupercliNative/PaneLayoutState.swift:
+    destination: "Rust: supercli-client (pane_layout)"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "PaneContent.session/launcher; sessionID, isLauncher"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneContent"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::pane_content_session_id"
+      - swift: "Pane init with canonical UUID id"
+        target: "crates/supercli-client/src/pane_layout.rs::Pane::new"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::create_group_two_panes"
+      - swift: "SplitDirection; PaneEdge.splitDirection/newLeafIsLeftChild"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneEdge"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::pane_edge_split_direction"
+      - swift: "PaneSplitBranch/PaneSplitPath; PaneSplit clamped ratio [0.1, 0.9]"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneSplit::clamped_ratio"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::clamped_ratio_bounds"
+      - swift: "PaneNode.leaves (preorder), sessionLeaves, containsLauncher, leaf(id:), pathToPane, node(at:), replacingNode(at:with:)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneNode"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::path_to_pane_and_node_at"
+      - swift: "PaneNode.removingLeaf (sibling replaces parent split), updatingLeaf, splittingLeaf (0.5 split, edge side)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneNode::removing_leaf"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::removing_leaf_collapses"
+      - swift: "PaneNode.equalized (leftWeight/totalWeight), structuralIdentity (excludes ratios)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneNode::equalized"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::structural_identity_ignores_ratio"
+      - swift: "PaneNode.gridDimensions, leafSlots(rect subdivision), spatialNeighbor (nearest qualifying leaf)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneNode::spatial_neighbor"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::spatial_neighbor_finds_adjacent"
+      - swift: "PaneGroup.panes/sessionIDs; preLauncherRoot snapshot"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneGroup"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::create_group_two_panes"
+      - swift: "PaneLayoutState.createGroup (duplicate/same/empty validation)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::create_group"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::create_group_rejects_duplicates"
+      - swift: "PaneLayoutState.insertSession (split leaf or create group), insertSessionSplitting, insertSessionAtGroupEdge (1/(n+1) share)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::insert_session"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::insert_session_splits_leaf"
+      - swift: "PaneLayoutState.insertLauncher/insertLauncherBeside (one launcher max, snapshot), bindLauncher, removeLauncher (snapshot restore)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::insert_launcher"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::launcher_lifecycle"
+      - swift: "PaneLayoutState.detachPane (collapse, dissolve <2 sessions, representative promotion), closeGroup"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::detach_pane"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::detach_pane_keeps_group_with_two_sessions"
+      - swift: "PaneLayoutState.resizeSplit (clamped), equalize, swapPanes (same-group, representative stable)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::resize_split"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::resize_split_clamps"
+      - swift: "PaneLayoutState.reconcile (drop ineligible, dissolve, promote representative, prune snapshot)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneLayoutState::reconcile"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::reconcile_drops_ineligible"
+      - swift: "DurablePaneLayout v2 schema ({pane:{}}/{split:{}} wire shape), v1 migration (flat list -> right-leaning chain), unknown version -> empty"
+        target: "crates/supercli-client/src/pane_layout.rs::DurablePaneLayout"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::durable_v1_migration"
+      - swift: "PaneStableID.make (UUID v4), canonical (lowercased UUID or nil)"
+        target: "crates/supercli-client/src/pane_layout.rs::PaneStableId"
+        test: "crates/supercli-client/src/pane_layout.rs::tests::pane_stable_id_canonical"
+    tests:
+      - file: crates/supercli-client/src/pane_layout.rs
+        count: 32
+    notes: "Ported 2026-09-29: full recursive split-tree pane model (PaneContent/Pane/SplitDirection/PaneEdge/PaneSplitBranch/PaneSplitPath/PaneSplit/PaneNode/PaneGroup/PaneLayoutState), spatial navigation, ratio subdivision, insertion, launcher lifecycle, detach/close, equalize, swap, reconcile, durable v2 schema + v1 migration, stable UUID canonicalization. CGRect replaced by local Rect struct; UUID generation uses monotonic counter (web-safe, no uuid crate); AppKit/UIKit UI (PaneLayoutController, views) not portable."
 
   native/SupercliNative/Tests/SupercliNativeTests/MobilePaneGroupProjectionTests.swift:
     destination: "Dart: clients/supercli-app"

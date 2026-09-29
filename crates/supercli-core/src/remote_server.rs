@@ -924,22 +924,32 @@ pub fn run(config: &RemoteServerConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// The {url, token, fingerprint} JSON object shared by remote.json and
+/// --peer-file files. This is the writer side of the peer-file contract;
+/// `remote_attach::read_peer_file` is the reader side. Any future client
+/// writer must produce this same shape.
+pub fn peer_file_json(url: &str, token: &str, fingerprint: &str) -> serde_json::Value {
+    json!({
+        "url": url,
+        "token": token,
+        "fingerprint": fingerprint,
+    })
+}
+
 fn write_remote_state(url: &str, token: &str, port: u16, fingerprint: &str) -> Result<(), String> {
     let path = remote_state_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create state dir: {e}"))?;
     }
-    let state = json!({
-        "url": url,
-        "token": token,
-        "port": port,
-        "fingerprint": fingerprint,
-        "pid": std::process::id(),
-        // Lets a reaper prove this pid still belongs to this server before
-        // signaling it — under load the pid counter wraps fast enough that a
-        // bare pid routinely points at an unrelated process.
-        "pid_started_at": crate::session_host::process_start_time_ms(std::process::id()),
-    });
+    let mut state = peer_file_json(url, token, fingerprint);
+    state["port"] = json!(port);
+    state["pid"] = json!(std::process::id());
+    // Lets a reaper prove this pid still belongs to this server before
+    // signaling it — under load the pid counter wraps fast enough that a
+    // bare pid routinely points at an unrelated process.
+    state["pid_started_at"] = json!(crate::session_host::process_start_time_ms(
+        std::process::id()
+    ));
     write_private(&path, format!("{state}\n").as_bytes())
 }
 

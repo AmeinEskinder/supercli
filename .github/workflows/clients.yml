@@ -6,16 +6,6 @@ name: Apple clients (legacy, frozen)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['main', 'next', 'feat/**']
-    paths:
-      # Legacy clients are frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-native-bridge/**'
-      - '.github/workflows/clients.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-native-bridge/**'
-      - '.github/workflows/clients.yml'
 
 permissions:
   contents: read

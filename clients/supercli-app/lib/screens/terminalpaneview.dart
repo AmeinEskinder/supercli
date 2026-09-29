@@ -1,5 +1,12 @@
 /// Terminal pane: the embedded terminal surface for a session.
 ///
+/// Home of the `TerminalPaneView.swift` port
+/// (`clients/legacy/native/SupercliNative/.../Views/TerminalPaneView.swift`).
+/// The view itself is below; the portable surface logic (title-chip rename
+/// editing, focus resolution, archive-verb decision, pane menus, split
+/// layout, drop-zone preview rects) lives in `lib/terminal/` and is
+/// re-exported here so this screen stays the port's single entry point.
+///
 /// Real implementation of the P0-8 terminal pane (not a scaffold). The pane
 /// is backed by [TerminalState] (grid + scrollback + cursor + selection) and
 /// renders through [TerminalPane] via the RLE fallback (P0-8 UiTerminal proposal pending)
@@ -22,6 +29,35 @@ export '../terminal/terminal_drop_maps.dart' show TerminalDropMaps;
 export '../terminal/terminal_pane.dart' show TerminalPane, TerminalKeymap;
 export '../terminal/terminal_state.dart' show TerminalState, TerminalCellUpdate;
 export '../terminal/session_output_stream.dart' show SessionOutputStream;
+// Surface logic ported from TerminalPaneView.swift (re-exported so this
+// screen is the port's single home; implementation in lib/terminal/).
+export '../terminal/terminal_pane_rename.dart'
+    show TerminalPaneRename, RenameEnd, RenameJustEnd, RenameCommit;
+export '../terminal/terminal_pane_focus.dart'
+    show TerminalPaneFocus, PaneSessionStatus;
+export '../terminal/terminal_pane_archive.dart'
+    show TerminalPaneArchive, PaneArchiveDecision;
+export '../terminal/terminal_pane_menu.dart'
+    show
+        TranscriptCopyRange,
+        PaneMenuAction,
+        PaneMenuItem,
+        PaneSessionMenuInput,
+        buildPaneSessionMenu,
+        buildPaneLauncherMenu,
+        copySessionIdText;
+export '../terminal/terminal_pane_split.dart'
+    show TerminalPaneSplitLayout, SplitPaneExtents;
+export '../terminal/terminal_pane_drop_zones.dart'
+    show
+        DropZoneEdge,
+        PaneDropTarget,
+        PaneTarget,
+        GroupEdgeTarget,
+        DropZoneRect,
+        dropZonePreviewRect,
+        fitToDesktopHelpText,
+        fitToDesktopLabel;
 
 /// One terminal pane within a session.
 final class TerminalPaneView {
