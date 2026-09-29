@@ -18,6 +18,8 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 
 import 'appkit_protocol.dart';
+import 'appkit_protocol_lists.dart';
+import 'appkit_protocol_widgets.dart';
 import 'appkit_widgets.dart' as w;
 
 /// Renders decoded app-kit nodes as native gpuidart widget trees.
@@ -42,6 +44,10 @@ abstract final class AppKitRenderer {
   }
 
   /// Mirrors Swift `PageView.body`.
+  ///
+  /// Uses the single wire-faithful [PageSpec] definition (from
+  /// `appkit_protocol_widgets.dart`/`appkit_protocol_lists.dart`); the old
+  /// renderer-subset duplicate was removed per reviewer finding.
   static UiNode renderPage(String id, PageSpec spec) {
     return UiColumn('appkit-page-$id', [
       UiText('appkit-page-title-$id', spec.title),
@@ -50,6 +56,7 @@ abstract final class AppKitRenderer {
           for (final t in spec.tabs)
             UiButton('appkit-tab-${t.id}', t.label),
         ]),
+      if (spec.header != null) _renderPageHeader(id, spec.header!),
       _renderPageBody(id, spec.body),
       if (!spec.footer.isEmpty)
         w.FooterActionsView(
@@ -60,14 +67,81 @@ abstract final class AppKitRenderer {
     ]);
   }
 
-  static UiNode _renderPageBody(String id, PageBody body) {
-    return switch (body) {
-      PageBodyList(:final list) => renderList('$id-body', list),
-      PageBodyContent(:final content) => renderContent('$id-body', content),
-      PageBodyGauge(:final gauge) => renderGauge('$id-body', gauge),
-      PageBodyUnsupported(:final bodyKind) =>
-        renderUnsupported('$id-body', 'pageBody:$bodyKind'),
+  static UiNode _renderPageHeader(String id, UIPageHeaderSlot header) {
+    return switch (header) {
+      UIPageHeaderSlotInput(:final input) =>
+        UiText('appkit-page-header-$id', '[input: ${input.id}]'),
+      UIPageHeaderSlotUnsupported(:final type) =>
+        renderUnsupported('appkit-page-header-$id', 'pageHeader:$type'),
     };
+  }
+
+  static UiNode _renderPageBody(String id, UIPageBodySlot body) {
+    return switch (body) {
+      UIPageBodySlotList(:final list) => _renderUIList('$id-body', list),
+      UIPageBodySlotContent(:final content) =>
+        _renderUIContent('$id-body', content),
+      UIPageBodySlotSparkline() =>
+        UiText('appkit-body-$id', '[sparkline]'),
+      UIPageBodySlotBarChart() =>
+        UiText('appkit-body-$id', '[bar chart]'),
+      UIPageBodySlotLineChart() =>
+        UiText('appkit-body-$id', '[line chart]'),
+      UIPageBodySlotGauge(:final gauge) => _renderUIGauge('$id-body', gauge),
+      UIPageBodySlotUnsupported(:final type) =>
+        renderUnsupported('$id-body', 'pageBody:$type'),
+    };
+  }
+
+  /// Renders the wire-faithful [UIListSpec] (single definition).
+  static UiNode _renderUIList(String id, UIListSpec spec) {
+    if (spec.items.isEmpty) {
+      return UiColumn('appkit-list-$id', [
+        UiText('appkit-list-empty-$id',
+            spec.emptyMessage.isEmpty ? '(empty)' : spec.emptyMessage),
+      ]);
+    }
+    return UiColumn('appkit-list-$id', [
+      for (final item in spec.items) _renderUIListItem(id, item),
+    ]);
+  }
+
+  static UiNode _renderUIListItem(String listId, UIListItemSpec item) {
+    return UiColumn('appkit-item-${item.id}', [
+      UiRow('appkit-item-row-${item.id}', [
+        UiText('appkit-item-label-${item.id}',
+            '${item.done ? '✓ ' : ''}${item.label}${item.busy ? ' …' : ''}'),
+        if (item.detail != null)
+          UiText('appkit-item-detail-${item.id}', item.detail!),
+        if (item.value != null)
+          UiText('appkit-item-value-${item.id}', item.value!),
+      ]),
+    ]);
+  }
+
+  /// Renders the wire-faithful [UIContentSpec] (single definition).
+  static UiNode _renderUIContent(String id, UIContentSpec spec) {
+    if (spec.lines.isEmpty) {
+      return UiColumn('appkit-content-$id', [
+        UiText('appkit-content-empty-$id',
+            spec.emptyMessage.isEmpty ? '(empty)' : spec.emptyMessage),
+      ]);
+    }
+    return UiColumn('appkit-content-$id', [
+      for (final line in spec.lines)
+        UiText('appkit-content-line-${line.id}',
+            line.runs.map((r) => r.text).join()),
+    ]);
+  }
+
+  /// Renders the wire-faithful [UIGaugeSpec] as a text bar (gpuidart has no
+  /// chart primitive yet — GAP-APPKIT-4).
+  static UiNode _renderUIGauge(String id, UIGaugeSpec gauge) {
+    final filled = (gauge.ratio * 10).round().clamp(0, 10);
+    final bar = '█' * filled + '░' * (10 - filled);
+    final caption = gauge.caption;
+    return UiText('appkit-gauge-$id',
+        '${gauge.label} $bar${caption == null ? '' : ' $caption'}');
   }
 
   /// Mirrors Swift `ListNavigation` + list item rendering.
@@ -190,9 +264,16 @@ abstract final class AppKitRenderer {
   }
 
   /// Mirrors Swift `MediaView` (placeholder until UiImage lands, P0-6).
+  ///
+  /// Uses the single wire-faithful [MediaSpec]: `source` is a [MediaSource]
+  /// (not a plain string) and the caption is [MediaSpec.alt].
   static UiNode renderMedia(String id, MediaSpec spec) {
-    return w.MediaView(source: spec.source, caption: spec.caption ?? '')
-        .build();
+    final source = switch (spec.source) {
+      MediaSourcePath(:final path) => path,
+      MediaSourceInline() => '[inline]',
+      MediaSourceBlob() => '[blob]',
+    };
+    return w.MediaView(source: source, caption: spec.alt).build();
   }
 
   /// Mirrors Swift `SemanticMenuView`.
@@ -215,18 +296,25 @@ abstract final class AppKitRenderer {
   }
 
   /// Mirrors Swift `CanvasPageView` (stack fallback until canvas, P0-12).
+  ///
+  /// Uses the single wire-faithful [CanvasPageSpec]: Swift has no `children`
+  /// — the canvas is a `surface` plus `controls`, rendered here as a
+  /// structural placeholder.
   static UiNode renderCanvasPage(String id, CanvasPageSpec spec) {
-    return w.CanvasPageView(
-      children: [for (final c in spec.children) render(c)],
-    ).build();
+    return UiColumn('appkit-canvas-$id', [
+      UiText('appkit-canvas-title-$id', spec.title),
+      UiText('appkit-canvas-surface-$id',
+          '[canvas: ${spec.controls.length} controls]'),
+    ]);
   }
 
   /// Mirrors Swift `SurfaceComponentView`.
+  ///
+  /// Uses the single wire-faithful [SurfaceSpec]: Swift has no `child` — the
+  /// surface is a live stream [SurfaceReference], rendered as a placeholder.
   static UiNode renderSurface(String id, SurfaceSpec spec) {
-    final child = spec.child;
-    return w.SurfaceComponentView(
-      child: child == null ? null : render(child),
-    ).build();
+    return UiText('appkit-surface-$id',
+        '[surface: ${spec.reference.sessionID}/${spec.reference.streamID}]');
   }
 
   /// Terminal fallback for unknown components (Swift `unsupported` behavior).

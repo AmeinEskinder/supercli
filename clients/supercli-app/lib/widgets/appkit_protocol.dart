@@ -27,6 +27,9 @@ library;
 
 import 'dart:convert';
 
+import 'appkit_protocol_lists.dart';
+import 'appkit_protocol_widgets.dart';
+
 /// Protocol identity. Mirrors `SupercliUIProtocol`.
 abstract final class AppKitProtocol {
   static const name = 'supercli.ui';
@@ -290,142 +293,6 @@ final class AppKitUnsupported extends AppKitComponent {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-
-/// Mirrors Swift `PageSpec`.
-final class PageSpec {
-  const PageSpec({
-    required this.title,
-    this.tabs = const [],
-    this.toolbar,
-    this.back,
-    this.body = const PageBodyList(ListSpec(id: '', items: [])),
-    this.footer = const FooterActionsSpec(),
-  });
-
-  final String title;
-  final List<PageTab> tabs;
-  final PageToolbar? toolbar;
-  final String? back;
-  final PageBody body;
-  final FooterActionsSpec footer;
-
-  factory PageSpec.fromJson(Map<String, dynamic> json) {
-    return PageSpec(
-      title: json['title'] as String,
-      tabs: ((json['tabs'] as List?) ?? [])
-          .map((t) => PageTab.fromJson(t as Map<String, dynamic>))
-          .toList(),
-      toolbar: json['toolbar'] == null
-          ? null
-          : PageToolbar.fromJson(json['toolbar'] as Map<String, dynamic>),
-      back: json['back'] as String?,
-      body: PageBody.fromJson(json['body'] as Map<String, dynamic>? ?? {}),
-      footer: json['footer'] == null
-          ? const FooterActionsSpec()
-          : FooterActionsSpec.fromJson(
-              json['footer'] as Map<String, dynamic>),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'tabs': tabs.map((t) => t.toJson()).toList(),
-        if (toolbar != null) 'toolbar': toolbar!.toJson(),
-        if (back != null) 'back': back,
-        'body': body.toJson(),
-        'footer': footer.toJson(),
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      other is PageSpec &&
-      other.title == title &&
-      _listEq(other.tabs, tabs) &&
-      other.back == back &&
-      other.body == body &&
-      other.footer == footer;
-
-  @override
-  int get hashCode => Object.hash(title, back, body, footer);
-}
-
-/// Page body slot. Mirrors Swift `UIPageBodySlot`.
-sealed class PageBody {
-  const PageBody();
-
-  factory PageBody.fromJson(Map<String, dynamic> json) {
-    final type = json['type'] as String?;
-    switch (type) {
-      case 'list':
-        return PageBodyList(
-            ListSpec.fromJson(json['list'] as Map<String, dynamic>? ?? json));
-      case 'content':
-        return PageBodyContent(ContentSpec.fromJson(
-            json['content'] as Map<String, dynamic>? ?? json));
-      case 'gauge':
-        return PageBodyGauge(GaugeSpec.fromJson(json));
-      default:
-        // The Swift body also supports sparkline/barChart/lineChart; the Dart
-        // renderer falls back to unsupported for chart bodies (GAP-APPKIT-4).
-        if (type == null && json.containsKey('items')) {
-          return PageBodyList(ListSpec.fromJson(json));
-        }
-        return PageBodyUnsupported(type ?? 'unknown');
-    }
-  }
-
-  Map<String, dynamic> toJson();
-}
-
-final class PageBodyList extends PageBody {
-  const PageBodyList(this.list);
-  final ListSpec list;
-  @override
-  Map<String, dynamic> toJson() =>
-      {'type': 'list', 'list': list.toJson()};
-  @override
-  bool operator ==(Object other) =>
-      other is PageBodyList && other.list == list;
-  @override
-  int get hashCode => list.hashCode;
-}
-
-final class PageBodyContent extends PageBody {
-  const PageBodyContent(this.content);
-  final ContentSpec content;
-  @override
-  Map<String, dynamic> toJson() =>
-      {'type': 'content', 'content': content.toJson()};
-  @override
-  bool operator ==(Object other) =>
-      other is PageBodyContent && other.content == content;
-  @override
-  int get hashCode => content.hashCode;
-}
-
-final class PageBodyGauge extends PageBody {
-  const PageBodyGauge(this.gauge);
-  final GaugeSpec gauge;
-  @override
-  Map<String, dynamic> toJson() => {'type': 'gauge', ...gauge.toJson()};
-  @override
-  bool operator ==(Object other) =>
-      other is PageBodyGauge && other.gauge == gauge;
-  @override
-  int get hashCode => gauge.hashCode;
-}
-
-final class PageBodyUnsupported extends PageBody {
-  const PageBodyUnsupported(this.bodyKind);
-  final String bodyKind;
-  @override
-  Map<String, dynamic> toJson() => {'type': bodyKind};
-  @override
-  bool operator ==(Object other) =>
-      other is PageBodyUnsupported && other.bodyKind == bodyKind;
-  @override
-  int get hashCode => bodyKind.hashCode;
-}
 
 /// Mirrors Swift `UIPageTab`.
 final class PageTab {
@@ -1312,70 +1179,6 @@ final class TreeItemSpec {
 // TextBox / Media / Menu / MarkdownEditor / Canvas / Surface (light specs)
 // ---------------------------------------------------------------------------
 
-/// Mirrors Swift `TextBoxSpec` (render subset).
-final class TextBoxSpec {
-  const TextBoxSpec({
-    this.text = '',
-    this.placeholder = '',
-    this.prompt = '',
-    this.submitLabel = 'Submit',
-  });
-
-  final String text;
-  final String placeholder;
-  final String prompt;
-  final String submitLabel;
-
-  factory TextBoxSpec.fromJson(Map<String, dynamic> json) => TextBoxSpec(
-        text: json['text'] as String? ?? '',
-        placeholder: json['placeholder'] as String? ?? '',
-        prompt: json['prompt'] as String? ?? '',
-        submitLabel: json['submitLabel'] as String? ?? 'Submit',
-      );
-
-  Map<String, dynamic> toJson() => {
-        'text': text,
-        'placeholder': placeholder,
-        'prompt': prompt,
-        'submitLabel': submitLabel,
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      other is TextBoxSpec &&
-      other.text == text &&
-      other.placeholder == placeholder &&
-      other.prompt == prompt;
-
-  @override
-  int get hashCode => Object.hash(text, placeholder, prompt);
-}
-
-/// Mirrors Swift `MediaSpec` (render subset).
-final class MediaSpec {
-  const MediaSpec({this.source = '', this.caption});
-
-  final String source;
-  final String? caption;
-
-  factory MediaSpec.fromJson(Map<String, dynamic> json) => MediaSpec(
-        source: json['source'] as String? ?? '',
-        caption: json['caption'] as String?,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'source': source,
-        if (caption != null) 'caption': caption,
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      other is MediaSpec && other.source == source && other.caption == caption;
-
-  @override
-  int get hashCode => Object.hash(source, caption);
-}
-
 /// Mirrors Swift `UIMenuSpec` (render subset).
 final class MenuSpec {
   const MenuSpec({required this.id, this.items = const []});
@@ -1441,80 +1244,6 @@ final class MenuItemSpec {
 
   @override
   int get hashCode => Object.hash(id, label, action, role);
-}
-
-/// Mirrors Swift `MarkdownEditorSpec` (render subset).
-final class MarkdownEditorSpec {
-  const MarkdownEditorSpec({this.text = '', this.placeholder = ''});
-
-  final String text;
-  final String placeholder;
-
-  factory MarkdownEditorSpec.fromJson(Map<String, dynamic> json) =>
-      MarkdownEditorSpec(
-        text: json['text'] as String? ?? '',
-        placeholder: json['placeholder'] as String? ?? '',
-      );
-
-  Map<String, dynamic> toJson() => {'text': text, 'placeholder': placeholder};
-
-  @override
-  bool operator ==(Object other) =>
-      other is MarkdownEditorSpec &&
-      other.text == text &&
-      other.placeholder == placeholder;
-
-  @override
-  int get hashCode => Object.hash(text, placeholder);
-}
-
-/// Mirrors Swift `CanvasPageSpec` (render subset).
-final class CanvasPageSpec {
-  const CanvasPageSpec({this.children = const []});
-
-  final List<AppKitNode> children;
-
-  factory CanvasPageSpec.fromJson(Map<String, dynamic> json) =>
-      CanvasPageSpec(
-        children: ((json['children'] as List?) ?? [])
-            .map((c) => AppKitNode.fromJson(c as Map<String, dynamic>))
-            .toList(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'children': children.map((c) => c.toJson()).toList(),
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      other is CanvasPageSpec && _listEq(other.children, children);
-
-  @override
-  int get hashCode => children.length;
-}
-
-/// Mirrors Swift `SurfaceSpec` (render subset).
-final class SurfaceSpec {
-  const SurfaceSpec({this.child});
-
-  final AppKitNode? child;
-
-  factory SurfaceSpec.fromJson(Map<String, dynamic> json) => SurfaceSpec(
-        child: json['child'] == null
-            ? null
-            : AppKitNode.fromJson(json['child'] as Map<String, dynamic>),
-      );
-
-  Map<String, dynamic> toJson() => {
-        if (child != null) 'child': child!.toJson(),
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      other is SurfaceSpec && other.child == child;
-
-  @override
-  int get hashCode => child.hashCode;
 }
 
 // ---------------------------------------------------------------------------
