@@ -208,18 +208,6 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// Deterministic FNV-1a hash — Swift's `String.hashValue` is salted per
-/// process, which would change the derived suite name every launch.
-///
-/// Port of `AppDefaults.stableHash(_:)` from `LaunchConfig.swift`.
-pub fn stable_hash(s: &str) -> u64 {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for byte in s.as_bytes() {
-        hash = (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3);
-    }
-    hash
-}
-
 /// Derive the UserDefaults suite name for a dev instance launched with
 /// `SUPERCLI_HOME=home`. `None`/empty returns `None` (use `.standard`).
 ///
@@ -227,7 +215,13 @@ pub fn stable_hash(s: &str) -> u64 {
 pub fn defaults_suite_name(for_supercli_home: Option<&str>) -> Option<String> {
     match for_supercli_home {
         Some(home) if !home.trim().is_empty() => {
-            Some(format!("com.supercli.devhome.{:x}", stable_hash(home)))
+            // Deterministic FNV-1a (crate::hash::fnv1a): Swift's
+            // `String.hashValue` is salted per process, which would change
+            // the derived suite name every launch.
+            Some(format!(
+                "com.supercli.devhome.{:x}",
+                crate::hash::fnv1a(home)
+            ))
         }
         _ => None,
     }
@@ -240,19 +234,6 @@ mod tests {
 
     // Env vars are process-global; serialize tests that mutate them.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn stable_hash_is_deterministic() {
-        assert_eq!(stable_hash("hello"), stable_hash("hello"));
-        assert_ne!(stable_hash("hello"), stable_hash("world"));
-    }
-
-    #[test]
-    fn stable_hash_known_value() {
-        // FNV-1a 64-bit of "hello" — verifies the algorithm, not just
-        // determinism.
-        assert_eq!(stable_hash("hello"), 0xa430d84680aabd0b);
-    }
 
     #[test]
     fn defaults_suite_name_none_for_empty() {

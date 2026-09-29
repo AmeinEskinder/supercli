@@ -144,7 +144,7 @@ _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostServiceAgent.swift | 190 | Rust: supercli-native-bridge::macos::launchd | ported |  | 9 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift | 221 | Rust: supercli-native-bridge::macos::service_identity | partial |  | 9 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/HostServiceManager.swift | 342 | Rust: supercli-native-bridge::macos::service_manager | partial |  | 6 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift | 207 | Rust: supercli-client | partial |  | 9 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift | 207 | Rust: supercli-client | partial |  | 7 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Licensing/LicenseKeychain.swift | 64 | Rust: supercli-native-bridge::macos::keychain | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Licensing/LicenseManager.swift | 599 | Rust: supercli-native-bridge::macos::license | partial |  | 11 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/LocalHostClientFeature.swift | 118 | Rust: supercli-client | ported |  | 9 |
@@ -170,7 +170,7 @@ _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ProviderCapabilities.swift | 94 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ProviderThemeReadRequest.swift | 30 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift | 769 | Rust: supercli-client | ported |  | 11 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift | 247 | Rust: supercli-client | partial |  | 11 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift | 247 | Rust: supercli-client | partial |  | 7 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift | 627 | Rust: supercli-client | partial |  | 9 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteUnpeelClient.swift | 172 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ResumeCommand.swift | 68 | Rust: supercli-core/client | todo |  | 0 |

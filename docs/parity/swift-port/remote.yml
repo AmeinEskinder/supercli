@@ -290,7 +290,7 @@ files:
     tests:
       - file: crates/supercli-client/src/remote_terminal_websocket.rs
         count: 8
-    notes: "304 LOC. Portable decision logic ported: error enum, input routing (WS-vs-HTTP with 0.5s timeout and 16KiB frame threshold), send outcome mapping. URLSession WebSocket, certificate pinning delegate, and ping watchdog are platform-specific and not portable. Protocol parsing already in remote_terminal_stream.rs."
+    notes: "304 LOC. Portable decision logic ported: error enum, input routing (WS-vs-HTTP with 0.5s timeout and 16KiB frame threshold), send outcome mapping. todo: port to supercli-client — URLSession WebSocket transport, certificate pinning delegate, and ping watchdog (tungstenite + tls::pinned_client_config already exist in the crate). Protocol parsing already in remote_terminal_stream.rs."
 
   native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift:
     destination: "Rust: supercli-client"
@@ -298,8 +298,8 @@ files:
     checklist: ""
     behaviours:
       - swift: "GitHeadReader.currentBranch (parse .git/HEAD, follow worktree .git files, detached HEAD short commit)"
-        target: "crates/supercli-client/src/remote_dto_adapters.rs::git_head_reader::current_branch"
-        test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::git_head_reader_branch"
+        target: "crates/supercli-client/src/git.rs::head_branch"
+        test: "crates/supercli-client/src/git.rs::tests::head_branch_reads_branch"
       - swift: "SessionStatus.remoteStatus (exited→exited, others→running)"
         target: "crates/supercli-client/src/remote_dto_adapters.rs::SessionStatus::remote_status"
         test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::session_status_maps_to_remote"
@@ -311,8 +311,8 @@ files:
         test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::scope_id_local_prefix"
     tests:
       - file: crates/supercli-client/src/remote_dto_adapters.rs
-        count: 11
-    notes: "247 LOC. Pure adapters ported: git HEAD reader (branch/worktree/detached), status/activity mappings, scope ID derivation. Swift extensions on Project/Preset/SessionEntry/SupercliStore depend on app-local model types with no Rust equivalent yet; not ported."
+        count: 7
+    notes: "247 LOC. Pure adapters ported: git HEAD reader (branch/worktree/detached — single implementation at supercli-client::git::head_branch, re-exported as supercli_core::git), status/activity mappings, scope ID derivation. Swift extensions on Project/Preset/SessionEntry/SupercliStore depend on app-local model types with no Rust equivalent yet; not ported."
 
   native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift:
     destination: "Rust: supercli-client"
@@ -329,15 +329,15 @@ files:
         target: "crates/supercli-client/src/launch_config.rs::attach_command"
         test: "crates/supercli-client/src/launch_config.rs::tests::attach_command_has_direct_prefix"
       - swift: "AppDefaults.stableHash (deterministic FNV-1a)"
-        target: "crates/supercli-client/src/launch_config.rs::stable_hash"
-        test: "crates/supercli-client/src/launch_config.rs::tests::stable_hash_known_value"
+        target: "crates/supercli-client/src/hash.rs::fnv1a"
+        test: "crates/supercli-client/src/hash.rs::tests::fnv1a_hello_known_value"
       - swift: "AppDefaults.suite(forSupercliHome:) derivation"
         target: "crates/supercli-client/src/launch_config.rs::defaults_suite_name"
         test: "crates/supercli-client/src/launch_config.rs::tests::defaults_suite_name_derives_from_home"
     tests:
       - file: crates/supercli-client/src/launch_config.rs
-        count: 9
-    notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported. supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
+        count: 7
+    notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported (single implementation at supercli-client::hash::fnv1a, re-exported as supercli_core::hash). supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
 
   ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
     destination: "Rust: supercli-client"

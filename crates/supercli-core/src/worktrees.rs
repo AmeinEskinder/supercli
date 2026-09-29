@@ -35,16 +35,6 @@ fn run_git(repo: &str, args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// FNV-1a over the UTF-8 bytes — same constants as the Swift port.
-fn fnv1a(input: &str) -> u64 {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in input.as_bytes() {
-        hash ^= *byte as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    hash
-}
-
 /// Branch/dir slug: lowercase, non-alphanumerics collapsed to '-'.
 pub fn slug(input: &str) -> String {
     let mut out = String::new();
@@ -72,7 +62,7 @@ pub fn repo_worktrees_dir(toplevel: &str) -> PathBuf {
         .map(|n| slug(&n.to_string_lossy()))
         .unwrap_or_else(|| "repo".into());
     // `{:08x}` zero-pads to 8 but keeps every significant digit.
-    let hex = format!("{:08x}", fnv1a(toplevel));
+    let hex = format!("{:08x}", crate::hash::fnv1a(toplevel));
     canonical_or_self(&app_paths::worktrees_root()).join(format!("{repo_name}-{hex}"))
 }
 
@@ -250,6 +240,7 @@ pub fn remove(path: &str, force: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hash::fnv1a;
 
     #[test]
     fn hash_and_slug_match_the_desktop_scheme() {

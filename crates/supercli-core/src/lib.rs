@@ -64,12 +64,20 @@ pub mod durable_runs;
 pub mod first_run;
 #[cfg(feature = "native-host")]
 mod ghostty_vt;
+// Single-implementation homes live in supercli-client (the dependency graph
+// forbids client → core: core → connector → client would cycle), re-exported
+// here so Host code keeps the `supercli_core::git` / `supercli_core::hash`
+// paths.
+#[cfg(feature = "controller-core")]
+pub use supercli_client::git;
 #[cfg(feature = "native-host")]
 pub mod grant_audit;
 #[cfg(feature = "native-host")]
 pub mod grant_store;
 #[cfg(feature = "native-host")]
 pub mod grant_writer;
+#[cfg(feature = "controller-core")]
+pub use supercli_client::hash;
 #[cfg(feature = "native-host")]
 pub mod hook_assets;
 #[cfg(feature = "native-host")]
