@@ -69,10 +69,11 @@ pub mod remote_connection;
 pub mod remote_dto_adapters;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
+pub mod remote_session_cache;
 pub mod remote_terminal_websocket;
-pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_ws_transport;
+pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
 pub mod stream_frame_reconciler;
