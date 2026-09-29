@@ -7,8 +7,8 @@ library;
 
 import 'package:test/test.dart';
 
-import '../lib/terminal/terminal_drop_target_map.dart';
-import '../lib/terminal/terminal_path_drag_map.dart';
+import 'package:supercli_app/terminal/terminal_drop_target_map.dart';
+import 'package:supercli_app/terminal/terminal_path_drag_map.dart';
 
 void main() {
   group('TerminalDropTargetMap', () {

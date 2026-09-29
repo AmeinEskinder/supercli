@@ -1,10 +1,11 @@
 /// Tests for presets.dart
 /// 
 /// Port of PresetsTests.swift behaviors.
+library;
 import 'package:test/test.dart';
-import '../lib/presets.dart';
-import '../lib/plugin_settings_list.dart';
-import '../lib/tool_icons.dart';
+import 'package:supercli_app/presets.dart';
+import 'package:supercli_app/plugin_settings_list.dart';
+import 'package:supercli_app/tool_icons.dart';
 
 void main() {
   group('Preset', () {

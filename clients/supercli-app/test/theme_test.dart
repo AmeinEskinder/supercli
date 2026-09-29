@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 
-import '../lib/theme.dart';
+import 'package:supercli_app/theme.dart';
 
 void main() {
   group('ThemePreference', () {
