@@ -139,3 +139,47 @@ When the Rust side implements the `terminal` node kind, it needs:
    bracketed paste (G-9), resize → `onResize` (G-7).
 
 The `UiTerminal` JSON contract in `terminal.dart`/`nodes.dart` is the spec.
+
+## GhosttyBridge NSView rewrite — TerminalPaneView on gpuidart (2026-09-29)
+
+**Source:** `clients/legacy/native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift`
+(2,618 LOC). The Ghostty-free value types are ported to Rust
+(`crates/supercli-core/src/ghostty_bridge.rs`: `RemoteTerminalViewport`,
+`RemoteTerminalCallbackEpoch`, `RemoteTerminalCallbackRelay`,
+`RemoteTerminalLocalFeed`, `GhosttyTerminalPaneDelegate` trait — 12/12 tests).
+The ~2,000 LOC of AppKit `NSView` classes below are **not** staying Swift:
+under the 0% goal they are rewritten as `TerminalPaneView` on gpuidart.
+Sidecar row: `docs/parity/swift-port/terminal.yml` → `GhosttyBridge.swift`
+(status `partial`).
+
+| Swift class | LOC (approx) | Rewrite target on gpuidart |
+|---|---|---|
+| `GhosttyTerminalPane: NSView` (line 166) — wraps the Ghostty EXEC surface; hosts `PathDraggableTerminalView` + `TerminalController`; file-drop routing, cmd-click path resolution, OSC-7 working-directory tracking, project-root-relative path display | ~1,850 | `TerminalPaneView` widget: renders via `UiTerminal` node (grid, cursor, selection); input through the raw key-event stream (G-5); drops through the semantic drop-target map (`TerminalDropTargetMap`, already ported to Dart); cmd-click via `ClickablePath` match data from the host |
+| `RemoteGhosttyTerminalPane: NSView` (line 2015) — remote variant; retained remote frame, `InMemoryTerminalSession` backend, `RemoteTerminalCallbackRelay` for stale-callback discard, occlusion observer, presentation gating | ~510 | `TerminalPaneView.hosted` (remote): same `UiTerminal` rendering; the callback-relay/epoch logic already lives in Rust (`ghostty_bridge.rs`) and is exposed to Dart via `supercli-client-ffi`; occlusion/presentation gating becomes gpuidart visibility signals |
+| `PathDraggableTerminalView: TerminalView, NSDraggingSource` (line 51, private) — drag source for TUI path regions (`pathAtCell`); drag-candidate tracking from `NSEvent` | ~115 | gpuidart drag source on `TerminalPaneView`: path lookup via the same `pathAtCell` callback plumbed through the host event stream; needs native drag-out (see G-12) |
+
+### G-12. No native drag-out from an arbitrary node (BLOCKS PathDraggableTerminalView)
+gpuidart has no `NSDraggingSource` equivalent: a node cannot initiate an OS
+drag with a file promise / path payload. Dropping *onto* the terminal is
+covered by the drop-target map, but dragging a path *out of* the terminal
+(cmd-click-drag of a `ClickablePath` match) has no native path.
+**Needed:** a drag-source API on nodes (begin drag with payload + drag image),
+or a host-mediated `beginDrag(payload)` event.
+
+### G-13. No occlusion / visibility signals (BLOCKS RemoteGhosttyTerminalPane presentation gating)
+`RemoteGhosttyTerminalPane` suspends presentation work when occluded
+(`occlusionObserver`, `presentationEnabled`, `needsRefitOnNextPresentation`).
+gpuidart exposes no per-node visibility/occlusion callback, so a
+`TerminalPaneView.hosted` cannot cheaply pause frame production when hidden.
+**Needed:** an `onVisibilityChanged(visible)` node callback or equivalent.
+
+### G-14. No cmd-click / link-hover affordance primitives (BLOCKS GhosttyTerminalPane link UX)
+Hover-link highlighting (`hoveredLink`) and cmd-click handling
+(`commandClickHandler`) need pointer-move with exact modifiers (G-8) plus a
+cursor-shape change on hover. Cursor-shape control is not exposed.
+**Needed:** G-8 pointer events plus `setCursorStyle` on hover.
+
+**Request for Amein (upstream gpuidart):** G-12 (drag-out), G-13 (visibility
+signals), and cursor-shape control (G-14). G-5/G-7/G-8 (raw keys, resize,
+mouse) are already required by the P0-8 plan above and cover the rest of the
+rewrite.

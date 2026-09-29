@@ -169,43 +169,6 @@ files:
     tests: []
     notes: 'BLOCKED: depends on RemoteBrowserArtifact/MobilePairingStore/NativeControllerRouter
       (SupercliShared) not yet ported to Dart.'
-  native/SupercliNative/Sources/SupercliNative/ProjectWorkspaceMove.swift:
-    destination: "Rust: supercli-core"
-    status: ported
-    checklist: ""
-    behaviours:
-      - swift: "WorkspaceMoveTarget (id/name/home)"
-        target: "crates/supercli-core/src/workspace_move.rs::WorkspaceMoveTarget"
-        test: "crates/supercli-core/src/workspace_move.rs::tests (struct covered by move tests)"
-      - swift: "MoveError + user-facing errorDescription"
-        target: "crates/supercli-core/src/workspace_move.rs::MoveError"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_*"
-      - swift: "move(projectID:from:to:) — session rename, state merge/strip, rollback"
-        target: "crates/supercli-core/src/workspace_move.rs::move_project"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
-      - swift: "sessionIDs(projectID:in:) / liveSessionIDs(projectID:in:)"
-        target: "crates/supercli-core/src/workspace_move.rs::session_ids_for_project, live_session_ids"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
-      - swift: "descendantProjectIDs — subtree traversal"
-        target: "crates/supercli-core/src/workspace_move.rs::descendant_project_ids"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
-      - swift: "sessionIsLive — running manifest + pid identity"
-        target: "crates/supercli-core/src/workspace_move.rs::session_is_live"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
-      - swift: "merge/strip helpers (projects, pins, sort modes, colors, orchestrators, blocked)"
-        target: "crates/supercli-core/src/workspace_move.rs::merge_*/strip_*"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
-      - swift: "session-order.json / project-order.json merge/strip/append"
-        target: "crates/supercli-core/src/workspace_move.rs::merge_session_orders/strip_session_orders/append_project_order/strip_project_order"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
-      - swift: "PresetStateFile.edit(at:) atomic locked edit"
-        target: "crates/supercli-core/src/app_state.rs::edit_at (pre-existing)"
-        test: "crates/supercli-core/src/workspace_move.rs::tests (all move tests)"
-    tests:
-      - file: crates/supercli-core/src/workspace_move.rs
-        count: 8
-    notes: "Ported to Rust (not Dart): filesystem + JSON + process-liveness logic. app_state::edit_at is the exact equivalent of PresetStateFile.edit(at:) (flock + atomic rename). Manifest decode is lenient like Swift's custom Decodable init."
-
   native/SupercliNative/Sources/SupercliNative/SessionArtifacts.swift:
     destination: 'Dart: clients/supercli-app/lib/screens/session_artifacts.dart'
     status: ported
@@ -261,7 +224,7 @@ files:
       code not portable. UNTESTED (no Dart SDK).'
   native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "Background read-only polling and snapshot cache; equivalent (timestamp-only) snapshots never republish (acceptSnapshot, isEquivalent(to:))"
@@ -288,7 +251,7 @@ files:
     tests:
       - file: clients/supercli-app/test/workspace_pool_test.dart
         count: 23
-    notes: "Ported 2026-09-29 (feat/port-workspace-pool): portable pool kernel in Dart. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and the MainActor orchestration are platform runtime machinery with no portable equivalent — not ported. Fidelity gaps: Swift async interleavings became a synchronous deterministic state machine; connection retirement/peek UI (lend/exclude/resume callsites) still to wire in the app shell. UNTESTED locally: no Dart SDK in this VM; count on CI."
+    notes: "Ported 2026-09-29 (feat/port-workspace-pool): portable pool kernel in Dart. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and the MainActor orchestration are platform runtime machinery with no portable equivalent — not ported. Fidelity gaps: Swift async interleavings became a synchronous deterministic state machine; connection retirement/peek UI (lend/exclude/resume callsites) still to wire in the app shell. UNTESTED locally: no Dart SDK in this VM; count on CI. Logic moving to Rust per Amein's one-implementation rule. Dart workspace_pool.dart belongs next to remote_runtime.rs."
 
   native/SupercliNative/Tests/SupercliNativeTests/AgentWorktreeAdoptionTests.swift:
     destination: 'Dart: clients/supercli-app'
@@ -311,34 +274,6 @@ files:
     behaviours: []
     tests: []
     notes: 'BLOCKED: source MobileSessionControl.swift depends on RemoteBrowserArtifact/MobilePairingStore/NativeControllerRouter not yet in Dart.'
-  native/SupercliNative/Tests/SupercliNativeTests/ProjectWorkspaceMoveTests.swift:
-    destination: "Rust: supercli-core"
-    status: ported
-    checklist: ""
-    behaviours:
-      - swift: "testMovesProjectSessionsPinsAndOrdersAndLeavesNeighbors"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
-      - swift: "testLeavesSessionFiledOutOfTheSubtree"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::leaves_session_filed_out_of_the_subtree"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::leaves_session_filed_out_of_the_subtree"
-      - swift: "testRefusesDestPathCollisionAndLeavesSourceIntact"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_path_collision_and_leaves_source_intact"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_path_collision_and_leaves_source_intact"
-      - swift: "testRefusesDestSessionIdCollision"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_session_id_collision"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_session_id_collision"
-      - swift: "testMovesRunningSessionDirWithoutStopping"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
-      - swift: "testCollectsChildGroupsAndWorktrees"
-        target: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
-        test: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
-    tests:
-      - file: crates/supercli-core/src/workspace_move.rs
-        count: 8
-    notes: "All 6 XCTest cases ported 1:1, plus 2 new error-path tests (sameHome, projectNotFound)."
-
   native/SupercliNative/Tests/SupercliNativeTests/SessionMoveRulesTests.swift:
     destination: 'Dart: clients/supercli-app'
     status: ported
@@ -396,7 +331,7 @@ files:
     notes: 'Porter P: codec behaviours covered by Porter K Dart tests. 3 UI/settings tests (deep link, worktrees tab, unified tabs) not portable — belong to settings UI.'
   native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "XCTest suite for the background workspace pool: poll caching, backoff/recovery, remote cap, attention edges, lend/exclude, organization holds"
@@ -405,4 +340,4 @@ files:
     tests:
       - file: clients/supercli-app/test/workspace_pool_test.dart
         count: 23
-    notes: "Swift tests drive real async entry loops (Task poll loops, CheckedContinuation wakes) which are platform runtime machinery and intentionally not reproduced; every portable-behavior XCTest is mirrored against the Dart kernel. UNTESTED locally: no Dart SDK in this VM; count on CI."
+    notes: "Swift tests drive real async entry loops (Task poll loops, CheckedContinuation wakes) which are platform runtime machinery and intentionally not reproduced; every portable-behavior XCTest is mirrored against the Dart kernel. UNTESTED locally: no Dart SDK in this VM; count on CI. Logic moving to Rust per Amein's one-implementation rule."

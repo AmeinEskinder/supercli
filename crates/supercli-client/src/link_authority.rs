@@ -17,6 +17,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -175,17 +176,15 @@ fn new_generation() -> String {
             *b = ((seed >> ((i % 8) * 8)) as u8).wrapping_add(i as u8);
         }
     }
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Exclusive filesystem lock (`link-license.lock`, 0o600) shared with the
-/// Swift side. Uses a lock file + `flock(2)` via libc-free `fcntl`
-/// emulation: Rust std has no flock, so we use a pid-scoped lock file with
-/// `O_CREAT|O_EXCL` retry... — actually `fs2` is unavailable; implement
-/// with `libc` if present, else fall back to a blocking open.
+/// Swift side.
 ///
-/// To avoid new dependencies, this uses the `flock(2)` syscall through a
-/// tiny `extern "C"` declaration.
+/// Unix: `flock(2)` via a tiny `extern "C"` declaration (no new dependencies).
+/// Windows: `LockFileEx` via the `fs2` crate.
+#[cfg(unix)]
 mod flock {
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     use std::os::unix::io::AsRawFd;
@@ -206,6 +205,7 @@ mod flock {
         pub fn exclusive(path: &std::path::Path) -> std::io::Result<Self> {
             let file = std::fs::OpenOptions::new()
                 .create(true)
+                .truncate(false)
                 .read(true)
                 .write(true)
                 .mode(0o600)
@@ -231,6 +231,55 @@ mod flock {
     }
 }
 
+#[cfg(windows)]
+mod flock {
+    use fs2::FileExt;
+
+    pub struct FileLock {
+        file: std::fs::File,
+    }
+
+    impl FileLock {
+        pub fn exclusive(path: &std::path::Path) -> std::io::Result<Self> {
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)?;
+            // fs2::FileExt::lock_exclusive blocks until the exclusive
+            // LockFileEx lock is acquired.
+            file.lock_exclusive()?;
+            Ok(Self { file })
+        }
+    }
+
+    impl Drop for FileLock {
+        fn drop(&mut self) {
+            let _ = fs2::FileExt::unlock(&self.file);
+        }
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+mod flock {
+    pub struct FileLock {
+        _file: std::fs::File,
+    }
+
+    impl FileLock {
+        pub fn exclusive(path: &std::path::Path) -> std::io::Result<Self> {
+            // No OS-level locking available; open the file so callers still
+            // get a handle, but this is NOT an exclusive lock.
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)?;
+            Ok(Self { _file: file })
+        }
+    }
+}
+
 /// Write `data` to `url` atomically (tmp file + fsync + rename) with 0o600
 /// permissions. Swift: `LinkAuthorityStore.writePrivateAtomically`.
 fn write_private_atomically(data: &[u8], url: &Path) -> Result<(), LinkAuthorityError> {
@@ -247,12 +296,11 @@ fn write_private_atomically(data: &[u8], url: &Path) -> Result<(), LinkAuthority
         new_generation()
     ));
     {
-        let mut f = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .mode(0o600)
-            .open(&tmp)
-            .map_err(LinkAuthorityError::Io)?;
+        let mut opts = OpenOptions::new();
+        opts.create_new(true).write(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        let mut f = opts.open(&tmp).map_err(LinkAuthorityError::Io)?;
         f.write_all(data).map_err(LinkAuthorityError::Io)?;
         f.sync_all().map_err(LinkAuthorityError::Io)?;
     }
@@ -372,12 +420,8 @@ impl LinkAuthorityStore {
                 reason,
                 disabled_at: now_unix(),
             };
-            let data = serde_json::to_vec(&record).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                ))
-            })?;
+            let data = serde_json::to_vec(&record)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &suppression_url(home))?;
             Ok(SuppressionOutcome {
                 record,
@@ -416,12 +460,8 @@ impl LinkAuthorityStore {
                     .map(|r| r.disabled_at)
                     .unwrap_or_else(now_unix),
             };
-            let data = serde_json::to_vec(&pending).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                ))
-            })?;
+            let data = serde_json::to_vec(&pending)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &suppression_url(home))?;
             // The marker already makes the retained bearer unusable; keep a
             // removal failure as a diagnostic only.
@@ -445,12 +485,8 @@ impl LinkAuthorityStore {
                     "Link authority changed while authorizing".to_string(),
                 ));
             }
-            let data = serde_json::to_vec(entitlement).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                ))
-            })?;
+            let data = serde_json::to_vec(entitlement)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &cache_url(home))?;
             if current.is_some() {
                 fs::remove_file(suppression_url(home)).map_err(|e| {
@@ -498,6 +534,7 @@ pub fn push_failure_label(reason: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     fn authority_home() -> (PathBuf, impl FnOnce()) {
@@ -539,13 +576,16 @@ mod tests {
             restarted.suppression.as_ref().unwrap().reason,
             LinkSuppressionReason::UserDisabled
         );
-        // Marker is written 0o600.
-        let perms = fs::symlink_metadata(suppression_url(&home))
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(perms, 0o600);
+        // Marker is written 0o600 (unix only; Windows ACLs differ).
+        #[cfg(unix)]
+        {
+            let perms = fs::symlink_metadata(suppression_url(&home))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(perms, 0o600);
+        }
         cleanup();
     }
 

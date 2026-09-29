@@ -130,37 +130,6 @@ files:
       - file: native/SupercliNative/Tests/SupercliNativeTests/RelayUplinkManagerTests.swift
         count: 11
     notes: "Portable core ported to Rust supercli-client (link_authority.rs). 15 Rust tests cover all 11 Swift authority tests plus config, labels, and JSON compatibility. The @MainActor ObservableObject manager, entitlement HTTP fetch, and APNs push stay Swift-side."
-  native/SupercliNative/Sources/SupercliNative/RemoteHostRuntime.swift:
-    destination: "Rust: supercli-client"
-    status: wired
-    checklist: ""
-    behaviours:
-      - swift: "RemoteHostConnectionState enum (idle/connecting/connected/reconnecting/repairRequired/incompatible/failed)"
-        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostConnectionState"
-        test: "crates/supercli-client/src/remote_runtime.rs::tests::connection_state_variants"
-      - swift: "RemoteHostConnectionRoute enum + shortLabel (ssh/localGateway/direct/link)"
-        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostConnectionRoute::short_label"
-        test: "crates/supercli-client/src/remote_runtime.rs::tests::route_short_labels"
-      - swift: "PairedHostConnectionPlan Direct->Link fallback (link disabled => no relay; cert pin validation)"
-        target: "crates/supercli-client/src/remote_runtime.rs::PairedHostConnectionPlan::build"
-        test: "crates/supercli-client/src/remote_runtime.rs::tests::direct_first_then_link_fallback"
-      - swift: "connectPairedHost: Direct first, Link only on classified reachability failure, never on hard failures"
-        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::connect"
-        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
-      - swift: "reconnection keeps last valid state visible; backoff; 401 => repairRequired (re-pair, not retry)"
-        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::reconnect"
-        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_reconnect_after_host_death, live_wrong_token_requires_repair_not_retry"
-      - swift: "disconnect tears down to idle; health check re-runs bootstrap on the live client"
-        target: "crates/supercli-client/src/remote_connection.rs::RemoteHostConnection::disconnect, health_check"
-        test: "crates/supercli-client/tests/remote_runtime_live.rs::live_connect_health_disconnect"
-    tests:
-      - file: crates/supercli-client/src/remote_runtime.rs
-        count: 6
-      - file: crates/supercli-client/src/remote_connection.rs
-        count: 5
-      - file: crates/supercli-client/tests/remote_runtime_live.rs
-        count: 3
-    notes: "WIRED (feat/wire-remote-runtime): the connection lifecycle is mounted against a live Host via the authenticated API — connect/disconnect/reconnect/health_check integration-tested against a real `supercli serve` (pinned TLS + bearer). Direct->Link gating unit-tested; the Link leg itself needs the app's live relay connection (row 217). The @MainActor UI runtime's session verbs and pane state remain Swift/Dart-side; verbs ride HostClient which is already Rust."
   native/SupercliNative/Sources/SupercliNative/RemoteHosts.swift:
     destination: "Rust: supercli-client"
     status: partial
@@ -188,30 +157,6 @@ files:
       - file: crates/supercli-client/src/host_store.rs
         count: 9
     notes: "Porting record management (pair/adopt/forget/rename/select/setLinkEnabled). Keychain credential storage is platform-specific; Rust uses the credential store abstraction."
-  native/SupercliNative/Sources/SupercliNative/SelectedHostScope.swift:
-    destination: "Rust: supercli-client"
-    status: ported
-    checklist: ""
-    behaviours:
-      - swift: "permits_local_execution"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::permits_local_execution"
-        test: "crates/supercli-client/src/scope.rs::tests::only_local_permits_execution"
-      - swift: "is_local_machine"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::is_local_machine"
-        test: "crates/supercli-client/src/scope.rs::tests::local_workspace_is_local_machine"
-      - swift: "supports_session_panes"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::supports_session_panes"
-        test: "crates/supercli-client/src/scope.rs::tests::all_scopes_support_panes"
-      - swift: "pane_scope_id"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope::pane_scope_id"
-        test: "crates/supercli-client/src/scope.rs::tests::pane_scope_id_stable"
-      - swift: "scoped_local_home / remote_host_id / local_workspace_home / local_workspace_name / session_launch_wire_value"
-        target: "crates/supercli-client/src/scope.rs::SelectedHostScope"
-        test: "crates/supercli-client/src/scope.rs::tests::wire_values"
-    tests:
-      - file: crates/supercli-client/src/scope.rs
-        count: 5
-    notes: "Ported by worker F (2af9778). 9/9 behaviours mapped, 5 tests."
   native/SupercliNative/Sources/SupercliNative/Views/HostPickerView.swift:
     destination: "Dart: clients/supercli-app"
     status: partial

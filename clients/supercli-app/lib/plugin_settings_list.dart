@@ -186,7 +186,7 @@ abstract final class PluginSettingsList {
     final items = <PluginSettingsItem>[];
     
     // Available agents
-    for (final agent in snapshot.workspaceSettings?.availableAgents ?? []) {
+    for (final AvailableAgentSummary agent in snapshot.workspaceSettings?.availableAgents ?? []) {
       items.add(PluginSettingsItem(
         id: agent.id,
         name: agent.name,
@@ -204,7 +204,7 @@ abstract final class PluginSettingsList {
     }
     
     // Available apps
-    for (final app in snapshot.availableApps ?? []) {
+    for (final RemoteAppSummary app in snapshot.availableApps ?? []) {
       items.add(PluginSettingsItem(
         id: app.id,
         name: app.name,

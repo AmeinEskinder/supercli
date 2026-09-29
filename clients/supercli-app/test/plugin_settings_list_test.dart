@@ -1,8 +1,9 @@
 /// Tests for plugin_settings_list.dart
 /// 
 /// Port of PluginSettingsListTests.swift behaviors.
+library;
 import 'package:test/test.dart';
-import '../lib/plugin_settings_list.dart';
+import 'package:supercli_app/plugin_settings_list.dart';
 
 void main() {
   group('PluginSettingsList.merging', () {

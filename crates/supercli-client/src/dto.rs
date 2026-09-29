@@ -108,6 +108,15 @@ pub struct SessionSummary {
     pub terminal_background_hex: Option<i32>,
     #[serde(default)]
     pub archived: bool,
+    /// The CLI's brand/spinner tint (0xRRGGBB), resolved on the Host.
+    /// Nil = older Host or no per-tool brand color.
+    #[serde(rename = "spinnerColorHex", default)]
+    pub spinner_color_hex: Option<i32>,
+    /// Latest persisted App alert body when it is the Session's newest activity.
+    #[serde(rename = "latestAlertBody", default)]
+    pub latest_alert_body: Option<String>,
+    #[serde(rename = "latestAlertAtUnixMs", default)]
+    pub latest_alert_at_unix_ms: Option<i64>,
     /// Per-session capability flags advertised by the Host; gates the
     /// organize-sheet verbs (restart/resume-agent/archive/notify).
     #[serde(default)]
@@ -302,10 +311,28 @@ pub struct BootstrapSnapshot {
     pub host_id: Option<String>,
     #[serde(rename = "macName", default)]
     pub host_name: Option<String>,
+    /// Project folders from the Host's bootstrap.
+    #[serde(default)]
+    pub folders: Vec<serde_json::Value>,
     #[serde(default)]
     pub presets: Vec<PresetSummary>,
     #[serde(default)]
     pub sessions: Vec<SessionSummary>,
+    /// The workspace's current behavior knobs (additive, minor 10).
+    #[serde(rename = "workspaceSettings", default)]
+    pub workspace_settings: Option<serde_json::Value>,
+    /// Complete official App catalog, including missing Apps (minor 15).
+    #[serde(rename = "availableApps", default)]
+    pub available_apps: Option<Vec<serde_json::Value>>,
+    /// Live installed App subset (minor 15).
+    #[serde(rename = "installedApps", default)]
+    pub installed_apps: Option<Vec<serde_json::Value>>,
+    /// Typed resource selector -> App/editor/system (minor 15).
+    #[serde(default)]
+    pub openers: Option<std::collections::HashMap<String, String>>,
+    /// Semantic App/pane envelope (minor 15).
+    #[serde(rename = "appPresentations", default)]
+    pub app_presentations: Option<serde_json::Value>,
     /// Projects/groups from the Host's bootstrap; the "Move to" filing
     /// destinations are derived from these.
     #[serde(default)]
@@ -320,6 +347,18 @@ pub struct BootstrapSnapshot {
     pub remote_server_certificate_fingerprint: Option<String>,
     #[serde(rename = "proEntitled", default)]
     pub pro_entitled: Option<bool>,
+    /// Whether the Git worktrees feature is enabled (additive).
+    #[serde(rename = "experimentalWorktreesEnabled", default)]
+    pub experimental_worktrees_enabled: Option<bool>,
+    /// The Host workspace's chrome tint hue in degrees (presentation only).
+    #[serde(rename = "hostTintHue", default)]
+    pub host_tint_hue: Option<f64>,
+    /// Stable hardware family of the Host ("macbook" | "linux" | ...).
+    #[serde(rename = "hostDeviceKind", default)]
+    pub host_device_kind: Option<String>,
+    /// Host device model string.
+    #[serde(rename = "hostDeviceModel", default)]
+    pub host_device_model: Option<String>,
 }
 
 /// A device paired with the Host.
@@ -913,6 +952,137 @@ mod serde_bytes_option {
     }
 }
 
+/// One plugin's activation change. Mirrors Swift `RemotePluginActivationPatch`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginActivationPatch {
+    pub id: String,
+    pub active: bool,
+}
+
+/// Patch for the Host's workspace settings. Mirrors Swift
+/// `RemoteWorkspaceSettingsPatch`. All fields are optional; only the set
+/// ones are applied.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceSettingsPatch {
+    #[serde(
+        rename = "pluginOrder",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub plugin_order: Option<Vec<String>>,
+    #[serde(
+        rename = "pluginActivation",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub plugin_activation: Option<PluginActivationPatch>,
+    #[serde(
+        rename = "autoStopArchiveMinutes",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub auto_stop_archive_minutes: Option<i64>,
+    #[serde(
+        rename = "sidebarStoppedLimit",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sidebar_stopped_limit: Option<i64>,
+    #[serde(
+        rename = "browserDefaultAccess",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub browser_default_access: Option<String>,
+    #[serde(
+        rename = "mcpNonchildWriteAccess",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mcp_nonchild_write_access: Option<String>,
+    #[serde(
+        rename = "computerAccess",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub computer_access: Option<String>,
+    #[serde(
+        rename = "mcpWorktreeAccess",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mcp_worktree_access: Option<bool>,
+    #[serde(
+        rename = "mcpAutoAddBrowserScreenshots",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mcp_auto_add_browser_screenshots: Option<bool>,
+}
+
+/// One-project organization patch. Mirrors Swift
+/// `RemoteProjectOrganizationPatch`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOrganizationPatch {
+    #[serde(rename = "projectID")]
+    pub project_id: String,
+    #[serde(rename = "folderID", default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+    #[serde(rename = "sortOrder", default, skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<i64>,
+    #[serde(
+        rename = "displayName",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub display_name: Option<String>,
+    #[serde(rename = "colorID", default, skip_serializing_if = "Option::is_none")]
+    pub color_id: Option<String>,
+    #[serde(
+        rename = "dateSorted",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub date_sorted: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
+}
+
+/// One-preset edit patch. Mirrors Swift `RemotePresetPatch`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PresetPatch {
+    #[serde(rename = "presetID", default, skip_serializing_if = "Option::is_none")]
+    pub preset_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(
+        rename = "quickLaunch",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub quick_launch: Option<bool>,
+    #[serde(rename = "sortOrder", default, skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removed: Option<bool>,
+}
+
+/// The Host's receipt for a created session. Mirrors Swift
+/// `NativeRemoteCreatedSession`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreatedSession {
+    #[serde(rename = "requestID", default)]
+    pub request_id: u64,
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(rename = "capturedAtUnixMs", default)]
+    pub captured_at_unix_ms: Option<i64>,
+    #[serde(default)]
+    pub session: Option<SessionSummary>,
+}
+
 // MARK: - RemoteControlProtocol batch 2 (porter T)
 //
 // Remaining `Remote*` types from `RemoteControlProtocol.swift` not covered by
@@ -1453,7 +1623,6 @@ pub struct SessionOrderRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn session_summary_decodes_minimal() {
         let s: SessionSummary = serde_json::from_value(serde_json::json!({
