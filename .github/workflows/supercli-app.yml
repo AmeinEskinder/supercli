@@ -76,10 +76,21 @@ jobs:
           # interpolated keys:/shortcut: strings outside lib/keymap.dart.
           hits=$(grep -rnE "['\"](ctrl|cmd|meta)\+" lib bin --include='*.dart' | grep -v 'lib/keymap.dart' || true)
           hits2=$(grep -rnE "(keys|shortcut):[[:space:]]*['\"]\\$" lib bin --include='*.dart' | grep -v 'lib/keymap.dart' || true)
+          # Menu key equivalents must be derived from Keymap via the
+          # `_menuItem(chord: …)` helper: no `key: '<literal>'` or
+          # `modifiers: {<literal>}` literals in lib/app_shell_menu.dart.
+          hits3=$(grep -nE "key:[[:space:]]*['\"]" lib/app_shell_menu.dart || true)
+          hits4=$(grep -nE "modifiers:[[:space:]]*\\{" lib/app_shell_menu.dart || true)
           if [ -n "$hits" ] || [ -n "$hits2" ]; then
             echo "FAIL: hardcoded key chords outside lib/keymap.dart:"
             echo "$hits"
             echo "$hits2"
+            exit 1
+          fi
+          if [ -n "$hits3" ] || [ -n "$hits4" ]; then
+            echo "FAIL: hardcoded menu key equivalents in lib/app_shell_menu.dart:"
+            echo "$hits3"
+            echo "$hits4"
             exit 1
           fi
           echo "PASS: no hardcoded key chords outside lib/keymap.dart."

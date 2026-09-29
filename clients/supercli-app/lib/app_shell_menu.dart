@@ -8,16 +8,21 @@
 /// owns the native binding: it builds the `NSMenu` via objc2 from this model
 /// and validates items with `validate_menu_item`.
 ///
+/// Every key equivalent in this file is DERIVED from [Keymap]
+/// (`lib/keymap.dart`), the single source of truth — never hardcoded.
+/// [_menuItem] takes a `Keymap` chord and [_parseMenuChord] converts it to the
+/// AppKit-style key + modifier set. Enforced by
+/// `test/no_hardcoded_keys_test.dart` ("no hardcoded menu keys in
+/// lib/app_shell_menu.dart").
+///
 /// Action ids are the snake_case names of `MenuAction` in
 /// `crates/supercli-native-bridge/src/macos/app_shell.rs`.
 library;
 
+import 'keymap.dart';
+
 /// Key-equivalent modifier.
-enum MenuModifier {
-  command,
-  shift,
-  option,
-}
+enum MenuModifier { command, shift, option }
 
 /// One entry in a menu.
 sealed class MenuEntry {
@@ -73,13 +78,88 @@ final class AppMenu {
   final List<MenuEntry> entries;
 }
 
-const _cmd = MenuModifier.command;
-const _shift = MenuModifier.shift;
-const _opt = MenuModifier.option;
+/// Converts a [Keymap] chord (e.g. `Keymap.zoomPane(isMacOS: true)` →
+/// `'shift+meta+enter'`) into the AppKit-style key equivalent and modifier
+/// set used by [MenuItemEntry].
+///
+/// The native shell menu is macOS-only, so every chord is resolved with
+/// `isMacOS: true`: `meta` becomes [MenuModifier.command]. `ctrl` has no
+/// menu equivalent and is rejected; no menu chord uses it.
+({String key, Set<MenuModifier> modifiers}) _parseMenuChord(String chord) {
+  const modifierByName = {
+    'meta': MenuModifier.command,
+    'shift': MenuModifier.shift,
+    'alt': MenuModifier.option,
+  };
+  const namedKeys = {
+    'enter': '\r',
+    'left': '←',
+    'right': '→',
+    'up': '↑',
+    'down': '↓',
+  };
+
+  final modifiers = <MenuModifier>{};
+  var rest = chord;
+  while (true) {
+    final plus = rest.indexOf('+');
+    if (plus < 0) break;
+    final token = rest.substring(0, plus);
+    if (token == 'ctrl') {
+      throw ArgumentError.value(
+        chord,
+        'chord',
+        'ctrl has no MenuModifier in the native menu',
+      );
+    }
+    final modifier = modifierByName[token];
+    if (modifier == null) break;
+    modifiers.add(modifier);
+    rest = rest.substring(plus + 1);
+  }
+  var key = namedKeys[rest] ?? rest;
+  if (key.length != 1) {
+    throw ArgumentError.value(chord, 'chord', 'unrecognized key "$rest"');
+  }
+  return (key: key, modifiers: modifiers);
+}
+
+/// Builds a [MenuItemEntry] whose key equivalent is derived from a [Keymap]
+/// chord — never hardcoded. Pass the chord resolved for macOS, e.g.
+/// `Keymap.settings(isMacOS: true)`.
+///
+/// [shiftedKey]: when true and the chord carries shift, the key equivalent
+/// is the shifted character ('Z', 'G'), preserving AppDelegate's original
+/// keyEquivalent for Redo and Find Previous. AppKit treats 'z'+shift and
+/// 'Z'+shift identically; the flag keeps the pinned model byte-exact.
+MenuItemEntry _menuItem({
+  required String title,
+  required String action,
+  required String chord,
+  bool shiftedKey = false,
+  bool hidden = false,
+  bool allowsKeyEquivalentWhenHidden = false,
+}) {
+  final parsed = _parseMenuChord(chord);
+  var key = parsed.key;
+  if (shiftedKey && parsed.modifiers.contains(MenuModifier.shift)) {
+    key = key.toUpperCase();
+  }
+  return MenuItemEntry(
+    title: title,
+    action: action,
+    key: key,
+    modifiers: parsed.modifiers,
+    hidden: hidden,
+    allowsKeyEquivalentWhenHidden: allowsKeyEquivalentWhenHidden,
+  );
+}
 
 /// The full macOS main menu, in HIG order. Port of
 /// `AppDelegate.installMainMenu()`.
-const List<AppMenu> mainMenu = [
+///
+/// Non-const: every key equivalent is computed from [Keymap] at startup.
+final List<AppMenu> mainMenu = [
   AppMenu(
     id: 'app',
     title: 'Supercli',
@@ -87,37 +167,36 @@ const List<AppMenu> mainMenu = [
       // autoenablesItems = false on this menu: AppKit would otherwise
       // re-enable the targetless "Check for Updates…" item via responder
       // chain resolution.
-      MenuItemEntry(title: 'About Supercli', action: 'about'),
-      MenuItemEntry(title: 'Check for Updates…', action: 'check_for_updates'),
-      MenuSeparator(),
-      MenuItemEntry(
+      const MenuItemEntry(title: 'About Supercli', action: 'about'),
+      const MenuItemEntry(
+        title: 'Check for Updates…',
+        action: 'check_for_updates',
+      ),
+      const MenuSeparator(),
+      _menuItem(
         title: 'Settings…',
         action: 'open_settings',
-        key: ',',
-        modifiers: {_cmd},
+        chord: Keymap.settings(isMacOS: true),
       ),
-      MenuSeparator(),
-      ServicesSubmenu(),
-      MenuSeparator(),
-      MenuItemEntry(
+      const MenuSeparator(),
+      const ServicesSubmenu(),
+      const MenuSeparator(),
+      _menuItem(
         title: 'Hide Supercli',
         action: 'hide',
-        key: 'h',
-        modifiers: {_cmd},
+        chord: Keymap.hide(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Hide Others',
         action: 'hide_others',
-        key: 'h',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.hideOthers(isMacOS: true),
       ),
-      MenuItemEntry(title: 'Show All', action: 'show_all'),
-      MenuSeparator(),
-      MenuItemEntry(
+      const MenuItemEntry(title: 'Show All', action: 'show_all'),
+      const MenuSeparator(),
+      _menuItem(
         title: 'Quit Supercli',
         action: 'quit',
-        key: 'q',
-        modifiers: {_cmd},
+        chord: Keymap.quit(isMacOS: true),
       ),
     ],
   ),
@@ -125,87 +204,75 @@ const List<AppMenu> mainMenu = [
     id: 'session',
     title: 'Session',
     entries: [
-      MenuItemEntry(
+      _menuItem(
         title: 'New Session',
         action: 'new_session',
-        key: 'n',
-        modifiers: {_cmd},
+        chord: Keymap.newSession(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'New Terminal',
         action: 'new_terminal',
-        key: 't',
-        modifiers: {_cmd},
+        chord: Keymap.newTerminal(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Split Pane Right',
         action: 'split_pane_right',
-        key: 'd',
-        modifiers: {_cmd},
+        chord: Keymap.splitRight(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Split Pane Down',
         action: 'split_pane_down',
-        key: 'd',
-        modifiers: {_cmd, _shift},
+        chord: Keymap.splitDown(isMacOS: true),
       ),
       // ⇧⌘↩ (Ghostty parity): temporarily maximize the active pane.
-      MenuItemEntry(
+      _menuItem(
         title: 'Zoom Pane',
         action: 'zoom_pane',
-        key: '\r',
-        modifiers: {_cmd, _shift},
+        chord: Keymap.zoomPane(isMacOS: true),
       ),
-      MenuItemEntry(title: 'Equalize Splits', action: 'equalize_splits'),
+      const MenuItemEntry(title: 'Equalize Splits', action: 'equalize_splits'),
       // ⌥⌘arrows move keyboard focus to the spatial neighbor pane.
-      MenuItemEntry(
+      _menuItem(
         title: 'Focus Pane Left',
         action: 'focus_pane_left',
-        key: '←',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.focusPaneLeft(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Focus Pane Right',
         action: 'focus_pane_right',
-        key: '→',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.focusPaneRight(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Focus Pane Up',
         action: 'focus_pane_up',
-        key: '↑',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.focusPaneUp(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Focus Pane Down',
         action: 'focus_pane_down',
-        key: '↓',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.focusPaneDown(isMacOS: true),
       ),
-      MenuSeparator(),
+      const MenuSeparator(),
       // ⌥⌘B — the sidebar chord family (⌘B toggles the sidebar).
-      MenuItemEntry(
+      _menuItem(
         title: 'Collapse All Folders',
         action: 'collapse_all_folders',
-        key: 'b',
-        modifiers: {_cmd, _opt},
+        chord: Keymap.collapseAllFolders(isMacOS: true),
       ),
-      MenuSeparator(),
+      const MenuSeparator(),
       // The palette is the discoverable home for "jump to anything".
-      MenuItemEntry(
+      _menuItem(
         title: 'Command Palette',
         action: 'toggle_command_palette',
-        key: 'k',
-        modifiers: {_cmd},
+        chord: Keymap.commandPalette(isMacOS: true),
       ),
-      MenuSeparator(),
+      const MenuSeparator(),
       // ⌘⇧S (the Firefox screenshot binding; the system's ⌘⇧3/4/5 are
       // intercepted before apps see them).
-      MenuItemEntry(
+      _menuItem(
         title: 'Take Screenshot…',
         action: 'take_screenshot',
-        key: 's',
-        modifiers: {_cmd, _shift},
+        chord: Keymap.screenshot(isMacOS: true),
       ),
     ],
   ),
@@ -213,43 +280,52 @@ const List<AppMenu> mainMenu = [
     id: 'edit',
     title: 'Edit',
     entries: [
-      MenuItemEntry(title: 'Undo', action: 'undo', key: 'z', modifiers: {_cmd}),
-      MenuItemEntry(
+      _menuItem(
+        title: 'Undo',
+        action: 'undo',
+        chord: Keymap.undo(isMacOS: true),
+      ),
+      _menuItem(
         title: 'Redo',
         action: 'redo',
-        key: 'Z',
-        modifiers: {_cmd, _shift},
+        chord: Keymap.redo(isMacOS: true),
+        shiftedKey: true,
       ),
-      MenuSeparator(),
-      MenuItemEntry(title: 'Cut', action: 'cut', key: 'x', modifiers: {_cmd}),
-      MenuItemEntry(title: 'Copy', action: 'copy', key: 'c', modifiers: {_cmd}),
-      MenuItemEntry(title: 'Paste', action: 'paste', key: 'v', modifiers: {_cmd}),
-      MenuItemEntry(
+      const MenuSeparator(),
+      _menuItem(title: 'Cut', action: 'cut', chord: Keymap.cut(isMacOS: true)),
+      _menuItem(
+        title: 'Copy',
+        action: 'copy',
+        chord: Keymap.copy(isMacOS: true),
+      ),
+      _menuItem(
+        title: 'Paste',
+        action: 'paste',
+        chord: Keymap.paste(isMacOS: true),
+      ),
+      _menuItem(
         title: 'Select All',
         action: 'select_all',
-        key: 'a',
-        modifiers: {_cmd},
+        chord: Keymap.selectAll(isMacOS: true),
       ),
-      MenuSeparator(),
+      const MenuSeparator(),
       // Terminal search rides libghostty's own engine; the notification
       // reaches the displayed pane's find bar.
-      MenuItemEntry(
+      _menuItem(
         title: 'Find…',
         action: 'find',
-        key: 'f',
-        modifiers: {_cmd},
+        chord: Keymap.find(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Find Next',
         action: 'find_next',
-        key: 'g',
-        modifiers: {_cmd},
+        chord: Keymap.findNext(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Find Previous',
         action: 'find_previous',
-        key: 'G',
-        modifiers: {_cmd, _shift},
+        chord: Keymap.findPrevious(isMacOS: true),
+        shiftedKey: true,
       ),
     ],
   ),
@@ -259,33 +335,29 @@ const List<AppMenu> mainMenu = [
     entries: [
       // Terminal font zoom edits the persisted Settings ▸ Appearance font,
       // so every pane follows and the zoom survives a restart.
-      MenuItemEntry(
+      _menuItem(
         title: 'Increase Font Size',
         action: 'increase_font_size',
-        key: '+',
-        modifiers: {_cmd},
+        chord: Keymap.increaseFont(isMacOS: true),
       ),
       // Hidden twin: ⌘+ is ⌘⇧= on US layouts, so this keeps the unshifted
       // chord working.
-      MenuItemEntry(
+      _menuItem(
         title: 'Increase Font Size',
         action: 'increase_font_size',
-        key: '=',
-        modifiers: {_cmd},
+        chord: Keymap.increaseFontAlt(isMacOS: true),
         hidden: true,
         allowsKeyEquivalentWhenHidden: true,
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Decrease Font Size',
         action: 'decrease_font_size',
-        key: '-',
-        modifiers: {_cmd},
+        chord: Keymap.decreaseFont(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Reset Font Size',
         action: 'reset_font_size',
-        key: '0',
-        modifiers: {_cmd},
+        chord: Keymap.resetFont(isMacOS: true),
       ),
     ],
   ),
@@ -296,21 +368,22 @@ const List<AppMenu> mainMenu = [
       // ⌘W follows Ghostty's active-surface convention while a terminal is
       // shown, then falls back to closing the window. The native binding
       // sets this menu as NSApp.windowsMenu.
-      MenuItemEntry(
+      _menuItem(
         title: 'Close Window',
         action: 'close_pane_or_window',
-        key: 'w',
-        modifiers: {_cmd},
+        chord: Keymap.closeWindow(isMacOS: true),
       ),
-      MenuItemEntry(
+      _menuItem(
         title: 'Minimize',
         action: 'minimize',
-        key: 'm',
-        modifiers: {_cmd},
+        chord: Keymap.minimize(isMacOS: true),
       ),
-      MenuItemEntry(title: 'Zoom', action: 'zoom'),
-      MenuSeparator(),
-      MenuItemEntry(title: 'Bring All to Front', action: 'arrange_in_front'),
+      const MenuItemEntry(title: 'Zoom', action: 'zoom'),
+      const MenuSeparator(),
+      const MenuItemEntry(
+        title: 'Bring All to Front',
+        action: 'arrange_in_front',
+      ),
     ],
   ),
   AppMenu(
@@ -318,7 +391,7 @@ const List<AppMenu> mainMenu = [
     title: 'Help',
     entries: [
       // The native binding sets this menu as NSApp.helpMenu.
-      MenuItemEntry(title: 'Supercli Help', action: 'open_help'),
+      const MenuItemEntry(title: 'Supercli Help', action: 'open_help'),
     ],
   ),
 ];
