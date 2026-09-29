@@ -609,8 +609,7 @@ where
             return (self.http_send)(text, &write_id).map_err(RouterError::Http);
         }
         if let Some(transport) = self.healthy_transport() {
-            let timeout =
-                Duration::from_secs_f64(crate::remote_terminal_websocket::WS_SEND_TIMEOUT_SECS);
+            let timeout = Duration::from_secs_f64(WS_SEND_TIMEOUT_SECS);
             match transport.send_input_bounded(text, Some(&write_id), timeout) {
                 Ok(()) => return Ok(()),
                 Err(_) => self.retire(&transport),
