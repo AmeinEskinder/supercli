@@ -650,12 +650,14 @@ files:
         count: 3
     notes: "3 XCTest cases ported: ghost grouping, live rows never ghosts, multiple dead generations."
   native/SupercliNative/Tests/SupercliNativeTests/SharedOrganizationReconciliationTests.swift:
-    destination: "Rust: supercli-core::store_policies::tests"
+    destination: "Rust: supercli-core::store_policies::tests + supercli-client::sidebar_order::tests"
     status: ported
     tests:
       - file: crates/supercli-core/src/store_policies.rs
-        count: 13
-    notes: "13 XCTest cases ported: title freshness/normalization, pending-write decoding, pin add/remove raw-JSON edits, legacy flat normalization, malformed refusal, timestamp reconciliation, legacy removal deferral."
+        count: 4
+      - file: crates/supercli-client/src/sidebar_order.rs
+        count: 9
+    notes: "13 XCTest cases ported: title freshness/normalization + pending-write decoding stay in store_policies (4 Rust tests); the pin half (add/remove raw-JSON edits, legacy flat normalization, malformed refusal, timestamp reconciliation, legacy removal deferral) moved to supercli-client::sidebar_order as the single pin kernel (9 Rust tests) — the Host never called it and the client cannot depend on core."
   native/SupercliNative/Tests/SupercliNativeTests/StartupPerformanceTests.swift:
     destination: "Rust: supercli-core::store_policies::tests"
     status: partial

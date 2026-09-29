@@ -30,11 +30,11 @@ files:
         target: "crates/supercli-core/src/store_policies.rs::decoded_pending_title_writes"
         test: "store_policies::tests::legacy_pending_title_storage_decodes_conservatively"
       - swift: "applyPinOverrides — raw-JSON edits preserving unknown fields, legacy flat normalization, malformed shape refuses"
-        target: "crates/supercli-core/src/store_policies.rs::apply_pin_overrides"
-        test: "store_policies::tests::pin_intent_preserves_concurrent_unrelated_shared_pin, pin_removal_touches_only_its_own_key, pin_intent_keeps_legacy_flat_pins_and_normalizes_shape, malformed_pin_state_leaves_intent_pending"
+        target: "crates/supercli-client/src/sidebar_order.rs::apply_pin_overrides"
+        test: "sidebar_order::tests::pin_intent_preserves_concurrent_unrelated_shared_pin, pin_removal_touches_only_its_own_key, pin_intent_keeps_legacy_flat_pins_and_normalizes_shape, malformed_pin_state_leaves_intent_pending"
       - swift: "reconciledPinOverrides — timestamp-based add/remove reconciliation against shared state"
-        target: "crates/supercli-core/src/store_policies.rs::reconciled_pin_overrides"
-        test: "store_policies::tests::newer_shared_unpin_retires_stale_native_added_overlay, pending_native_add_survives_an_older_shared_snapshot, newer_shared_repin_retires_native_removal, pending_native_removal_beats_an_older_shared_pin, legacy_untimestamped_removal_defers_to_readable_shared_state"
+        target: "crates/supercli-client/src/sidebar_order.rs::reconciled_pin_overrides"
+        test: "sidebar_order::tests::newer_shared_unpin_retires_stale_native_added_overlay, pending_native_add_survives_an_older_shared_snapshot, newer_shared_repin_retires_native_removal, pending_native_removal_beats_an_older_shared_pin, legacy_untimestamped_removal_defers_to_readable_shared_state"
       - swift: "settings_resolve — auto_stop_archive_minutes normalization/resolution/labels (absent vs explicit vs junk)"
         target: "crates/supercli-core/src/settings_resolve.rs::normalize_auto_stop_archive_minutes, resolve_auto_stop_archive_minutes"
         test: "settings_resolve::tests (10 tests)"
@@ -76,7 +76,7 @@ files:
         test: "sidebar_order::tests::rebuild_pin_groups_validity_ordering_and_overlay, rebuild_pin_groups_unplaced_append_oldest_first, assemble_pinned_items_mixed_order_with_preview_rerank, advertised_session_order_only_when_interleaving_folders, apply_pinned_record_order_reorders_and_keeps_rest, apply_pinned_record_order_synthesizes_group_records, apply_pinned_record_order_legacy_flat_and_unknown_shapes"
     tests:
       - file: crates/supercli-core/src/store_policies.rs
-        count: 23
+        count: 14
       - file: crates/supercli-core/src/settings_resolve.rs
         count: 10
       - file: crates/supercli-core/src/approval_pairs.rs
@@ -88,5 +88,5 @@ files:
       - file: crates/supercli-client/src/remote_session_cache.rs
         count: 8
       - file: crates/supercli-client/src/sidebar_order.rs
-        count: 34
-    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 7 pure-logic sections ported with 93 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8), sidebar ordering (34). The sidebar ordering port covers the ordering kernel only: tree build, overlay precedence/application, sibling reorder math, session sorts, drag preview/commit/cancel state, local overlay writes, pin-group rebuild, pinned-item assembly, advertised order, and the raw-JSON pinned-record reorder. UserDefaults/app-state/shared-file persistence, remote-Host verb paths, SwiftUI animations, the sidebarLists truncation window, archive sections, and pane-layout reconciliation are not portable and stay with UI/host workers. The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active(). The sidebar row types are local web-safe views (supercli-client has no supercli-core dependency); SessionStatus reuses remote_dto_adapters::SessionStatus."
+        count: 43
+    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 7 pure-logic sections ported with 93 tests: store_policies (14), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8), sidebar ordering (43). The pin-override kernel (applyPinOverrides/reconciledPinOverrides + 9 tests, formerly supercli-core::store_policies) now lives in supercli-client::sidebar_order as the single pin/sidebar kernel — the Host never called it (verified zero callers on next) and the client cannot depend on core; the Host's persisted pin model (supercli-core::state::PinnedSidebarSession) is unchanged. The sidebar ordering port covers the ordering kernel only: tree build, overlay precedence/application, sibling reorder math, session sorts, drag preview/commit/cancel state, local overlay writes, pin-group rebuild, pinned-item assembly, advertised order, and the raw-JSON pinned-record reorder. UserDefaults/app-state/shared-file persistence, remote-Host verb paths, SwiftUI animations, the sidebarLists truncation window, archive sections, and pane-layout reconciliation are not portable and stay with UI/host workers. The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active(). The sidebar row types are local web-safe views (supercli-client has no supercli-core dependency); SessionStatus reuses remote_dto_adapters::SessionStatus."
