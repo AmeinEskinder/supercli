@@ -87,7 +87,7 @@ files:
     notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift:
-    destination: "Rust: supercli-core/client"
+    destination: "Rust: supercli-core + gpuidart TerminalPaneView rewrite"
     status: partial
     checklist: ""
     behaviours:
@@ -107,18 +107,18 @@ files:
         target: "crates/supercli-core/src/ghostty_bridge.rs::GhosttyTerminalPaneDelegate"
         test: "ghostty_bridge::tests::delegate_trait_is_object_usable"
       - swift: "GhosttyTerminalPane (AppKit NSView wrapping Ghostty EXEC surface)"
-        target: null
+        target: "gpuidart: TerminalPaneView rewrite (see docs/gpuidart-gaps-terminal.md)"
         test: null
       - swift: "RemoteGhosttyTerminalPane (AppKit NSView; retained remote frame, InMemoryTerminalSession backend)"
-        target: null
+        target: "gpuidart: TerminalPaneView.hosted rewrite (see docs/gpuidart-gaps-terminal.md)"
         test: null
       - swift: "PathDraggableTerminalView (AppKit NSDraggingSource for TUI path regions)"
-        target: null
+        target: "gpuidart: TerminalPaneView drag-out (see docs/gpuidart-gaps-terminal.md G-12)"
         test: null
     tests:
       - file: crates/supercli-core/src/ghostty_bridge.rs
         count: 12
-    notes: "PARTIAL 2026-09-29: Ghostty-free value types ported to supercli-core::ghostty_bridge (controller-core gated, no GUI deps): RemoteTerminalViewport, RemoteTerminalCallbackEpoch, RemoteTerminalCallbackRelay, RemoteTerminalLocalFeed, GhosttyTerminalPaneDelegate trait. Swift's MainActor delivery hop is collapsed to a synchronous epoch check; the stale-callback-discard invariant is preserved and tested. The ~2000 LOC of AppKit NSView classes (GhosttyTerminalPane, RemoteGhosttyTerminalPane, PathDraggableTerminalView) are macOS-native and stay Swift-side — not portable to Rust."
+    notes: "PARTIAL 2026-09-29: Ghostty-free value types ported to supercli-core::ghostty_bridge (controller-core gated, no GUI deps): RemoteTerminalViewport, RemoteTerminalCallbackEpoch, RemoteTerminalCallbackRelay, RemoteTerminalLocalFeed, GhosttyTerminalPaneDelegate trait. Swift's MainActor delivery hop is collapsed to a synchronous epoch check; the stale-callback-discard invariant is preserved and tested. The ~2000 LOC of AppKit NSView classes (GhosttyTerminalPane, RemoteGhosttyTerminalPane, PathDraggableTerminalView) do NOT stay Swift-side: under the 0% goal they are rewritten as TerminalPaneView on gpuidart (rendering via UiTerminal, input via raw key stream, drops via the semantic drop-target map). Rewrite gaps documented in docs/gpuidart-gaps-terminal.md (G-12 drag-out, G-13 visibility signals, G-14 cursor-shape/hover); P0-8 gaps G-5/G-7/G-8 (raw keys, resize, mouse) also required."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Dart: clients/supercli-app"
