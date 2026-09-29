@@ -19,7 +19,6 @@ import 'package:gpuidart/gpuidart.dart';
 import 'settingsprimitives.dart';
 import 'settingspanels.dart' as base;
 import 'hostsettingspanels.dart';
-import 'featuressettingspanel.dart';
 
 /// Maps a stable feature key to its additive settings field
 /// (Swift: `RemoteFeaturesSettingsPanel.value(_:in:)`).
@@ -159,7 +158,7 @@ final class RemoteFeaturesSettingsPanel {
   final Map<String, bool> overrides;
   final String? errorMessage;
 
-  UiNode _featureRow(FeatureDefinition feature) {
+  UiNode _featureRow(base.FeatureDefinition feature) {
     final value =
         overrides[feature.key] ??
         (settings == null
@@ -191,7 +190,7 @@ final class RemoteFeaturesSettingsPanel {
           'Waiting for $scopeName\'s feature settings…',
         ),
       );
-    } else if (allFeatures.isEmpty) {
+    } else if (base.allFeatures.isEmpty) {
       sections.add(
         const UiText(
           'remote-features-empty',
@@ -199,10 +198,10 @@ final class RemoteFeaturesSettingsPanel {
         ),
       );
     } else {
-      final shipped = allFeatures
+      final shipped = base.allFeatures
           .where((f) => !f.isExperimental)
           .toList(growable: false);
-      final experimental = allFeatures
+      final experimental = base.allFeatures
           .where((f) => f.isExperimental)
           .toList(growable: false);
       sections.add(
@@ -215,7 +214,7 @@ final class RemoteFeaturesSettingsPanel {
           UiColumn('remote-features-experimental', [
             const SettingsSectionHeader(
               title: 'Experimental',
-              description: experimentalSectionDescription,
+              description: base.experimentalSectionDescription,
             ).build(),
             for (final f in experimental) _featureRow(f),
           ]),

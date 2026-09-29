@@ -410,36 +410,42 @@ void main() {
   });
 
   group('NotificationsSettingsPanel', () {
-    test('renders toggles and test buttons', () {
-      final panel = NotificationsSettingsPanel(settings: AppSettings());
+    test('renders attention and test sections', () {
+      const panel = NotificationsSettingsPanel();
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 5);
-      final testRow = node.children[3] as UiRow;
-      expect((testRow.children[0] as UiButton).label, 'Test on this Mac');
+      // Pane header, menu-attention section, notifications test section.
+      expect(node.children.length, 3);
+      final tests = node.children[2] as UiColumn;
+      expect(tests.id, 'notifications-tests');
     });
   });
 
   group('TranscriptsSettingsPanel', () {
-    test('renders content toggle', () {
-      final panel = TranscriptsSettingsPanel(settings: AppSettings());
+    test('renders content toggles and range picker', () {
+      const panel = TranscriptsSettingsPanel();
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 3);
+      expect(node.children.length, 2);
+      expect(node.id, 'transcripts-settings');
     });
   });
 
   group('FeaturesSettingsPanel', () {
-    test('renders four feature toggles', () {
-      final panel = FeaturesSettingsPanel(settings: AppSettings());
+    test('renders shipped and experimental sections', () {
+      const panel = FeaturesSettingsPanel();
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 5);
+      // Pane header, shipped features, experimental section.
+      expect(node.children.length, 3);
+      expect(panel.shipped.length, 4);
+      expect(panel.experimental.length, 1);
     });
   });
 
   group('AdvancedSettingsPanel', () {
-    test('renders advanced controls', () {
-      final panel = AdvancedSettingsPanel(settings: AppSettings());
+    test('renders cleanup/memory/terminals/diagnostics sections', () {
+      const panel = AdvancedSettingsPanel();
       final node = panel.build() as UiColumn;
-      expect(node.children.length, 6);
+      // Pane header, cleanup, memory, terminals, diagnostics.
+      expect(node.children.length, 5);
     });
   });
 

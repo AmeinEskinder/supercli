@@ -4,17 +4,14 @@
 library;
 
 import 'package:gpuidart/gpuidart.dart';
-import 'package:supercli_app/screens/advancedsettingspanel.dart';
 import 'package:supercli_app/screens/appearancesettingspanel.dart';
-import 'package:supercli_app/screens/featuressettingspanel.dart';
 import 'package:supercli_app/screens/hostsettingspanels.dart';
-import 'package:supercli_app/screens/notificationssettingspanel.dart';
 import 'package:supercli_app/screens/openresourcessettingsrows.dart';
 import 'package:supercli_app/screens/remoteappearancesettingspanel.dart';
 import 'package:supercli_app/screens/remotehostsettingspanels.dart';
 import 'package:supercli_app/screens/settingsshell.dart';
+import 'package:supercli_app/screens/settingspanels.dart';
 import 'package:supercli_app/screens/settingsview.dart';
-import 'package:supercli_app/screens/transcriptssettingspanel.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -31,10 +31,6 @@ import 'remoteappearancesettingspanel.dart';
 import 'hostsettingspanels.dart';
 import 'remotehostsettingspanels.dart';
 import 'remotesettingspanel.dart';
-import 'notificationssettingspanel.dart';
-import 'transcriptssettingspanel.dart';
-import 'featuressettingspanel.dart';
-import 'advancedsettingspanel.dart';
 import 'pluginsettingspanel.dart';
 import 'workspacessettingspanel.dart';
 import 'worktreessettingspanel.dart';
@@ -381,13 +377,13 @@ final class SettingsView {
       case SettingsPanelKind.agentAccess:
         return AgentAccessSettingsPanel(settings: settings).build();
       case SettingsPanelKind.transcripts:
-        return const TranscriptsSettingsPanel().build();
+        return const panels.TranscriptsSettingsPanel().build();
       case SettingsPanelKind.notifications:
-        return const NotificationsSettingsPanel().build();
+        return const panels.NotificationsSettingsPanel().build();
       case SettingsPanelKind.features:
-        return const FeaturesSettingsPanel().build();
+        return const panels.FeaturesSettingsPanel().build();
       case SettingsPanelKind.advanced:
-        return const AdvancedSettingsPanel().build();
+        return const panels.AdvancedSettingsPanel().build();
       case SettingsPanelKind.mobile:
         return const RemoteSettingsPanel().build();
       case SettingsPanelKind.workspaces:

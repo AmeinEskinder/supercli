@@ -26,6 +26,8 @@ library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import 'settingsprimitives.dart';
+
 /// Which settings scope is being edited.
 enum SettingsScope {
   thisMac('This Mac'),
@@ -495,117 +497,768 @@ final class SessionsSettingsPanel {
   }
 }
 
-/// Features settings panel: experimental gates.
-final class FeaturesSettingsPanel {
-  FeaturesSettingsPanel({required this.settings});
+/// Local Notifications settings panel.
+///
+/// Port of `NotificationsSettingsPanel` (SettingsView.swift, 3909-4059).
+///
+/// How Supercli flags a session that needs the user and when it sends a
+/// notification banner: the menu-attention detection toggle, the Mac/phone
+/// test buttons, and the Link/push diagnostics rows.
+///
+/// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
+/// since gpuidart has no native settings widgets (see
+/// docs/gpuidart-gaps-settings.md).
+final class NotificationsSettingsPanel {
+  const NotificationsSettingsPanel({
+    this.isDefaultInstance = true,
+    this.defaultWorkspaceLabel = 'Personal',
+    this.hasOwnMenuAttentionSetting = false,
+    this.menuAttentionDetection = true,
+    this.macTestInFlight = false,
+    this.lastMacTestLabel = '',
+    this.macTestNeedsSystemSettings = false,
+    this.pairedPhoneTokenCount = 0,
+    this.linkStatusLabel = '',
+    this.lastPhonePushLabel = '',
+    this.lastPushAttemptText,
+  });
 
-  final AppSettings settings;
+  final bool isDefaultInstance;
+  final String defaultWorkspaceLabel;
+  final bool hasOwnMenuAttentionSetting;
+  final bool menuAttentionDetection;
+  final bool macTestInFlight;
+  final String lastMacTestLabel;
+  final bool macTestNeedsSystemSettings;
+  final int pairedPhoneTokenCount;
+  final String linkStatusLabel;
+  final String lastPhonePushLabel;
+  final String? lastPushAttemptText;
+
+  String get pairedPhoneTokensText => pairedPhoneTokenCount == 0
+      ? 'None registered'
+      : '$pairedPhoneTokenCount ready';
+
+  UiNode _menuAttentionSection() {
+    return UiColumn('notifications-attention', [
+      const SettingsSectionHeader(
+        title: 'Attention',
+        description:
+            'When a session is waiting for you to answer an on-screen menu.',
+      ).build(),
+      SettingsToggle(
+        id: 'notifications-menu-attention',
+        label: 'Flag menus waiting for a choice',
+        value: menuAttentionDetection,
+      ).fallback(),
+      const UiText(
+        'notifications-menu-attention-desc',
+        'Show the yellow attention dot when an agent draws a pick-an-option menu. These prompts send no signal on their own, so Supercli reads them off the screen.',
+      ),
+    ]);
+  }
+
+  UiNode _notificationsSection() {
+    final rows = <UiNode>[
+      const SettingsSectionHeader(
+        title: 'Notifications',
+        description:
+            'A macOS banner (and a push to a paired iPhone) when a '
+            'session needs input, or finishes if you turned on “Notify when done” '
+            'for it. Phone alerts use Link/APNs even while terminal traffic stays '
+            'Direct or SSH. Mac and phone tests exercise their respective delivery '
+            'paths; phone diagnostics distinguish a missing APNs token, Link '
+            'entitlement failure, and APNs rejection.',
+      ).build(),
+      UiButton(
+        'notifications-mac-test',
+        macTestInFlight ? 'Sending…' : 'Send a test Mac notification',
+      ),
+      SettingsValueRow(label: 'Last Mac test', value: lastMacTestLabel).build(),
+    ];
+    if (macTestNeedsSystemSettings) {
+      rows.add(
+        const UiButton(
+          'notifications-mac-settings',
+          'Open Mac Notification Settings…',
+        ),
+      );
+    }
+    rows.addAll([
+      const UiButton(
+        'notifications-phone-test',
+        'Send a test phone notification',
+      ),
+      SettingsValueRow(
+        label: 'Paired phone tokens',
+        value: pairedPhoneTokensText,
+      ).build(),
+      SettingsValueRow(label: 'Supercli Link', value: linkStatusLabel).build(),
+      SettingsValueRow(
+        label: 'Last phone push',
+        value: lastPhonePushLabel,
+      ).build(),
+      if (lastPushAttemptText != null)
+        SettingsValueRow(
+          label: 'Last attempt',
+          value: lastPushAttemptText!,
+        ).build(),
+    ]);
+    return UiColumn('notifications-tests', rows);
+  }
 
   UiNode build() {
-    return UiColumn('features-settings', [
-      const UiText('features-title', 'Features'),
-      SettingsToggle(
-        id: 'feat-remote-ws',
-        label: 'Remote workspaces',
-        value: settings.remoteWorkspaces,
-      ).fallback(),
-      SettingsToggle(
-        id: 'feat-git-worktrees',
-        label: 'Git worktrees',
-        value: settings.gitWorktrees,
-      ).fallback(),
-      SettingsToggle(
-        id: 'feat-browser-mcp',
-        label: 'Browser MCP (experimental)',
-        value: settings.browserMcp,
-      ).fallback(),
-      SettingsToggle(
-        id: 'feat-auto-screenshots',
-        label: 'Auto-add browser screenshots',
-        value: settings.autoAddBrowserScreenshots,
-      ).fallback(),
-    ]);
+    final sections = <UiNode>[
+      const SettingsPaneHeader(
+        title: 'Notifications',
+        description: 'How Supercli flags a session that needs you and when it sends a notification banner.',
+      ).build(),
+    ];
+    if (!isDefaultInstance) {
+      sections.add(
+        UiColumn('notifications-inherit', [
+          SettingsSectionHeader(
+            title: 'Inherits from $defaultWorkspaceLabel',
+            description:
+                'This workspace uses the default workspace\'s '
+                'notification settings until a setting below is changed. '
+                'Revert drops its own values.',
+          ).build(),
+          UiButton(
+            'notifications-use-inherited',
+            'Use $defaultWorkspaceLabel\'s notifications',
+          ),
+        ]),
+      );
+    }
+    sections.add(_menuAttentionSection());
+    sections.add(_notificationsSection());
+    return UiColumn('notifications-settings', sections);
   }
 }
 
-/// Transcripts settings panel.
-final class TranscriptsSettingsPanel {
-  TranscriptsSettingsPanel({required this.settings});
+/// Range options for the transcript range picker
+/// (Swift: the `maxEntries` Picker in `transcriptSection`).
+const List<int> transcriptRangeOptions = [0, 20, 50, 100];
 
-  final AppSettings settings;
+/// Label for a transcript range option (Swift: picker tags).
+String transcriptRangeLabel(int entries) {
+  switch (entries) {
+    case 0:
+      return 'Whole conversation';
+    case 20:
+      return 'Last 20 entries';
+    case 50:
+      return 'Last 50 entries';
+    case 100:
+      return 'Last 100 entries';
+    default:
+      return 'Last $entries entries';
+  }
+}
+
+/// Local Transcripts settings panel.
+///
+/// Port of `TranscriptsSettingsPanel` (SettingsView.swift, 4060-4197).
+///
+/// Which content types the Markdown transcript includes and how much of
+/// it. Shared by the session context menu's "Copy transcript" action
+/// (desktop and phone) and the Sessions MCP `read_transcript` tool (as its
+/// defaults), so all of them stay in sync.
+///
+/// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
+/// since gpuidart has no native settings widgets (see
+/// docs/gpuidart-gaps-settings.md).
+final class TranscriptsSettingsPanel {
+  const TranscriptsSettingsPanel({
+    this.includeSessionInfo = true,
+    this.includeUser = true,
+    this.includeAssistant = true,
+    this.includeReasoning = true,
+    this.includeTools = true,
+    this.includeFileChanges = true,
+    this.includePlanUpdates = true,
+    this.maxEntries = 50,
+  });
+
+  final bool includeSessionInfo;
+  final bool includeUser;
+  final bool includeAssistant;
+  final bool includeReasoning;
+  final bool includeTools;
+  final bool includeFileChanges;
+  final bool includePlanUpdates;
+  final int maxEntries;
+
+  UiNode _toggle({
+    required String id,
+    required String title,
+    String subtitle = '',
+    required bool value,
+  }) {
+    return UiColumn('$id-labeled', [
+      SettingsToggle(id: id, label: title, value: value).fallback(),
+      if (subtitle.isNotEmpty) UiText('$id-subtitle', subtitle),
+    ]);
+  }
 
   UiNode build() {
     return UiColumn('transcripts-settings', [
-      const UiText('transcripts-title', 'Transcripts'),
-      const UiText(
-        'transcripts-info',
-        'Control what session content is stored in transcripts.',
-      ),
-      SettingsToggle(
-        id: 'transcript-content',
-        label: 'Store message content',
-        value: settings.transcriptContentEnabled,
-      ).fallback(),
+      const SettingsPaneHeader(
+        title: 'Transcripts',
+        description:
+            'A session\'s conversation, rendered as Markdown — '
+            'what "Copy transcript" copies and what agents read.',
+      ).build(),
+      UiColumn('transcripts-content', [
+        const SettingsSectionHeader(
+          title: 'Transcript content',
+          description:
+              'What "Copy transcript" (right-click a session) puts on '
+              'the clipboard as Markdown. These options also drive the defaults '
+              'for agents reading a session\'s transcript. Range is the default '
+              'for agent reads; the Copy transcript menu picks its own range.',
+        ).build(),
+        _toggle(
+          id: 'transcripts-session-info',
+          title: 'Session info header',
+          subtitle:
+              'Start with the session\'s title, ID, CLI, and model. '
+              'The ID lets another agent target this session with the '
+              'Sessions MCP tools.',
+          value: includeSessionInfo,
+        ),
+        _toggle(
+          id: 'transcripts-user',
+          title: 'User messages',
+          value: includeUser,
+        ),
+        _toggle(
+          id: 'transcripts-assistant',
+          title: 'Assistant messages',
+          value: includeAssistant,
+        ),
+        _toggle(
+          id: 'transcripts-reasoning',
+          title: 'Reasoning',
+          subtitle: 'The agent\'s thinking blocks.',
+          value: includeReasoning,
+        ),
+        _toggle(
+          id: 'transcripts-tools',
+          title: 'Tool calls & results',
+          subtitle: 'Commands the agent ran and their output.',
+          value: includeTools,
+        ),
+        _toggle(
+          id: 'transcripts-file-changes',
+          title: 'File changes & diffs',
+          value: includeFileChanges,
+        ),
+        _toggle(
+          id: 'transcripts-plan-updates',
+          title: 'Plan updates',
+          value: includePlanUpdates,
+        ),
+        UiColumn('transcripts-range-labeled', [
+          SettingsSelect(
+            id: 'transcripts-range',
+            label: 'Range',
+            selected: transcriptRangeLabel(maxEntries),
+            options: [
+              for (final o in transcriptRangeOptions) transcriptRangeLabel(o),
+            ],
+          ).fallback(),
+          const UiText(
+            'transcripts-range-subtitle',
+            'How much of the conversation to include.',
+          ),
+        ]),
+      ]),
     ]);
   }
 }
 
-/// Notifications settings panel.
-final class NotificationsSettingsPanel {
-  NotificationsSettingsPanel({required this.settings});
+/// Header copy for the Features tab's Experimental section, shared by the
+/// local, per-workspace, and remote Host panels
+/// (Swift: `SupercliFeatureFlags.experimentalSectionDescription`).
+const String experimentalSectionDescription =
+    'Early features that are still being shaped. They can change or '
+    'disappear between releases. Turn one off here if it gets in the way.';
 
-  final AppSettings settings;
+/// A feature toggle descriptor (Swift: `AppFeature`).
+final class FeatureDefinition {
+  const FeatureDefinition({
+    required this.key,
+    required this.title,
+    required this.summary,
+    this.defaultOn = false,
+    this.isExperimental = false,
+  });
+
+  final String key;
+  final String title;
+  final String summary;
+  final bool defaultOn;
+  final bool isExperimental;
+}
+
+/// Everything shown in Settings ▸ Features, in display order (shipped
+/// features first; the panel groups the experimental ones under their own
+/// section). Remote workspaces, Git worktrees, Sessions use, and Workspaces
+/// graduated on 2026-09-08; Browser use stays experimental.
+/// (Swift: `SupercliFeatureFlags.all`.)
+const List<FeatureDefinition> allFeatures = [
+  FeatureDefinition(
+    key: 'remoteWorkspaces',
+    title: 'Remote workspaces',
+    summary:
+        'Add and control workspaces on other machines — pair another Mac, a '
+        'headless `supercli serve` box, or an SSH host — and share this Mac with '
+        'other devices. Direct connections are for your own network or VPN; '
+        'Supercli Link carries the encrypted path when you are away.',
+    defaultOn: true,
+  ),
+  FeatureDefinition(
+    key: 'worktrees',
+    title: 'Git worktrees',
+    summary:
+        'Run sessions in an isolated git worktree of a project so multiple '
+        'agents can work the same repo in parallel without touching each other\'s '
+        'files. Adds worktree controls to the project menu, sidebar, and the '
+        'Worktrees settings tab.',
+    defaultOn: true,
+  ),
+  FeatureDefinition(
+    key: 'sessionsMcp',
+    title: 'Sessions use',
+    summary:
+        'Let an agent session see your other sessions: it can read them all, '
+        'and asks before writing to another session unless you already approved '
+        'that pair. These are cooperation controls, not a sandbox against commands '
+        'running as your macOS user. Adds the Sessions settings tab. Applies when '
+        'a session starts, so already-running sessions pick it up after a restart.',
+    defaultOn: true,
+  ),
+  FeatureDefinition(
+    // The persisted key is deliberately still `profiles`: shipped
+    // experimental-feature keys are immutable.
+    key: 'profiles',
+    title: 'Workspaces',
+    summary:
+        'Use extra, fully separate workspaces on this Mac — each '
+        'workspace has its own sessions, projects, presets, settings, and '
+        'pairs with your phone as its own workspace. Adds the Workspaces '
+        'settings tab.',
+    defaultOn: true,
+  ),
+  FeatureDefinition(
+    key: 'browserMcp',
+    title: 'Browser use',
+    summary:
+        'Let agent sessions drive a real browser — open pages, click, '
+        'fill forms, and take screenshots. Each session gets its own isolated '
+        'browser with no access to your normal browser profile. Browser access '
+        'prompts are cooperation controls, not a sandbox against commands '
+        'running as your macOS user. Adds the Browser settings tab.',
+    defaultOn: true,
+    isExperimental: true,
+  ),
+];
+
+/// Local Features settings panel.
+///
+/// Port of `FeaturesSettingsPanel` (SettingsView.swift, 4330-4429).
+///
+/// Turn Supercli's optional features on or off — no restart needed. A
+/// workspace instance inherits the default workspace's feature flags until
+/// it sets its own; the revert is offered inline. Shipped features render
+/// first; experimental ones group under their own section.
+///
+/// Feature definitions come from `AppFeature` (FeatureFlags.swift):
+/// everything shown in Settings ▸ Features, in display order. Shipped
+/// feature keys are immutable — the workspaces feature's persisted key is
+/// deliberately still `profiles`.
+///
+/// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
+/// since gpuidart has no native settings widgets (see
+/// docs/gpuidart-gaps-settings.md).
+final class FeaturesSettingsPanel {
+  const FeaturesSettingsPanel({
+    this.isDefaultInstance = true,
+    this.defaultWorkspaceLabel = 'Personal',
+    this.hasOwnSettings = false,
+    this.values = const {},
+  });
+
+  final bool isDefaultInstance;
+  final String defaultWorkspaceLabel;
+  final bool hasOwnSettings;
+  final Map<String, bool> values;
+
+  List<FeatureDefinition> get shipped =>
+      allFeatures.where((f) => !f.isExperimental).toList();
+
+  List<FeatureDefinition> get experimental =>
+      allFeatures.where((f) => f.isExperimental).toList();
+
+  UiNode _featureRow(FeatureDefinition feature) {
+    return UiColumn('feature-${feature.key}-labeled', [
+      SettingsToggle(
+        id: 'feature-${feature.key}',
+        label: feature.title,
+        value: values[feature.key] ?? feature.defaultOn,
+      ).fallback(),
+      UiText('feature-${feature.key}-summary', feature.summary),
+    ]);
+  }
 
   UiNode build() {
-    return UiColumn('notifications-settings', [
-      const UiText('notifications-title', 'Notifications'),
-      SettingsToggle(
-        id: 'notify-completion',
-        label: 'Notify on session completion',
-        value: settings.notifyOnCompletion,
-      ).fallback(),
-      SettingsToggle(
-        id: 'notify-flags',
-        label: 'Flag select menus',
-        value: settings.notifyFlags,
-      ).fallback(),
-      UiRow('notify-test-row', [
-        const UiButton('notify-test-mac', 'Test on this Mac'),
-        const UiButton('notify-test-phone', 'Test on phone'),
-      ]),
-      const UiButton('notify-diagnostics', 'Delivery diagnostics'),
-    ]);
+    final sections = <UiNode>[
+      const SettingsPaneHeader(
+        title: 'Features',
+        description:
+            'Turn Supercli\'s optional features on or off — no restart needed.',
+      ).build(),
+    ];
+    if (!isDefaultInstance) {
+      sections.add(
+        UiColumn('features-inherit', [
+          SettingsSectionHeader(
+            title: 'Inherits from $defaultWorkspaceLabel',
+            description:
+                'This workspace uses the default workspace\'s features '
+                'until a toggle below is changed. Revert drops its own values.',
+          ).build(),
+          UiButton(
+            'features-use-inherited',
+            'Use $defaultWorkspaceLabel\'s features',
+          ),
+        ]),
+      );
+    }
+    if (allFeatures.isEmpty) {
+      sections.add(
+        const UiText(
+          'features-empty',
+          'No optional features right now. Check back after an update.',
+        ),
+      );
+    } else {
+      sections.add(
+        UiColumn('features-shipped', [for (final f in shipped) _featureRow(f)]),
+      );
+      if (experimental.isNotEmpty) {
+        sections.add(
+          UiColumn('features-experimental', [
+            const SettingsSectionHeader(
+              title: 'Experimental',
+              description: experimentalSectionDescription,
+            ).build(),
+            for (final f in experimental) _featureRow(f),
+          ]),
+        );
+      }
+    }
+    return UiColumn('features-settings', sections);
   }
 }
 
-/// Advanced settings panel.
-final class AdvancedSettingsPanel {
-  AdvancedSettingsPanel({required this.settings});
+/// Auto-stop/archive minute options for the local cleanup picker
+/// (Swift: `SupercliStore.autoStopArchiveMinuteOptions`).
+const List<int> autoStopArchiveMinuteOptions = [0, 30, 60, 120, 240, 480, 1440];
 
-  final AppSettings settings;
+/// Stopped-sidebar limit options for the local cleanup picker
+/// (Swift: `SupercliStore.sidebarStoppedLimitOptions`).
+const List<int> sidebarStoppedLimitOptions = [0, 3, 5, 10, 15, 25];
+
+/// Label for an auto-stop/archive minute option
+/// (Swift: `SupercliStore.autoStopArchiveLabel(for:)`).
+String autoStopArchiveLabel(int minutes) {
+  if (minutes == 0) return 'Never';
+  if (minutes < 60) return 'After $minutes minutes';
+  if (minutes == 60) return 'After 1 hour';
+  if (minutes == 1440) return 'After 1 day';
+  return 'After ${minutes ~/ 60} hours';
+}
+
+/// Label for a stopped-sidebar limit option
+/// (Swift: `SupercliStore.sidebarStoppedLimitLabel(for:)`).
+String sidebarStoppedLimitLabel(int limit) => limit == 0 ? 'None' : '$limit';
+
+/// "42 MB" (Swift: `AdvancedSettingsPanel.formatMB`).
+String formatMB(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
+
+/// "4.2%" / "42%" (Swift: `AdvancedSettingsPanel.formatCpu`).
+String formatCpu(double value) => value >= 10
+    ? '${value.toStringAsFixed(0)}%'
+    : '${value.toStringAsFixed(1)}%';
+
+/// ".../last/two" for long paths; "No folder" for empty
+/// (Swift: `AdvancedSettingsPanel.compactPath`).
+String compactPath(String path) {
+  if (path.isEmpty) return 'No folder';
+  final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+  if (parts.length <= 2) return path;
+  return '.../${parts.sublist(parts.length - 2).join('/')}';
+}
+
+/// Process memory snapshot (Swift: `MemorySnapshot`).
+final class MemorySnapshot {
+  const MemorySnapshot({
+    required this.processFootprintBytes,
+    required this.runningHostCount,
+    required this.hostedSessionCount,
+  });
+
+  final int processFootprintBytes;
+  final int runningHostCount;
+  final int hostedSessionCount;
+}
+
+/// A running terminal host row (Swift: `RunningTerminal`).
+final class RunningTerminal {
+  const RunningTerminal({
+    required this.id,
+    required this.projectID,
+    required this.label,
+    required this.command,
+    required this.cwd,
+    required this.pid,
+    required this.processCount,
+    required this.cpuPercent,
+    required this.rssBytes,
+    this.canArchive = false,
+    this.isRemoving = false,
+  });
+
+  final String id;
+  final String projectID;
+  final String label;
+  final String command;
+  final String cwd;
+  final int pid;
+  final int processCount;
+  final double cpuPercent;
+  final int rssBytes;
+  final bool canArchive;
+  final bool isRemoving;
+
+  /// "Blank shell" when the command is empty (Swift: `commandLabel`).
+  String get commandLabel => command.trim().isEmpty ? 'Blank shell' : command;
+}
+
+/// Diagnostics data (Swift: `AdvancedDiagnostics.Snapshot`).
+///
+/// Collection (`AdvancedDiagnostics.collect()`) is Host/FFI work — the app
+/// injects a snapshot; this file only renders it.
+final class AdvancedDiagnosticsSnapshot {
+  const AdvancedDiagnosticsSnapshot({
+    this.memory,
+    this.terminals = const [],
+    this.sessionsFolder = '',
+    this.traceLogExists = false,
+  });
+
+  final MemorySnapshot? memory;
+  final List<RunningTerminal> terminals;
+  final String sessionsFolder;
+  final bool traceLogExists;
+}
+
+/// Local Advanced settings panel.
+///
+/// Port of `AdvancedSettingsPanel` (SettingsView.swift, 4430-4740) with the
+/// pure display helpers `formatMB`/`formatCpu`/`compactPath` and the data
+/// shapes `MemorySnapshot` (4741-4746) and `RunningTerminal` (4747-4762).
+///
+/// `AdvancedDiagnostics.collect()` shells out and reads processes and the
+/// filesystem in Swift. The Dart port does NOT perform that collection:
+/// the panel accepts an injected [AdvancedDiagnosticsSnapshot] (populated
+/// by the app through `supercli-client-ffi`/the Host) and renders it. Only
+/// the display/pure formatting logic is ported here.
+///
+/// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
+/// since gpuidart has no native settings widgets (see
+/// docs/gpuidart-gaps-settings.md).
+final class AdvancedSettingsPanel {
+  const AdvancedSettingsPanel({
+    this.autoStopArchiveMinutes = 60,
+    this.sidebarStoppedLimit = 10,
+    this.snapshot = const AdvancedDiagnosticsSnapshot(),
+    this.loading = false,
+  });
+
+  final int autoStopArchiveMinutes;
+  final int sidebarStoppedLimit;
+  final AdvancedDiagnosticsSnapshot snapshot;
+  final bool loading;
+
+  double get _totalCpu =>
+      snapshot.terminals.fold(0.0, (sum, t) => sum + t.cpuPercent);
+
+  int get _totalRss => snapshot.terminals.fold(0, (sum, t) => sum + t.rssBytes);
+
+  /// "N running · X% CPU · Y MB memory. Sorted by current CPU usage."
+  /// (Swift: `AdvancedSettingsPanel.summaryText`).
+  String get summaryText {
+    if (snapshot.terminals.isEmpty) {
+      return 'Live terminal hosts sorted by current CPU usage.';
+    }
+    return '${snapshot.terminals.length} running · ${formatCpu(_totalCpu)} CPU · '
+        '${formatMB(_totalRss)} memory. Sorted by current CPU usage.';
+  }
+
+  UiNode _cleanupSection() {
+    return UiColumn('advanced-cleanup', [
+      const SettingsSectionHeader(
+        title: 'Cleanup',
+        description:
+            'Sessions that have stayed idle for the selected time are '
+            'stopped and archived — the same as clicking "Stop and archive": the '
+            'terminal stops and the session files away into the project\'s archive '
+            'library, where Restore & Resume continues the conversation. Sessions '
+            'that keep working (including loops — any activity resets the clock), '
+            'or that are pinned, selected, unread, or waiting for input, are left '
+            'alone; plain shell terminals are never touched. Nothing is deleted '
+            'automatically. Sessions that stop or die on their own are never '
+            'archived automatically. Choose how many stopped or archived sessions '
+            'each project previews; older rows are hidden from the sidebar only.',
+      ).build(),
+      UiColumn('advanced-cleanup-auto-stop-labeled', [
+        SettingsSelect(
+          id: 'advanced-auto-stop',
+          label: 'Auto-stop and archive inactive terminals',
+          selected: autoStopArchiveLabel(autoStopArchiveMinutes),
+          options: [
+            for (final m in autoStopArchiveMinuteOptions)
+              autoStopArchiveLabel(m),
+          ],
+        ).fallback(),
+      ]),
+      UiColumn('advanced-cleanup-limit-labeled', [
+        SettingsSelect(
+          id: 'advanced-sidebar-limit',
+          label: 'Stopped or archived sessions shown in sidebar',
+          selected: sidebarStoppedLimitLabel(sidebarStoppedLimit),
+          options: [
+            for (final l in sidebarStoppedLimitOptions)
+              sidebarStoppedLimitLabel(l),
+          ],
+        ).fallback(),
+      ]),
+    ]);
+  }
+
+  UiNode _memorySection() {
+    final memory = snapshot.memory;
+    return UiColumn('advanced-memory', [
+      const SettingsSectionHeader(
+        title: 'Memory',
+        description: 'Current process memory usage and active session counts.',
+      ).build(),
+      if (memory != null) ...[
+        SettingsValueRow(
+          label: 'App memory (Supercli Native)',
+          value: formatMB(memory.processFootprintBytes),
+        ).build(),
+        SettingsValueRow(
+          label: 'Running terminal hosts',
+          value: '${memory.runningHostCount}',
+        ).build(),
+        SettingsValueRow(
+          label: 'Hosted sessions on disk',
+          value: '${memory.hostedSessionCount}',
+        ).build(),
+      ] else
+        UiText(
+          'advanced-memory-state',
+          loading ? 'Loading…' : 'Unable to read memory usage',
+        ),
+    ]);
+  }
+
+  UiNode _terminalRow(RunningTerminal terminal) {
+    return UiRow('advanced-terminal-${terminal.id}', [
+      UiColumn('advanced-terminal-info-${terminal.id}', [
+        UiText('advanced-terminal-label-${terminal.id}', terminal.label),
+        UiText(
+          'advanced-terminal-sub-${terminal.id}',
+          '${terminal.commandLabel} • PID ${terminal.pid} • '
+              '${terminal.processCount} proc • ${compactPath(terminal.cwd)}',
+        ),
+      ]),
+      UiColumn('advanced-terminal-cpu-${terminal.id}', [
+        UiText(
+          'advanced-terminal-cpu-value-${terminal.id}',
+          formatCpu(terminal.cpuPercent),
+        ),
+        const UiText('advanced-terminal-cpu-label', 'CPU'),
+      ]),
+      UiColumn('advanced-terminal-mem-${terminal.id}', [
+        UiText(
+          'advanced-terminal-mem-value-${terminal.id}',
+          formatMB(terminal.rssBytes),
+        ),
+        const UiText('advanced-terminal-mem-label', 'Memory'),
+      ]),
+      UiButton('advanced-terminal-open-${terminal.id}', 'Open'),
+      UiButton(
+        'advanced-terminal-archive-${terminal.id}',
+        terminal.canArchive ? 'Stop and archive' : 'Remove',
+      ),
+    ]);
+  }
+
+  UiNode _terminalsSection() {
+    return UiColumn('advanced-terminals', [
+      UiRow('advanced-terminals-header', [
+        const SettingsSectionHeader(title: 'Running Terminals').build(),
+        UiButton(
+          'advanced-terminals-refresh',
+          loading ? 'Refreshing…' : 'Refresh',
+        ),
+      ]),
+      UiText('advanced-terminals-summary', summaryText),
+      if (snapshot.terminals.isEmpty)
+        UiText(
+          'advanced-terminals-empty',
+          loading ? 'Loading terminals…' : 'No running terminals.',
+        )
+      else
+        UiColumn('advanced-terminals-rows', [
+          for (final t in snapshot.terminals) _terminalRow(t),
+        ]),
+    ]);
+  }
+
+  UiNode _diagnosticsSection() {
+    return UiColumn('advanced-diagnostics', [
+      const SettingsSectionHeader(
+        title: 'Diagnostics',
+        description: 'Quick access to Supercli\'s on-disk session data and hook trace log.',
+      ).build(),
+      UiRow('advanced-diagnostics-sessions', [
+        const UiText('advanced-diagnostics-sessions-label', 'Sessions folder'),
+        const UiButton('advanced-diagnostics-sessions-open', 'Show in Finder'),
+      ]),
+      UiRow('advanced-diagnostics-trace', [
+        const UiText('advanced-diagnostics-trace-label', 'Hooks trace log'),
+        const UiButton('advanced-diagnostics-trace-open', 'Show in Finder'),
+      ]),
+    ]);
+  }
 
   UiNode build() {
     return UiColumn('advanced-settings', [
-      const UiText('advanced-title', 'Advanced'),
-      SettingsToggle(
-        id: 'adv-show-worktrees',
-        label: 'Show agent worktrees',
-        value: settings.showAgentWorktrees,
-      ).fallback(),
-      UiRow('sessions-folder-row', [
-        UiText(
-          'sessions-folder-label',
-          'Sessions folder: ${settings.sessionsFolder.isEmpty ? '(default)' : settings.sessionsFolder}',
-        ),
-        const UiButton('sessions-folder-choose', 'Choose…'),
-      ]),
-      SettingsToggle(
-        id: 'adv-trace-log',
-        label: 'Trace log',
-        value: settings.traceLog,
-      ).fallback(),
-      const UiButton('adv-running-hosts', 'Running hosts…'),
-      const UiText('adv-memory', 'Memory usage: see Activity Monitor'),
+      const SettingsPaneHeader(
+        title: 'Advanced',
+        description: 'Resource usage, cleanup, and on-disk data for Supercli\'s terminal hosts.',
+      ).build(),
+      _cleanupSection(),
+      _memorySection(),
+      _terminalsSection(),
+      _diagnosticsSection(),
     ]);
   }
 }

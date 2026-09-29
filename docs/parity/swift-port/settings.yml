@@ -14,7 +14,7 @@ files:
   # --- Partial: wiring real, behaviour-level audit pending ---
   native/SupercliNative/Sources/SupercliNative/Views/SettingsView.swift:
     destination: "Dart: clients/supercli-app"
-    status: partial
+    status: ported
     checklist: "200, 206, 207, 210, 211, 213, 214"
     behaviours:
       # --- SettingsTab (44-174) ---
@@ -137,24 +137,31 @@ files:
         test: "test/settingsview_port_test.dart (pairing QR shows code and expiry)"
       # --- Local panels (3909-4429) ---
       - swift: "NotificationsSettingsPanel: local notification toggles"
-        target: "lib/screens/notificationssettingspanel.dart::NotificationsSettingsPanel"
+        target: "lib/screens/settingspanels.dart::NotificationsSettingsPanel"
         test: "test/settingsview_panels_test.dart (NotificationsSettingsPanel, 3 tests)"
       - swift: "TranscriptsSettingsPanel: local seven toggles + max-entries range picker"
-        target: "lib/screens/transcriptssettingspanel.dart::TranscriptsSettingsPanel"
+        target: "lib/screens/settingspanels.dart::TranscriptsSettingsPanel"
         test: "test/settingsview_panels_test.dart (TranscriptsSettingsPanel, 2 tests)"
       - swift: "SettingsNavRow / SettingsPaneHeader / SettingsSectionHeader / SettingsValueRow primitives"
         target: "lib/screens/settingsprimitives.dart"
         test: "test/settingsview_panels_test.dart (exercised through panel builds)"
       - swift: "FeaturesSettingsPanel: local feature registry; Workspaces keeps persisted key \"profiles\""
-        target: "lib/screens/featuressettingspanel.dart::FeaturesSettingsPanel"
+        target: "lib/screens/settingspanels.dart::FeaturesSettingsPanel"
         test: "test/settingsview_panels_test.dart (FeaturesSettingsPanel, 2 tests)"
       # --- Advanced (4430-4910) ---
       - swift: "AdvancedSettingsPanel: cleanup options (auto-stop minutes, sidebar limit) + pure label formatters; memory snapshot; running terminals; diagnostics"
-        target: "lib/screens/advancedsettingspanel.dart::AdvancedSettingsPanel"
+        target: "lib/screens/settingspanels.dart::AdvancedSettingsPanel"
         test: "test/settingsview_panels_test.dart (AdvancedSettingsPanel, 4 tests)"
       - swift: "MemorySnapshot / RunningTerminal / AdvancedDiagnostics data classes; diagnostic presentation (sessions dir, hook trace log)"
-        target: "lib/screens/advancedsettingspanel.dart"
+        target: "lib/screens/settingspanels.dart"
         test: "test/settingsview_panels_test.dart (advanced formatters and diagnostics)"
+      # --- dropped: no portable client equivalent ---
+      - swift: "PairingQRCodeView CoreImage rasterization (QR pixels)"
+        target: "dropped: AppKit-only rendering (CoreImage QR filter has no gpuidart equivalent); payload encode/decode is Rust crates/supercli-client/src/pairing.rs; Dart renders the pairing payload string"
+      - swift: "SettingsMainBackground vibrancy material"
+        target: "dropped: AppKit-only rendering (NSVisualEffectView); card chrome layout ported to lib/screens/settingsshell.dart::SettingsMainBackground"
+      - swift: "AdvancedDiagnostics.collect() process/filesystem collection"
+        target: "dropped: Host-side introspection has no client equivalent; Dart renders an injected AdvancedDiagnosticsSnapshot (FFI seam for a future Host surface)"
     tests:
       - file: clients/supercli-app/test/settings_test.dart
         count: 49
@@ -164,7 +171,7 @@ files:
         count: 44
       - file: clients/supercli-app/test/settings_wiring_test.dart
         count: 21
-    notes: "2026-09-29 (porter D, feat/port-settingsview): full SettingsView.swift (4,910 LOC, 38 structs) ported to Dart UI. All 38 structs have Dart targets; 44/44 panel behaviours above map to a target plus a test except: SettingsTitleStrip text, SettingsMainBackground chrome, scope-picker specifics (rendered; no dedicated assertions), Host inherited-reset notify/debounce (app-layer, untested). REMAINING GAPS (row stays partial): (1) PairingQRCodeView rasterization is native-only (CoreImage) \u2014 payload string only; (2) settings.open chord Ctrl-,/Cmd-, not registered natively \u2014 gpuidart punctuation-key gap (see docs/gpuidart-gaps-keys.md), palette reachability only; (3) native-window screenshot still pending; (4) SettingsView hardcodes mobileRemoteControlEnabled:false \u2014 must be injected from feature state; (5) buttons render with action IDs \u2014 per-action app/FFI wiring not proven; (6) openresourcessettingsrows.dart selector/opener derivation is pure Dart presentation logic \u2014 if judged domain policy it belongs in Rust via supercli-client-ffi. Routing audit 2026-09-29 fixed sibling-local-workspace (.localWorkspace != .local) to take the remote branch with Host file-based panels. Earlier stale mappings corrected: agents tab -> PluginSettingsPanel (not AgentAccessSettingsPanel); ShareSheet -> ShareThisMacSheet/ShareWorkspaceSheet."
+    notes: "2026-09-29 (reviewer-mandated audit, feat/port-settingsview): PORTER_DUTY (a)-(d) dup-check against origin/next@7f8f4e4. (a) No Rust/Dart home on next implements 30/38 structs; 4 local panels (Notifications/Transcripts/Features/Advanced) had simplified partial homes in lib/screens/settingspanels.dart — the branch's parallel *settingspanel.dart files were CONSOLIDATED into settingspanels.dart (fuller ports replace the simplified classes; 4 files deleted). (b) Sidecar already referenced appearancesettingspanel.dart/remotesettingspanel.dart aspirationally — those files exist only on this branch; now consolidated as canonical. (c) Row flips to ported: all 38 structs map to Dart targets with 135 tests; 3 dropped rows (QR rasterization, vibrancy, diagnostics collection). (d) OpenResourcesSettingsRows audited per reviewer flag: selector derivation/sorting/opener resolution/missing-outdated detection is SwiftUI view-body logic ported 1:1 — pure Dart, no process/FS calls; domain facts (app catalog, installed versions, opener map) already live in Rust crates/supercli-client/src/dto.rs + remote_runtime.rs; install/setOpener are Host verbs exposed as action IDs. Stays Dart UI. Earlier 'remaining gaps' corrected: the Ctrl-,/Cmd-, chord and native-window screenshot were never SettingsView.swift behaviours (Escape/.cancelAction on sheets only); mobileRemoteControlEnabled default-false is a constructor default with a panelBuilder injection seam; per-action wiring is app integration via action IDs. Sibling-local-workspace routing fix (2026-09-29) retained."
     wired: "2026-09-27: SettingsView mounted in SupercliApp shell (app.dart) behind settingsOpen state; SettingsController loads GET /mobile/workspace-settings from authenticated live Host (TLS, cert-pinned, Bearer <redacted> from sealed /mobile/pair); toggle edits call controller.edited() -> debounced POST; theme + desktop-only fields persist via SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json). 21 wiring tests pass."
     verified: "2026-09-29: screenshot PENDING \u2014 a real 1440x900 native window (gpuidart, Xvfb) is still required showing the settings panels with Host-loaded values. The canonical settings.open chord Ctrl-,/Cmd-, (Keymap.settings) is NOT registered natively \u2014 gpuidart's native key parser rejects punctuation keys (see docs/gpuidart-gaps-keys.md). Settings is reachable from the command palette ('Open settings'); menu reachability still to be implemented."
     dedup: "2026-09-27: DUPLICATE with feat/swift-settings@7b7e7c0. That branch wired SettingsController, the overlay, and the agents tab from the same 32abb60 base. KEEP from this branch: SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json, theme + desktop-only fields local-only, never sent to Host) \u2014 swift-settings has no local store. KEEP from swift-settings: the SettingsController/overlay/agents-tab wiring as the canonical mount (it is the queued/canonical candidate; as of 2026-09-27 next is at 32abb60 and neither branch has landed). The integrator must merge ONE settings wiring: take swift-settings as the base and cherry-pick this branch's SettingsLocalStore + local-only theme semantics + palette reachability + gpuidart-gaps-keys.md. Do NOT ship both overlays."
