@@ -46,10 +46,28 @@ files:
       - swift: "Sparkline/barChart/lineChart page bodies"
         target: "lib/widgets/appkit_protocol.dart::PageBodySparkline/PageBodyBarChart/PageBodyLineChart"
         test: "test/appkit_protocol_test.dart::charts group (7 tests)"
+      - swift: "Wire-faithful message envelope (attach/attached/snapshot/delta/event/ack/lifecycle/requestSnapshot/presence/error)"
+        target: "lib/widgets/appkit_protocol_messages.dart::UIMessage.fromJson"
+        test: "test/appkit_protocol_messages_test.dart (written-not-run)"
+      - swift: "UIEventValue nine-case type/value dispatch"
+        target: "lib/widgets/appkit_protocol_messages.dart::UIEventValue.fromJson"
+        test: "test/appkit_protocol_messages_test.dart::UIEventValue wire round trips (all nine cases)"
+      - swift: "UIAttach token redaction + version-range validation"
+        target: "lib/widgets/appkit_protocol_messages.dart::UIAttach.fromJson/toString"
+        test: "test/appkit_protocol_messages_test.dart::attach token redaction group"
     tests:
       - file: clients/supercli-app/test/appkit_protocol_test.dart
         count: 15
-    notes: "Core decode types ported. Added: chart page bodies (SparklineSpec/BarChartSpec/LineChartSpec with validation), UIInputSpec + PageHeader, full UIMenuSpec decode, MenuSpec.requiredCapabilities."
+      - file: clients/supercli-app/test/appkit_protocol_messages_test.dart
+        count: 36
+        status: written-not-run
+      - file: clients/supercli-app/test/appkit_protocol_widgets_test.dart
+        count: 33
+        status: written-not-run
+      - file: clients/supercli-app/test/appkit_protocol_lists_test.dart
+        count: 33
+        status: written-not-run
+    notes: "Core decode types ported. Added: chart page bodies (SparklineSpec/BarChartSpec/LineChartSpec with validation), UIInputSpec + PageHeader, full UIMenuSpec decode, MenuSpec.requiredCapabilities. 2026-09-29: wire-faithful message layer (UIMessage/UIAttach/UIEvent/UIAck/UISnapshot/etc.) in appkit_protocol_messages.dart; UIMessage.delta now carries the typed UIDelta from appkit_protocol_delta.dart. New suites for messages/widgets/lists written but NOT run: no Dart toolchain on this VM."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift:
     destination: "Dart: appkit_widgets"
@@ -73,12 +91,27 @@ files:
       - swift: "UISnapshot.applying(_:) incremental application (33 ops)"
         target: "lib/widgets/appkit_delta_apply.dart::AppKitSnapshotApply.applying"
         test: "test/appkit_delta_apply_test.dart (25 tests)"
+      - swift: "UIDeltaOperation wire-faithful decode/encode (all 33 ops, exact CodingKeys)"
+        target: "lib/widgets/appkit_protocol_delta.dart::UIDeltaOperation.fromJson/toJson"
+        test: "test/appkit_protocol_delta_test.dart::every operation encodes and decodes identically (33 ops)"
+      - swift: "UIDelta envelope validation (1...4096 ops, revision > baseRevision)"
+        target: "lib/widgets/appkit_protocol_delta.dart::UIDelta.fromJson"
+        test: "test/appkit_protocol_delta_test.dart::UIDelta validation group (4 tests)"
+      - swift: "UISnapshot.applying(_:) route/contiguity guards + op application + final selection check"
+        target: "lib/widgets/appkit_protocol_messages.dart::UISnapshot.applying (extension UIDeltaApplication)"
+        test: "test/appkit_protocol_delta_test.dart::UISnapshot.applying group (16 tests)"
+      - swift: "UTF-16 markdown text edits (utf16Offset(for:in:))"
+        target: "lib/widgets/appkit_protocol_delta.dart::utf16OffsetForPosition"
+        test: "test/appkit_protocol_delta_test.dart::edits use UTF-16 offsets"
     tests:
       - file: clients/supercli-app/test/appkit_delta_test.dart
         count: 12
       - file: clients/supercli-app/test/appkit_delta_apply_test.dart
         count: 25
-    notes: "Wire decode + envelope validation + incremental application ported (1336 Swift LOC -> ~1700 Dart LOC). All 33 ops with route/contiguity guards, UTF-16 text edits, tree/list/content mutations."
+      - file: clients/supercli-app/test/appkit_protocol_delta_test.dart
+        count: 22
+        status: written-not-run
+    notes: "Wire decode + envelope validation + incremental application ported (1336 Swift LOC -> ~1700 Dart LOC). All 33 ops with route/contiguity guards, UTF-16 text edits, tree/list/content mutations. Wire-faithful UIDelta port added in appkit_protocol_delta.dart (2026-09-29): the renderer-oriented AppKitDelta in appkit_delta.dart remains for the legacy renderer. Delta tests written but NOT run: no Dart toolchain on this VM."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift:
     destination: "Dart: appkit_widgets"

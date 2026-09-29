@@ -95,9 +95,9 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/SurfaceComponentView.swift | 84 | Dart: appkit_widgets | partial |  | 0 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/TextBoxView.swift | 175 | Dart: appkit_widgets | partial |  | 0 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/TreeView.swift | 370 | Dart: appkit_widgets | partial |  | 0 |
-| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift | 1336 | Dart: appkit_widgets | partial |  | 37 |
+| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift | 1336 | Dart: appkit_widgets | partial |  | 59 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift | 163 | Dart: appkit_widgets | partial |  | 1 |
-| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift | 4216 | Dart: appkit_widgets | partial |  | 15 |
+| clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIProtocol.swift | 4216 | Dart: appkit_widgets | partial |  | 117 |
 | clients/legacy/app-kit/swift/Sources/SupercliAppKitUI/UIUnixSessionClient.swift | 513 | Dart: appkit_widgets | todo |  | 0 |
 | clients/legacy/app-kit/swift/Tests/SupercliAppKitUITests/MarkdownInsertMenuTests.swift | 155 | Dart: appkit_widgets | partial |  | 0 |
 | clients/legacy/app-kit/swift/Tests/SupercliAppKitUITests/ProtocolTests.swift | 827 | Dart: appkit_widgets | partial |  | 15 |
