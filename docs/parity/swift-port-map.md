@@ -309,7 +309,7 @@ _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | shared/SupercliShared/Sources/SupercliShared/GeneratedRuntimeCatalog.swift | 887 | Rust: supercli-core::app_runtime (generated) | todo |  | 0 |
 | shared/SupercliShared/Sources/SupercliShared/PairedHostRecord.swift | 88 | Rust: supercli-client::types, supercli-client::pairing | ported |  | 5 |
 | shared/SupercliShared/Sources/SupercliShared/RelayProtocol.swift | 608 | Rust: supercli-client::relay, supercli-client::crypto | ported |  | 10 |
-| shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift | 2739 | Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend | partial |  | 34 |
+| shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift | 2739 | Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend | partial |  | 35 |
 | shared/SupercliShared/Sources/SupercliShared/RemotePairingClient.swift | 138 | Rust: supercli-client::pairing | ported |  | 14 |
 | shared/SupercliShared/Sources/SupercliShared/RemoteRelayConnection.swift | 601 | Rust: supercli-client::relay_conn | ported |  | 10 |
 | shared/SupercliShared/Sources/SupercliShared/ToolIcons.swift | 163 | Dart: clients/supercli-app | todo |  | 0 |
