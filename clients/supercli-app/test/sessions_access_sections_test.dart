@@ -1,6 +1,7 @@
 /// Tests for sessions_access_sections.dart
+library;
 import 'package:test/test.dart';
-import '../lib/sessions_access_sections.dart';
+import 'package:supercli_app/sessions_access_sections.dart';
 
 void main() {
   group('SessionsAccessData.approvedPairs', () {
