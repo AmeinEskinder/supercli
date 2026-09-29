@@ -546,7 +546,7 @@ A remote Controller only. The detail screen is always a live terminal, never a c
 | App registry | Official Apps allowlist (id, binary, version, icon SVG, media types, resource kinds, defaults) | protocol/app-registry.json |
 | Unpeel UI protocol v1 | NDJSON App ↔ Host semantic UI messages (schema, stream, fixtures) | protocol/unpeel-ui-v1.schema.json, unpeel-ui-stream-v1.ndjson, unpeel-ui-fixtures-v1.json |
 | Workspace UI / App Kit state schemas | App Kit state and workspace-UI protocol schemas | crates/apps/app-kit/protocol/* |
-| Generated runtime catalog | Swift runtime catalog generated from runtimes/ | generated/GeneratedRuntimeCatalog.swift; scripts/generate-runtime-client-catalog.mjs |
+| Generated runtime catalog | JSON runtime catalog generated from runtimes/ (Swift generation removed) | generated/runtime-catalog.json; scripts/generate-runtime-client-catalog.mjs |
 | Protocol shipped in every CLI archive | `protocol/`, `generated/`, BUILD_PROVENANCE.json and notices ship in each archive | docs/agents/releases.md |
 
 ---

@@ -26,11 +26,12 @@ names and references. Do not rename.
   rename).
 - `tests/device/` — `.mob` device-test scripts that drive the frozen Dioxus
   mobile client (bundle id `com.unpeel.controller`, `unpeel pair`).
-- `scripts/generate-runtime-client-catalog.mjs` — emits the `UnpeelRuntime*`
-  Swift API for the frozen Swift client; renaming it would break the frozen
-  client's compile-time API.
-- `generated/GeneratedRuntimeCatalog.swift` — checked-in output of the above
-  generator for the frozen client.
+- `scripts/generate-runtime-client-catalog.mjs` — emits the JSON runtime catalog
+  (`generated/runtime-catalog.json`); Swift generation was removed under the
+  Swift-0% goal.
+- `generated/GeneratedRuntimeCatalog.swift` — legacy checked-in Swift output,
+  superseded by `generated/runtime-catalog.json`; tracked in the port map as
+  a dropped file.
 - Frozen native-app release channel (published `Unpeel-*.dmg` / `Unpeel-*.zip`
   artifact names for the frozen macOS app; renaming would break download URLs):
   - `scripts/release-app.mjs`
