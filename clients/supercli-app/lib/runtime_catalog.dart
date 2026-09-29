@@ -1,0 +1,231 @@
+/// Runtime catalog for the Supercli app.
+/// 
+/// Port of the `SupercliRuntimeCatalog` API surface from `GeneratedRuntimeCatalog.swift`.
+/// The full catalog data is generated from `runtimes/*/runtime.toml`.
+/// This file provides the data structures and lookup API; the full generated
+/// data can be produced by running the generator script.
+library;
+
+/// Runtime capability.
+enum SupercliRuntimeCapability {
+  lifecycleHooks,
+  resume,
+  restartAgent,
+  mcpSessions,
+  mcpBrowser,
+  mcpComputer,
+  transcript,
+  notifyWhenDone,
+  semanticTerminalTitle;
+
+  String get rawValue => switch (this) {
+    SupercliRuntimeCapability.lifecycleHooks => 'lifecycle_hooks',
+    SupercliRuntimeCapability.resume => 'resume',
+    SupercliRuntimeCapability.restartAgent => 'restart_agent',
+    SupercliRuntimeCapability.mcpSessions => 'mcp_sessions',
+    SupercliRuntimeCapability.mcpBrowser => 'mcp_browser',
+    SupercliRuntimeCapability.mcpComputer => 'mcp_computer',
+    SupercliRuntimeCapability.transcript => 'transcript',
+    SupercliRuntimeCapability.notifyWhenDone => 'notify_when_done',
+    SupercliRuntimeCapability.semanticTerminalTitle => 'semantic_terminal_title',
+  };
+}
+
+/// Runtime platform.
+enum SupercliRuntimePlatform {
+  macos,
+  linux;
+
+  String get rawValue => name;
+}
+
+/// Presentation family for sidebar logos and generic fallbacks.
+enum SupercliRuntimeKind {
+  agent,
+  app,
+  editor,
+  terminal;
+
+  String get rawValue => name;
+}
+
+/// Suggested preset from a runtime.
+final class SupercliRuntimeSuggestedPreset {
+  const SupercliRuntimeSuggestedPreset({
+    required this.id,
+    required this.label,
+    required this.command,
+    required this.quickLaunch,
+  });
+
+  final String id;
+  final String label;
+  final String command;
+  final bool quickLaunch;
+}
+
+/// Usage store for a runtime.
+final class SupercliRuntimeUsageStore {
+  const SupercliRuntimeUsageStore({
+    required this.root,
+    required this.extensions,
+    this.fileName,
+    this.fileNameSuffix,
+    this.parentDirName,
+  });
+
+  final String root;
+  final Set<String> extensions;
+  final String? fileName;
+  final String? fileNameSuffix;
+  final String? parentDirName;
+}
+
+/// Runtime metadata.
+final class SupercliRuntimeMetadata {
+  const SupercliRuntimeMetadata({
+    required this.stableID,
+    required this.slug,
+    required this.legacySlug,
+    this.legacyOrder,
+    required this.label,
+    required this.platforms,
+    required this.supportsQuickLaunch,
+    required this.kind,
+    this.tintColorHex,
+    this.spinnerTintColorHex,
+    required this.iconKey,
+    this.iconSVG,
+    required this.iconIsTemplate,
+    this.iconSource,
+    this.iconLicense,
+    required this.windowPaddingX,
+    this.installURL,
+    this.installCommand,
+    this.commandAliases = const [],
+    this.processAliases = const [],
+    this.searchPathSuffixes = const [],
+    required this.lifecycleSource,
+    required this.lifecycleAuthority,
+    required this.lifecycleFallback,
+    required this.completionReliable,
+    required this.attentionReliable,
+    required this.anchorStartEventToOutput,
+    required this.attentionClearsOnOutput,
+    required this.distrustStopsWhileOutputGrows,
+    this.capabilities = const {},
+    this.usageStores = const [],
+    this.suggestedPresets = const [],
+  });
+
+  final String stableID;
+  final String slug;
+  final String legacySlug;
+  final int? legacyOrder;
+  final String label;
+  final Set<SupercliRuntimePlatform> platforms;
+  final bool supportsQuickLaunch;
+  final SupercliRuntimeKind kind;
+  final int? tintColorHex;
+  final int? spinnerTintColorHex;
+  final String iconKey;
+  final String? iconSVG;
+  final bool iconIsTemplate;
+  final String? iconSource;
+  final String? iconLicense;
+  final int windowPaddingX;
+  final String? installURL;
+  final String? installCommand;
+  final List<String> commandAliases;
+  final List<String> processAliases;
+  final List<String> searchPathSuffixes;
+  final String lifecycleSource;
+  final String lifecycleAuthority;
+  final String lifecycleFallback;
+  final bool completionReliable;
+  final bool attentionReliable;
+  final bool anchorStartEventToOutput;
+  final bool attentionClearsOnOutput;
+  final bool distrustStopsWhileOutputGrows;
+  final Set<SupercliRuntimeCapability> capabilities;
+  final List<SupercliRuntimeUsageStore> usageStores;
+  final List<SupercliRuntimeSuggestedPreset> suggestedPresets;
+
+  bool supports(SupercliRuntimePlatform platform) => platforms.contains(platform);
+  SupercliRuntimeSuggestedPreset? get defaultPreset =>
+      suggestedPresets.isEmpty ? null : suggestedPresets.first;
+  String? get presentationCommand =>
+      commandAliases.isEmpty ? null : commandAliases.first;
+}
+
+/// Runtime catalog.
+/// 
+/// Note: The full catalog contains 20+ runtimes generated from `runtimes/*/runtime.toml`.
+/// This is a minimal version with the most common runtimes for the Dart client.
+/// The full data can be generated by porting `scripts/generate-runtime-client-catalog.mjs`.
+abstract final class SupercliRuntimeCatalog {
+  /// All runtimes (minimal set; full catalog is generated).
+  static const List<SupercliRuntimeMetadata> runtimes = [
+    // runtimes/claude-code/runtime.toml
+    SupercliRuntimeMetadata(
+      stableID: 'com.anthropic.claude-code',
+      slug: 'claude-code',
+      legacySlug: 'claude',
+      legacyOrder: 0,
+      label: 'Claude',
+      platforms: {SupercliRuntimePlatform.macos, SupercliRuntimePlatform.linux},
+      supportsQuickLaunch: true,
+      kind: SupercliRuntimeKind.agent,
+      tintColorHex: 0xD97757,
+      spinnerTintColorHex: 0xD97757,
+      iconKey: 'claude',
+      iconIsTemplate: true,
+      windowPaddingX: 8,
+      installCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+      commandAliases: ['claude'],
+      processAliases: ['claude'],
+      lifecycleSource: 'hooks',
+      lifecycleAuthority: 'provider',
+      lifecycleFallback: 'output',
+      completionReliable: true,
+      attentionReliable: true,
+      anchorStartEventToOutput: true,
+      attentionClearsOnOutput: true,
+      distrustStopsWhileOutputGrows: false,
+      capabilities: {
+        SupercliRuntimeCapability.lifecycleHooks,
+        SupercliRuntimeCapability.resume,
+        SupercliRuntimeCapability.restartAgent,
+        SupercliRuntimeCapability.transcript,
+      },
+    ),
+    // Additional runtimes would be generated here from runtimes/*/runtime.toml
+  ];
+
+  /// Finds a runtime by stable ID.
+  static SupercliRuntimeMetadata? runtime({String? id, String? command}) {
+    if (id != null) {
+      for (final r in runtimes) {
+        if (r.stableID == id) return r;
+      }
+      return null;
+    }
+    if (command != null) {
+      final token = command.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
+      final unquoted = token.replaceAll(RegExp('^[\'"]|[\'"]\$'), '');
+      final binary = unquoted.split('/').last.toLowerCase();
+      if (binary.isEmpty) return null;
+      for (final r in runtimes) {
+        if (r.commandAliases.any((a) => a.toLowerCase() == binary)) return r;
+        if (r.processAliases.any((a) => a.toLowerCase() == binary)) return r;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /// Returns runtimes supporting the given platform.
+  static List<SupercliRuntimeMetadata> runtimesFor(SupercliRuntimePlatform platform) {
+    return runtimes.where((r) => r.supports(platform)).toList();
+  }
+}
