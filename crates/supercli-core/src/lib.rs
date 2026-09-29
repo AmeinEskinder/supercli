@@ -27,6 +27,8 @@ pub mod app_runtime;
 #[cfg(feature = "native-host")]
 pub mod app_state;
 #[cfg(feature = "native-host")]
+pub mod approval_pairs;
+#[cfg(feature = "native-host")]
 pub mod apps_mcp;
 #[cfg(feature = "native-host")]
 pub mod backup;
@@ -111,6 +113,8 @@ pub mod plugins;
 #[cfg(all(test, feature = "controller-core"))]
 mod portable_gating_tests;
 #[cfg(feature = "native-host")]
+pub mod preset_overlay;
+#[cfg(feature = "native-host")]
 pub mod profile;
 pub mod provider_theme;
 #[cfg(feature = "controller-core")]
@@ -163,6 +167,8 @@ pub mod session_host;
 pub mod session_input;
 #[cfg(feature = "native-host")]
 pub mod session_ops;
+#[cfg(feature = "native-host")]
+pub mod settings_resolve;
 #[cfg(feature = "native-host")]
 pub mod setup;
 #[cfg(feature = "native-host")]

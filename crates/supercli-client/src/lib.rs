@@ -33,6 +33,8 @@ pub mod crypto;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod host_routing;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
