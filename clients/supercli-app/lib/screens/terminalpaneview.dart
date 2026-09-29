@@ -37,6 +37,33 @@ export '../terminal/terminal_pane_focus.dart'
     show TerminalPaneFocus, PaneSessionStatus;
 export '../terminal/terminal_pane_archive.dart'
     show TerminalPaneArchive, PaneArchiveDecision;
+export '../terminal/terminal_pane_actions.dart'
+    show
+        CloseActivePaneDecision,
+        CloseActivePaneNone,
+        CloseActivePaneDetach,
+        CloseActivePaneRemove,
+        CloseActivePaneConfirmArchive,
+        ClosePaneSessionEntry,
+        resolveCloseActivePane,
+        ActivatePaneDecision,
+        ActivatePaneIgnored,
+        ActivatePaneSolo,
+        ActivatePaneGrouped,
+        resolveActivatePane,
+        SyncActivePaneDecision,
+        SyncActivePaneResetSolo,
+        SyncActivePaneReaffirm,
+        SyncActivePaneActivateDefault,
+        resolveSyncActivePane,
+        resolveFocusRequest,
+        resolveClaimPendingReveal,
+        resolveZoomedPane,
+        liveDividerRatio,
+        shouldDetachPane,
+        shouldLaunchIntoPane,
+        PaneBannerKind,
+        paneBanners;
 export '../terminal/terminal_pane_menu.dart'
     show
         TranscriptCopyRange,

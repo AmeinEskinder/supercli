@@ -114,6 +114,33 @@ files:
       - swift: "Split layout: child extents (total - dividerWidth) split by ratio; divider path key (components joined with ','); existingSessionLeafCount (solo=1, group=max(1,sessionLeaves)); launcher titles (Starting…/New pane); unavailable-pane title"
         target: "lib/terminal/terminal_pane_split.dart::TerminalPaneSplitLayout"
         test: "test/terminal_pane_surface_test.dart::TerminalPaneSplitLayout/pane titles groups"
+      - swift: "closeActivePane: Ghostty-style ⌘W resolves the focused leaf via effectiveActivePaneID; stale-slot guard (session no longer resolves -> detach, never an unknown-id Host mutation); dispatches to detach / confirm-remove / archive-confirmation"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveCloseActivePane"
+        test: "test/terminal_pane_actions_test.dart::resolveCloseActivePane group"
+      - swift: "activatePane: membership guard; solo container clears group-scoped store state and remembers focused solo session; grouped container sets store active terminal pane"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveActivatePane"
+        test: "test/terminal_pane_actions_test.dart::resolveActivatePane group"
+      - swift: "syncActivePane: remount restore — re-affirm a still-valid store-active pane (group match + pane present), else fall back to the default active pane"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveSyncActivePane"
+        test: "test/terminal_pane_actions_test.dart::resolveSyncActivePane group"
+      - swift: "focusRequestedPane: five guards (group, groupID match, representative match, pane membership, request still pending) before activating the requested pane; transport-specific focus stays with the caller"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveFocusRequest"
+        test: "test/terminal_pane_actions_test.dart::resolveFocusRequest group"
+      - swift: "claimPendingReveal: one-shot insertion-marker claim — pending pane present -> consume marker and activate in place, no entrance motion"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveClaimPendingReveal"
+        test: "test/terminal_pane_actions_test.dart::resolveClaimPendingReveal group"
+      - swift: "zoomedPane resolution: the zoomed pane when it belongs to this group and is still present (only the zoomed leaf renders — rendering rule stays AppKit-side)"
+        target: "lib/terminal/terminal_pane_actions.dart::resolveZoomedPane"
+        test: "test/terminal_pane_actions_test.dart::resolveZoomedPane group"
+      - swift: "liveRatio(of:at:): divider's live ratio — the drag's ratio while its path key matches, else the model's ratio (live ratio stays local, model commits on release)"
+        target: "lib/terminal/terminal_pane_actions.dart::liveDividerRatio"
+        test: "test/terminal_pane_actions_test.dart::liveDividerRatio group"
+      - swift: "detachPane / launch(_:into:) synthetic guards: a synthetic (solo, no-group) pane has nothing to detach and cannot host a preset launch"
+        target: "lib/terminal/terminal_pane_actions.dart::shouldDetachPane/shouldLaunchIntoPane"
+        test: "test/terminal_pane_actions_test.dart::synthetic guards group"
+      - swift: "paneBanners selection: local-only chrome — restart-recommendation and resume-failure banners are independent and may both show; non-local scope shows nothing"
+        target: "lib/terminal/terminal_pane_actions.dart::paneBanners"
+        test: "test/terminal_pane_actions_test.dart::paneBanners group"
       - swift: "AppKit-only surface NOT ported (platform): PanelPane/TerminalPane/TitleChip drag-source registrations (NSViewRepresentable click-through frames), drop-zone magnet spring, PaneMoreMenuButton/Controller/Anchor native menu plumbing, PaneSplitButton/DialogPillButton/PaneCardChrome/ProjectSidebarPinDropTarget rendering, window-drag gesture, zoom rule (only zoomed leaf renders)"
         target: "dropped: AppKit/SwiftUI rendering plumbing — no portable logic"
         test: "n/a"
@@ -126,7 +153,9 @@ files:
         count: 8
       - file: clients/supercli-app/test/terminal_pane_surface_test.dart
         count: 52
-    notes: "PARTIAL 2026-09-29: data plane + container logic + full surface inventory ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content, title-chip rename editing, focus resolution incl. active border + split-button visibility + working spinner, archive-verb decision, agent-terminal gate, full pane more-menu model for session and launcher panes, split layout extents + divider path keys + session-leaf counts, launcher/unavailable titles, drop-zone preview rects, fit-to-desktop text). Single home: lib/screens/terminalpaneview.dart re-exports all surface modules (implementation in lib/terminal/terminal_pane_*.dart, following the area's existing pattern); PORTER_DUTY dup-check vs origin/next clean (only overlap: already-ported TerminalPaneDropPreviewGeometry, reused not duplicated). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. AppKit-only rendering plumbing deliberately dropped (drag-source NSViewRepresentable registrations, magnet spring, native menu plumbing, card chrome, pin preview rendering, window-drag gesture). GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
+      - file: clients/supercli-app/test/terminal_pane_actions_test.dart
+        count: 30
+    notes: "PARTIAL 2026-09-30: write-path action decisions ported to lib/terminal/terminal_pane_actions.dart (resolveCloseActivePane with stale-slot guard, resolveActivatePane solo/grouped, resolveSyncActivePane remount restore, resolveFocusRequest 5-guard validation, resolveClaimPendingReveal, resolveZoomedPane, liveDividerRatio, synthetic detach/launch guards, paneBanners local-only selection) + 30 tests in terminal_pane_actions_test.dart. Prior 2026-09-29: data plane + container logic + full surface inventory ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content, title-chip rename editing, focus resolution incl. active border + split-button visibility + working spinner, archive-verb decision, agent-terminal gate, full pane more-menu model for session and launcher panes, split layout extents + divider path keys + session-leaf counts, launcher/unavailable titles, drop-zone preview rects, fit-to-desktop text). Single home: lib/screens/terminalpaneview.dart re-exports all surface modules (implementation in lib/terminal/terminal_pane_*.dart, following the area's existing pattern); PORTER_DUTY dup-check vs origin/next clean (only overlap: already-ported TerminalPaneDropPreviewGeometry, reused not duplicated). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. AppKit-only rendering plumbing deliberately dropped (drag-source NSViewRepresentable registrations, magnet spring, native menu plumbing, card chrome, pin preview rendering, window-drag gesture). GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Rust: supercli-core::terminal_drop_maps"
