@@ -51,80 +51,19 @@ highlight = "all"
 # third-party crates and is out of scope. Each is a standard ecosystem
 # split (e.g. syn 1.x vs 2.x during migration).
 
-[[bans.skip]]
-name = "base64"
-reason = "0.22 vs 0.23: different majors required by different deps; both are pure codecs with no shared state."
-
-[[bans.skip]]
-name = "bitflags"
-reason = "1.x vs 2.x: macro crate, no runtime interaction between versions."
-
-[[bans.skip]]
-name = "block-buffer"
-reason = "0.10 vs 0.11: digest ecosystem split; pulled by sha2 versions."
-
-[[bans.skip]]
-name = "cpufeatures"
-reason = "0.2 vs 0.3: digest ecosystem split."
-
-[[bans.skip]]
-name = "crypto-common"
-reason = "0.1 vs 0.2: digest ecosystem split."
-
-[[bans.skip]]
-name = "curve25519-dalek"
-reason = "4.x duplicates: ed25519-dalek ecosystem; pure crypto, no shared state."
-
-[[bans.skip]]
-name = "digest"
-reason = "0.10 vs 0.11: digest ecosystem split during migration."
-
-[[bans.skip]]
-name = "fiat-crypto"
-reason = "Duplicates via curve25519-dalek; generated code, no shared state."
-
-[[bans.skip]]
-name = "getrandom"
-reason = "0.2 vs 0.3: ecosystem split; both are thin syscall wrappers."
-
-[[bans.skip]]
-name = "hashbrown"
-reason = "0.14 vs 0.15: indexmap ecosystem split."
-
-[[bans.skip]]
-name = "r-efi"
-reason = "Duplicates via getrandom/wasip2; platform bindings, no shared state."
-
-[[bans.skip]]
-name = "rand_core"
-reason = "0.6 vs 0.9: rand ecosystem split."
-
-[[bans.skip]]
-name = "sha2"
-reason = "0.10 vs 0.11: digest ecosystem split."
-
-[[bans.skip]]
-name = "syn"
-reason = "1.x vs 2.x: proc-macro ecosystem during migration; build-time only."
-
-[[bans.skip]]
-name = "thiserror"
-reason = "1.x vs 2.x: error-derive ecosystem during migration."
-
-[[bans.skip]]
-name = "thiserror-impl"
-reason = "1.x vs 2.x: matches thiserror split."
-
-[[bans.skip]]
-name = "webpki-roots"
-reason = "0.26 vs 1.x: rustls ecosystem split; both are CA bundles."
-
-[[bans.skip]]
-name = "windows-sys"
-reason = "0.52 vs 0.59: Windows API bindings split; platform-only."
-
-# --- Queue #16 credential-stack duplicates (2026-09-29) --------------------
-# The wire-remote-runtime merge (queue #16) enabled keyring's
+# --- Exceptions (each with a reason) ---------------------------------------
+# Duplicate versions below are different MAJOR versions required by
+# different dependencies; unifying them would require breaking upgrades of
+# third-party crates and is out of scope. Each is a standard ecosystem
+# split (e.g. syn 2.x vs 3.x during migration).
+#
+# Every skip entry pins EXACT versions (version = "=x.y.z", one entry per
+# version in Cargo.lock). cargo-deny matches skips per (name, version), so
+# an unpinned entry would silently allow any future duplicate version.
+# When Cargo.lock gains a new duplicate version, add a new pinned entry
+# here with a reason -- do not broaden an existing pin.
+#
+# Queue #16 note (2026-09-29): the wire-remote-runtime merge enabled keyring's
 # `async-secret-service` feature, pulling in secret-service v4 + the zbus v4
 # D-Bus stack. That stack legitimately requires different major versions of
 # crates the rest of the workspace pins differently (classic ecosystem split,
@@ -135,72 +74,389 @@ reason = "0.52 vs 0.59: Windows API bindings split; platform-only."
 # each duplicated platform sub-crate needs its own entry.
 
 [[bans.skip]]
+name = "base64"
+version = "=0.22.1"
+reason = "0.22.1 vs 0.23.1: different majors required by different deps; both are pure codecs with no shared state."
+
+[[bans.skip]]
+name = "base64"
+version = "=0.23.1"
+reason = "0.22.1 vs 0.23.1: different majors required by different deps; both are pure codecs with no shared state."
+
+[[bans.skip]]
+name = "bitflags"
+version = "=1.3.2"
+reason = "1.3.2 vs 2.13.2: macro crate, no runtime interaction between versions."
+
+[[bans.skip]]
+name = "bitflags"
+version = "=2.13.2"
+reason = "1.3.2 vs 2.13.2: macro crate, no runtime interaction between versions."
+
+[[bans.skip]]
+name = "block-buffer"
+version = "=0.10.4"
+reason = "0.10.4 vs 0.12.1: digest ecosystem split; pulled by sha2 versions."
+
+[[bans.skip]]
+name = "block-buffer"
+version = "=0.12.1"
+reason = "0.10.4 vs 0.12.1: digest ecosystem split; pulled by sha2 versions."
+
+[[bans.skip]]
+name = "cpufeatures"
+version = "=0.2.17"
+reason = "0.2.17 vs 0.3.1: digest ecosystem split."
+
+[[bans.skip]]
+name = "cpufeatures"
+version = "=0.3.1"
+reason = "0.2.17 vs 0.3.1: digest ecosystem split."
+
+[[bans.skip]]
+name = "crypto-common"
+version = "=0.1.7"
+reason = "0.1.7 vs 0.2.2: digest ecosystem split."
+
+[[bans.skip]]
+name = "crypto-common"
+version = "=0.2.2"
+reason = "0.1.7 vs 0.2.2: digest ecosystem split."
+
+[[bans.skip]]
+name = "curve25519-dalek"
+version = "=4.1.3"
+reason = "4.1.3 vs 5.0.0: ed25519-dalek ecosystem; pure crypto, no shared state."
+
+[[bans.skip]]
+name = "curve25519-dalek"
+version = "=5.0.0"
+reason = "4.1.3 vs 5.0.0: ed25519-dalek ecosystem; pure crypto, no shared state."
+
+[[bans.skip]]
+name = "digest"
+version = "=0.10.7"
+reason = "0.10.7 vs 0.11.3: digest ecosystem split during migration."
+
+[[bans.skip]]
+name = "digest"
+version = "=0.11.3"
+reason = "0.10.7 vs 0.11.3: digest ecosystem split during migration."
+
+[[bans.skip]]
+name = "fiat-crypto"
+version = "=0.2.9"
+reason = "0.2.9 vs 0.3.0: duplicates via curve25519-dalek; generated code, no shared state."
+
+[[bans.skip]]
+name = "fiat-crypto"
+version = "=0.3.0"
+reason = "0.2.9 vs 0.3.0: duplicates via curve25519-dalek; generated code, no shared state."
+
+[[bans.skip]]
+name = "getrandom"
+version = "=0.2.17"
+reason = "0.2.17 vs 0.3.4 vs 0.4.3: ecosystem split; all are thin syscall wrappers."
+
+[[bans.skip]]
+name = "getrandom"
+version = "=0.3.4"
+reason = "0.2.17 vs 0.3.4 vs 0.4.3: ecosystem split; all are thin syscall wrappers."
+
+[[bans.skip]]
+name = "getrandom"
+version = "=0.4.3"
+reason = "0.2.17 vs 0.3.4 vs 0.4.3: ecosystem split; all are thin syscall wrappers."
+
+[[bans.skip]]
+name = "hashbrown"
+version = "=0.15.5"
+reason = "0.15.5 vs 0.17.1: indexmap ecosystem split."
+
+[[bans.skip]]
+name = "hashbrown"
+version = "=0.17.1"
+reason = "0.15.5 vs 0.17.1: indexmap ecosystem split."
+
+[[bans.skip]]
+name = "r-efi"
+version = "=5.3.0"
+reason = "5.3.0 vs 6.0.0: duplicates via getrandom/wasip2; platform bindings, no shared state."
+
+[[bans.skip]]
+name = "r-efi"
+version = "=6.0.0"
+reason = "5.3.0 vs 6.0.0: duplicates via getrandom/wasip2; platform bindings, no shared state."
+
+[[bans.skip]]
+name = "rand_core"
+version = "=0.6.4"
+reason = "0.6.4 vs 0.9.5 vs 0.10.1: rand ecosystem split."
+
+[[bans.skip]]
+name = "rand_core"
+version = "=0.9.5"
+reason = "0.6.4 vs 0.9.5 vs 0.10.1: rand ecosystem split."
+
+[[bans.skip]]
+name = "rand_core"
+version = "=0.10.1"
+reason = "0.6.4 vs 0.9.5 vs 0.10.1: rand ecosystem split."
+
+[[bans.skip]]
+name = "sha2"
+version = "=0.10.9"
+reason = "0.10.9 vs 0.11.0: digest ecosystem split."
+
+[[bans.skip]]
+name = "sha2"
+version = "=0.11.0"
+reason = "0.10.9 vs 0.11.0: digest ecosystem split."
+
+[[bans.skip]]
+name = "syn"
+version = "=2.0.119"
+reason = "2.0.119 vs 3.0.6: proc-macro ecosystem during migration; build-time only."
+
+[[bans.skip]]
+name = "syn"
+version = "=3.0.6"
+reason = "2.0.119 vs 3.0.6: proc-macro ecosystem during migration; build-time only."
+
+[[bans.skip]]
+name = "thiserror"
+version = "=1.0.69"
+reason = "1.0.69 vs 2.0.21: error-derive ecosystem during migration."
+
+[[bans.skip]]
+name = "thiserror"
+version = "=2.0.21"
+reason = "1.0.69 vs 2.0.21: error-derive ecosystem during migration."
+
+[[bans.skip]]
+name = "thiserror-impl"
+version = "=1.0.69"
+reason = "1.0.69 vs 2.0.21: matches thiserror split."
+
+[[bans.skip]]
+name = "thiserror-impl"
+version = "=2.0.21"
+reason = "1.0.69 vs 2.0.21: matches thiserror split."
+
+[[bans.skip]]
+name = "webpki-roots"
+version = "=0.26.11"
+reason = "0.26.11 vs 1.0.9: rustls ecosystem split; both are CA bundles."
+
+[[bans.skip]]
+name = "webpki-roots"
+version = "=1.0.9"
+reason = "0.26.11 vs 1.0.9: rustls ecosystem split; both are CA bundles."
+
+[[bans.skip]]
+name = "windows-sys"
+version = "=0.52.0"
+reason = "0.52.0 vs 0.59.0 vs 0.60.2 vs 0.61.2: Windows API bindings split; platform-only."
+
+[[bans.skip]]
+name = "windows-sys"
+version = "=0.59.0"
+reason = "0.52.0 vs 0.59.0 vs 0.60.2 vs 0.61.2: Windows API bindings split; platform-only."
+
+[[bans.skip]]
+name = "windows-sys"
+version = "=0.60.2"
+reason = "0.52.0 vs 0.59.0 vs 0.60.2 vs 0.61.2: Windows API bindings split; platform-only."
+
+[[bans.skip]]
+name = "windows-sys"
+version = "=0.61.2"
+reason = "0.52.0 vs 0.59.0 vs 0.60.2 vs 0.61.2: Windows API bindings split; platform-only."
+
+[[bans.skip]]
 name = "memoffset"
+version = "=0.6.5"
+reason = "0.6.5 vs 0.9.1: 0.6.5 via nix 0.25.1 (portable-pty); 0.9.1 via nix 0.29.0 (zbus/keyring credential stack). Different majors, no shared state."
+
+[[bans.skip]]
+name = "memoffset"
+version = "=0.9.1"
 reason = "0.6.5 vs 0.9.1: 0.6.5 via nix 0.25.1 (portable-pty); 0.9.1 via nix 0.29.0 (zbus/keyring credential stack). Different majors, no shared state."
 
 [[bans.skip]]
 name = "nix"
+version = "=0.25.1"
+reason = "0.25.1 vs 0.29.0: portable-pty pins 0.25; zbus 4.x requires 0.29. Different majors, no shared state."
+
+[[bans.skip]]
+name = "nix"
+version = "=0.29.0"
 reason = "0.25.1 vs 0.29.0: portable-pty pins 0.25; zbus 4.x requires 0.29. Different majors, no shared state."
 
 [[bans.skip]]
 name = "rand"
-reason = "0.8 vs 0.9: secret-service/zbus credential stack requires 0.8; workspace (tungstenite, supercli-serve) uses 0.9. Different majors, no shared state."
+version = "=0.8.8"
+reason = "0.8.8 vs 0.9.5 vs 0.10.3: secret-service/zbus credential stack requires 0.8; workspace (tungstenite, supercli-serve) uses 0.9/0.10. Different majors, no shared state."
+
+[[bans.skip]]
+name = "rand"
+version = "=0.9.5"
+reason = "0.8.8 vs 0.9.5 vs 0.10.3: secret-service/zbus credential stack requires 0.8; workspace (tungstenite, supercli-serve) uses 0.9/0.10. Different majors, no shared state."
+
+[[bans.skip]]
+name = "rand"
+version = "=0.10.3"
+reason = "0.8.8 vs 0.9.5 vs 0.10.3: secret-service/zbus credential stack requires 0.8; workspace (tungstenite, supercli-serve) uses 0.9/0.10. Different majors, no shared state."
 
 [[bans.skip]]
 name = "rand_chacha"
-reason = "0.3 vs 0.9: follows the rand 0.8/0.9 credential-stack split."
+version = "=0.3.1"
+reason = "0.3.1 vs 0.9.0: follows the rand credential-stack split."
+
+[[bans.skip]]
+name = "rand_chacha"
+version = "=0.9.0"
+reason = "0.3.1 vs 0.9.0: follows the rand credential-stack split."
 
 [[bans.skip]]
 name = "security-framework"
-reason = "2.x vs 3.x: keyring 3.x requires 2.x on macOS; workspace uses 3.x. Different majors, no shared state."
+version = "=2.11.1"
+reason = "2.11.1 vs 3.7.0: keyring 3.x requires 2.x on macOS; workspace uses 3.x. Different majors, no shared state."
+
+[[bans.skip]]
+name = "security-framework"
+version = "=3.7.0"
+reason = "2.11.1 vs 3.7.0: keyring 3.x requires 2.x on macOS; workspace uses 3.x. Different majors, no shared state."
 
 [[bans.skip]]
 name = "toml_datetime"
-reason = "0.6 vs 1.1: workspace toml 0.8 uses 0.6; zbus's zvariant/toml_parser chain uses 1.1. Different majors, build-time parsing only."
+version = "=0.6.11"
+reason = "0.6.11 vs 1.1.1: workspace toml 0.8 uses 0.6; zbus's zvariant/toml_parser chain uses 1.1. Different majors, build-time parsing only."
+
+[[bans.skip]]
+name = "toml_datetime"
+version = "=1.1.1"
+reason = "0.6.11 vs 1.1.1: workspace toml 0.8 uses 0.6; zbus's zvariant/toml_parser chain uses 1.1. Different majors, build-time parsing only."
 
 [[bans.skip]]
 name = "toml_edit"
-reason = "0.22 vs 0.25: workspace toml 0.8 uses 0.22; zbus's zvariant/toml_parser chain uses 0.25. Different majors, build-time only."
+version = "=0.22.27"
+reason = "0.22.27 vs 0.25.15: workspace toml 0.8 uses 0.22; zbus's zvariant/toml_parser chain uses 0.25. Different majors, build-time only."
+
+[[bans.skip]]
+name = "toml_edit"
+version = "=0.25.15"
+reason = "0.22.27 vs 0.25.15: workspace toml 0.8 uses 0.22; zbus's zvariant/toml_parser chain uses 0.25. Different majors, build-time only."
 
 [[bans.skip]]
 name = "winnow"
-reason = "0.7 vs 1.0: follows the toml_edit 0.22/0.25 credential-stack split."
+version = "=0.7.15"
+reason = "0.7.15 vs 1.0.4: follows the toml_edit 0.22/0.25 credential-stack split."
+
+[[bans.skip]]
+name = "winnow"
+version = "=1.0.4"
+reason = "0.7.15 vs 1.0.4: follows the toml_edit 0.22/0.25 credential-stack split."
 
 [[bans.skip]]
 name = "windows-targets"
-reason = "0.52.6 vs 0.53.5: platform sub-crate of the windows-sys 0.52/0.59 split (companion to the windows-sys skip above). Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.5: platform sub-crate of the windows-sys split (companion to the windows-sys skip above). Platform-only bindings."
+
+[[bans.skip]]
+name = "windows-targets"
+version = "=0.53.5"
+reason = "0.52.6 vs 0.53.5: platform sub-crate of the windows-sys split (companion to the windows-sys skip above). Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_aarch64_gnullvm"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_aarch64_gnullvm"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_aarch64_msvc"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_aarch64_msvc"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_i686_gnu"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_gnu"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_i686_gnullvm"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_gnullvm"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_i686_msvc"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_i686_msvc"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_x86_64_gnu"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_gnu"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_x86_64_gnullvm"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_gnullvm"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
 
 [[bans.skip]]
 name = "windows_x86_64_msvc"
-reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys 0.52/0.59 split. Platform-only bindings."
+version = "=0.52.6"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "windows_x86_64_msvc"
+version = "=0.53.1"
+reason = "0.52.6 vs 0.53.1: platform sub-crate of the windows-sys split. Platform-only bindings."
+
+[[bans.skip]]
+name = "core-foundation"
+version = "=0.9.4"
+reason = "0.9.4 vs 0.10.1: macOS system bindings; 0.9.4 via system-configuration (hyper-util), 0.10.1 via security-framework (native-tls). Different majors, no shared state."
+
+[[bans.skip]]
+name = "core-foundation"
+version = "=0.10.1"
+reason = "0.9.4 vs 0.10.1: macOS system bindings; 0.9.4 via system-configuration (hyper-util), 0.10.1 via security-framework (native-tls). Different majors, no shared state."
 
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
@@ -222,6 +478,3 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = []
 
-[[bans.skip]]
-name = "core-foundation"
-reason = "0.9.4 vs 0.10.1: macOS system bindings; 0.9.4 via system-configuration (hyper-util), 0.10.1 via security-framework (native-tls). Different majors, no shared state."

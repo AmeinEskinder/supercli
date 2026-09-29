@@ -52,6 +52,37 @@ except ImportError:
     print("ERROR: PyYAML is required (pip install pyyaml)", file=sys.stderr)
     sys.exit(2)
 
+# Strict duplicate-key loader: a duplicate Swift path inside one sidecar file
+# used to be silently swallowed (PyYAML keeps the last value), hiding rows
+# from the generated map — e.g. the store Swift file keyed twice in
+# macos-services.yml. Any duplicate key is now a hard error naming the
+# file and key.
+
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that fails on duplicate mapping keys.
+
+    A duplicate Swift path inside one sidecar file used to be silently
+    swallowed (PyYAML keeps the last value), hiding rows from the generated
+    map — e.g. the store Swift file keyed twice in macos-services.yml. Any
+    duplicate key is now a hard error naming the file and key.
+    """
+
+
+def _construct_strict_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        if key in mapping:
+            raise yaml.YAMLError(f"duplicate key in sidecar: {key!r}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_strict_mapping,
+)
+
 # Repo-root-relative directories to walk for Swift files.
 # clients/legacy holds the frozen legacy clients (native, iOS, app-kit,
 # shared, dioxus bridges, dmg background, vendored libghostty-spm).
@@ -313,13 +344,13 @@ def load_sidecars(sidecar_dir):
         if not fname.endswith(".yml"):
             continue
         area = fname[:-4]
-        if area not in WORKER_AREAS:
-            print(f"WARNING: unknown sidecar area '{area}' in {fname}; "
-                  f"expected one of {WORKER_AREAS}", file=sys.stderr)
-            continue
         path = os.path.join(sidecar_dir, fname)
         with open(path, "r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            try:
+                data = yaml.load(fh, Loader=_StrictLoader) or {}
+            except yaml.YAMLError as exc:
+                print(f"ERROR: {fname}: {exc}", file=sys.stderr)
+                sys.exit(1)
         if data.get("area", area) != area:
             print(f"WARNING: {fname} declares area '{data.get('area')}', "
                   f"expected '{area}'", file=sys.stderr)
