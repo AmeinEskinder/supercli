@@ -338,3 +338,71 @@ files:
       - file: crates/supercli-client/src/launch_config.rs
         count: 9
     notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported. supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteServerVersion parsing (v-prefix, pre-release/build suffixes, 1-3 components)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteServerVersion::parse"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::parses_plain_semver"
+      - swift: "RemoteServerVersion comparison (semantic ordering)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteServerVersion"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::orders_semantically"
+      - swift: "RemoteDirectTransportPolicy.normalizedFingerprint (trim, lowercase, empty→nil)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteDirectTransportPolicy::normalized_fingerprint"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::normalizes_fingerprint"
+      - swift: "RemoteDirectTransportPolicy.decision (capability wins, version gating, tlsUnpinnable/plaintext/unknown)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteDirectTransportPolicy::decision"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::capability_wins_with_fingerprint"
+      - swift: "RemoteDirectTransportPolicy.isPlaintextRefusal (426, 401+https/tls)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteDirectTransportPolicy::is_plaintext_refusal"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::detects_plaintext_refusal"
+      - swift: "RemoteDirectTransportPolicy.canonicalStoredEndpoint (https→http)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteDirectTransportPolicy::canonical_stored_endpoint"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::canonicalizes_https_to_http"
+      - swift: "RemoteBootstrapDeadline.seconds (4s direct, 10-20s relay scaled by RTT)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::RemoteBootstrapDeadline::seconds"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::bootstrap_deadlines"
+      - swift: "PushTokenRegistrationRoute.plan (active-relay shortcut, direct+transient fallback)"
+        target: "crates/supercli-client/src/remote_direct_transport.rs::PushTokenRegistrationRoute::plan"
+        test: "crates/supercli-client/src/remote_direct_transport.rs::tests::push_route_plans"
+    tests:
+      - file: crates/supercli-client/src/remote_direct_transport.rs
+        count: 16
+    notes: "264 LOC. Pure transport policy ported: version parsing/comparison, TLS decision logic (capability flag wins, version gating), plaintext refusal detection, endpoint canonicalization, bootstrap deadlines, push token routes. RemotePinnedURLSessionCache is platform-specific (URLSession) and not portable."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteTerminalTransportSelector.normalizedFingerprint (sha256: prefix, colons, 64 hex)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalTransportSelector::normalized_fingerprint"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::normalizes_strict_fingerprint"
+      - swift: "RemoteTerminalTransportSelector.endpoint (port + fingerprint required)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalTransportSelector::endpoint"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::endpoint_requires_port_and_fingerprint"
+      - swift: "RemoteTerminalTransportSelector.candidate (endpoint + host + token)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalTransportSelector::candidate"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::candidate_requires_endpoint_host_and_token"
+      - swift: "RemoteTerminalTransportSelector.webSocketOutputURL (wss://.../output?token=&offset=)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalTransportSelector::web_socket_output_url"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::builds_output_url"
+      - swift: "RemoteTerminalWSServerMessage.parse (hello/error/unknown)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalWsServerMessage::parse"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::parses_hello_frame"
+      - swift: "RemoteTerminalWSHello modePreambleBase64 decoding"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalWsHello::mode_preamble"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::hello_mode_preamble_decodes"
+      - swift: "RemoteTerminalWSBinaryFrame.parse (8-byte big-endian offset prefix)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalWsBinaryFrame::parse"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::parses_binary_frame"
+      - swift: "RemoteTerminalWSClientMessage.inputFrames (char-boundary chunking, writeID only on single frame)"
+        target: "crates/supercli-client/src/remote_terminal_stream.rs::RemoteTerminalWsClientMessage::input_frames"
+        test: "crates/supercli-client/src/remote_terminal_stream.rs::tests::chunks_on_char_boundaries_without_write_id"
+    tests:
+      - file: crates/supercli-client/src/remote_terminal_stream.rs
+        count: 16
+    notes: "263 LOC. Pure WS protocol logic ported: fingerprint normalization, endpoint/candidate selection, URL building, hello/error frame parsing, binary frame parsing (8-byte BE offset), input frame chunking on char boundaries. Socket I/O lives in remote_terminal_websocket.rs."
