@@ -1,9 +1,14 @@
-/// Behavior tests for the desktop sidebar (#151-154).
+/// Behavior tests for the desktop sidebar (#151-154) plus the remaining
+/// SidebarView.swift portable behaviours (feat/port-sidebarview-b).
 ///
 /// These exercise the sidebar models and renderers, not just tree shape:
 /// attention dots, busy spinners, unread badges, pin glyphs, filter,
 /// pinned-first ordering, context-menu item lists, drag validation,
-/// workspace dots, and relative activity timestamps.
+/// workspace dots, relative activity timestamps, motion constants, folder
+/// drop highlight, fade mask, scroll targets/cues, branch labels, footer +
+/// add menu, collapse-all state, row action buttons, resume presentation,
+/// quick preset strip, new-session menu, empty states, aggregate rollups,
+/// marquee timing, and cluster backgrounds.
 library;
 
 import 'dart:convert';
@@ -718,4 +723,734 @@ void main() {
       expect(p.path, '/home/u/supercli');
     });
   });
+  group('SidebarMotion', () {
+    test('slide is 200ms cubicOut', () {
+      expect(SidebarMotion.slide.durationMs, 200);
+      expect(SidebarMotion.slide.c1x, closeTo(0.33, 1e-9));
+      expect(SidebarMotion.slide.c1y, 1);
+      expect(SidebarMotion.slide.c2x, closeTo(0.68, 1e-9));
+      expect(SidebarMotion.slide.c2y, 1);
+    });
+
+    test('accordion open/close durations', () {
+      expect(SidebarMotion.accordionOpen.durationMs, 340);
+      expect(SidebarMotion.accordionClose.durationMs, 240);
+    });
+
+    test('rowEnter staggers 14ms per index over 380ms', () {
+      final a = SidebarMotion.rowEnter(0);
+      final b = SidebarMotion.rowEnter(3);
+      expect(a.durationMs, 380);
+      expect(a.delayMs, 0);
+      expect(b.delayMs, 42);
+    });
+
+    test('session list fade 220ms in / 140ms out', () {
+      expect(SidebarMotion.sessionListFadeInMs, 220);
+      expect(SidebarMotion.sessionListFadeOutMs, 140);
+      expect(SidebarMotion.rowRemoveFadeMs, 140);
+    });
+
+    test('panel slide offset is 140pt', () {
+      expect(SidebarMotion.panelSlideOffset, 140.0);
+    });
+  });
+
+  group('SidebarFolderDropHighlight', () {
+    test('hidden when nothing targeted', () {
+      expect(
+        SidebarFolderDropHighlight.visible(
+          externallyTargeted: false,
+          folderHoverCount: 0,
+        ),
+        isFalse,
+      );
+    });
+
+    test('visible when externally targeted (empty list space)', () {
+      expect(
+        SidebarFolderDropHighlight.visible(
+          externallyTargeted: true,
+          folderHoverCount: 0,
+        ),
+        isTrue,
+      );
+    });
+
+    test('visible when a row hover counter is active', () {
+      expect(
+        SidebarFolderDropHighlight.visible(
+          externallyTargeted: false,
+          folderHoverCount: 2,
+        ),
+        isTrue,
+      );
+    });
+
+    test('build renders nothing when hidden', () {
+      final texts = textsOf(
+        SidebarFolderDropHighlight.build(
+          externallyTargeted: false,
+          folderHoverCount: 0,
+        ),
+      );
+      expect(texts, ['']);
+    });
+  });
+
+  group('SidebarListFadeMask', () {
+    test('smoothstep endpoints and midpoint', () {
+      expect(sidebarSmoothstep(0), 0);
+      expect(sidebarSmoothstep(1), 1);
+      expect(sidebarSmoothstep(0.5), closeTo(0.5, 1e-9));
+    });
+
+    test('smoothstep clamps out-of-range input', () {
+      expect(sidebarSmoothstep(-2), 0);
+      expect(sidebarSmoothstep(2), 1);
+    });
+
+    test('top stops ramp 0 -> 1 over 8 steps', () {
+      final alphas = SidebarListFadeMask.topStopAlphas();
+      expect(alphas.first, 0);
+      expect(alphas.last, closeTo(1, 1e-9));
+      for (var i = 1; i < alphas.length; i++) {
+        expect(alphas[i], greaterThanOrEqualTo(alphas[i - 1]));
+      }
+    });
+
+    test('mask geometry constants', () {
+      expect(SidebarListFadeMask.opaqueHeight, 76.0);
+      expect(SidebarListFadeMask.bottomFadeHeight, 26.0);
+    });
+  });
+
+  group('SessionScrollTarget', () {
+    test('scroll id format', () {
+      expect(SessionScrollTarget.id('abc'), 'scroll-target:abc');
+    });
+
+    test('margin is 48pt', () {
+      expect(SessionScrollTarget.margin, 48.0);
+    });
+
+    test('tree top anchor id', () {
+      expect(treeTopScrollId, 'supercli.sidebar.tree-top');
+    });
+  });
+
+  group('decideSidebarScroll', () {
+    test('scope change scrolls to top', () {
+      final d = decideSidebarScroll(
+        previous: const SidebarScrollCue(scope: 'local', selection: 's1'),
+        current: const SidebarScrollCue(scope: 'remote', selection: 's1'),
+        selectionNeedsReveal: false,
+      );
+      expect(d.toTop, isTrue);
+      expect(d.isNone, isFalse);
+    });
+
+    test('selection change reveals the row', () {
+      final d = decideSidebarScroll(
+        previous: const SidebarScrollCue(scope: 'local', selection: 's1'),
+        current: const SidebarScrollCue(scope: 'local', selection: 's2'),
+        selectionNeedsReveal: true,
+      );
+      expect(d.targetId, 'scroll-target:s2');
+    });
+
+    test('selection change without reveal need does nothing', () {
+      final d = decideSidebarScroll(
+        previous: const SidebarScrollCue(scope: 'local', selection: 's1'),
+        current: const SidebarScrollCue(scope: 'local', selection: 's2'),
+        selectionNeedsReveal: false,
+      );
+      expect(d.isNone, isTrue);
+    });
+
+    test('unchanged cue does nothing', () {
+      final d = decideSidebarScroll(
+        previous: const SidebarScrollCue(scope: 'local', selection: 's1'),
+        current: const SidebarScrollCue(scope: 'local', selection: 's1'),
+        selectionNeedsReveal: true,
+      );
+      expect(d.isNone, isTrue);
+    });
+  });
+
+  group('SidebarBranchLabel', () {
+    test('hidden when branch == projectName', () {
+      const label = SidebarBranchLabel(branch: 'main', projectName: 'main');
+      expect(label.visible, isFalse);
+      expect(label.text, '');
+    });
+
+    test('visible when branch differs', () {
+      const label =
+          SidebarBranchLabel(branch: 'feature-x', projectName: 'supercli');
+      expect(label.visible, isTrue);
+      expect(label.text, 'feature-x');
+      expect(textsOf(label.build('b1')), ['⎇ feature-x']);
+    });
+  });
+
+  group('ActiveProjectBranchLabel', () {
+    test('renders only for the project holding the selection', () {
+      const active = ActiveProjectBranchLabel(
+        projectId: 'p1',
+        selectedSessionProjectId: 'p1',
+        branchName: 'feature-x',
+        projectName: 'supercli',
+      );
+      const inactive = ActiveProjectBranchLabel(
+        projectId: 'p2',
+        selectedSessionProjectId: 'p1',
+        branchName: 'feature-x',
+        projectName: 'other',
+      );
+      expect(active.visible, isTrue);
+      expect(inactive.visible, isFalse);
+    });
+
+    test('hidden for worktrees and missing branch', () {
+      const worktree = ActiveProjectBranchLabel(
+        projectId: 'p1',
+        selectedSessionProjectId: 'p1',
+        branchName: 'feature-x',
+        projectName: 'supercli',
+        isWorktree: true,
+      );
+      const noBranch = ActiveProjectBranchLabel(
+        projectId: 'p1',
+        selectedSessionProjectId: 'p1',
+        projectName: 'supercli',
+      );
+      expect(worktree.visible, isFalse);
+      expect(noBranch.visible, isFalse);
+    });
+  });
+
+  group('SidebarFooter', () {
+    test('add menu shows both rows for local scope', () {
+      const menu = SidebarFooterAddMenu(localVerbsVisible: true);
+      expect(
+        menu.items,
+        [('project.add', 'Add Project…'), ('workspace.add', 'Add Workspace…')],
+      );
+    });
+
+    test('add menu hides Add Project while remote Host scoped', () {
+      const menu = SidebarFooterAddMenu(localVerbsVisible: false);
+      expect(menu.items, [('workspace.add', 'Add Workspace…')]);
+    });
+
+    test('footer build renders the menu rows', () {
+      const menu = SidebarFooterAddMenu(localVerbsVisible: false);
+      expect(buttonsOf(menu.build()), ['Add Workspace…']);
+    });
+  });
+
+  group('SidebarCollapseAll', () {
+    test('disabled while nothing expanded', () {
+      expect(const SidebarCollapseAll().enabled, isFalse);
+      expect(
+        const SidebarCollapseAll(expandedProjectCount: 2).enabled,
+        isTrue,
+      );
+    });
+  });
+
+  group('RowActionButtons', () {
+    test('archive for resumable, remove for non-resumable', () {
+      expect(RowActionButtons.showsArchive(true), isTrue);
+      expect(RowActionButtons.showsArchive(false), isFalse);
+      expect(RowActionButtons.showsRemove(false), isTrue);
+      expect(RowActionButtons.showsRemove(true), isFalse);
+    });
+
+    test('restart affordance for stopped resumable rows', () {
+      expect(RowActionButtons.showsRestart(true), isTrue);
+      expect(RowActionButtons.showsRestart(false), isFalse);
+    });
+
+    test('button ids are session-scoped', () {
+      expect(
+        buttonsOf(RowActionButtons.archiveButton('s1')),
+        ['🗃'],
+      );
+      expect(
+        buttonsOf(RowActionButtons.removeButton('s1')),
+        ['✕'],
+      );
+      expect(
+        buttonsOf(RowActionButtons.restartButton('s1')),
+        ['↻'],
+      );
+    });
+  });
+
+  group('sessionRowResumePresentation', () {
+    test('archived: restore & resume when restartable', () {
+      expect(
+        sessionRowResumePresentation(
+          isArchived: true,
+          canRestart: true,
+          canResumeAgent: false,
+          isLive: false,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.restoreAndResume,
+      );
+    });
+
+    test('archived: restore only when not restartable', () {
+      expect(
+        sessionRowResumePresentation(
+          isArchived: true,
+          canRestart: false,
+          canResumeAgent: false,
+          isLive: false,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.restore,
+      );
+    });
+
+    test('starting sessions show no affordance', () {
+      expect(
+        sessionRowResumePresentation(
+          isArchived: false,
+          canRestart: true,
+          canResumeAgent: true,
+          isLive: false,
+          isStarting: true,
+        ),
+        SessionRowResumePresentation.none,
+      );
+    });
+
+    test('live session: resume agent when supported', () {
+      expect(
+        sessionRowResumePresentation(
+          isArchived: false,
+          canRestart: false,
+          canResumeAgent: true,
+          isLive: true,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.resumeAgent,
+      );
+      expect(
+        sessionRowResumePresentation(
+          isArchived: false,
+          canRestart: false,
+          canResumeAgent: false,
+          isLive: true,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.none,
+      );
+    });
+
+    test('stopped session: resume when restartable', () {
+      expect(
+        sessionRowResumePresentation(
+          isArchived: false,
+          canRestart: true,
+          canResumeAgent: false,
+          isLive: false,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.resumeSession,
+      );
+      expect(
+        sessionRowResumePresentation(
+          isArchived: false,
+          canRestart: false,
+          canResumeAgent: false,
+          isLive: false,
+          isStarting: false,
+        ),
+        SessionRowResumePresentation.none,
+      );
+    });
+
+    test('titles', () {
+      expect(SessionRowResumePresentation.none.title, isNull);
+      expect(
+        SessionRowResumePresentation.resumeAgent.title,
+        'Resume Agent',
+      );
+      expect(SessionRowResumePresentation.resumeSession.title, 'Resume');
+      expect(
+        SessionRowResumePresentation.restore.title,
+        'Restore from archive',
+      );
+      expect(
+        SessionRowResumePresentation.restoreAndResume.title,
+        'Restore & Resume',
+      );
+    });
+
+    test('inline resume set', () {
+      expect(
+        sessionRowShowsInlineResume(SessionRowResumePresentation.resumeAgent),
+        isTrue,
+      );
+      expect(
+        sessionRowShowsInlineResume(
+            SessionRowResumePresentation.restoreAndResume),
+        isTrue,
+      );
+      expect(
+        sessionRowShowsInlineResume(SessionRowResumePresentation.restore),
+        isFalse,
+      );
+      expect(
+        sessionRowShowsInlineResume(SessionRowResumePresentation.none),
+        isFalse,
+      );
+    });
+  });
+
+  group('sessionRowActivitySpinnerCommand', () {
+    test('needs-input wins over spinners', () {
+      expect(
+        sessionRowActivitySpinnerCommand(
+          needsAttention: true,
+          isWorking: true,
+          presentationCommand: 'claude',
+          paneWorkingCommands: const ['codex'],
+        ),
+        isNull,
+      );
+    });
+
+    test('working session keeps its own command', () {
+      expect(
+        sessionRowActivitySpinnerCommand(
+          needsAttention: false,
+          isWorking: true,
+          presentationCommand: 'claude',
+          paneWorkingCommands: const ['codex'],
+        ),
+        'claude',
+      );
+    });
+
+    test('collapsed group falls back to first working pane', () {
+      expect(
+        sessionRowActivitySpinnerCommand(
+          needsAttention: false,
+          isWorking: false,
+          presentationCommand: null,
+          paneWorkingCommands: const ['codex', 'claude'],
+        ),
+        'codex',
+      );
+    });
+
+    test('no activity anywhere yields no spinner', () {
+      expect(
+        sessionRowActivitySpinnerCommand(
+          needsAttention: false,
+          isWorking: false,
+          presentationCommand: null,
+          paneWorkingCommands: const [],
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('sessionRowShowsCopyTranscript', () {
+    test('multi-pane rows hide copy transcript', () {
+      expect(
+        sessionRowShowsCopyTranscript(
+          paneItemsEmpty: false,
+          supportsTranscriptCopy: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('single-pane rows show it when supported', () {
+      expect(
+        sessionRowShowsCopyTranscript(
+          paneItemsEmpty: true,
+          supportsTranscriptCopy: true,
+        ),
+        isTrue,
+      );
+      expect(
+        sessionRowShowsCopyTranscript(
+          paneItemsEmpty: true,
+          supportsTranscriptCopy: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('QuickPresetStrip', () {
+    test('collapsed by default, expands on hover or forced', () {
+      const strip = QuickPresetStrip(quickGroupCount: 2);
+      expect(strip.expanded, isFalse);
+      expect(strip.collapsedWidth, 28);
+      expect(
+        const QuickPresetStrip(quickGroupCount: 2, hovering: true).expanded,
+        isTrue,
+      );
+      expect(
+        const QuickPresetStrip(quickGroupCount: 2, forceExpanded: true)
+            .expanded,
+        isTrue,
+      );
+    });
+
+    test('expanded width = (groups + 1) * 23 + 30', () {
+      expect(const QuickPresetStrip(quickGroupCount: 0).expandedWidth, 53);
+      expect(const QuickPresetStrip(quickGroupCount: 2).expandedWidth, 99);
+    });
+
+    test('menu chip for 2+ starred presets', () {
+      expect(QuickPresetStrip.isMenuChip(2), isTrue);
+      expect(QuickPresetStrip.isMenuChip(1), isFalse);
+    });
+  });
+
+  group('splitLaunchPresets', () {
+    test('plugin-backed presets go to Plugins, rest to Agents', () {
+      const presets = [
+        LaunchPreset(id: 'codex', label: 'codex', command: 'codex --yolo'),
+        LaunchPreset(
+          id: 'markdown',
+          label: 'Markdown',
+          command: 'supercli-markdown',
+          pluginId: 'supercli.app.markdown',
+        ),
+      ];
+      final split = splitLaunchPresets(presets);
+      expect(split.agents.map((p) => p.id), ['codex']);
+      expect(split.plugins.map((p) => p.id), ['markdown']);
+    });
+  });
+
+  group('NewSessionMenuModel', () {
+    test('sections: blank, agents, plugins, archived', () {
+      final model = NewSessionMenuModel(
+        menuPresets: const [
+          LaunchPreset(id: 'codex', label: 'codex', command: 'codex'),
+          LaunchPreset(
+            id: 'markdown',
+            label: 'Markdown',
+            command: 'supercli-markdown',
+            pluginId: 'supercli.app.markdown',
+          ),
+        ],
+        showsManagePlugins: true,
+        archivedCount: 3,
+      );
+      final kinds = model.sections.map((s) => s.kind).toList();
+      expect(kinds, ['blank', 'agents', 'plugins', 'archived']);
+      expect(model.sections[3].archivedCount, 3);
+    });
+
+    test('agents section renders with manage entry even when empty', () {
+      final model = NewSessionMenuModel(menuPresets: const []);
+      final kinds = model.sections.map((s) => s.kind).toList();
+      expect(kinds, ['blank', 'agents']);
+      expect(model.sections[1].showManage, isTrue);
+    });
+
+    test('no archived section when count is 0', () {
+      final model = NewSessionMenuModel(menuPresets: const []);
+      expect(
+        model.sections.map((s) => s.kind),
+        isNot(contains('archived')),
+      );
+    });
+  });
+
+  group('EmptySessionsPlaceholderRow', () {
+    test('leading indent is 28 + depth * 14', () {
+      expect(const EmptySessionsPlaceholderRow().leadingIndent, 28);
+      expect(const EmptySessionsPlaceholderRow(depth: 2).leadingIndent, 56);
+    });
+
+    test('label and archived row', () {
+      final texts = textsOf(const EmptySessionsPlaceholderRow().build());
+      expect(texts, contains('No sessions yet.'));
+      final archived = textsOf(
+        const EmptySessionsPlaceholderRow(archivedCount: 4).build(),
+      );
+      expect(archived, contains('No sessions yet.'));
+      expect(
+        buttonsOf(const EmptySessionsPlaceholderRow(archivedCount: 4).build()),
+        ['Archived (4)'],
+      );
+    });
+  });
+
+  group('SidebarEmptyProjectsView', () {
+    test('shows the Add Project CTA', () {
+      expect(buttonsOf(SidebarEmptyProjectsView.build()), ['Add Project']);
+    });
+  });
+
+  group('ChevronGlyph', () {
+    test('direction follows expansion', () {
+      expect(ChevronGlyph.glyphFor(expanded: true), '▾');
+      expect(ChevronGlyph.glyphFor(expanded: false), '▸');
+    });
+  });
+
+  group('AttentionDot', () {
+    test('static 6px dot with 14px 20% halo', () {
+      expect(AttentionDot.dotSize, 6.0);
+      expect(AttentionDot.haloSize, 14.0);
+      expect(AttentionDot.haloOpacity, 0.20);
+    });
+  });
+
+  group('GroupClusterBackground', () {
+    test('highlighted on hover', () {
+      const bg = GroupClusterBackground(
+        isHovering: true,
+        selectedSessionId: null,
+        descendantSessionIds: [],
+      );
+      expect(bg.highlighted, isTrue);
+    });
+
+    test('highlighted while a descendant is selected', () {
+      const bg = GroupClusterBackground(
+        isHovering: false,
+        selectedSessionId: 's1',
+        descendantSessionIds: ['s1', 's2'],
+      );
+      expect(bg.highlighted, isTrue);
+    });
+
+    test('not highlighted otherwise', () {
+      const bg = GroupClusterBackground(
+        isHovering: false,
+        selectedSessionId: 's9',
+        descendantSessionIds: ['s1'],
+      );
+      expect(bg.highlighted, isFalse);
+    });
+  });
+
+  group('HoverMarqueeTitle', () {
+    test('no overflow means no marquee', () {
+      expect(HoverMarqueeTitle.overflowOf(100, 120), 0);
+      expect(HoverMarqueeTitle.travelDurationMs(0), 0);
+    });
+
+    test('travel duration is max(1.2s, overflow / 28pt/s)', () {
+      // 28pt overflow -> exactly 1.0s, floored to 1.2s.
+      expect(HoverMarqueeTitle.travelDurationMs(28), 1200);
+      // 56pt overflow -> 2.0s.
+      expect(HoverMarqueeTitle.travelDurationMs(56), 2000);
+      expect(HoverMarqueeTitle.overflowOf(200, 120), 80);
+    });
+
+    test('timing constants', () {
+      expect(HoverMarqueeTitle.pointsPerSecond, 28.0);
+      expect(HoverMarqueeTitle.initialPauseMs, 500);
+      expect(HoverMarqueeTitle.endPauseMs, 900);
+      expect(HoverMarqueeTitle.fadeWidth, 10.0);
+    });
+  });
+
+  group('SessionCommandIconSpec', () {
+    test('visible only with an icon asset', () {
+      expect(
+        const SessionCommandIconSpec(kind: 'claude', iconAsset: 'claude.png')
+            .visible,
+        isTrue,
+      );
+      expect(const SessionCommandIconSpec(kind: 'claude').visible, isFalse);
+    });
+  });
+
+  group('SidebarProject rollups', () {
+    SidebarProject sample() => SidebarProject(
+          id: 'p1',
+          name: 'supercli',
+          sessions: [
+            SidebarSession(
+              summary: summary('s1', 'plain'),
+              busy: true,
+            ),
+            SidebarSession(
+              summary: summary('s2', 'unread', unread: 2),
+            ),
+          ],
+          groups: [
+            SidebarGroup(
+              id: 'g1',
+              title: 'Backend',
+              sessions: [
+                SidebarSession(
+                  summary: summary('s3', 'blocked'),
+                  attention: true,
+                ),
+              ],
+            ),
+          ],
+        );
+
+    test('aggregate attention wins over busy shimmer', () {
+      final p = sample();
+      expect(p.aggregateHasAttention, isTrue);
+      expect(p.showsBusyShimmer, isFalse);
+    });
+
+    test('unread rollup across groups', () {
+      expect(sample().aggregateHasUnread, isTrue);
+      expect(
+        const SidebarProject(id: 'p', name: 'n').aggregateHasUnread,
+        isFalse,
+      );
+    });
+
+    test('busy shimmer when busy and no attention', () {
+      final p = SidebarProject(
+        id: 'p1',
+        name: 'supercli',
+        sessions: [
+          SidebarSession(summary: summary('s1', 'working'), busy: true),
+        ],
+      );
+      expect(p.showsBusyShimmer, isTrue);
+    });
+  });
+
+  group('SidebarView footer wiring', () {
+    test('footer renders + and settings buttons', () {
+      final buttons = buttonsOf(SidebarView().build());
+      expect(buttons, contains('＋'));
+      expect(buttons, contains('⚙ Settings'));
+      // The open-settings id is preserved for SupercliApp.handleClick.
+      expect(buttons, contains('⚙ Settings'));
+    });
+
+    test('add menu opens with scope-gated rows', () {
+      final local = SidebarView(addMenuOpen: true);
+      expect(buttonsOf(local.build()), contains('Add Project…'));
+      final remote = SidebarView(
+        addMenuOpen: true,
+        localVerbsVisible: false,
+      );
+      expect(buttonsOf(remote.build()), isNot(contains('Add Project…')));
+      expect(buttonsOf(remote.build()), contains('Add Workspace…'));
+    });
+
+    test('add menu hidden by default', () {
+      expect(buttonsOf(SidebarView().build()), isNot(contains('Add Project…')));
+    });
+  });
+
 }

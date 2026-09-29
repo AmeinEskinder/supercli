@@ -45,31 +45,89 @@ files:
     - swift: 'SidebarBranchLabel: branch shown in monospaced 10pt, hidden when branch
         == projectName'
       target: lib/screens/sidebarview.dart::SidebarBranchLabel
-      test: test/sidebar_completion_test.dart::SidebarBranchLabel group
+      test: test/sidebar_test.dart::SidebarBranchLabel group
     - swift: 'ActiveProjectBranchLabel: label only for the project holding the selected
         session; hidden for worktrees'
       target: lib/screens/sidebarview.dart::ActiveProjectBranchLabel
-      test: test/sidebar_completion_test.dart::ActiveProjectBranchLabel group
-    - swift: 'SidebarFooter: settings + add-project + collapse-all; collapse-all disabled
-        while nothing expanded; add-project hidden while remote Host scoped'
-      target: lib/screens/sidebarview.dart::SidebarFooter
-      test: test/sidebar_completion_test.dart::SidebarFooter group
-    - swift: 'ArchiveActionButton/RemoveActionButton: archive for resumable sessions,
-        remove for non-resumable'
+      test: test/sidebar_test.dart::ActiveProjectBranchLabel group
+    - swift: 'SidebarFooter: + add popover (Add Project hidden while remote Host scoped,
+        Add Workspace always) + Settings; collapse-all lives in the menu bar, disabled
+        while nothing expanded'
+      target: lib/screens/sidebarview.dart::SidebarFooter + SidebarFooterAddMenu + SidebarCollapseAll
+      test: test/sidebar_test.dart::SidebarFooter + SidebarCollapseAll groups
+    - swift: 'ArchiveActionButton/RemoveActionButton/RestartActionButton: archive for
+        resumable sessions, remove for non-resumable, restart for stopped rows'
       target: lib/screens/sidebarview.dart::RowActionButtons
-      test: test/sidebar_completion_test.dart::RowActionButtons group
+      test: test/sidebar_test.dart::RowActionButtons group
+    - swift: 'SidebarMotion: slide 200ms cubicOut, accordion 340/240ms, row-enter 380ms
+        + 14ms stagger, list fade 220/140ms, panel slide +/-140pt'
+      target: lib/screens/sidebarview.dart::SidebarMotion
+      test: test/sidebar_test.dart::SidebarMotion group
+    - swift: 'SidebarFolderDropHighlight: visible when externally targeted or any row
+        hover counter active'
+      target: lib/screens/sidebarview.dart::SidebarFolderDropHighlight
+      test: test/sidebar_test.dart::SidebarFolderDropHighlight group
+    - swift: 'SidebarListFadeMask: smoothstep 8-step top ramp, 76pt opaque, 26pt bottom
+        fade'
+      target: lib/screens/sidebarview.dart::SidebarListFadeMask + sidebarSmoothstep
+      test: test/sidebar_test.dart::SidebarListFadeMask group
+    - swift: 'SessionScrollTarget: 48pt margin, scroll-target:<id> ids; scope change
+        scrolls to top, selection change reveals the row'
+      target: lib/screens/sidebarview.dart::SessionScrollTarget + decideSidebarScroll
+      test: test/sidebar_test.dart::SessionScrollTarget + decideSidebarScroll
+        groups
+    - swift: 'SessionRowResumePresentation: archived/live/starting/stopped x
+        canRestart/canResumeAgent decision + inline-resume set'
+      target: lib/screens/sidebarview.dart::sessionRowResumePresentation
+      test: test/sidebar_test.dart::sessionRowResumePresentation group
+    - swift: 'sessionRowActivitySpinnerCommand: needs-input wins, else own command,
+        else first working pane; sessionRowShowsCopyTranscript single-pane gate'
+      target: lib/screens/sidebarview.dart::sessionRowActivitySpinnerCommand
+      test: test/sidebar_test.dart::sessionRowActivitySpinnerCommand +
+        sessionRowShowsCopyTranscript groups
+    - swift: 'QuickPresetStrip: expands on hover/forced, width (groups+1)*23+30, menu
+        chip for 2+ starred presets'
+      target: lib/screens/sidebarview.dart::QuickPresetStrip
+      test: test/sidebar_test.dart::QuickPresetStrip group
+    - swift: 'newSessionMenuContent: blank terminal first, Agents/Plugins sections +
+        manage entries, Archived(count) row'
+      target: lib/screens/sidebarview.dart::NewSessionMenuModel + splitLaunchPresets
+      test: test/sidebar_test.dart::NewSessionMenuModel + splitLaunchPresets
+        groups
+    - swift: 'EmptySessionsPlaceholderRow (No sessions yet., 28+depth*14 indent) +
+        SidebarEmptyProjectsView (Add Project CTA)'
+      target: lib/screens/sidebarview.dart::EmptySessionsPlaceholderRow
+      test: test/sidebar_test.dart::EmptySessionsPlaceholderRow +
+        SidebarEmptyProjectsView groups
+    - swift: 'Project aggregate rollups: attention > unread > busy shimmer over
+        descendant sessions'
+      target: lib/screens/sidebarview.dart::SidebarProjectRollups
+      test: test/sidebar_test.dart::SidebarProject rollups group
+    - swift: 'HoverMarqueeSessionTitle: 28pt/s, 500ms/900ms pauses, 10pt edge fade,
+        travel = max(1.2s, overflow/28)'
+      target: lib/screens/sidebarview.dart::HoverMarqueeTitle
+      test: test/sidebar_test.dart::HoverMarqueeTitle group
+    - swift: 'AttentionDot: static 6px dot + 14px 20% halo; GroupClusterBackground:
+        hover/selection wash; ChevronGlyph direction; SessionCommandIcon asset gate;
+        SessionMoveTarget data'
+      target: lib/screens/sidebarview.dart (see header for full list)
+      test: test/sidebar_test.dart::AttentionDot + GroupClusterBackground +
+        ChevronGlyph + SessionCommandIconSpec groups
     tests:
     - file: clients/supercli-app/test/sidebar_test.dart
-      count: 36
-    - file: clients/supercli-app/test/sidebar_completion_test.dart
-      count: 9
+      count: 112
     notes: 'Partial 2026-09-27 (feat/wire-sidebar): Host wiring done for session list,
       status signals and project tree (headless e2e against live Host, 2 real sessions).
-      2026-09-29 (feat/port-sidebar-terminal): branch labels, footer, row action buttons
-      ported with tests. SidebarView.swift is 4,406 lines / ~151 funcs; remaining
-      behaviours (drag highlight rendering, motion/transitions, scroll targets, fade
-      masks, preset strip, context menus beyond #153/#154) still todo. Screenshot
-      BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM); not verified.'
+      2026-09-29 (feat/port-sidebarview-b): ported remaining portable behaviours —
+      motion, drop highlight, fade mask, scroll targets/cues, branch labels, footer +
+      add menu, collapse-all state, row action buttons, resume presentation, spinner
+      command, copy-transcript gate, quick preset strip, new-session menu, empty states,
+      aggregate rollups, marquee timing, attention dot, cluster background, chevron,
+      command icon spec, move target (69 new tests). Platform-only pieces NOT ported
+      (AppKit/SwiftUI drag-drop delegates, NSViewRepresentable hover monitors,
+      CoreText glyph metrics, NSImage icon pipelines) — see sidebarview.dart header.
+      Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM);
+      not verified. UNTESTED: no Dart SDK in this VM.'
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: 'Dart: clients/supercli-app'
     status: ported

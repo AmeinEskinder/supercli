@@ -225,7 +225,7 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift | 3517 | Dart: clients/supercli-app | ported | #152 | 22 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSkeleton.swift | 27 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSpinners.swift | 318 | Dart: clients/supercli-app | ported |  | 1 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarView.swift | 4406 | Dart: clients/supercli-app | partial | #151 | 45 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarView.swift | 4406 | Dart: clients/supercli-app | partial | #151 | 112 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceDots.swift | 2171 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarWorkspaceSelector.swift | 548 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift | 1461 | Dart: clients/supercli-app | partial |  | 14 |
