@@ -53,6 +53,27 @@ files:
       - swift: "RemoteArchivedSessionSummaryCache — per-project archived session summary cache (replaceProject drops stale rows, retainProjects prunes, removeAll clears)"
         target: "crates/supercli-client/src/remote_session_cache.rs::RemoteArchivedSessionSummaryCache"
         test: "remote_session_cache::tests (8 tests)"
+      - swift: "sidebar ordering — rebuildTree: scan → project tree (removal filter, restart placeholders, override filing, newest-first + session overlay, worktree/folder children, project overlays)"
+        target: "crates/supercli-client/src/sidebar_order.rs::SidebarOrderState::build_tree"
+        test: "sidebar_order::tests::build_tree_groups_files_and_orders, build_tree_honors_project_overlay_and_filters_removing, build_tree_injects_restart_placeholders_and_date_sorts, flattened_project_order_ids_is_preorder"
+      - swift: "sidebar ordering — overlay precedence (preview > shared > local) + project/session/pinned rank application (applyProjectOrderOverlay, applySessionOrderOverlay, orderedPinnedSessions)"
+        target: "crates/supercli-client/src/sidebar_order.rs::resolve_overlay, apply_project_order, apply_session_order, ordered_pinned_records"
+        test: "sidebar_order::tests::overlay_precedence_preview_beats_shared_beats_local, effective_overlay_rejects_empty_winners, project_order_overlay_ranks_first_and_appends_new, project_order_empty_or_disjoint_overlay_keeps_base, session_order_new_sessions_stay_above_hand_ordered_block, pin_record_order_target_id, ordered_pinned_records_shared_wins_then_local, overlay_key_formats"
+      - swift: "sidebar ordering — sibling reorder math (projectInsertionOrder, projectSiblingMove, combinedSessionOrder, applyingRelativeIDOrder, replacingSessionID, inserting(_:below:in:))"
+        target: "crates/supercli-client/src/sidebar_order.rs::project_insertion_order, sibling_move_to_target_slot, combined_session_order, applying_relative_id_order, replacing_session_id, insert_ids_below"
+        test: "sidebar_order::tests::project_insertion_order_gap_semantics, sibling_move_takes_target_slot, combined_session_order_dedups_pins_first, applying_relative_id_order_moves_around_foreign_ids, replacing_session_id_swaps_in_place, insert_ids_below_host"
+      - swift: "sidebar ordering — session sorts (sessionsSortedByRecentActivity, orderedSessions) and effectiveProjectID"
+        target: "crates/supercli-client/src/sidebar_order.rs::sessions_sorted_by_recent_activity, order_sessions_manual, effective_project_id"
+        test: "sidebar_order::tests::order_sessions_manual_unranked_newest_first_above, recent_activity_sort_working_first_then_stamp_then_id, effective_project_id_override_with_stale_fallback"
+      - swift: "sidebar ordering — drag previews: preview/commit/cancel for projects (previewProjectMove, commitProjectReorder, cancelProjectReorder) and sessions (previewSessionMove, previewPinnedSessionMove, commitSessionReorder incl. date-sort flip, cancelSessionReorder)"
+        target: "crates/supercli-client/src/sidebar_order.rs::SidebarOrderState::{preview_project_move, commit_project_preview, cancel_project_preview, preview_session_move, commit_session_preview, cancel_session_preview}"
+        test: "sidebar_order::tests::project_preview_commit_cancel_cycle, session_preview_commit_flips_date_sort_for_regular_section, session_preview_pinned_partition_never_flips_date_sort"
+      - swift: "sidebar ordering — durable order writes (setProjectOrder/setSessionOrder/setPinnedOrder local-overlay halves), pruneProjectOrderOverlays, toggleProjectExpanded, isDateSorted/setSessionDateSorted"
+        target: "crates/supercli-client/src/sidebar_order.rs::SidebarOrderState::{set_project_order, set_session_order, set_pinned_order, prune_project_overlays, toggle_expanded, is_date_sorted, set_date_sorted}"
+        test: "sidebar_order::tests::set_orders_write_local_overlay_and_return_combined, prune_project_overlays_drops_removed_ids_and_parents, toggle_expanded_flips"
+      - swift: "sidebar ordering — pinned partition: rebuildPins merge/group/validity/order kernel, renderedPinnedItems local assembly, advertisedSessionOrder, applyPinnedRecordOrder raw-JSON reorder"
+        target: "crates/supercli-client/src/sidebar_order.rs::SidebarOrderState::rebuild_pin_groups, assemble_pinned_items, advertised_session_order, apply_pinned_record_order"
+        test: "sidebar_order::tests::rebuild_pin_groups_validity_ordering_and_overlay, rebuild_pin_groups_unplaced_append_oldest_first, assemble_pinned_items_mixed_order_with_preview_rerank, advertised_session_order_only_when_interleaving_folders, apply_pinned_record_order_reorders_and_keeps_rest, apply_pinned_record_order_synthesizes_group_records, apply_pinned_record_order_legacy_flat_and_unknown_shapes"
     tests:
       - file: crates/supercli-core/src/store_policies.rs
         count: 23
@@ -66,4 +87,6 @@ files:
         count: 5
       - file: crates/supercli-client/src/remote_session_cache.rs
         count: 8
-    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 6 pure-logic sections ported with 59 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8). The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
+      - file: crates/supercli-client/src/sidebar_order.rs
+        count: 34
+    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 7 pure-logic sections ported with 93 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8), sidebar ordering (34). The sidebar ordering port covers the ordering kernel only: tree build, overlay precedence/application, sibling reorder math, session sorts, drag preview/commit/cancel state, local overlay writes, pin-group rebuild, pinned-item assembly, advertised order, and the raw-JSON pinned-record reorder. UserDefaults/app-state/shared-file persistence, remote-Host verb paths, SwiftUI animations, the sidebarLists truncation window, archive sections, and pane-layout reconciliation are not portable and stay with UI/host workers. The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active(). The sidebar row types are local web-safe views (supercli-client has no supercli-core dependency); SessionStatus reuses remote_dto_adapters::SessionStatus."
