@@ -13,7 +13,10 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
+
+#[cfg(not(target_arch = "wasm32"))]
+use subtle::ConstantTimeEq;
 
 /// Reservation expiry: the QR's five-minute lifetime plus the historical
 /// 30-second proxy grace. Swift: `5 * 60 + 30`.
@@ -110,6 +113,13 @@ pub struct PairingProxyReservation {
     pub endpoint: String,
 }
 
+/// The sealed-exchange provider. `Send`/`Sync` because it runs on a
+/// connection thread; Swift hops to `@MainActor` here, which has no Rust
+/// equivalent in this crate, so the provider runs inline on a worker
+/// thread.
+pub type PairingProvider =
+    Arc<dyn Fn(Vec<u8>) -> Result<Vec<u8>, MobileRemoteError> + Send + Sync + 'static>;
+
 struct ActiveReservation {
     id: String,
     expires_at: SystemTime,
@@ -117,7 +127,7 @@ struct ActiveReservation {
     /// connection thread; Swift hops to `@MainActor` here, which has no Rust
     /// equivalent in this crate, so the provider runs inline on a worker
     /// thread.
-    provider: Arc<dyn Fn(Vec<u8>) -> Result<Vec<u8>, MobileRemoteError> + Send + Sync + 'static>,
+    provider: PairingProvider,
     forwarding: bool,
 }
 
@@ -182,17 +192,21 @@ impl ControllerPairingProxy {
     }
 
     /// Replace any prior invitation with one random, short-lived URL.
-    /// Returns `None` after [`stop`](Self::stop).
+    /// Returns `None` after [`stop`](Self::stop), or if the OS RNG is
+    /// unavailable (fail closed: no predictable fallback ids).
     pub fn reserve(
         &self,
         provider: impl Fn(Vec<u8>) -> Result<Vec<u8>, MobileRemoteError> + Send + Sync + 'static,
     ) -> Option<PairingProxyReservation> {
         // 128-bit random id, uppercased hex like Swift's UUID().uuidString.
+        // Fail closed if the OS RNG is unavailable: the id is the only
+        // capability on a 0.0.0.0 listener, so a predictable fallback is
+        // a security vulnerability.
         let mut id_bytes = [0u8; 16];
-        getrandom_fill(&mut id_bytes);
+        getrandom_fill(&mut id_bytes).ok()?;
         let id = id_bytes
             .iter()
-            .map(|b| format!("{:02X}", b))
+            .map(|b| format!("{b:02X}"))
             .collect::<String>();
         let host = self
             .advertised_host
@@ -216,7 +230,7 @@ impl ControllerPairingProxy {
     /// Drop the reservation with `id`, if it is the active one.
     pub fn cancel(&self, id: &str) {
         let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if state.active.as_ref().is_some_and(|a| a.id == id) {
+        if state.active.as_ref().is_some_and(|a| pairing_id_eq(&a.id, id)) {
             state.active = None;
         }
     }
@@ -228,22 +242,31 @@ impl Drop for ControllerPairingProxy {
     }
 }
 
-/// Fill `buf` with random bytes; falls back to a time-seeded counter when
-/// the OS RNG is unavailable (reservation ids only need uniqueness).
-fn getrandom_fill(buf: &mut [u8]) {
-    // Use /dev/urandom directly to avoid adding a dependency.
-    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
-        if f.read_exact(buf).is_ok() {
-            return;
-        }
+/// Fill `buf` with cryptographically secure random bytes using the OS RNG.
+/// Returns an error if the OS RNG is unavailable — callers must fail closed
+/// (no reservation) rather than falling back to predictable values.
+/// The pairing id is the only capability on a 0.0.0.0 listener.
+fn getrandom_fill(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    getrandom::getrandom(buf)
+}
+
+/// Compare two pairing ids in constant time to prevent timing side-channels.
+/// The id is the only capability on a 0.0.0.0 listener.
+#[cfg(not(target_arch = "wasm32"))]
+fn pairing_id_eq(a: &str, b: &str) -> bool {
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    if a_bytes.len() != b_bytes.len() {
+        return false;
     }
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    for (i, b) in buf.iter_mut().enumerate() {
-        *b = ((seed >> ((i % 8) * 8)) as u8).wrapping_add(i as u8);
-    }
+    a_bytes.ct_eq(b_bytes).into()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn pairing_id_eq(a: &str, b: &str) -> bool {
+    // wasm32 target doesn't have the subtle dependency; the pairing proxy
+    // doesn't run on wasm anyway (no TCP listeners).
+    a == b
 }
 
 fn accept_loop(listener: TcpListener, state: Arc<Mutex<ProxyState>>) {
@@ -401,14 +424,14 @@ fn forward(
     let id = parts[2];
 
     // Claim the single-flight forwarding slot; expire stale reservations.
-    let provider: Arc<dyn Fn(Vec<u8>) -> Result<Vec<u8>, MobileRemoteError> + Send + Sync>;
+    let provider: PairingProvider;
     {
         let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
         let now = SystemTime::now();
-        let claimable = match state.active.as_mut() {
-            Some(a) if a.id == id && a.expires_at > now && !a.forwarding => true,
-            _ => false,
-        };
+        let claimable = matches!(
+            state.active.as_mut(),
+            Some(a) if pairing_id_eq(&a.id, id) && a.expires_at > now && !a.forwarding
+        );
         if !claimable {
             if state.active.as_ref().is_some_and(|a| a.expires_at <= now) {
                 state.active = None;
@@ -443,7 +466,7 @@ fn forward(
             }
             // Success consumes the one-shot reservation.
             let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
-            if state.active.as_ref().is_some_and(|a| a.id == id) {
+            if state.active.as_ref().is_some_and(|a| pairing_id_eq(&a.id, id)) {
                 state.active = None;
             }
             Ok(bytes)
@@ -460,7 +483,7 @@ fn forward(
 fn release_forwarding_claim(state: &Arc<Mutex<ProxyState>>, id: &str) {
     let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(a) = state.active.as_mut() {
-        if a.id == id {
+        if pairing_id_eq(&a.id, id) {
             a.forwarding = false;
         }
     }
@@ -667,7 +690,7 @@ mod tests {
     fn proxy_reserve_mints_pairing_proxy_url() {
         let proxy = ControllerPairingProxy::new(Some("127.0.0.1".to_string())).unwrap();
         let r = proxy
-            .reserve(|body| Ok(body))
+            .reserve(Ok)
             .expect("reserve must succeed while listening");
         assert!(r.endpoint.starts_with("http://127.0.0.1:"));
         assert!(r.endpoint.contains("/mobile/pairing-proxy/"));

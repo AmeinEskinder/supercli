@@ -1,8 +1,10 @@
 name: Runtime catalog
 
-# The client-safe runtime catalog (`generated/GeneratedRuntimeCatalog.swift`)
+# The client-safe runtime catalog (`generated/runtime-catalog.json`)
 # ships inside every CLI archive, so a runtime PR must not land with a stale
 # copy. Regenerate from `runtimes/` and fail on any difference.
+# (Swift generation was removed under the Swift-0% goal; the Rust Host
+# consumes runtimes/ directly via build.rs.)
 on:
   push:
     branches: ['main', 'next', 'feat/**']
