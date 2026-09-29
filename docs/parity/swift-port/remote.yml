@@ -266,3 +266,75 @@ files:
       - file: crates/supercli-client/src/viewer_presence.rs
         count: 7
     notes: "Behaviours covered by 7 Rust tests. No Dart test file existed for viewer_presence."
+
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalWebSocket.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteTerminalWebSocketError (helloTimeout, protocolViolation, closed)"
+        target: "crates/supercli-client/src/remote_terminal_websocket.rs::RemoteTerminalWebSocketError"
+        test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::error_display"
+      - swift: "RemoteTerminalInputRouter.send routing (WS if healthy, HTTP fallback, idempotency key)"
+        target: "crates/supercli-client/src/remote_terminal_websocket.rs::route_input"
+        test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::route_prefers_healthy_websocket"
+      - swift: "Large paste bypasses WS (maxInputBytesPerFrame threshold)"
+        target: "crates/supercli-client/src/remote_terminal_websocket.rs::MAX_INPUT_BYTES_PER_FRAME"
+        test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::route_large_paste_goes_http_even_with_healthy_ws"
+      - swift: "WS send timeout 0.5s then retire and fall back to HTTP"
+        target: "crates/supercli-client/src/remote_terminal_websocket.rs::WS_SEND_TIMEOUT_SECS"
+        test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::timeout_constant_matches_swift"
+      - swift: "WS send failure retires socket"
+        target: "crates/supercli-client/src/remote_terminal_websocket.rs::on_ws_send_result"
+        test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::ws_send_outcome_err_retires"
+    tests:
+      - file: crates/supercli-client/src/remote_terminal_websocket.rs
+        count: 8
+    notes: "304 LOC. Portable decision logic ported: error enum, input routing (WS-vs-HTTP with 0.5s timeout and 16KiB frame threshold), send outcome mapping. URLSession WebSocket, certificate pinning delegate, and ping watchdog are platform-specific and not portable. Protocol parsing already in remote_terminal_stream.rs."
+
+  native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "GitHeadReader.currentBranch (parse .git/HEAD, follow worktree .git files, detached HEAD short commit)"
+        target: "crates/supercli-client/src/remote_dto_adapters.rs::git_head_reader::current_branch"
+        test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::git_head_reader_branch"
+      - swift: "SessionStatus.remoteStatus (exited→exited, others→running)"
+        target: "crates/supercli-client/src/remote_dto_adapters.rs::SessionStatus::remote_status"
+        test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::session_status_maps_to_remote"
+      - swift: "SessionActivityStatus.remoteActivity"
+        target: "crates/supercli-client/src/remote_dto_adapters.rs::SessionActivityStatus::remote_activity"
+        test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::activity_status_maps_to_remote"
+      - swift: "MobilePaneGroupProjection.scopeID (local:/ssh:/host: prefix mapping)"
+        target: "crates/supercli-client/src/remote_dto_adapters.rs::MobilePaneGroupProjection::scope_id"
+        test: "crates/supercli-client/src/remote_dto_adapters.rs::tests::scope_id_local_prefix"
+    tests:
+      - file: crates/supercli-client/src/remote_dto_adapters.rs
+        count: 11
+    notes: "247 LOC. Pure adapters ported: git HEAD reader (branch/worktree/detached), status/activity mappings, scope ID derivation. Swift extensions on Project/Preset/SessionEntry/SupercliStore depend on app-local model types with no Rust equivalent yet; not ported."
+
+  native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "LaunchConfig.attachCommandEnvVar / hostCommandEnvVar constants"
+        target: "crates/supercli-client/src/launch_config.rs::ATTACH_COMMAND_ENV_VAR"
+        test: "crates/supercli-client/src/launch_config.rs::tests::attach_command_uses_env_override"
+      - swift: "LaunchConfig.attachBinary / hostBinary resolution (env → bundled → workspace)"
+        target: "crates/supercli-client/src/launch_config.rs::attach_binary"
+        test: "crates/supercli-client/src/launch_config.rs::tests::host_binary_uses_env_override"
+      - swift: "LaunchConfig.attachCommand (direct: prefix, sessions-dir scoping, SUPERCLI_HOME)"
+        target: "crates/supercli-client/src/launch_config.rs::attach_command"
+        test: "crates/supercli-client/src/launch_config.rs::tests::attach_command_has_direct_prefix"
+      - swift: "AppDefaults.stableHash (deterministic FNV-1a)"
+        target: "crates/supercli-client/src/launch_config.rs::stable_hash"
+        test: "crates/supercli-client/src/launch_config.rs::tests::stable_hash_known_value"
+      - swift: "AppDefaults.suite(forSupercliHome:) derivation"
+        target: "crates/supercli-client/src/launch_config.rs::defaults_suite_name"
+        test: "crates/supercli-client/src/launch_config.rs::tests::defaults_suite_name_derives_from_home"
+    tests:
+      - file: crates/supercli-client/src/launch_config.rs
+        count: 9
+    notes: "207 LOC. Binary path resolution, attach command building (direct: prefix, env overrides, sessions-dir scoping), and FNV-1a stable hash ported. supercliDir already in supercli-core::app_paths; Bundle.main paths replaced with exe-relative + workspace lookup. UserDefaults suite not portable."
