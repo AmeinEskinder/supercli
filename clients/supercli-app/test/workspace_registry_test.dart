@@ -1,4 +1,4 @@
-/// Tests for `workspace_registry.dart` — port of `UnpeelWorkspaceRegistry.swift`.
+/// Tests for `workspace_registry.dart` — port of the workspace registry Swift source.
 library;
 
 import 'package:supercli_app/screens/workspace_registry.dart';
@@ -41,7 +41,7 @@ class FakeIo implements WorkspaceRegistryIo {
 }
 
 void main() {
-  group('SupercliWorkspaceRegistry (UnpeelWorkspaceRegistry.swift)', () {
+  group('SupercliWorkspaceRegistry', () {
     test('slugify matches Swift', () {
       expect(SupercliWorkspaceRegistry.slugify('My Workspace'), 'my-workspace');
       expect(SupercliWorkspaceRegistry.slugify('  Leading'), 'leading');
