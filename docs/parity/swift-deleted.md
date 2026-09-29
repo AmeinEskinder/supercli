@@ -25,6 +25,13 @@ and sums LOC for rows with Status `merged` into the map headline
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/RemoteHostRuntimeTests.swift | 3510 | b65ec68 (feat/verify-delete-batch3) | merged | superseded by Rust tests above (all 81 XCTest cases ported 1:1) | (same 89) |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ProjectWorkspaceMove.swift | 635 | b65ec68 (feat/verify-delete-batch3) | merged | supercli-core/src/workspace_move.rs | 8/8 tests pass on next |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ProjectWorkspaceMoveTests.swift | 354 | b65ec68 (feat/verify-delete-batch3) | merged | superseded by Rust tests above (8 XCTest cases mapped 1:1) | (same 8) |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/Presets.swift | 650 | (feat/verify-delete-batch5) | pending | supercli-core/src/presets.rs::tool_usage_scanner — filesystem/PATH scanner ported | 16 Rust tests pass (tool_usage_scanner_counts_session_files, etc.) |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift | 879 | (feat/verify-delete-batch5) | pending | supercli-client/src/workspace_pool.rs — async pool driver with 5 state-machine fixes | 34 Rust tests pass |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift | 422 | (feat/verify-delete-batch5) | pending | supercli-core/src/workspace_registry.rs — env/order/PID/launcher ported | 13 Rust tests pass |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift | 133 | (feat/verify-delete-batch5) | pending | clients/supercli-app/lib/terminal/terminal_drop_maps.dart — decision logic in Rust FFI | 7 Dart tests (parse-checked; verified by supercli-app CI) |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift | 75 | (feat/verify-delete-batch5) | pending | clients/supercli-app/lib/terminal/terminal_drop_maps.dart — path drag maps | (same 7 Dart tests) |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift | 327 | (feat/verify-delete-batch5) | pending | supercli-client/src/viewer_presence.rs — has_viewers + GridReassertTracker | 11 Rust tests pass |
+| clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift | 220 | (feat/verify-delete-batch5) | pending | supercli-core/src/provider_theme.rs::resolve_frame_background — 3 XCTest cases ported | 29 provider_theme tests pass |
 
 ## Totals
 
