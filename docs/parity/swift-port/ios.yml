@@ -3,4 +3,64 @@
 # See docs/parity/swift-port/README.md for the workflow and the strict
 # "ported" standard.
 area: ios
-files: {}
+files:
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteDirectTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteServerVersion: parse (v-prefix, pre-release/build suffixes) + ordering"
+        target: "crates/supercli-client/src/direct_transport.rs::RemoteServerVersion"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::server_version_parsing_and_ordering"
+      - swift: "RemoteDirectTransportPolicy.decision: capability flag wins; else version >= 0.5.3 -> TLS, lower -> plaintext, no signal -> unknown"
+        target: "crates/supercli-client/src/direct_transport.rs::direct_transport_decision"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::capability_flag_selects_tls"
+      - swift: "RemoteDirectTransportPolicy.applying: TLS upgrade accepted from any source; plaintext downgrade only from authenticated source"
+        target: "crates/supercli-client/src/direct_transport.rs::apply_direct_transport_decision"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::upgrade_to_tls_is_accepted_from_plaintext_bootstrap"
+      - swift: "RemoteDirectTransportPolicy.isPlaintextRefusal: 426, or 401 naming https/tls"
+        target: "crates/supercli-client/src/direct_transport.rs::is_plaintext_refusal"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::plaintext_refusal_is_recognized_from_426_and_from_a_401_that_names_https"
+      - swift: "RemoteDirectTransportPolicy.canonicalStoredEndpoint: https:// stored as http://"
+        target: "crates/supercli-client/src/direct_transport.rs::canonical_stored_endpoint"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::https_advertised_endpoints_are_stored_canonically_as_http"
+      - swift: "RemoteBootstrapDeadline.seconds: 4s LAN; relay 10s floor, 5x RTT, 20s ceiling"
+        target: "crates/supercli-client/src/direct_transport.rs::bootstrap_deadline::seconds"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::relay_bootstrap_deadline_scales_with_measured_round_trip_within_bounds"
+      - swift: "PushTokenRegistrationRoute.plan: active Host on relay -> live connection only; else Direct then transient relay"
+        target: "crates/supercli-client/src/direct_transport.rs::PushTokenRegistrationRoute::plan"
+        test: "crates/supercli-client/src/direct_transport.rs::tests::direct_hosts_try_the_lan_then_a_link_connection"
+    tests:
+      - file: ios/SupercliIOSTests/RemoteDirectTransportTests.swift
+        count: 14
+    notes: "Socket-free decision logic ported 1:1 (14 of 27 XCTest cases; the other 13 need RemoteMacClient/PairedMacRecord/RemotePairingCommit/RemotePreviewStore from other files). normalizedFingerprint reuses crate::tls::normalize_fingerprint (not duplicated). GAP: RemotePinnedURLSessionCache is Apple URLSession machinery — not portable; Rust equivalent is tls::pinned_client_config."
+  ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalStreamTransport.swift:
+    destination: "Rust: supercli-client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteTerminalWSHello: hello frame decode incl. optional mode_preamble_base64"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsHello"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::hello_carries_optional_mode_preamble"
+      - swift: "RemoteTerminalWSServerMessage.parse: hello/error/unknown; hello missing fields -> unknown"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsServerMessage::parse"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::parse_unknown_type_and_garbage"
+      - swift: "RemoteTerminalWSBinaryFrame.parse: 8-byte big-endian offset prefix + raw payload"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsBinaryFrame::parse"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::binary_frame_parses_big_endian_offset_and_payload"
+      - swift: "RemoteTerminalTransportSelector.normalizedFingerprint: strict 64-hex (strips sha256:, colons, whitespace)"
+        target: "crates/supercli-client/src/terminal_stream.rs::normalize_terminal_fingerprint"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::fingerprint_normalization_lowercases_and_strips_decoration"
+      - swift: "RemoteTerminalTransportSelector.endpoint/candidate: WS candidate vs HTTP long-poll fallback"
+        target: "crates/supercli-client/src/terminal_stream.rs::terminal_stream_candidate"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::candidate_requires_endpoint_host_and_token"
+      - swift: "RemoteTerminalTransportSelector.webSocketOutputURL: wss://host:port/api/sessions/id/output?token=..[&offset=N]"
+        target: "crates/supercli-client/src/terminal_stream.rs::web_socket_output_url"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::web_socket_output_url_with_resume_offset"
+      - swift: "RemoteTerminalWSClientMessage.inputFrames: single-frame + char-boundary chunking, writeID only on single frame"
+        target: "crates/supercli-client/src/terminal_stream.rs::RemoteTerminalWsClientMessage::input_frames"
+        test: "crates/supercli-client/src/terminal_stream.rs::tests::input_frames_chunk_large_input_on_character_boundaries"
+    tests:
+      - file: ios/SupercliIOSTests/RemoteTerminalStreamTransportTests.swift
+        count: 24
+    notes: "Socket-free wire contract ported 1:1 (24 of 33 XCTest cases in the file; the 9 RemoteTerminalPresentationCadenceTests belong to RemoteGhosttyRenderer/RemoteTerminalAsyncSingleFlight/etc. in other files — async/@MainActor/UI-bound, not portable here)."

@@ -25,11 +25,17 @@
 //! - [`pairing`] — one-time sealed pairing: QR codes, pairing crypto, exchange
 //! - [`tls`] — certificate-pinned TLS for the Direct `https://` endpoint
 //! - [`credentials`] — platform keychain storage for pairing secrets
+//! - [`direct_transport`] — Direct `/mobile` transport decisions: pinned-HTTPS
+//!   vs plaintext policy, bootstrap deadlines, push-token routes
+//! - [`terminal_stream`] — terminal output WebSocket wire contract: hello/error
+//!   frame decoding, binary frame parsing, WS transport selection
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod credentials;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod direct_transport;
 pub mod dto;
 pub mod events;
 #[cfg(not(target_arch = "wasm32"))]
@@ -53,6 +59,8 @@ pub mod remote_connection;
 pub mod remote_runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod terminal_stream;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
