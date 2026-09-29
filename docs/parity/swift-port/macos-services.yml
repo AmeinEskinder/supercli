@@ -223,13 +223,43 @@ files:
       - swift: "Socket server (loopback listener)"
         target: null
         test: null
-      - swift: "Additional operations (notification delivery, editor opening, thumbnails, link entitlement refresh, mobile keys, push registration, relay recovery)"
-        target: null
-        test: null
+      - swift: "approval.present — typed approval rows (id/kind/title/body/callerSessionID/requestedAtUnixMs, ≤32, deduped ids)"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (approval.present arm)"
+        test: "hook_server::tests::approval_present_parses_strictly"
+      - swift: "app.open-in-editor — absolute existing path, exactly 1 request field"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (app.open-in-editor arm) + editor_path"
+        test: "hook_server::tests::open_in_editor_validates_path"
+      - swift: "artifact.thumbnail — allowlisted query keys, max_dim > 0, numeric offset/limit"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (artifact.thumbnail arm)"
+        test: "hook_server::tests::thumbnail_validates_query"
+      - swift: "link.entitlement.refresh — trimmed macID, ≤256, no NUL/CR/LF"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (link.entitlement.refresh arm)"
+        test: "hook_server::tests::link_entitlement_refresh_trims_and_validates"
+      - swift: "mobile.e2e-key.reconcile — sync (1 field) / remove (2 fields + deviceID)"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (mobile.e2e-key.reconcile arm)"
+        test: "hook_server::tests::mobile_e2e_key_reconcile_and_remove"
+      - swift: "overlay.project-color.set — projectID + colorID (empty clears, else valid ProjectFolderColor)"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (overlay.project-color.set arm)"
+        test: "hook_server::tests::project_color_set_validates_color"
+      - swift: "push.register — deviceID + hex apnsToken (16–200 chars) + sandbox/production"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (push.register arm)"
+        test: "hook_server::tests::push_register_validates_token_hex"
+      - swift: "relay.credentials.recover — trimmed deviceID"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (relay.credentials.recover arm)"
+        test: "hook_server::tests::relay_credentials_recover_validates_device"
+      - swift: "notification.deliver — session/title/body/kind/bools/suppressDeviceIDs (≤64, deduped)"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::platform_adapter_call (notification.deliver arm)"
+        test: "hook_server::tests::notification_deliver_validates_all_fields"
+      - swift: "reconciledPortRegistry — pure registry dedupe/prune/cap-16"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::reconciled_port_registry"
+        test: "hook_server::tests::reconciled_port_registry_dedupes_and_caps"
+      - swift: "editorPath — absolute, ≤16 KiB, exists"
+        target: "crates/supercli-native-bridge/src/macos/hook_server.rs::editor_path"
+        test: "hook_server::tests::editor_path_rejects_non_absolute_and_missing"
     tests:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
-        count: 4
-    notes: "Parsing and 3 operations ported. Remaining platform-adapter operations and the socket server not yet ported."
+        count: 15
+    notes: "Parsing and all 13 platform-adapter operations ported with tests, plus editorPath and reconciledPortRegistry. Socket server (loopback listener) not yet ported."
 
   native/SupercliNative/Sources/SupercliNative/LocalHostControl.swift:
     destination: "Rust: supercli-native-bridge::macos::local_host_control"

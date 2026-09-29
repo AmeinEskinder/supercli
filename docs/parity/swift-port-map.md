@@ -133,7 +133,7 @@ _Note: 1 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | native/SupercliNative/Sources/SupercliNative/FeatureFlags.swift | 273 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift | 2618 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/GlobalActivityMenu.swift | 281 | Dart: clients/supercli-app | todo |  | 0 |
-| native/SupercliNative/Sources/SupercliNative/HookServer.swift | 961 | Rust: supercli-native-bridge::macos::hook_server | partial |  | 4 |
+| native/SupercliNative/Sources/SupercliNative/HookServer.swift | 961 | Rust: supercli-native-bridge::macos::hook_server | partial |  | 15 |
 | native/SupercliNative/Sources/SupercliNative/HostHardware.swift | 70 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/HostManagementState.swift | 33 | Rust: supercli-core/client | todo |  | 0 |
 | native/SupercliNative/Sources/SupercliNative/HostServiceAgent.swift | 190 | Rust: supercli-native-bridge::macos::launchd | ported |  | 9 |
