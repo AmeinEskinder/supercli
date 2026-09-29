@@ -223,6 +223,10 @@ final class HostClient {
     if (response.statusCode != 200) {
       throw HostException(
         'POST /mobile/session-organization failed',
+        statusCode: response.statusCode,
+      );
+    }
+  }
 
   // ------------------------------------------------------------------
   // Terminal routes (crates/supercli-core/src/controller_api.rs).

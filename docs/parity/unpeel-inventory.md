@@ -525,7 +525,7 @@ A remote Controller only. The detail screen is always a live terminal, never a c
 | Relay protocol | Forward-secret E2E handshake, sealed frames, transcript MAC | RelayProtocol.swift |
 | Relay connection | WebSocket relay client used by iOS and the native Link downlink | RemoteRelayConnection.swift |
 | Paired host record | Persisted Host identity used for fail-closed reconnects | PairedHostRecord.swift |
-| Runtime catalog (generated) | Swift copy of the runtime registry (names, icons, tints) | GeneratedRuntimeCatalog.swift; generated/GeneratedRuntimeCatalog.swift |
+| Runtime catalog (generated) | JSON copy of the runtime registry (names, icons, tints) | generated/runtime-catalog.json (Swift output deleted under Swift-0%) |
 | Tool/chrome icons | Shared provider/browser icon art | ToolIcons.swift; ChromeIcons.swift |
 | KAT vector tests | Relay crypto pinned to `protocol/relay-kat-vectors-v1.json` | Tests/UnpeelSharedTests/RelayCryptoVectorTests.swift |
 | Transport contract tests | Plugin/remote/transport contract tests | Tests/UnpeelSharedTests/* |
@@ -546,7 +546,7 @@ A remote Controller only. The detail screen is always a live terminal, never a c
 | App registry | Official Apps allowlist (id, binary, version, icon SVG, media types, resource kinds, defaults) | protocol/app-registry.json |
 | Unpeel UI protocol v1 | NDJSON App ↔ Host semantic UI messages (schema, stream, fixtures) | protocol/unpeel-ui-v1.schema.json, unpeel-ui-stream-v1.ndjson, unpeel-ui-fixtures-v1.json |
 | Workspace UI / App Kit state schemas | App Kit state and workspace-UI protocol schemas | crates/apps/app-kit/protocol/* |
-| Generated runtime catalog | Swift runtime catalog generated from runtimes/ | generated/GeneratedRuntimeCatalog.swift; scripts/generate-runtime-client-catalog.mjs |
+| Generated runtime catalog | JSON runtime catalog generated from runtimes/ (Swift generation removed) | generated/runtime-catalog.json; scripts/generate-runtime-client-catalog.mjs |
 | Protocol shipped in every CLI archive | `protocol/`, `generated/`, BUILD_PROVENANCE.json and notices ship in each archive | docs/agents/releases.md |
 
 ---

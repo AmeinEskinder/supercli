@@ -4,17 +4,12 @@
 
 name: Android APK (Dioxus, legacy frozen)
 
+# Manual dispatch only. The push/pull_request triggers were removed: this
+# workflow builds the frozen clients/legacy/dioxus tree, whose workspace
+# metadata is broken (see linux.yml dioxus-launchers), so every automatic
+# run fails. Workflow-only change; clients/legacy stays frozen.
 on:
   workflow_dispatch:
-  push:
-    branches: ['main', 'next', 'feat/**']
-    paths:
-      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-client/**'
-      - '.github/workflows/android.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-client/**'
 
 env:
   RUST_VERSION: "1.88.0"
