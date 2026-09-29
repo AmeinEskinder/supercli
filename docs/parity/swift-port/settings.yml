@@ -251,7 +251,7 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/Presets.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: "216"
     behaviours:
       - swift: "Preset struct (id, label, command, enabled, quickLaunch, newTerminal)"
@@ -271,7 +271,7 @@ files:
         test: "clients/supercli-app/test/presets_test.dart::GlobalPresetFile"
     tests:
       - "clients/supercli-app/test/presets_test.dart (12 tests)"
-    notes: "650 LOC ported. Portable logic; filesystem scanner not yet implemented."
+    notes: "650 LOC ported. Portable logic; filesystem scanner not yet implemented. Logic moving to Rust per Amein's one-implementation rule. Dart presets.dart duplicates preset_overlay.rs."
 
 
   native/SupercliNative/Sources/SupercliNative/Views/PluginListDrag.swift:
