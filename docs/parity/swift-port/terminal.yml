@@ -264,14 +264,17 @@ files:
     notes: "Tests SidebarSessionDragController.dropTarget (AppKit NSRect/NSPoint hit testing, 285 lines). The drop-zone geometry logic may be portable, but the tests are in AppKit window coordinates (y-up). Needs coordinate-system translation before porting to Dart."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalPathDragMapTests.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: crates/supercli-core/src/terminal_drop_maps.rs"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "TerminalPathDragMapTests — fresh resolution, stale/future/relative fail-closed"
-        target: "lib/terminal/terminal_path_drag_map.dart"
-        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::PathDragMap::path_at"
+        test: "terminal_drop_maps::tests::path_drag_map_resolves_first_matching_absolute_path"
+      - swift: "TerminalPathDragMapTests.testLoaderRejectsOversizedMarkers — 64 KiB fail-closed gate"
+        target: "crates/supercli-core/src/terminal_drop_maps.rs::PathDragMap::load_from_dir"
+        test: "terminal_drop_maps::tests::loader_rejects_oversized_markers"
     tests:
-      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
-        count: 6
-    notes: "Test file ported 2026-09-29 alongside TerminalPathDragMap.swift. Oversized-marker loader test not portable (requires FileManager). Logic moving to Rust per Amein's one-implementation rule."
+      - file: crates/supercli-core/src/terminal_drop_maps.rs
+        count: 7
+    notes: "Test file fully ported 2026-09-29. Oversized-marker loader case ported via std::fs::metadata gate in PathDragMap::load_from_dir (was marked not-portable; the gate is a pure file-size check)."
