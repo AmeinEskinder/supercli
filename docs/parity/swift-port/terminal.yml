@@ -86,6 +86,40 @@ files:
         count: 8
     notes: "PARTIAL 2026-09-27: data plane + container logic ported (ANSI parser, Host API stream, geometry, close action, hosted wiring, divider drag math, pane identity/active-pane, confirmation dialog content). App mount wired: bin/main.dart::_syncTerminalView creates TerminalPaneView.hosted for the selected session and mounts it in pane-1 via TerminalArea.views (session switch stops old stream, starts new); terminal.key.* actions dispatch to handleKeyAction -> /mobile/write. Full SwiftUI surface (drop zone overlay rendering, pin/magnet preview, title editing, pane chrome, split tree rendering, launcher states, focus sync, banners, approval overlays, AppKit menus) NOT yet audited — needs behaviour-level inventory before 'ported'. GAPS (honest, not wired): printable-character typing (gpuidart raw-input gap G-5, no UiInput mounted); resize only initial 80x24 (no window-size observation in gpuidart); user-split panes (>pane-1) show placeholder; no real-window screenshot (native capture blocked: libxkbcommon-x11.so.0 missing); no live-Host e2e run."
 
+  native/SupercliNative/Sources/SupercliNative/GhosttyBridge.swift:
+    destination: "Rust: supercli-core/client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "RemoteTerminalViewport (Ghostty-free viewport value: columns/rows/pixel geometry/cell size)"
+        target: "crates/supercli-core/src/ghostty_bridge.rs::RemoteTerminalViewport"
+        test: "ghostty_bridge::tests::viewport_fields_and_equality"
+      - swift: "RemoteTerminalCallbackEpoch (wrapping revision token; accepts() stale check)"
+        target: "crates/supercli-core/src/ghostty_bridge.rs::RemoteTerminalCallbackEpoch"
+        test: "ghostty_bridge::tests::epoch_starts_at_zero_and_advances / epoch_wraps_on_overflow / epoch_accepts_only_current_revision"
+      - swift: "RemoteTerminalCallbackRelay (mutex-guarded callback indirection; epoch advance on update/clear; stale-epoch discard at delivery; resize-live gating)"
+        target: "crates/supercli-core/src/ghostty_bridge.rs::RemoteTerminalCallbackRelay"
+        test: "ghostty_bridge::tests::relay_delivers_input_and_resize / relay_drops_resize_while_not_live / relay_discards_input_enqueued_before_update / relay_discards_resize_enqueued_before_clear / relay_update_advances_epoch"
+      - swift: "RemoteTerminalLocalFeed (CAN+RIS+DEC2026 reset byte sequences; reset+payload ordering)"
+        target: "crates/supercli-core/src/ghostty_bridge.rs::RemoteTerminalLocalFeed"
+        test: "ghostty_bridge::tests::local_feed_reset_bytes_are_exact / local_feed_reset_before_payload_ordering"
+      - swift: "GhosttyTerminalPaneDelegate protocol (title change, close/processAlive events)"
+        target: "crates/supercli-core/src/ghostty_bridge.rs::GhosttyTerminalPaneDelegate"
+        test: "ghostty_bridge::tests::delegate_trait_is_object_usable"
+      - swift: "GhosttyTerminalPane (AppKit NSView wrapping Ghostty EXEC surface)"
+        target: null
+        test: null
+      - swift: "RemoteGhosttyTerminalPane (AppKit NSView; retained remote frame, InMemoryTerminalSession backend)"
+        target: null
+        test: null
+      - swift: "PathDraggableTerminalView (AppKit NSDraggingSource for TUI path regions)"
+        target: null
+        test: null
+    tests:
+      - file: crates/supercli-core/src/ghostty_bridge.rs
+        count: 12
+    notes: "PARTIAL 2026-09-29: Ghostty-free value types ported to supercli-core::ghostty_bridge (controller-core gated, no GUI deps): RemoteTerminalViewport, RemoteTerminalCallbackEpoch, RemoteTerminalCallbackRelay, RemoteTerminalLocalFeed, GhosttyTerminalPaneDelegate trait. Swift's MainActor delivery hop is collapsed to a synchronous epoch check; the stale-callback-discard invariant is preserved and tested. The ~2000 LOC of AppKit NSView classes (GhosttyTerminalPane, RemoteGhosttyTerminalPane, PathDraggableTerminalView) are macOS-native and stay Swift-side — not portable to Rust."
+
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Dart: clients/supercli-app"
     status: todo

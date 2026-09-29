@@ -58,6 +58,8 @@ pub mod direct_path_punch;
 pub mod durable_runs;
 #[cfg(feature = "native-host")]
 pub mod first_run;
+#[cfg(feature = "controller-core")]
+pub mod ghostty_bridge;
 #[cfg(feature = "native-host")]
 mod ghostty_vt;
 #[cfg(feature = "native-host")]
