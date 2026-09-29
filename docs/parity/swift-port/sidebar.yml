@@ -28,6 +28,23 @@ files:
     behaviours: []
     tests: []
     notes: ''
+  native/SupercliNative/Sources/SupercliNative/StartupPresentationCache.swift:
+    destination: 'Rust: supercli-client::startup_presentation_cache'
+    status: ported
+    checklist: ''
+    behaviours:
+      - swift: "StartupPresentation Codable (version, home, hostID, nodes, pins, archivedIDs, unreadIDs)"
+        target: "crates/supercli-client/src/startup_presentation_cache.rs::StartupPresentation"
+        test: "crates/supercli-client/src/startup_presentation_cache.rs::tests::json_field_names_match_swift"
+      - swift: "load validates version/home/hostID/size bound, fail-closed"
+        target: "crates/supercli-client/src/startup_presentation_cache.rs::StartupPresentationCache::load"
+        test: "crates/supercli-client/src/startup_presentation_cache.rs::tests::save_then_load_roundtrip"
+      - swift: "save atomic via temp-file + rename, refuses oversize"
+        target: "crates/supercli-client/src/startup_presentation_cache.rs::StartupPresentationCache::save"
+        test: "crates/supercli-client/src/startup_presentation_cache.rs::tests::save_is_atomic_no_torn_file"
+    tests:
+      - "crates/supercli-client/src/startup_presentation_cache.rs::tests (12 tests)"
+    notes: 'Ported from Swift; nodes/pins are opaque JSON values in Rust.'
   native/SupercliNative/Sources/SupercliNative/Views/SidebarView.swift:
     destination: 'Dart: clients/supercli-app'
     status: partial
