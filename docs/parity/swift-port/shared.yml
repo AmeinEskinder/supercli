@@ -252,6 +252,11 @@ files:
       modePreamble helper, WorkspaceSettingsPatch gained the four missing
       settings groups + isEmpty, RemotePairingEnvelope.salt/.sealed accessors.
 
+      Protocol-minor note: the frozen Swift source still says
+      hostMinorVersion = 19, but the canonical ledger
+      (protocol/host-capabilities-v1.json) and supercli-client PROTOCOL_MINOR
+      are 22. The Swift constant is stale and superseded; do NOT lower Rust.
+
       Batch 2 (porter T, 2026-09-29): 30 more DTOs ported to supercli-client::dto
 
       with 24 tests: ProjectFolderSummary, ArchivedSessionsResponse,
