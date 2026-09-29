@@ -669,7 +669,7 @@ final class SidebarScrollDecision {
   const SidebarScrollDecision._({this.targetId, this.toTop = false});
 
   const SidebarScrollDecision.top() : this._(toTop: true);
-  const SidebarScrollDecision.session(String sessionId)
+  SidebarScrollDecision.session(String sessionId)
       : this._(targetId: SessionScrollTarget.id(sessionId));
   const SidebarScrollDecision.none() : this._();
 

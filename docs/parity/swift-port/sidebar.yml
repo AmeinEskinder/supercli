@@ -127,7 +127,8 @@ files:
       (AppKit/SwiftUI drag-drop delegates, NSViewRepresentable hover monitors,
       CoreText glyph metrics, NSImage icon pipelines) — see sidebarview.dart header.
       Screenshot BLOCKED: gpuidart window does not materialize on bare Xvfb (no WM);
-      not verified. UNTESTED: no Dart SDK in this VM.'
+      not verified. 2026-09-29: Dart tests EXECUTED — 112/112 pass
+      (dart test test/sidebar_test.dart, Dart SDK 3.13.4).'
   native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift:
     destination: 'Dart: clients/supercli-app'
     status: ported

@@ -923,6 +923,7 @@ void main() {
       const noBranch = ActiveProjectBranchLabel(
         projectId: 'p1',
         selectedSessionProjectId: 'p1',
+        branchName: null,
         projectName: 'supercli',
       );
       expect(worktree.visible, isFalse);
