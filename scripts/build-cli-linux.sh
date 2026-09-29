@@ -84,11 +84,11 @@ cp "$repo_root"/protocol/* "$stage/protocol/"
   echo "error: protocol/host-capabilities-v1.json missing from the staged archive" >&2
   exit 1
 }
-# generated/ carries the client-safe runtime catalog the Apple repo copies.
+# generated/ carries the client-safe runtime catalog (JSON) the Apple repo copies.
 mkdir -p "$stage/generated"
 cp "$repo_root"/generated/* "$stage/generated/"
-[ -f "$stage/generated/GeneratedRuntimeCatalog.swift" ] || {
-  echo "error: generated/GeneratedRuntimeCatalog.swift missing from the staged archive" >&2
+[ -f "$stage/generated/runtime-catalog.json" ] || {
+  echo "error: generated/runtime-catalog.json missing from the staged archive" >&2
   exit 1
 }
 rust_notice_target=$(rustc -vV | sed -n 's/^host: //p')
