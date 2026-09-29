@@ -177,4 +177,6 @@ pub mod terminal_viewport;
 #[cfg(feature = "native-host")]
 pub mod transcripts;
 #[cfg(feature = "native-host")]
+pub mod workspace_move;
+#[cfg(feature = "native-host")]
 pub mod worktrees;

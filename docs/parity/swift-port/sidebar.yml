@@ -167,12 +167,41 @@ files:
     notes: ""
 
   native/SupercliNative/Sources/SupercliNative/ProjectWorkspaceMove.swift:
-    destination: "Dart: clients/supercli-app"
-    status: todo
+    destination: "Rust: supercli-core"
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "WorkspaceMoveTarget (id/name/home)"
+        target: "crates/supercli-core/src/workspace_move.rs::WorkspaceMoveTarget"
+        test: "crates/supercli-core/src/workspace_move.rs::tests (struct covered by move tests)"
+      - swift: "MoveError + user-facing errorDescription"
+        target: "crates/supercli-core/src/workspace_move.rs::MoveError"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_*"
+      - swift: "move(projectID:from:to:) — session rename, state merge/strip, rollback"
+        target: "crates/supercli-core/src/workspace_move.rs::move_project"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
+      - swift: "sessionIDs(projectID:in:) / liveSessionIDs(projectID:in:)"
+        target: "crates/supercli-core/src/workspace_move.rs::session_ids_for_project, live_session_ids"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
+      - swift: "descendantProjectIDs — subtree traversal"
+        target: "crates/supercli-core/src/workspace_move.rs::descendant_project_ids"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
+      - swift: "sessionIsLive — running manifest + pid identity"
+        target: "crates/supercli-core/src/workspace_move.rs::session_is_live"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
+      - swift: "merge/strip helpers (projects, pins, sort modes, colors, orchestrators, blocked)"
+        target: "crates/supercli-core/src/workspace_move.rs::merge_*/strip_*"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
+      - swift: "session-order.json / project-order.json merge/strip/append"
+        target: "crates/supercli-core/src/workspace_move.rs::merge_session_orders/strip_session_orders/append_project_order/strip_project_order"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
+      - swift: "PresetStateFile.edit(at:) atomic locked edit"
+        target: "crates/supercli-core/src/app_state.rs::edit_at (pre-existing)"
+        test: "crates/supercli-core/src/workspace_move.rs::tests (all move tests)"
+    tests:
+      - file: crates/supercli-core/src/workspace_move.rs
+        count: 8
+    notes: "Ported to Rust (not Dart): filesystem + JSON + process-liveness logic. app_state::edit_at is the exact equivalent of PresetStateFile.edit(at:) (flock + atomic rename). Manifest decode is lenient like Swift's custom Decodable init."
 
   native/SupercliNative/Sources/SupercliNative/SessionArtifacts.swift:
     destination: "Dart: clients/supercli-app"
@@ -255,12 +284,32 @@ files:
     notes: ""
 
   native/SupercliNative/Tests/SupercliNativeTests/ProjectWorkspaceMoveTests.swift:
-    destination: "Dart: clients/supercli-app"
-    status: todo
+    destination: "Rust: supercli-core"
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "testMovesProjectSessionsPinsAndOrdersAndLeavesNeighbors"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_project_sessions_pins_and_orders_and_leaves_neighbors"
+      - swift: "testLeavesSessionFiledOutOfTheSubtree"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::leaves_session_filed_out_of_the_subtree"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::leaves_session_filed_out_of_the_subtree"
+      - swift: "testRefusesDestPathCollisionAndLeavesSourceIntact"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_path_collision_and_leaves_source_intact"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_path_collision_and_leaves_source_intact"
+      - swift: "testRefusesDestSessionIdCollision"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_session_id_collision"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::refuses_dest_session_id_collision"
+      - swift: "testMovesRunningSessionDirWithoutStopping"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::moves_running_session_dir_without_stopping"
+      - swift: "testCollectsChildGroupsAndWorktrees"
+        target: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
+        test: "crates/supercli-core/src/workspace_move.rs::tests::collects_child_groups_and_worktrees"
+    tests:
+      - file: crates/supercli-core/src/workspace_move.rs
+        count: 8
+    notes: "All 6 XCTest cases ported 1:1, plus 2 new error-path tests (sameHome, projectNotFound)."
 
   native/SupercliNative/Tests/SupercliNativeTests/SessionMoveRulesTests.swift:
     destination: "Dart: clients/supercli-app"
