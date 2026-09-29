@@ -92,11 +92,6 @@ files:
         count: 1
     notes: "Token + expiry ported (163 Swift LOC -> ~40 Dart LOC). Missing: token validation/refresh logic."
 
-  app-kit/swift/Sources/SupercliAppKitUI/UIUnixSessionClient.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "GAP-APPKIT-1 (deliberate): Unix-socket transport (NWConnection, Unix domain sockets) not ported. Dart uses HostClient (HTTP) instead. The reconnecting client, frame decoding, action coalescing, and event dispatch logic are transport-specific and have no Dart equivalent. This is an architecture decision, not a missing port."
-
   app-kit/swift/Sources/SupercliAppKitUI/PageView.swift:
     destination: "Dart: appkit_widgets"
     status: partial
@@ -277,57 +272,3 @@ files:
         test: null
     notes: "3 of 4 Swift tests ported (155 Swift LOC -> 27 Dart tests). nativeMarkdownSlashRoundTrip requires AppKit NSWindow/SwiftUI hosting; not portable to Dart unit tests. MarkdownInsertMenu behaviour audit (porter F) resolved the blocker."
 
-  app-kit/swift/Examples/KitchenSink/Package.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "SwiftPM manifest (59 LOC) for the KitchenSink demo app. No Dart equivalent needed; demo only. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/AppFixtures.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Test fixtures (188 LOC) for the KitchenSink demo app. Demo-only; no Dart product equivalent. The Dart appkit widget tests use inline fixtures. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/ComponentTreeView.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo view (177 LOC) for the KitchenSink showcase app. Demo-only SwiftUI; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/ContentView.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo view (610 LOC) for the KitchenSink showcase app. Demo-only SwiftUI; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/KitchenSinkApp.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo app entry (44 LOC, AppKit/SwiftUI @main). Demo-only; no Dart equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/MiniHost.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Test double Host (889 LOC) for the KitchenSink demo app. Simulates a Host for SwiftUI previews; no Dart product equivalent (Dart has no demo app). Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/SemanticWalkthrough.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo walkthrough (266 LOC) for the KitchenSink showcase app. Demo-only; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/SurfaceMiniHost.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Test double Host (857 LOC) for the KitchenSink demo app (Surface variant). Demo-only; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/TerminalPane.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo terminal pane (273 LOC) for the KitchenSink showcase app. Demo-only; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/WebComponentPane.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "Demo web pane (151 LOC) for the KitchenSink showcase app. Demo-only; no Dart product equivalent. Will be deleted with the Swift package."
-
-  app-kit/swift/Package.swift:
-    destination: "Dart: appkit_widgets"
-    status: todo
-    notes: "SwiftPM manifest (17 LOC) for the app-kit Swift package. Build file; no Dart equivalent. Will be deleted with the Swift package."
