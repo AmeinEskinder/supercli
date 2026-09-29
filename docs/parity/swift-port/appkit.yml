@@ -64,7 +64,7 @@ files:
         count: 33
       - file: clients/supercli-app/test/appkit_protocol_lists_test.dart
         count: 33
-    notes: "Core decode types ported. Added: chart page bodies (SparklineSpec/BarChartSpec/LineChartSpec with validation), UIInputSpec + PageHeader, full UIMenuSpec decode, MenuSpec.requiredCapabilities. 2026-09-29: wire-faithful message layer (UIMessage/UIAttach/UIEvent/UIAck/UISnapshot/etc.) in appkit_protocol_messages.dart; UIMessage.delta now carries the typed UIDelta from appkit_protocol_delta.dart. New suites for messages/widgets/lists: tests unrun, pending supercli-app CI (no Dart toolchain on this VM)."
+    notes: "Core decode types ported. Added: chart page bodies (SparklineSpec/BarChartSpec/LineChartSpec with validation), UIInputSpec + PageHeader, full UIMenuSpec decode, MenuSpec.requiredCapabilities. 2026-09-29: wire-faithful message layer (UIMessage/UIAttach/UIEvent/UIAck/UISnapshot/etc.) in appkit_protocol_messages.dart; UIMessage.delta now carries the typed UIDelta from appkit_protocol_delta.dart. New suites for messages/widgets/lists: tests unrun, pending supercli-app CI (no Dart toolchain on this VM). Message-envelope behaviours (UIMessage/UIEventValue/UIAttach) are on HELD branch feat/port-uiprotocol-delta pending architecture decision."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIDelta.swift:
     destination: "Dart: appkit_widgets"
@@ -107,7 +107,7 @@ files:
         count: 25
       - file: clients/supercli-app/test/appkit_protocol_delta_test.dart
         count: 22
-    notes: "Wire decode + envelope validation + incremental application ported (1336 Swift LOC -> ~1700 Dart LOC). All 33 ops with route/contiguity guards, UTF-16 text edits, tree/list/content mutations. Wire-faithful UIDelta port added in appkit_protocol_delta.dart (2026-09-29): the renderer-oriented AppKitDelta in appkit_delta.dart remains for the legacy renderer. Delta tests: tests unrun, pending supercli-app CI (no Dart toolchain on this VM)."
+    notes: "Wire decode + envelope validation + incremental application ported (1336 Swift LOC -> ~1700 Dart LOC). All 33 ops with route/contiguity guards, UTF-16 text edits, tree/list/content mutations. Wire-faithful UIDelta port added in appkit_protocol_delta.dart (2026-09-29): the renderer-oriented AppKitDelta in appkit_delta.dart remains for the legacy renderer. Delta tests: tests unrun, pending supercli-app CI (no Dart toolchain on this VM). HELD: branch feat/port-uiprotocol-delta pending Amein architecture decision on whether UIDelta/message-envelope logic belongs in Rust (shared via FFI) rather than Dart. Do NOT merge until decided."
 
   app-kit/swift/Sources/SupercliAppKitUI/UIParticipantToken.swift:
     destination: "Dart: appkit_widgets"
