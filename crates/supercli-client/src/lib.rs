@@ -57,6 +57,7 @@ pub mod nearby;
 pub mod pairing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pairing_proxy;
+pub mod pane_layout;
 pub mod protocol;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod relay;
