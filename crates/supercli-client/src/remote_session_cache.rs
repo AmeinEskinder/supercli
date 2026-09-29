@@ -1,6 +1,6 @@
 //! Per-project cache of archived remote session summaries.
 //!
-//! Port of Swift `RemoteArchivedSessionSummaryCache` (UnpeelStore.swift).
+//! Port of Swift `RemoteArchivedSessionSummaryCache` (the legacy Swift store module).
 //! Session ids are Host-global, but tracking ownership by requested project
 //! lets a refreshed archive page replace its rows without retaining stale
 //! summaries.
