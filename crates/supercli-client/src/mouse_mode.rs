@@ -514,7 +514,7 @@ mod tests {
         // pending buffer entirely (truncating it could bisect the sequence
         // into bytes that parse as something else).
         let mut junk = b"\x1B[?".to_vec();
-        junk.extend(std::iter::repeat(b'1').take(4096));
+        junk.extend(std::iter::repeat_n(b'1', 4096));
         tracker.feed(&junk);
 
         // A follow-up final byte must not combine with the dropped prefix.
