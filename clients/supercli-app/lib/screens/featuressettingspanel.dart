@@ -55,7 +55,8 @@ const List<FeatureDefinition> allFeatures = [
   FeatureDefinition(
     key: 'remoteWorkspaces',
     title: 'Remote workspaces',
-    summary: 'Add and control workspaces on other machines — pair another Mac, a '
+    summary:
+        'Add and control workspaces on other machines — pair another Mac, a '
         'headless `supercli serve` box, or an SSH host — and share this Mac with '
         'other devices. Direct connections are for your own network or VPN; '
         'Supercli Link carries the encrypted path when you are away.',
@@ -64,7 +65,8 @@ const List<FeatureDefinition> allFeatures = [
   FeatureDefinition(
     key: 'worktrees',
     title: 'Git worktrees',
-    summary: 'Run sessions in an isolated git worktree of a project so multiple '
+    summary:
+        'Run sessions in an isolated git worktree of a project so multiple '
         'agents can work the same repo in parallel without touching each other\'s '
         'files. Adds worktree controls to the project menu, sidebar, and the '
         'Worktrees settings tab.',
@@ -73,7 +75,8 @@ const List<FeatureDefinition> allFeatures = [
   FeatureDefinition(
     key: 'sessionsMcp',
     title: 'Sessions use',
-    summary: 'Let an agent session see your other sessions: it can read them all, '
+    summary:
+        'Let an agent session see your other sessions: it can read them all, '
         'and asks before writing to another session unless you already approved '
         'that pair. These are cooperation controls, not a sandbox against commands '
         'running as your macOS user. Adds the Sessions settings tab. Applies when '
@@ -85,7 +88,8 @@ const List<FeatureDefinition> allFeatures = [
     // experimental-feature keys are immutable.
     key: 'profiles',
     title: 'Workspaces',
-    summary: 'Use extra, fully separate workspaces on this Mac — each '
+    summary:
+        'Use extra, fully separate workspaces on this Mac — each '
         'workspace has its own sessions, projects, presets, settings, and '
         'pairs with your phone as its own workspace. Adds the Workspaces '
         'settings tab.',
@@ -94,7 +98,8 @@ const List<FeatureDefinition> allFeatures = [
   FeatureDefinition(
     key: 'browserMcp',
     title: 'Browser use',
-    summary: 'Let agent sessions drive a real browser — open pages, click, '
+    summary:
+        'Let agent sessions drive a real browser — open pages, click, '
         'fill forms, and take screenshots. Each session gets its own isolated '
         'browser with no access to your normal browser profile. Browser access '
         'prompts are cooperation controls, not a sandbox against commands '
@@ -139,35 +144,47 @@ final class FeaturesSettingsPanel {
     final sections = <UiNode>[
       const SettingsPaneHeader(
         title: 'Features',
-        description: 'Turn Supercli\'s optional features on or off — no restart needed.',
+        description:
+            'Turn Supercli\'s optional features on or off — no restart needed.',
       ).build(),
     ];
     if (!isDefaultInstance) {
-      sections.add(UiColumn('features-inherit', [
-        SettingsSectionHeader(
-          title: 'Inherits from $defaultWorkspaceLabel',
-          description: 'This workspace uses the default workspace\'s features '
-              'until a toggle below is changed. Revert drops its own values.',
-        ).build(),
-        UiButton('features-use-inherited',
-            'Use $defaultWorkspaceLabel\'s features'),
-      ]));
+      sections.add(
+        UiColumn('features-inherit', [
+          SettingsSectionHeader(
+            title: 'Inherits from $defaultWorkspaceLabel',
+            description:
+                'This workspace uses the default workspace\'s features '
+                'until a toggle below is changed. Revert drops its own values.',
+          ).build(),
+          UiButton(
+            'features-use-inherited',
+            'Use $defaultWorkspaceLabel\'s features',
+          ),
+        ]),
+      );
     }
     if (allFeatures.isEmpty) {
-      sections.add(const UiText('features-empty',
-          'No optional features right now. Check back after an update.'));
+      sections.add(
+        const UiText(
+          'features-empty',
+          'No optional features right now. Check back after an update.',
+        ),
+      );
     } else {
-      sections.add(UiColumn('features-shipped', [
-        for (final f in shipped) _featureRow(f),
-      ]));
+      sections.add(
+        UiColumn('features-shipped', [for (final f in shipped) _featureRow(f)]),
+      );
       if (experimental.isNotEmpty) {
-        sections.add(UiColumn('features-experimental', [
-          const SettingsSectionHeader(
-            title: 'Experimental',
-            description: experimentalSectionDescription,
-          ).build(),
-          for (final f in experimental) _featureRow(f),
-        ]));
+        sections.add(
+          UiColumn('features-experimental', [
+            const SettingsSectionHeader(
+              title: 'Experimental',
+              description: experimentalSectionDescription,
+            ).build(),
+            for (final f in experimental) _featureRow(f),
+          ]),
+        );
       }
     }
     return UiColumn('features-settings', sections);

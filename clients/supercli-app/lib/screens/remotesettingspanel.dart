@@ -60,8 +60,9 @@ final class PairedDevice {
   /// list and the Supercli Link enrollment list so both describe a device
   /// the same way. (Swift: `deviceDetail`.)
   String get detail {
-    final lastSeen =
-        lastSeenText == null ? 'never seen' : 'last seen $lastSeenText';
+    final lastSeen = lastSeenText == null
+        ? 'never seen'
+        : 'last seen $lastSeenText';
     final version = appVersion == null ? '' : ' $appVersion';
     return '$platform$version • $lastSeen';
   }
@@ -87,8 +88,7 @@ final class TestFlightBanner {
   UiNode build() {
     return UiColumn('testflight-banner', [
       const UiText('testflight-icon', 'TestFlight'),
-      const UiText(
-          'testflight-title', 'Supercli for iPhone is in beta'),
+      const UiText('testflight-title', 'Supercli for iPhone is in beta'),
       UiText('testflight-body', bodyText),
       const UiButton('testflight-join', 'Join the Beta'),
     ]);
@@ -103,10 +103,7 @@ final class TestFlightBanner {
 /// counterpart is the `supercli --host ssh://<hostname>` CLI command —
 /// SSH is a transport for the same Host contract, no pairing code involved.
 final class PairingQRCodeView {
-  const PairingQRCodeView({
-    required this.payload,
-    this.expiresInText = '',
-  });
+  const PairingQRCodeView({required this.payload, this.expiresInText = ''});
 
   final String payload;
   final String expiresInText;
@@ -114,8 +111,7 @@ final class PairingQRCodeView {
   UiNode build() {
     return UiColumn('pairing-qr', [
       UiText('pairing-qr-payload', payload),
-      if (expiresInText.isNotEmpty)
-        UiText('pairing-qr-expiry', expiresInText),
+      if (expiresInText.isNotEmpty) UiText('pairing-qr-expiry', expiresInText),
     ]);
   }
 }
@@ -128,12 +124,7 @@ final class PairingQRCodeView {
 /// actually intends to pair; re-minting is free — it just replaces the
 /// single active one-time token. Dismissing keeps the code valid until its
 /// TTL so copy-then-paste-on-another-Mac flows survive closing the sheet.
-enum ShareThisMacPhase {
-  idle,
-  pairing,
-  paired,
-  failed,
-}
+enum ShareThisMacPhase { idle, pairing, paired, failed }
 
 /// "Share This Mac" / "Share This Workspace" sheet
 /// (Swift: `ShareThisMacSheet`, 3330-3518).
@@ -156,9 +147,8 @@ final class ShareThisMacSheet {
   final String? error;
   final String sshHostName;
 
-  String get title => usesWorkspaceLanguage
-      ? 'Share This Workspace'
-      : 'Share This Mac';
+  String get title =>
+      usesWorkspaceLanguage ? 'Share This Workspace' : 'Share This Mac';
 
   String get subtitle {
     final target = deviceName.isNotEmpty
@@ -179,8 +169,10 @@ final class ShareThisMacSheet {
       if (phase == ShareThisMacPhase.paired)
         UiColumn('share-paired', [
           const UiText('share-paired-title', 'Controller paired'),
-          const UiText('share-paired-subtitle',
-              'The displayed one-time code has been consumed.'),
+          const UiText(
+            'share-paired-subtitle',
+            'The displayed one-time code has been consumed.',
+          ),
           const UiButton('share-pair-another', 'Pair Another Controller'),
         ])
       else
@@ -202,12 +194,7 @@ final class ShareThisMacSheet {
 }
 
 /// Share-workspace sheet phase (Swift: `ShareWorkspaceSheet` states).
-enum ShareWorkspacePhase {
-  idle,
-  pairing,
-  paired,
-  failed,
-}
+enum ShareWorkspacePhase { idle, pairing, paired, failed }
 
 /// Share-workspace sheet (Swift: `ShareWorkspaceSheet`, 3518-3679).
 ///
@@ -233,8 +220,10 @@ final class ShareWorkspaceSheet {
   UiNode build() {
     return UiColumn('share-workspace', [
       UiText('share-workspace-title', title),
-      UiText('share-workspace-subtitle',
-          'Pairing is scoped: one pairing = one workspace.'),
+      UiText(
+        'share-workspace-subtitle',
+        'Pairing is scoped: one pairing = one workspace.',
+      ),
       if (phase == ShareWorkspacePhase.failed && error != null)
         UiColumn('share-workspace-error', [
           UiText('share-workspace-error-text', error!),
@@ -294,8 +283,10 @@ final class LinkEnrollmentSection {
       const UiText('link-enrollment-title', 'Supercli Link'),
       UiText('link-enrollment-desc', reachDescription),
       if (enrolledDevices.isEmpty && enrolledHosts.isEmpty)
-        const UiText('link-enrollment-empty',
-            'Nothing is on Link — every connection stays direct, on your own network.')
+        const UiText(
+          'link-enrollment-empty',
+          'Nothing is on Link — every connection stays direct, on your own network.',
+        )
       else
         UiColumn('link-enrollment-rows', [
           for (final d in enrolledDevices)
@@ -326,8 +317,10 @@ final class LinkEnrollmentSection {
 enum RemoteScopeKind {
   /// A selected local workspace scope: scoped pairing section.
   localWorkspace,
+
   /// A remote Host scope (SSH or paired).
   remoteHost,
+
   /// This Mac (default): inbound list + enrollment + security.
   thisMac,
 }
@@ -387,13 +380,16 @@ final class RemoteSettingsPanel {
     return UiColumn('remote-scoped-workspace', [
       SettingsSectionHeader(
         title: 'Controls $scopedWorkspaceName',
-        description: 'Each workspace pairs its own devices — a device '
+        description:
+            'Each workspace pairs its own devices — a device '
             'paired here reaches only $scopedWorkspaceName. Revoke devices '
             'from $scopedWorkspaceName\'s own Remote Control settings.',
       ).build(),
       if (scopedDevices.isEmpty)
-        UiText('remote-scoped-empty',
-            'No devices are paired with $scopedWorkspaceName.')
+        UiText(
+          'remote-scoped-empty',
+          'No devices are paired with $scopedWorkspaceName.',
+        )
       else
         UiColumn('remote-scoped-devices', [
           for (final d in scopedDevices)
@@ -404,12 +400,16 @@ final class RemoteSettingsPanel {
             ]),
         ]),
       UiButton(
-          'remote-pair-device', 'Pair a Device with $scopedWorkspaceName…'),
-      UiText('remote-scoped-link-footnote',
-          'Supercli Link enrollment for $scopedWorkspaceName\'s devices lives in '
-          '$scopedWorkspaceName\'s own Remote Control settings; the license '
-          'covers every workspace on this Mac and is managed from '
-          '$advertisedHostName\'s scope.'),
+        'remote-pair-device',
+        'Pair a Device with $scopedWorkspaceName…',
+      ),
+      UiText(
+        'remote-scoped-link-footnote',
+        'Supercli Link enrollment for $scopedWorkspaceName\'s devices lives in '
+            '$scopedWorkspaceName\'s own Remote Control settings; the license '
+            'covers every workspace on this Mac and is managed from '
+            '$advertisedHostName\'s scope.',
+      ),
     ]);
   }
 
@@ -418,17 +418,20 @@ final class RemoteSettingsPanel {
     return UiColumn('remote-host', [
       SettingsSectionHeader(
         title: 'Controls $name',
-        description: 'Each workspace pairs its own devices — a device '
+        description:
+            'Each workspace pairs its own devices — a device '
             'paired here reaches only $name, and its entry is revocable on '
             '$name itself.',
       ).build(),
       if (remoteHostSupportsPairingInvitation)
         UiButton('remote-host-pair', 'Pair a Device with $name…')
       else
-        UiText('remote-host-no-invitation',
-            '$name cannot mint pairing invitations over this connection. '
-            'Pair devices from its own running Supercli instead — the '
-            'terminal UI\'s Settings ▸ Remote, or `supercli pair`.'),
+        UiText(
+          'remote-host-no-invitation',
+          '$name cannot mint pairing invitations over this connection. '
+              'Pair devices from its own running Supercli instead — the '
+              'terminal UI\'s Settings ▸ Remote, or `supercli pair`.',
+        ),
     ]);
   }
 
@@ -439,7 +442,8 @@ final class RemoteSettingsPanel {
     return UiColumn('remote-controls', [
       SettingsSectionHeader(
         title: title,
-        description: 'Devices pair directly over your network and receive '
+        description:
+            'Devices pair directly over your network and receive '
             'their own revocable credential. Revoking one immediately invalidates it.',
       ).build(),
       if (managementError != null)
@@ -464,8 +468,10 @@ final class RemoteSettingsPanel {
         ]),
       UiButton('remote-share', _shareButtonLabel),
       if (hasMultipleLocalWorkspaces)
-        const UiText('remote-share-footnote',
-            'Each workspace on this Mac is shared separately.'),
+        const UiText(
+          'remote-share-footnote',
+          'Each workspace on this Mac is shared separately.',
+        ),
     ]);
   }
 
@@ -473,7 +479,8 @@ final class RemoteSettingsPanel {
     return UiColumn('remote-security', [
       const SettingsSectionHeader(
         title: 'Security',
-        description: 'The hook and MCP servers stay localhost-only. Remote '
+        description:
+            'The hook and MCP servers stay localhost-only. Remote '
             'Controllers use a separate LAN server.',
       ).build(),
       const SettingsValueRow(
@@ -508,8 +515,9 @@ final class RemoteSettingsPanel {
       case RemoteScopeKind.thisMac:
         sections.add(_controlsThisMacSection());
         sections.add(
-            TestFlightBanner(usesWorkspaceLanguage: hasMultipleLocalWorkspaces)
-                .build());
+          TestFlightBanner(usesWorkspaceLanguage: hasMultipleLocalWorkspaces)
+              .build(),
+        );
         sections.add(linkEnrollment.build());
         // Link license sections live in the licensing UI; the enrollment
         // note above points at the managing scope.

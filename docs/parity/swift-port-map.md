@@ -221,7 +221,7 @@ _Note: 22 sidecar entr(ies) reference files not on disk (kept in the yml, exclud
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SessionLauncherView.swift | 282 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SessionScreenshotCapture.swift | 186 | Dart: clients/supercli-app/lib/screens/sessionscreenshotcapture.dart (UI stub) + screenshot_capture_mode.dart | partial |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SessionsAccessSections.swift | 259 | Dart: clients/supercli-app | partial | 204 | 1 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SettingsView.swift | 4910 | Dart: clients/supercli-app | partial | 200, 206, 207, 210, 211, 213, 214 | 25 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SettingsView.swift | 4910 | Dart: clients/supercli-app | partial | 200, 206, 207, 210, 211, 213, 214 | 135 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSessionDrag.swift | 3517 | Dart: clients/supercli-app | ported | #152 | 22 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSkeleton.swift | 27 | Dart: clients/supercli-app | ported |  | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/SidebarSpinners.swift | 318 | Dart: clients/supercli-app | ported |  | 1 |

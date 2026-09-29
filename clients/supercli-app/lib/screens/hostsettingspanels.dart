@@ -127,9 +127,7 @@ final class RemoteAppearanceSettings {
 /// Notification settings on the Host
 /// (Swift: `RemoteNotificationSettings`).
 final class RemoteNotificationSettings {
-  const RemoteNotificationSettings({
-    this.menuAttentionDetection = true,
-  });
+  const RemoteNotificationSettings({this.menuAttentionDetection = true});
 
   final bool menuAttentionDetection;
 }
@@ -195,7 +193,7 @@ UiNode labeledToggleRow({
   String subtitle = '',
   required bool value,
 }) {
-  return UiColumn('${id}-labeled', [
+  return UiColumn('$id-labeled', [
     base.SettingsToggle(id: id, label: title, value: value).fallback(),
     if (subtitle.isNotEmpty) UiText('$id-subtitle', subtitle),
   ]);
@@ -241,48 +239,63 @@ final class HostAppearanceSettingsPanel {
     return UiColumn('host-appearance', [
       const SettingsPaneHeader(
         title: 'Appearance',
-        description:
-            'Theme, app color, transparency, and terminal font for this workspace.',
+        description: 'Theme, app color, transparency, and terminal font for this workspace.',
       ).build(),
       if (!isDefaultInstance)
         UiColumn('host-appearance-inherit', [
           const SettingsSectionHeader(title: 'Workspace settings').build(),
-          UiText('host-appearance-inherit-desc',
-              'Inherits $defaultWorkspaceLabel’s appearance.'),
+          UiText(
+            'host-appearance-inherit-desc',
+            'Inherits $defaultWorkspaceLabel’s appearance.',
+          ),
           const UiButton('host-appearance-use-custom', 'Use custom values'),
           if (hasOverrides)
             const UiButton(
-                'host-appearance-reset-inherited', 'Reset to inherited'),
+              'host-appearance-reset-inherited',
+              'Reset to inherited',
+            ),
         ]),
       const SettingsSectionHeader(title: 'Mode').build(),
       UiRow('host-appearance-mode', [
         for (final m in ThemePreference.values)
-          UiButton('host-appearance-mode-${m.name}',
-              '${m.title}${m == mode ? ' ✓' : ''}'),
+          UiButton(
+            'host-appearance-mode-${m.name}',
+            '${m.title}${m == mode ? ' ✓' : ''}',
+          ),
       ]),
       const SettingsSectionHeader(title: 'App color').build(),
       UiRow('host-appearance-tint', [
         for (final t in appTints)
-          UiButton('host-appearance-tint-${t.name}',
-              '${t.title}${t == tint ? ' ✓' : ''}'),
+          UiButton(
+            'host-appearance-tint-${t.name}',
+            '${t.title}${t == tint ? ' ✓' : ''}',
+          ),
       ]),
       const SettingsSectionHeader(
         title: 'Transparency',
-        description:
-            'Reverting to opaque surfaces is instant; every change notifies the app.',
+        description: 'Reverting to opaque surfaces is instant; every change notifies the app.',
       ).build(),
       UiColumn('host-appearance-transparency', [
-        UiText('host-appearance-bg-opacity',
-            'Window background: ${(backgroundOpacity * 100).round()}%'),
-        UiText('host-appearance-surface-opacity',
-            'Panels: ${(surfaceOpacity * 100).round()}%'),
+        UiText(
+          'host-appearance-bg-opacity',
+          'Window background: ${(backgroundOpacity * 100).round()}%',
+        ),
+        UiText(
+          'host-appearance-surface-opacity',
+          'Panels: ${(surfaceOpacity * 100).round()}%',
+        ),
       ]),
       const SettingsSectionHeader(title: 'Terminal font').build(),
       UiColumn('host-appearance-font', [
         UiText('host-appearance-font-family', fontFamily),
-        UiText('host-appearance-font-size', '${fontSize.toStringAsFixed(1)} pt'),
-        UiText('host-appearance-font-lineheight',
-            'Line height ${fontLineHeight.toStringAsFixed(2)}'),
+        UiText(
+          'host-appearance-font-size',
+          '${fontSize.toStringAsFixed(1)} pt',
+        ),
+        UiText(
+          'host-appearance-font-lineheight',
+          'Line height ${fontLineHeight.toStringAsFixed(2)}',
+        ),
       ]),
     ]);
   }
@@ -321,15 +334,16 @@ final class HostAdvancedSettingsPanel {
       ).build(),
       const SettingsSectionHeader(
         title: 'Auto-cleanup',
-        description:
-            'Stopped sessions are archived automatically after the chosen idle time.',
+        description: 'Stopped sessions are archived automatically after the chosen idle time.',
       ).build(),
       UiRow('host-advanced-minutes', [
         UiText('host-advanced-minutes-label', 'Archive stopped sessions after'),
         UiInput('host-advanced-minutes-input', placeholder: draftMinutes),
         if (saved != null)
-          UiText('host-advanced-minutes-saved',
-              'Saved: ${minuteLabel(saved.autoStopArchiveMinutes)}'),
+          UiText(
+            'host-advanced-minutes-saved',
+            'Saved: ${minuteLabel(saved.autoStopArchiveMinutes)}',
+          ),
       ]),
       UiRow('host-advanced-minute-options', [
         for (final m in autoStopMinuteOptions)
@@ -343,15 +357,16 @@ final class HostAdvancedSettingsPanel {
         UiText('host-advanced-limit-label', 'Stopped sessions in sidebar'),
         UiInput('host-advanced-limit-input', placeholder: draftLimit),
         if (saved != null)
-          UiText('host-advanced-limit-saved',
-              'Saved: ${saved.sidebarStoppedLimit}'),
+          UiText(
+            'host-advanced-limit-saved',
+            'Saved: ${saved.sidebarStoppedLimit}',
+          ),
       ]),
       UiRow('host-advanced-limit-options', [
         for (final l in sidebarStoppedLimitOptions)
           UiButton('host-advanced-limit-$l', '$l'),
       ]),
-      if (errorMessage != null)
-        UiText('host-advanced-error', errorMessage!),
+      if (errorMessage != null) UiText('host-advanced-error', errorMessage!),
     ]);
   }
 }
@@ -402,12 +417,15 @@ final class HostAccessSettingsPanel {
         UiRow('host-access-write-policy', [
           for (final o in writePolicyOptions)
             UiButton(
-                'host-access-write-policy-$o',
-                '$o${saved != null && saved.mcpNonchildWriteAccess == o ? ' ✓' : ''}'),
+              'host-access-write-policy-$o',
+              '$o${saved != null && saved.mcpNonchildWriteAccess == o ? ' ✓' : ''}',
+            ),
         ]),
         if (stringOverrides.containsKey('mcpNonchildWriteAccess'))
-          UiText('host-access-write-policy-override',
-              'Overridden: ${stringOverrides['mcpNonchildWriteAccess']}'),
+          UiText(
+            'host-access-write-policy-override',
+            'Overridden: ${stringOverrides['mcpNonchildWriteAccess']}',
+          ),
         labeledToggleRow(
           id: 'host-access-worktree',
           title: 'Allow worktree access',
@@ -423,19 +441,18 @@ final class HostAccessSettingsPanel {
         UiRow('host-access-browser-default', [
           for (final o in browserAccessOptions)
             UiButton(
-                'host-access-browser-default-$o',
-                '$o${saved != null && saved.browserDefaultAccess == o ? ' ✓' : ''}'),
+              'host-access-browser-default-$o',
+              '$o${saved != null && saved.browserDefaultAccess == o ? ' ✓' : ''}',
+            ),
         ]),
         labeledToggleRow(
           id: 'host-access-screenshots',
           title: 'Auto-add browser screenshots',
-          subtitle:
-              'Attach browser screenshots to the session gallery automatically.',
+          subtitle: 'Attach browser screenshots to the session gallery automatically.',
           value: saved?.mcpAutoAddBrowserScreenshots ?? false,
         ),
       ]),
-      if (errorMessage != null)
-        UiText('host-access-error', errorMessage!),
+      if (errorMessage != null) UiText('host-access-error', errorMessage!),
     ]);
   }
 }
@@ -479,33 +496,40 @@ final class HostTranscriptsSettingsPanel {
       ).build(),
       const SettingsSectionHeader(title: 'Content').build(),
       labeledToggleRow(
-          id: 'host-transcripts-session-info',
-          title: 'Session info',
-          value: v(saved?.includeSessionInfo)),
+        id: 'host-transcripts-session-info',
+        title: 'Session info',
+        value: v(saved?.includeSessionInfo),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-user',
-          title: 'User messages',
-          value: v(saved?.includeUser)),
+        id: 'host-transcripts-user',
+        title: 'User messages',
+        value: v(saved?.includeUser),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-assistant',
-          title: 'Assistant messages',
-          value: v(saved?.includeAssistant)),
+        id: 'host-transcripts-assistant',
+        title: 'Assistant messages',
+        value: v(saved?.includeAssistant),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-reasoning',
-          title: 'Reasoning',
-          value: v(saved?.includeReasoning)),
+        id: 'host-transcripts-reasoning',
+        title: 'Reasoning',
+        value: v(saved?.includeReasoning),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-tools',
-          title: 'Tool calls',
-          value: v(saved?.includeTools)),
+        id: 'host-transcripts-tools',
+        title: 'Tool calls',
+        value: v(saved?.includeTools),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-file-changes',
-          title: 'File changes',
-          value: v(saved?.includeFileChanges)),
+        id: 'host-transcripts-file-changes',
+        title: 'File changes',
+        value: v(saved?.includeFileChanges),
+      ),
       labeledToggleRow(
-          id: 'host-transcripts-plan-updates',
-          title: 'Plan updates',
-          value: v(saved?.includePlanUpdates)),
+        id: 'host-transcripts-plan-updates',
+        title: 'Plan updates',
+        value: v(saved?.includePlanUpdates),
+      ),
       const SettingsSectionHeader(
         title: 'History',
         description: 'How many transcript entries to keep. 0 means unlimited.',
@@ -513,9 +537,10 @@ final class HostTranscriptsSettingsPanel {
       UiRow('host-transcripts-max-entries', [
         for (final o in maxEntriesOptions)
           UiButton(
-              'host-transcripts-max-entries-$o',
-              '${maxEntriesLabel(o)}'
-              '${saved != null && saved.maxEntries == o ? ' ✓' : ''}'),
+            'host-transcripts-max-entries-$o',
+            '${maxEntriesLabel(o)}'
+                '${saved != null && saved.maxEntries == o ? ' ✓' : ''}',
+          ),
       ]),
     ];
     if (errorMessage != null) {
@@ -555,21 +580,29 @@ final class HostNotificationsSettingsPanel {
       ).build(),
     ];
     if (!isDefaultInstance) {
-      rows.add(UiColumn('host-notifications-inherit', [
-        UiText('host-notifications-inherit-desc',
-            'Inherits $defaultWorkspaceLabel’s notification settings.'),
-        if (hasOverride)
-          const UiButton(
-              'host-notifications-reset-inherited', 'Reset to inherited'),
-      ]));
+      rows.add(
+        UiColumn('host-notifications-inherit', [
+          UiText(
+            'host-notifications-inherit-desc',
+            'Inherits $defaultWorkspaceLabel’s notification settings.',
+          ),
+          if (hasOverride)
+            const UiButton(
+              'host-notifications-reset-inherited',
+              'Reset to inherited',
+            ),
+        ]),
+      );
     }
-    rows.add(labeledToggleRow(
-      id: 'host-notifications-menu-attention',
-      title: 'Menu attention detection',
-      subtitle:
-          'Watch the menu bar for attention requests while sessions run.',
-      value: menuAttentionDetection,
-    ));
+    rows.add(
+      labeledToggleRow(
+        id: 'host-notifications-menu-attention',
+        title: 'Menu attention detection',
+        subtitle:
+            'Watch the menu bar for attention requests while sessions run.',
+        value: menuAttentionDetection,
+      ),
+    );
     if (errorMessage != null) {
       rows.add(UiText('host-notifications-error', errorMessage!));
     }
@@ -605,10 +638,12 @@ final class HostFeaturesSettingsPanel {
   final String? errorMessage;
 
   UiNode build() {
-    final shipped =
-        features.where((f) => !f.isExperimental).toList(growable: false);
-    final experimental =
-        features.where((f) => f.isExperimental).toList(growable: false);
+    final shipped = features
+        .where((f) => !f.isExperimental)
+        .toList(growable: false);
+    final experimental = features
+        .where((f) => f.isExperimental)
+        .toList(growable: false);
     final rows = <UiNode>[
       const SettingsPaneHeader(
         title: 'Features',
@@ -616,32 +651,42 @@ final class HostFeaturesSettingsPanel {
       ).build(),
     ];
     if (!isDefaultInstance) {
-      rows.add(UiColumn('host-features-inherit', [
-        UiText('host-features-inherit-desc',
-            'Inherits $defaultWorkspaceLabel’s feature flags.'),
-        if (hasOverride)
-          const UiButton(
-              'host-features-reset-inherited', 'Reset to inherited'),
-      ]));
+      rows.add(
+        UiColumn('host-features-inherit', [
+          UiText(
+            'host-features-inherit-desc',
+            'Inherits $defaultWorkspaceLabel’s feature flags.',
+          ),
+          if (hasOverride)
+            const UiButton(
+              'host-features-reset-inherited',
+              'Reset to inherited',
+            ),
+        ]),
+      );
     }
     rows.add(const SettingsSectionHeader(title: 'Features').build());
     for (final f in shipped) {
-      rows.add(labeledToggleRow(
-        id: 'host-features-${f.key}',
-        title: f.title,
-        subtitle: f.summary,
-        value: values[f.key] ?? f.defaultOn,
-      ));
-    }
-    if (experimental.isNotEmpty) {
-      rows.add(const SettingsSectionHeader(title: 'Experimental').build());
-      for (final f in experimental) {
-        rows.add(labeledToggleRow(
+      rows.add(
+        labeledToggleRow(
           id: 'host-features-${f.key}',
           title: f.title,
           subtitle: f.summary,
           value: values[f.key] ?? f.defaultOn,
-        ));
+        ),
+      );
+    }
+    if (experimental.isNotEmpty) {
+      rows.add(const SettingsSectionHeader(title: 'Experimental').build());
+      for (final f in experimental) {
+        rows.add(
+          labeledToggleRow(
+            id: 'host-features-${f.key}',
+            title: f.title,
+            subtitle: f.summary,
+            value: values[f.key] ?? f.defaultOn,
+          ),
+        );
       }
     }
     if (errorMessage != null) {
@@ -670,8 +715,10 @@ final class HostSettingsUpdateRequiredPanel {
   UiNode build() {
     return UiColumn('host-update-required', [
       const UiText('host-update-required-title', 'Update required'),
-      UiText('host-update-required-body',
-          '$tabTitle settings need a newer $scopeName ($protocolLabel).'),
+      UiText(
+        'host-update-required-body',
+        '$tabTitle settings need a newer $scopeName ($protocolLabel).',
+      ),
       const UiButton('host-update-required-action', 'How to update'),
     ]);
   }

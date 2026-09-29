@@ -4,7 +4,6 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/screens/screens.dart';
-import 'package:supercli_app/screens/settingspanels.dart';
 import 'package:supercli_app/screens/settingsshell.dart';
 import 'package:supercli_app/widgets/widgets.dart';
 import 'package:test/test.dart';
@@ -250,7 +249,9 @@ void main() {
       // No code and not completed: sheet is hidden until an invitation exists.
       final node = picker.build() as UiColumn;
       expect(
-        node.children.whereType<UiColumn>().where((c) => c.id == 'pairing-sheet'),
+        node.children.whereType<UiColumn>().where(
+          (c) => c.id == 'pairing-sheet',
+        ),
         isEmpty,
       );
     });

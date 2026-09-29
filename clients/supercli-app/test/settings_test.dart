@@ -103,9 +103,9 @@ void main() {
       final node = view.build() as UiRow;
       final sidebar = node.children[0] as UiColumn;
       final nav = sidebar.children[2] as UiColumn;
-      final pluginsTab = nav.children
-          .whereType<UiButton>()
-          .firstWhere((b) => b.id == 'settings-tab-plugins');
+      final pluginsTab = nav.children.whereType<UiButton>().firstWhere(
+        (b) => b.id == 'settings-tab-plugins',
+      );
       expect(pluginsTab.label, startsWith('● '));
     });
 
@@ -119,9 +119,9 @@ void main() {
       final node = view.build() as UiRow;
       final sidebar = node.children[0] as UiColumn;
       final nav = sidebar.children[2] as UiColumn;
-      final workspacesTab = nav.children
-          .whereType<UiButton>()
-          .firstWhere((b) => b.id == 'settings-tab-workspaces');
+      final workspacesTab = nav.children.whereType<UiButton>().firstWhere(
+        (b) => b.id == 'settings-tab-workspaces',
+      );
       expect(workspacesTab.label, startsWith('● '));
     });
 
@@ -277,14 +277,10 @@ void main() {
 
     test('isValidKeyFormat accepts SCLI- keys', () {
       expect(
-        LicenseSettingsPanel.isValidKeyFormat(
-            'SCLI-eyJhIjoxfQ.c2ln'),
+        LicenseSettingsPanel.isValidKeyFormat('SCLI-eyJhIjoxfQ.c2ln'),
         isTrue,
       );
-      expect(
-        LicenseSettingsPanel.isValidKeyFormat('  SCLI-abc.def  '),
-        isTrue,
-      );
+      expect(LicenseSettingsPanel.isValidKeyFormat('  SCLI-abc.def  '), isTrue);
     });
 
     test('isValidKeyFormat rejects non-SCLI keys', () {
@@ -510,13 +506,28 @@ void main() {
       expect(SettingsTab.compatibleRawValue('agentsApps'), SettingsTab.agents);
       expect(SettingsTab.compatibleRawValue('mcp'), SettingsTab.agents);
       expect(SettingsTab.compatibleRawValue('presets'), SettingsTab.agents);
-      expect(SettingsTab.compatibleRawValue('sessions'), SettingsTab.agentAccess);
-      expect(SettingsTab.compatibleRawValue('browser'), SettingsTab.agentAccess);
-      expect(SettingsTab.compatibleRawValue('profiles'), SettingsTab.workspaces);
+      expect(
+        SettingsTab.compatibleRawValue('sessions'),
+        SettingsTab.agentAccess,
+      );
+      expect(
+        SettingsTab.compatibleRawValue('browser'),
+        SettingsTab.agentAccess,
+      );
+      expect(
+        SettingsTab.compatibleRawValue('profiles'),
+        SettingsTab.workspaces,
+      );
       expect(SettingsTab.compatibleRawValue('features'), SettingsTab.features);
-      expect(SettingsTab.compatibleRawValue('experimental'), SettingsTab.features);
+      expect(
+        SettingsTab.compatibleRawValue('experimental'),
+        SettingsTab.features,
+      );
       // Current spellings resolve directly
-      expect(SettingsTab.compatibleRawValue('appearance'), SettingsTab.appearance);
+      expect(
+        SettingsTab.compatibleRawValue('appearance'),
+        SettingsTab.appearance,
+      );
       expect(SettingsTab.compatibleRawValue('advanced'), SettingsTab.advanced);
       expect(SettingsTab.compatibleRawValue('mobile'), SettingsTab.mobile);
       // Unknown spellings return null (Swift: no 'license' case in the code)
@@ -532,51 +543,56 @@ void main() {
         bool workspacesEnabled = false,
         bool worktreesEnabled = false,
         bool mobileRemoteControlEnabled = false,
-      }) =>
-          SettingsTab.visibleCases(
-            sessionsMcp: sessionsMcp,
-            browserMcp: browserMcp,
-            workspacesEnabled: workspacesEnabled,
-            worktreesEnabled: worktreesEnabled,
-            mobileRemoteControlEnabled: mobileRemoteControlEnabled,
-          );
+      }) => SettingsTab.visibleCases(
+        sessionsMcp: sessionsMcp,
+        browserMcp: browserMcp,
+        workspacesEnabled: workspacesEnabled,
+        worktreesEnabled: worktreesEnabled,
+        mobileRemoteControlEnabled: mobileRemoteControlEnabled,
+      );
 
       // All flags off: agentAccess, mobile, workspaces, worktrees hidden;
       // computer and presets never show their old panels.
       var v = visible();
       expect(
-          v,
-          orderedEquals([
-            SettingsTab.agents,
-            SettingsTab.plugins,
-            SettingsTab.appearance,
-            SettingsTab.transcripts,
-            SettingsTab.notifications,
-            SettingsTab.features,
-            SettingsTab.advanced,
-          ]));
+        v,
+        orderedEquals([
+          SettingsTab.agents,
+          SettingsTab.plugins,
+          SettingsTab.appearance,
+          SettingsTab.transcripts,
+          SettingsTab.notifications,
+          SettingsTab.features,
+          SettingsTab.advanced,
+        ]),
+      );
       // sessionsMcp on → agentAccess appears
       expect(visible(sessionsMcp: true), contains(SettingsTab.agentAccess));
       // browserMcp on → agentAccess appears
       expect(visible(browserMcp: true), contains(SettingsTab.agentAccess));
       // workspaces flag → workspaces tab
-      expect(visible(workspacesEnabled: true), contains(SettingsTab.workspaces));
+      expect(
+        visible(workspacesEnabled: true),
+        contains(SettingsTab.workspaces),
+      );
       // worktrees flag → worktrees tab
       expect(visible(worktreesEnabled: true), contains(SettingsTab.worktrees));
       // mobile flag → mobile (Remote Control) tab
-      expect(visible(mobileRemoteControlEnabled: true),
-          contains(SettingsTab.mobile));
+      expect(
+        visible(mobileRemoteControlEnabled: true),
+        contains(SettingsTab.mobile),
+      );
     });
 
     test('resolved falls back to first visible tab', () {
       SettingsTab resolved(SettingsTab selected) => SettingsTab.resolved(
-            selected,
-            sessionsMcp: false,
-            browserMcp: false,
-            workspacesEnabled: true,
-            worktreesEnabled: false,
-            mobileRemoteControlEnabled: false,
-          );
+        selected,
+        sessionsMcp: false,
+        browserMcp: false,
+        workspacesEnabled: true,
+        worktreesEnabled: false,
+        mobileRemoteControlEnabled: false,
+      );
       expect(resolved(SettingsTab.appearance), SettingsTab.appearance);
       // mobile is gated off → falls back to workspaces (first visible)
       expect(resolved(SettingsTab.mobile), SettingsTab.workspaces);
@@ -586,8 +602,11 @@ void main() {
 
     test('iconName covers every tab', () {
       for (final tab in SettingsTab.values) {
-        expect(tab.iconName, isNotEmpty,
-            reason: 'SettingsTab.${tab.name} needs an icon');
+        expect(
+          tab.iconName,
+          isNotEmpty,
+          reason: 'SettingsTab.${tab.name} needs an icon',
+        );
         expect(tab.iconName, startsWith('settings-'));
       }
       // Spot checks against the Swift ChromeIcon mapping
@@ -615,19 +634,20 @@ void main() {
     test('hostScopedCases are the Host-contract tabs', () {
       final scoped = SettingsTab.hostScopedCases;
       expect(
-          scoped,
-          orderedEquals([
-            SettingsTab.agents,
-            SettingsTab.plugins,
-            SettingsTab.agentAccess,
-            SettingsTab.presets,
-            SettingsTab.appearance,
-            SettingsTab.transcripts,
-            SettingsTab.notifications,
-            SettingsTab.computer,
-            SettingsTab.features,
-            SettingsTab.advanced,
-          ]));
+        scoped,
+        orderedEquals([
+          SettingsTab.agents,
+          SettingsTab.plugins,
+          SettingsTab.agentAccess,
+          SettingsTab.presets,
+          SettingsTab.appearance,
+          SettingsTab.transcripts,
+          SettingsTab.notifications,
+          SettingsTab.computer,
+          SettingsTab.features,
+          SettingsTab.advanced,
+        ]),
+      );
       // Non-scoped tabs (local-only UI) are excluded
       expect(scoped, isNot(contains(SettingsTab.workspaces)));
       expect(scoped, isNot(contains(SettingsTab.mobile)));

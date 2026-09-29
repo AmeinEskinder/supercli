@@ -68,61 +68,73 @@ final class RemoteNotificationsSettingsPanel {
     final sections = <UiNode>[
       SettingsPaneHeader(
         title: 'Notifications',
-        description: 'How $scopeName flags sessions that need you, plus delivery diagnostics for this Controller Mac.',
+        description:
+            'How $scopeName flags sessions that need you, plus delivery diagnostics for this Controller Mac.',
       ).build(),
     ];
     if (settings != null) {
-      sections.add(UiColumn('remote-notifications-attention', [
-        const SettingsSectionHeader(
-          title: 'Attention',
-          description: 'Applied by the Host to its session activity before every Controller receives it.',
-        ).build(),
-        UiColumn('remote-notifications-menu-attention-labeled', [
-          base.SettingsToggle(
-            id: 'remote-notifications-menu-attention',
-            label: 'Flag menus waiting for a choice',
-            value: settings.menuAttentionDetection,
-          ).fallback(),
-          const UiText('remote-notifications-menu-attention-desc',
-              'Show the yellow attention dot when an agent draws a pick-an-option menu on the Host.'),
+      sections.add(
+        UiColumn('remote-notifications-attention', [
+          const SettingsSectionHeader(
+            title: 'Attention',
+            description: 'Applied by the Host to its session activity before every Controller receives it.',
+          ).build(),
+          UiColumn('remote-notifications-menu-attention-labeled', [
+            base.SettingsToggle(
+              id: 'remote-notifications-menu-attention',
+              label: 'Flag menus waiting for a choice',
+              value: settings.menuAttentionDetection,
+            ).fallback(),
+            const UiText(
+              'remote-notifications-menu-attention-desc',
+              'Show the yellow attention dot when an agent draws a pick-an-option menu on the Host.',
+            ),
+          ]),
         ]),
-      ]));
+      );
     }
-    sections.add(UiColumn('remote-notifications-this-mac', [
-      const SettingsSectionHeader(
-        title: 'This Mac',
-        description: '',
-      ).build(),
-      UiText('remote-notifications-this-mac-desc',
-          'Tests the notification banner on the Controller you are using now; it does not run anything on $scopeName.'),
-      UiButton('remote-notifications-mac-test',
-          macTestInFlight ? 'Sending…' : 'Send a test notification on this Mac'),
-      SettingsValueRow(
-        label: 'Last Mac test',
-        value: lastMacTestLabel,
-      ).build(),
-      if (macTestNeedsSystemSettings)
-        const UiButton('remote-notifications-mac-settings',
-            'Open Mac Notification Settings…'),
-    ]));
-    sections.add(UiColumn('remote-notifications-host-delivery', [
-      const SettingsSectionHeader(
-        title: 'Host delivery',
-        description: 'Phone delivery is shown only when the Host advertises it. Upstash/Linux Hosts can still surface attention here without pretending to own an APNs path.',
-      ).build(),
-      SettingsValueRow(
-        label: 'Phone registration',
-        value: pushRegisterSupported
-            ? 'Supported'
-            : 'Not advertised by this Host',
-      ).build(),
-      SettingsValueRow(
-        label: 'Notify when done',
-        value: notifyWhenDoneSupported
-            ? 'Available per session'
-            : 'Not advertised by this Host',
-      ).build(),
-    ]));
+    sections.add(
+      UiColumn('remote-notifications-this-mac', [
+        const SettingsSectionHeader(title: 'This Mac', description: '').build(),
+        UiText(
+          'remote-notifications-this-mac-desc',
+          'Tests the notification banner on the Controller you are using now; it does not run anything on $scopeName.',
+        ),
+        UiButton(
+          'remote-notifications-mac-test',
+          macTestInFlight ? 'Sending…' : 'Send a test notification on this Mac',
+        ),
+        SettingsValueRow(
+          label: 'Last Mac test',
+          value: lastMacTestLabel,
+        ).build(),
+        if (macTestNeedsSystemSettings)
+          const UiButton(
+            'remote-notifications-mac-settings',
+            'Open Mac Notification Settings…',
+          ),
+      ]),
+    );
+    sections.add(
+      UiColumn('remote-notifications-host-delivery', [
+        const SettingsSectionHeader(
+          title: 'Host delivery',
+          description: 'Phone delivery is shown only when the Host advertises it. Upstash/Linux Hosts can still surface attention here without pretending to own an APNs path.',
+        ).build(),
+        SettingsValueRow(
+          label: 'Phone registration',
+          value: pushRegisterSupported
+              ? 'Supported'
+              : 'Not advertised by this Host',
+        ).build(),
+        SettingsValueRow(
+          label: 'Notify when done',
+          value: notifyWhenDoneSupported
+              ? 'Available per session'
+              : 'Not advertised by this Host',
+        ).build(),
+      ]),
+    );
     if (errorMessage != null) {
       sections.add(UiText('remote-notifications-error', errorMessage!));
     }
@@ -148,7 +160,8 @@ final class RemoteFeaturesSettingsPanel {
   final String? errorMessage;
 
   UiNode _featureRow(FeatureDefinition feature) {
-    final value = overrides[feature.key] ??
+    final value =
+        overrides[feature.key] ??
         (settings == null
             ? feature.defaultOn
             : remoteFeatureValue(feature.key, settings!));
@@ -167,31 +180,46 @@ final class RemoteFeaturesSettingsPanel {
     final sections = <UiNode>[
       SettingsPaneHeader(
         title: 'Features',
-        description: 'Optional features owned by $scopeName. Session-tool changes apply to sessions started after the toggle.',
+        description:
+            'Optional features owned by $scopeName. Session-tool changes apply to sessions started after the toggle.',
       ).build(),
     ];
     if (settings == null) {
-      sections.add(UiText('remote-features-waiting',
-          'Waiting for $scopeName\'s feature settings…'));
+      sections.add(
+        UiText(
+          'remote-features-waiting',
+          'Waiting for $scopeName\'s feature settings…',
+        ),
+      );
     } else if (allFeatures.isEmpty) {
-      sections.add(const UiText('remote-features-empty',
-          'No optional features are available in this build.'));
+      sections.add(
+        const UiText(
+          'remote-features-empty',
+          'No optional features are available in this build.',
+        ),
+      );
     } else {
-      final shipped =
-          allFeatures.where((f) => !f.isExperimental).toList(growable: false);
-      final experimental =
-          allFeatures.where((f) => f.isExperimental).toList(growable: false);
-      sections.add(UiColumn('remote-features-shipped', [
-        for (final f in shipped) _featureRow(f),
-      ]));
+      final shipped = allFeatures
+          .where((f) => !f.isExperimental)
+          .toList(growable: false);
+      final experimental = allFeatures
+          .where((f) => f.isExperimental)
+          .toList(growable: false);
+      sections.add(
+        UiColumn('remote-features-shipped', [
+          for (final f in shipped) _featureRow(f),
+        ]),
+      );
       if (experimental.isNotEmpty) {
-        sections.add(UiColumn('remote-features-experimental', [
-          const SettingsSectionHeader(
-            title: 'Experimental',
-            description: experimentalSectionDescription,
-          ).build(),
-          for (final f in experimental) _featureRow(f),
-        ]));
+        sections.add(
+          UiColumn('remote-features-experimental', [
+            const SettingsSectionHeader(
+              title: 'Experimental',
+              description: experimentalSectionDescription,
+            ).build(),
+            for (final f in experimental) _featureRow(f),
+          ]),
+        );
       }
     }
     if (errorMessage != null) {

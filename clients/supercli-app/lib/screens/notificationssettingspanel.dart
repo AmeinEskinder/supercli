@@ -45,22 +45,26 @@ final class NotificationsSettingsPanel {
   final String lastPhonePushLabel;
   final String? lastPushAttemptText;
 
-  String get pairedPhoneTokensText =>
-      pairedPhoneTokenCount == 0 ? 'None registered' : '$pairedPhoneTokenCount ready';
+  String get pairedPhoneTokensText => pairedPhoneTokenCount == 0
+      ? 'None registered'
+      : '$pairedPhoneTokenCount ready';
 
   UiNode _menuAttentionSection() {
     return UiColumn('notifications-attention', [
       const SettingsSectionHeader(
         title: 'Attention',
-        description: 'When a session is waiting for you to answer an on-screen menu.',
+        description:
+            'When a session is waiting for you to answer an on-screen menu.',
       ).build(),
       base.SettingsToggle(
         id: 'notifications-menu-attention',
         label: 'Flag menus waiting for a choice',
         value: menuAttentionDetection,
       ).fallback(),
-      const UiText('notifications-menu-attention-desc',
-          'Show the yellow attention dot when an agent draws a pick-an-option menu. These prompts send no signal on their own, so Supercli reads them off the screen.'),
+      const UiText(
+        'notifications-menu-attention-desc',
+        'Show the yellow attention dot when an agent draws a pick-an-option menu. These prompts send no signal on their own, so Supercli reads them off the screen.',
+      ),
     ]);
   }
 
@@ -68,7 +72,8 @@ final class NotificationsSettingsPanel {
     final rows = <UiNode>[
       const SettingsSectionHeader(
         title: 'Notifications',
-        description: 'A macOS banner (and a push to a paired iPhone) when a '
+        description:
+            'A macOS banner (and a push to a paired iPhone) when a '
             'session needs input, or finishes if you turned on “Notify when done” '
             'for it. Phone alerts use Link/APNs even while terminal traffic stays '
             'Direct or SSH. Mac and phone tests exercise their respective delivery '
@@ -76,27 +81,29 @@ final class NotificationsSettingsPanel {
             'entitlement failure, and APNs rejection.',
       ).build(),
       UiButton(
-          'notifications-mac-test', macTestInFlight ? 'Sending…' : 'Send a test Mac notification'),
-      SettingsValueRow(
-        label: 'Last Mac test',
-        value: lastMacTestLabel,
-      ).build(),
+        'notifications-mac-test',
+        macTestInFlight ? 'Sending…' : 'Send a test Mac notification',
+      ),
+      SettingsValueRow(label: 'Last Mac test', value: lastMacTestLabel).build(),
     ];
     if (macTestNeedsSystemSettings) {
-      rows.add(const UiButton(
-          'notifications-mac-settings', 'Open Mac Notification Settings…'));
+      rows.add(
+        const UiButton(
+          'notifications-mac-settings',
+          'Open Mac Notification Settings…',
+        ),
+      );
     }
     rows.addAll([
       const UiButton(
-          'notifications-phone-test', 'Send a test phone notification'),
+        'notifications-phone-test',
+        'Send a test phone notification',
+      ),
       SettingsValueRow(
         label: 'Paired phone tokens',
         value: pairedPhoneTokensText,
       ).build(),
-      SettingsValueRow(
-        label: 'Supercli Link',
-        value: linkStatusLabel,
-      ).build(),
+      SettingsValueRow(label: 'Supercli Link', value: linkStatusLabel).build(),
       SettingsValueRow(
         label: 'Last phone push',
         value: lastPhonePushLabel,
@@ -118,16 +125,21 @@ final class NotificationsSettingsPanel {
       ).build(),
     ];
     if (!isDefaultInstance) {
-      sections.add(UiColumn('notifications-inherit', [
-        SettingsSectionHeader(
-          title: 'Inherits from $defaultWorkspaceLabel',
-          description: 'This workspace uses the default workspace\'s '
-              'notification settings until a setting below is changed. '
-              'Revert drops its own values.',
-        ).build(),
-        UiButton('notifications-use-inherited',
-            'Use $defaultWorkspaceLabel\'s notifications'),
-      ]));
+      sections.add(
+        UiColumn('notifications-inherit', [
+          SettingsSectionHeader(
+            title: 'Inherits from $defaultWorkspaceLabel',
+            description:
+                'This workspace uses the default workspace\'s '
+                'notification settings until a setting below is changed. '
+                'Revert drops its own values.',
+          ).build(),
+          UiButton(
+            'notifications-use-inherited',
+            'Use $defaultWorkspaceLabel\'s notifications',
+          ),
+        ]),
+      );
     }
     sections.add(_menuAttentionSection());
     sections.add(_notificationsSection());

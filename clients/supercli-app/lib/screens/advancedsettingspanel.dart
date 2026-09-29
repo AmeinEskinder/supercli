@@ -46,8 +46,9 @@ String sidebarStoppedLimitLabel(int limit) => limit == 0 ? 'None' : '$limit';
 String formatMB(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
 
 /// "4.2%" / "42%" (Swift: `AdvancedSettingsPanel.formatCpu`).
-String formatCpu(double value) =>
-    value >= 10 ? '${value.toStringAsFixed(0)}%' : '${value.toStringAsFixed(1)}%';
+String formatCpu(double value) => value >= 10
+    ? '${value.toStringAsFixed(0)}%'
+    : '${value.toStringAsFixed(1)}%';
 
 /// ".../last/two" for long paths; "No folder" for empty
 /// (Swift: `AdvancedSettingsPanel.compactPath`).
@@ -100,8 +101,7 @@ final class RunningTerminal {
   final bool isRemoving;
 
   /// "Blank shell" when the command is empty (Swift: `commandLabel`).
-  String get commandLabel =>
-      command.trim().isEmpty ? 'Blank shell' : command;
+  String get commandLabel => command.trim().isEmpty ? 'Blank shell' : command;
 }
 
 /// Diagnostics data (Swift: `AdvancedDiagnostics.Snapshot`).
@@ -139,8 +139,7 @@ final class AdvancedSettingsPanel {
   double get _totalCpu =>
       snapshot.terminals.fold(0.0, (sum, t) => sum + t.cpuPercent);
 
-  int get _totalRss =>
-      snapshot.terminals.fold(0, (sum, t) => sum + t.rssBytes);
+  int get _totalRss => snapshot.terminals.fold(0, (sum, t) => sum + t.rssBytes);
 
   /// "N running · X% CPU · Y MB memory. Sorted by current CPU usage."
   /// (Swift: `AdvancedSettingsPanel.summaryText`).
@@ -156,7 +155,8 @@ final class AdvancedSettingsPanel {
     return UiColumn('advanced-cleanup', [
       const SettingsSectionHeader(
         title: 'Cleanup',
-        description: 'Sessions that have stayed idle for the selected time are '
+        description:
+            'Sessions that have stayed idle for the selected time are '
             'stopped and archived — the same as clicking "Stop and archive": the '
             'terminal stops and the session files away into the project\'s archive '
             'library, where Restore & Resume continues the conversation. Sessions '
@@ -213,8 +213,10 @@ final class AdvancedSettingsPanel {
           value: '${memory.hostedSessionCount}',
         ).build(),
       ] else
-        UiText('advanced-memory-state',
-            loading ? 'Loading…' : 'Unable to read memory usage'),
+        UiText(
+          'advanced-memory-state',
+          loading ? 'Loading…' : 'Unable to read memory usage',
+        ),
     ]);
   }
 
@@ -222,24 +224,31 @@ final class AdvancedSettingsPanel {
     return UiRow('advanced-terminal-${terminal.id}', [
       UiColumn('advanced-terminal-info-${terminal.id}', [
         UiText('advanced-terminal-label-${terminal.id}', terminal.label),
-        UiText('advanced-terminal-sub-${terminal.id}',
-            '${terminal.commandLabel} • PID ${terminal.pid} • '
-            '${terminal.processCount} proc • ${compactPath(terminal.cwd)}'),
+        UiText(
+          'advanced-terminal-sub-${terminal.id}',
+          '${terminal.commandLabel} • PID ${terminal.pid} • '
+              '${terminal.processCount} proc • ${compactPath(terminal.cwd)}',
+        ),
       ]),
       UiColumn('advanced-terminal-cpu-${terminal.id}', [
-        UiText('advanced-terminal-cpu-value-${terminal.id}',
-            formatCpu(terminal.cpuPercent)),
+        UiText(
+          'advanced-terminal-cpu-value-${terminal.id}',
+          formatCpu(terminal.cpuPercent),
+        ),
         const UiText('advanced-terminal-cpu-label', 'CPU'),
       ]),
       UiColumn('advanced-terminal-mem-${terminal.id}', [
-        UiText('advanced-terminal-mem-value-${terminal.id}',
-            formatMB(terminal.rssBytes)),
+        UiText(
+          'advanced-terminal-mem-value-${terminal.id}',
+          formatMB(terminal.rssBytes),
+        ),
         const UiText('advanced-terminal-mem-label', 'Memory'),
       ]),
       UiButton('advanced-terminal-open-${terminal.id}', 'Open'),
       UiButton(
-          'advanced-terminal-archive-${terminal.id}',
-          terminal.canArchive ? 'Stop and archive' : 'Remove'),
+        'advanced-terminal-archive-${terminal.id}',
+        terminal.canArchive ? 'Stop and archive' : 'Remove',
+      ),
     ]);
   }
 
@@ -247,13 +256,17 @@ final class AdvancedSettingsPanel {
     return UiColumn('advanced-terminals', [
       UiRow('advanced-terminals-header', [
         const SettingsSectionHeader(title: 'Running Terminals').build(),
-        UiButton('advanced-terminals-refresh',
-            loading ? 'Refreshing…' : 'Refresh'),
+        UiButton(
+          'advanced-terminals-refresh',
+          loading ? 'Refreshing…' : 'Refresh',
+        ),
       ]),
       UiText('advanced-terminals-summary', summaryText),
       if (snapshot.terminals.isEmpty)
-        UiText('advanced-terminals-empty',
-            loading ? 'Loading terminals…' : 'No running terminals.')
+        UiText(
+          'advanced-terminals-empty',
+          loading ? 'Loading terminals…' : 'No running terminals.',
+        )
       else
         UiColumn('advanced-terminals-rows', [
           for (final t in snapshot.terminals) _terminalRow(t),
@@ -268,14 +281,11 @@ final class AdvancedSettingsPanel {
         description: 'Quick access to Supercli\'s on-disk session data and hook trace log.',
       ).build(),
       UiRow('advanced-diagnostics-sessions', [
-        const UiText(
-            'advanced-diagnostics-sessions-label', 'Sessions folder'),
-        const UiButton(
-            'advanced-diagnostics-sessions-open', 'Show in Finder'),
+        const UiText('advanced-diagnostics-sessions-label', 'Sessions folder'),
+        const UiButton('advanced-diagnostics-sessions-open', 'Show in Finder'),
       ]),
       UiRow('advanced-diagnostics-trace', [
-        const UiText(
-            'advanced-diagnostics-trace-label', 'Hooks trace log'),
+        const UiText('advanced-diagnostics-trace-label', 'Hooks trace log'),
         const UiButton('advanced-diagnostics-trace-open', 'Show in Finder'),
       ]),
     ]);

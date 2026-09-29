@@ -21,7 +21,6 @@ import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/screens/sidebarview.dart';
 import 'package:supercli_app/screens/settings_controller.dart';
 import 'package:supercli_app/screens/settingsview.dart';
-import 'package:supercli_app/screens/settingsshell.dart';
 import 'package:test/test.dart';
 
 /// In-memory fake of the Host's workspace-settings store.
@@ -212,7 +211,7 @@ void main() {
       app.handleAction('settings.open');
       final ids = collectIds(app.build().toJson().cast<String, Object?>());
       expect(ids.contains('settings'), isTrue);
-      expect(ids.contains('settings-tabs'), isTrue);
+      expect(ids.contains('settings-nav'), isTrue);
       expect(ids.contains('settings-content'), isTrue);
     });
 

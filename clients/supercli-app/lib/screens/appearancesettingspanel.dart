@@ -144,7 +144,10 @@ final class TerminalFontSection {
       ]),
       UiRow('terminal-font-line-height', [
         const UiText('terminal-font-line-height-label', 'Line height'),
-        UiText('terminal-font-line-height-value', lineHeight.toStringAsFixed(2)),
+        UiText(
+          'terminal-font-line-height-value',
+          lineHeight.toStringAsFixed(2),
+        ),
       ]),
     ]);
   }
@@ -155,10 +158,7 @@ final class TerminalFontSection {
 /// Label, slider, and a fixed-width live percentage so the row doesn't
 /// wiggle while dragging.
 final class TransparencySliderRow {
-  const TransparencySliderRow({
-    required this.title,
-    required this.value,
-  });
+  const TransparencySliderRow({required this.title, required this.value});
 
   final String title;
   final double value;
@@ -166,20 +166,14 @@ final class TransparencySliderRow {
   UiNode build() {
     return UiRow('transparency-$title', [
       UiText('transparency-$title-label', title),
-      UiText(
-        'transparency-$title-value',
-        '${(value * 100).round()}%',
-      ),
+      UiText('transparency-$title-value', '${(value * 100).round()}%'),
     ]);
   }
 }
 
 /// App tint swatch (Swift: `AppTintSwatch`, 2904-2931).
 final class AppTintSwatch {
-  const AppTintSwatch({
-    required this.tint,
-    required this.isSelected,
-  });
+  const AppTintSwatch({required this.tint, required this.isSelected});
 
   final AppTint tint;
   final bool isSelected;
@@ -231,26 +225,33 @@ final class AppearanceSettingsPanel {
     final sections = <UiNode>[
       const SettingsPaneHeader(
         title: 'Appearance',
-        description: 'How Supercli looks. System follows your macOS appearance.',
+        description:
+            'How Supercli looks. System follows your macOS appearance.',
       ).build(),
     ];
     if (!isDefaultInstance) {
-      sections.add(UiColumn('appearance-inherit', [
-        SettingsSectionHeader(
-          title: 'Inherits from $defaultWorkspaceLabel',
-          description: 'This workspace uses the default workspace\'s appearance '
-              'until a setting below is changed. Revert drops its own mode, '
-              'transparency and font; its color stays.',
-        ).build(),
-        UiButton('appearance-use-inherited',
-            'Use $defaultWorkspaceLabel\'s appearance'),
-      ]));
+      sections.add(
+        UiColumn('appearance-inherit', [
+          SettingsSectionHeader(
+            title: 'Inherits from $defaultWorkspaceLabel',
+            description:
+                'This workspace uses the default workspace\'s appearance '
+                'until a setting below is changed. Revert drops its own mode, '
+                'transparency and font; its color stays.',
+          ).build(),
+          UiButton(
+            'appearance-use-inherited',
+            'Use $defaultWorkspaceLabel\'s appearance',
+          ),
+        ]),
+      );
     }
     sections.addAll([
       UiColumn('appearance-mode', [
         const SettingsSectionHeader(
           title: 'Mode',
-          description: 'Applies to the window, sidebar and terminal colors. '
+          description:
+              'Applies to the window, sidebar and terminal colors. '
               'Claude Code has its own theme setting — run /config inside '
               'Claude Code and change Theme to match.',
         ).build(),
@@ -265,7 +266,8 @@ final class AppearanceSettingsPanel {
       UiColumn('appearance-tint', [
         const SettingsSectionHeader(
           title: 'App color',
-          description: 'Washes this workspace\'s window chrome — sidebar, '
+          description:
+              'Washes this workspace\'s window chrome — sidebar, '
               'content, and terminal canvas. Each workspace keeps its own color '
               '(also editable per workspace in Settings ▸ Workspaces).',
         ).build(),
@@ -280,7 +282,8 @@ final class AppearanceSettingsPanel {
       UiColumn('appearance-session-titles', [
         const SettingsSectionHeader(
           title: 'Session titles',
-          description: 'What names a session in the sidebar until you rename it. '
+          description:
+              'What names a session in the sidebar until you rename it. '
               'First prompt titles it once from your first message. Live from '
               'agent follows the agent\'s own task summary as it works (agents '
               'that publish one — Claude today), falling back to the first prompt '
@@ -296,14 +299,17 @@ final class AppearanceSettingsPanel {
       UiColumn('appearance-transparency', [
         const SettingsSectionHeader(
           title: 'Transparency',
-          description: 'Background is the window backdrop — the sidebar and '
+          description:
+              'Background is the window backdrop — the sidebar and '
               'everything behind the content; below 100% the desktop shows '
               'through it, natively blurred. Surface covers the terminal canvas, '
               'settings, and the other pages on top of it. 100% is fully opaque. '
               'Terminal text always stays fully opaque.',
         ).build(),
-        TransparencySliderRow(title: 'Background', value: backgroundOpacity)
-            .build(),
+        TransparencySliderRow(
+          title: 'Background',
+          value: backgroundOpacity,
+        ).build(),
         TransparencySliderRow(title: 'Surface', value: surfaceOpacity).build(),
         const UiButton('transparency-revert', 'Revert to default'),
       ]),
@@ -316,7 +322,8 @@ final class AppearanceSettingsPanel {
       UiColumn('appearance-open-resources', [
         const SettingsSectionHeader(
           title: 'Open resources',
-          description: 'Choose what opens each supported type in this workspace. '
+          description:
+              'Choose what opens each supported type in this workspace. '
               'The editor is also used by "Open in editor" and the titlebar open button.',
         ).build(),
         SettingsSelect(
@@ -344,8 +351,10 @@ final class AppearanceSettingsPanel {
           label: 'Session gallery',
           value: showSessionGallery,
         ).fallback(),
-        const UiText('appearance-session-gallery-desc',
-            'Photo chip in the terminal title bar with the session\'s captures, plus Take Screenshot (⇧⌘S) to shoot into the session and attach it to the prompt. Turn off if you use your own screenshot tools.'),
+        const UiText(
+          'appearance-session-gallery-desc',
+          'Photo chip in the terminal title bar with the session\'s captures, plus Take Screenshot (⇧⌘S) to shoot into the session and attach it to the prompt. Turn off if you use your own screenshot tools.',
+        ),
       ]),
     ]);
     return UiColumn('appearance-settings', sections);

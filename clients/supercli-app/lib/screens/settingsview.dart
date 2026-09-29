@@ -116,17 +116,17 @@ enum SettingsTab {
   ///
   /// Port of `SettingsTab.hostScopedCases` (SettingsView.swift).
   static List<SettingsTab> get hostScopedCases => [
-        SettingsTab.agents,
-        SettingsTab.plugins,
-        SettingsTab.agentAccess,
-        SettingsTab.presets,
-        SettingsTab.appearance,
-        SettingsTab.transcripts,
-        SettingsTab.notifications,
-        SettingsTab.computer,
-        SettingsTab.features,
-        SettingsTab.advanced,
-      ];
+    SettingsTab.agents,
+    SettingsTab.plugins,
+    SettingsTab.agentAccess,
+    SettingsTab.presets,
+    SettingsTab.appearance,
+    SettingsTab.transcripts,
+    SettingsTab.notifications,
+    SettingsTab.computer,
+    SettingsTab.features,
+    SettingsTab.advanced,
+  ];
 
   /// Resolve the selected tab, falling back to the first visible tab when
   /// the stored tab's gate turned off (Swift: `resolvedSettingsTab`).

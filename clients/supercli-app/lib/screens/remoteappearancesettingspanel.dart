@@ -47,14 +47,19 @@ final class RemoteAppearanceSettingsPanel {
     final sections = <UiNode>[
       SettingsPaneHeader(
         title: 'Appearance',
-        description: 'How Controllers look while scoped to $scopeName. '
+        description:
+            'How Controllers look while scoped to $scopeName. '
             'The Host stores these values, so another Mac or phone uses the '
             'same workspace appearance.',
       ).build(),
     ];
     if (settings == null) {
-      sections.add(UiText('remote-appearance-waiting',
-          'Waiting for $scopeName\'s appearance…'));
+      sections.add(
+        UiText(
+          'remote-appearance-waiting',
+          'Waiting for $scopeName\'s appearance…',
+        ),
+      );
     } else {
       final mode = ThemePreference.values.firstWhere(
         (m) => m.name == settings.theme,
@@ -70,22 +75,24 @@ final class RemoteAppearanceSettingsPanel {
       );
       sections.addAll([
         UiColumn('remote-appearance-mode', [
-          const SettingsSectionHeader(
-            title: 'Mode',
-            description: '',
-          ).build(),
-          UiText('remote-appearance-mode-desc',
-              'Applies to this Controller\'s window, sidebar and terminal colors while $scopeName is active.'),
+          const SettingsSectionHeader(title: 'Mode', description: '').build(),
+          UiText(
+            'remote-appearance-mode-desc',
+            'Applies to this Controller\'s window, sidebar and terminal colors while $scopeName is active.',
+          ),
           UiRow('remote-appearance-mode-picker', [
             for (final m in ThemePreference.values)
-              UiButton('remote-appearance-mode-${m.name}',
-                  '${m.title}${m == mode ? ' ✓' : ''}'),
+              UiButton(
+                'remote-appearance-mode-${m.name}',
+                '${m.title}${m == mode ? ' ✓' : ''}',
+              ),
           ]),
         ]),
         UiColumn('remote-appearance-tint', [
           SettingsSectionHeader(
             title: 'App color',
-            description: 'Washes the Controller chrome and identifies $scopeName in workspace pickers.',
+            description:
+                'Washes the Controller chrome and identifies $scopeName in workspace pickers.',
           ).build(),
           UiRow('remote-appearance-tint-swatches', [
             for (final t in AppTint.values)
@@ -114,7 +121,8 @@ final class RemoteAppearanceSettingsPanel {
         UiColumn('remote-appearance-transparency', [
           SettingsSectionHeader(
             title: 'Transparency',
-            description: 'Controls this Controller\'s background and terminal surface whenever $scopeName is selected.',
+            description:
+                'Controls this Controller\'s background and terminal surface whenever $scopeName is selected.',
           ).build(),
           TransparencySliderRow(
             title: 'Background',
@@ -125,13 +133,16 @@ final class RemoteAppearanceSettingsPanel {
             value: settings.surfaceOpacity,
           ).build(),
           const UiButton(
-              'remote-appearance-transparency-revert', 'Revert to default'),
+            'remote-appearance-transparency-revert',
+            'Revert to default',
+          ),
         ]),
         TerminalFontSection(
           family: fontFamily,
           size: fontSize,
           lineHeight: fontLineHeight,
-          description: 'Fonts render on this Mac, so this is this Controller\'s '
+          description:
+              'Fonts render on this Mac, so this is this Controller\'s '
               'own setting: it applies to $scopeName\'s terminals and every other '
               'workspace alike. ⌘+ and ⌘− zoom all panes; ⌘0 returns to 13 pt.',
         ).build(),

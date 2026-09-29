@@ -25,7 +25,6 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 
 import 'settingsview.dart';
-import 'settingsprimitives.dart';
 import 'settingspanels.dart' as panels;
 import 'appearancesettingspanel.dart';
 import 'remoteappearancesettingspanel.dart';
@@ -43,10 +42,7 @@ import 'agentaccesssettingspanel.dart';
 
 /// Sidebar nav row (Swift: `SettingsNavRow`, 4198-4248).
 final class SettingsNavRow {
-  const SettingsNavRow({
-    required this.tab,
-    required this.isActive,
-  });
+  const SettingsNavRow({required this.tab, required this.isActive});
 
   final SettingsTab tab;
   final bool isActive;
@@ -75,10 +71,7 @@ final class SettingsScopePickerControl {
   final String scopeTintName;
 
   UiNode build() {
-    return UiButton(
-      'settings-scope-picker',
-      '$scopeTintName $scopeName ›',
-    );
+    return UiButton('settings-scope-picker', '$scopeTintName $scopeName ›');
   }
 }
 
@@ -118,17 +111,14 @@ final class SettingsSidebarPanel {
 
 /// Title strip (Swift: `SettingsTitleStrip`, 2245-2311).
 ///
-/// "Settings — <workspace> › <Tab>" breadcrumb segments.
+/// `"Settings — <workspace> › <Tab>"` breadcrumb segments.
 final class SettingsTitleStrip {
-  const SettingsTitleStrip({
-    required this.workspaceName,
-    required this.tab,
-  });
+  const SettingsTitleStrip({required this.workspaceName, required this.tab});
 
   final String workspaceName;
   final SettingsTab tab;
 
-  /// "Settings — <workspace> › <Tab>" (Swift: title strip segments).
+  /// `"Settings — <workspace> › <Tab>"` (Swift: title strip segments).
   String get text => 'Settings — $workspaceName › ${tab.title}';
 
   UiNode build() {
@@ -203,7 +193,12 @@ final class SettingsScopeContext {
   final bool hasExperimentalSettings;
 
   /// A sibling local workspace scope (Swift: `.localWorkspace(home, name)`).
-  bool get isLocalWorkspace => isLocal && localWorkspaceHome != null;
+  ///
+  /// This is NOT `.local`: Swift's `SettingsContentHost.panelContent` sends
+  /// `.localWorkspace` down the remote branch (only `.local` takes
+  /// `localPanel`), where appearance/notifications/features resolve to the
+  /// Host file-based panels.
+  bool get isLocalWorkspace => !isLocal && localWorkspaceHome != null;
 }
 
 /// Settings content host (Swift: `SettingsContentHost`, 2023-2244).
@@ -227,7 +222,9 @@ final class SettingsContentHost {
   /// Route a tab to its panel kind for a scope
   /// (Swift: `SettingsContentHost.panelContent`).
   static SettingsPanelKind panelKindFor(
-      SettingsTab tab, SettingsScopeContext scope) {
+    SettingsTab tab,
+    SettingsScopeContext scope,
+  ) {
     if (!scope.isLocal && tab != SettingsTab.workspaces) {
       return _remotePanelKind(tab, scope);
     }
@@ -235,7 +232,9 @@ final class SettingsContentHost {
   }
 
   static SettingsPanelKind _remotePanelKind(
-      SettingsTab tab, SettingsScopeContext scope) {
+    SettingsTab tab,
+    SettingsScopeContext scope,
+  ) {
     switch (tab) {
       case SettingsTab.agents:
       case SettingsTab.presets:
@@ -252,8 +251,7 @@ final class SettingsContentHost {
         }
         return SettingsPanelKind.updateRequired;
       case SettingsTab.transcripts:
-        if (scope.supportsWorkspaceSettingsSet &&
-            scope.hasTranscriptSettings) {
+        if (scope.supportsWorkspaceSettingsSet && scope.hasTranscriptSettings) {
           return SettingsPanelKind.transcriptsHost;
         }
         return SettingsPanelKind.updateRequired;
@@ -266,8 +264,7 @@ final class SettingsContentHost {
         if (scope.isLocalWorkspace) {
           return SettingsPanelKind.appearanceHost;
         }
-        if (scope.supportsWorkspaceSettingsSet &&
-            scope.hasAppearanceSettings) {
+        if (scope.supportsWorkspaceSettingsSet && scope.hasAppearanceSettings) {
           return SettingsPanelKind.appearanceRemote;
         }
         return SettingsPanelKind.updateRequired;
@@ -358,21 +355,21 @@ final class SettingsView {
   final UiNode Function(SettingsPanelKind kind)? panelBuilder;
 
   List<SettingsTab> get _visibleTabs => SettingsTab.visibleCases(
-        sessionsMcp: settings.sessionsMcp,
-        browserMcp: settings.browserMcp,
-        workspacesEnabled: settings.remoteWorkspaces,
-        worktreesEnabled: settings.gitWorktrees,
-        mobileRemoteControlEnabled: false,
-      );
+    sessionsMcp: settings.sessionsMcp,
+    browserMcp: settings.browserMcp,
+    workspacesEnabled: settings.remoteWorkspaces,
+    worktreesEnabled: settings.gitWorktrees,
+    mobileRemoteControlEnabled: false,
+  );
 
   SettingsTab get _resolvedTab => SettingsTab.resolved(
-        activeTab,
-        sessionsMcp: settings.sessionsMcp,
-        browserMcp: settings.browserMcp,
-        workspacesEnabled: settings.remoteWorkspaces,
-        worktreesEnabled: settings.gitWorktrees,
-        mobileRemoteControlEnabled: false,
-      );
+    activeTab,
+    sessionsMcp: settings.sessionsMcp,
+    browserMcp: settings.browserMcp,
+    workspacesEnabled: settings.remoteWorkspaces,
+    worktreesEnabled: settings.gitWorktrees,
+    mobileRemoteControlEnabled: false,
+  );
 
   UiNode _defaultPanel(SettingsPanelKind kind) {
     switch (kind) {

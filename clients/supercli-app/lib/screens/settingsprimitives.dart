@@ -14,10 +14,7 @@ import 'package:gpuidart/gpuidart.dart';
 
 /// Pane title + description header (Swift: `SettingsPaneHeader`).
 final class SettingsPaneHeader {
-  const SettingsPaneHeader({
-    required this.title,
-    this.description = '',
-  });
+  const SettingsPaneHeader({required this.title, this.description = ''});
 
   final String title;
   final String description;
@@ -33,10 +30,7 @@ final class SettingsPaneHeader {
 
 /// Section title + description header (Swift: `SettingsSectionHeader`).
 final class SettingsSectionHeader {
-  const SettingsSectionHeader({
-    required this.title,
-    this.description = '',
-  });
+  const SettingsSectionHeader({required this.title, this.description = ''});
 
   final String title;
   final String description;
@@ -52,10 +46,7 @@ final class SettingsSectionHeader {
 
 /// Label/value row (Swift: `SettingsValueRow`).
 final class SettingsValueRow {
-  const SettingsValueRow({
-    required this.label,
-    required this.value,
-  });
+  const SettingsValueRow({required this.label, required this.value});
 
   final String label;
   final String value;

@@ -139,9 +139,7 @@ void main() {
 
     test('paired devices render with revoke buttons', () {
       const panel = RemoteSettingsPanel(
-        devices: [
-          PairedDevice(id: 'd1', name: 'iPhone'),
-        ],
+        devices: [PairedDevice(id: 'd1', name: 'iPhone')],
       );
       final node = panel.build() as UiColumn;
       final controls = node.children[1] as UiColumn;
@@ -172,9 +170,7 @@ void main() {
       const panel = RemoteSettingsPanel(
         scopeKind: RemoteScopeKind.localWorkspace,
         scopedWorkspaceName: 'API',
-        scopedDevices: [
-          ScopedPairedDevice(id: 's1', name: 'iPad'),
-        ],
+        scopedDevices: [ScopedPairedDevice(id: 's1', name: 'iPad')],
       );
       final node = panel.build() as UiColumn;
       final section = node.children[1] as UiColumn;

@@ -66,7 +66,7 @@ final class TranscriptsSettingsPanel {
     String subtitle = '',
     required bool value,
   }) {
-    return UiColumn('${id}-labeled', [
+    return UiColumn('$id-labeled', [
       base.SettingsToggle(id: id, label: title, value: value).fallback(),
       if (subtitle.isNotEmpty) UiText('$id-subtitle', subtitle),
     ]);
@@ -76,13 +76,15 @@ final class TranscriptsSettingsPanel {
     return UiColumn('transcripts-settings', [
       const SettingsPaneHeader(
         title: 'Transcripts',
-        description: 'A session\'s conversation, rendered as Markdown — '
+        description:
+            'A session\'s conversation, rendered as Markdown — '
             'what "Copy transcript" copies and what agents read.',
       ).build(),
       UiColumn('transcripts-content', [
         const SettingsSectionHeader(
           title: 'Transcript content',
-          description: 'What "Copy transcript" (right-click a session) puts on '
+          description:
+              'What "Copy transcript" (right-click a session) puts on '
               'the clipboard as Markdown. These options also drive the defaults '
               'for agents reading a session\'s transcript. Range is the default '
               'for agent reads; the Copy transcript menu picks its own range.',
@@ -90,7 +92,8 @@ final class TranscriptsSettingsPanel {
         _toggle(
           id: 'transcripts-session-info',
           title: 'Session info header',
-          subtitle: 'Start with the session\'s title, ID, CLI, and model. '
+          subtitle:
+              'Start with the session\'s title, ID, CLI, and model. '
               'The ID lets another agent target this session with the '
               'Sessions MCP tools.',
           value: includeSessionInfo,
@@ -133,12 +136,13 @@ final class TranscriptsSettingsPanel {
             label: 'Range',
             selected: transcriptRangeLabel(maxEntries),
             options: [
-              for (final o in transcriptRangeOptions)
-                transcriptRangeLabel(o),
+              for (final o in transcriptRangeOptions) transcriptRangeLabel(o),
             ],
           ).fallback(),
-          const UiText('transcripts-range-subtitle',
-              'How much of the conversation to include.'),
+          const UiText(
+            'transcripts-range-subtitle',
+            'How much of the conversation to include.',
+          ),
         ]),
       ]),
     ]);

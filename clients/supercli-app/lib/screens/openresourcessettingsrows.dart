@@ -70,22 +70,22 @@ String openResourceSelectorTitle(String selector) {
     case 'resource:github.repository':
       return 'GitHub repositories';
     default:
-      return selector
-          .replaceAll('file:', '')
-          .replaceAll('resource:', '');
+      return selector.replaceAll('file:', '').replaceAll('resource:', '');
   }
 }
 
 /// Sorted selector list derived from the available apps
 /// (Swift: `OpenResourcesSettingsRows.selectors`).
 List<String> openResourceSelectors(List<RemoteAppSummary> apps) {
-  final fileSelectors =
-      apps.expand((a) => a.mediaTypes).map((m) => 'file:$m');
-  final resourceSelectors =
-      apps.expand((a) => a.resourceKinds).map((k) => 'resource:$k');
+  final fileSelectors = apps.expand((a) => a.mediaTypes).map((m) => 'file:$m');
+  final resourceSelectors = apps
+      .expand((a) => a.resourceKinds)
+      .map((k) => 'resource:$k');
   final selectors = {...fileSelectors, ...resourceSelectors}.toList();
-  selectors.sort((a, b) =>
-      openResourceSelectorTitle(a).compareTo(openResourceSelectorTitle(b)));
+  selectors.sort(
+    (a, b) =>
+        openResourceSelectorTitle(a).compareTo(openResourceSelectorTitle(b)),
+  );
   return selectors;
 }
 
@@ -122,7 +122,11 @@ RemoteAppSummary? selectedMissingApp({
   String? override,
 }) {
   final opener = resolveOpener(
-      selector: selector, apps: apps, savedOpener: savedOpener, override: override);
+    selector: selector,
+    apps: apps,
+    savedOpener: savedOpener,
+    override: override,
+  );
   if (!opener.startsWith('app:')) return null;
   final appID = opener.substring(4);
   if (installedIDs.contains(appID)) return null;
@@ -141,7 +145,11 @@ RemoteAppSummary? selectedOutdatedApp({
   String? override,
 }) {
   final opener = resolveOpener(
-      selector: selector, apps: apps, savedOpener: savedOpener, override: override);
+    selector: selector,
+    apps: apps,
+    savedOpener: savedOpener,
+    override: override,
+  );
   if (!opener.startsWith('app:')) return null;
   final appID = opener.substring(4);
   for (final app in apps) {
@@ -167,7 +175,7 @@ String openerLabel(String opener, List<RemoteAppSummary> apps) {
 /// Open-resources settings rows (Swift: `OpenResourcesSettingsRows`).
 ///
 /// One labeled row per selector: the opener picker plus an Install /
-/// "Update to <version>" button when the selected app is missing or
+/// `"Update to <version>"` button when the selected app is missing or
 /// outdated. Running panes keep the old binary until Restart App.
 final class OpenResourcesSettingsRows {
   const OpenResourcesSettingsRows({
@@ -210,8 +218,7 @@ final class OpenResourcesSettingsRows {
               override: overrides[selector],
             )
           : null;
-      final handling =
-          apps.where((a) => a.handles(selector)).toList();
+      final handling = apps.where((a) => a.handles(selector)).toList();
       final options = <String>[];
       for (final app in handling) {
         final suffix = installedIDs.contains(app.id) ? '' : ' (Not installed)';
@@ -235,10 +242,10 @@ final class OpenResourcesSettingsRows {
         final label = missing != null
             ? (installing ? 'Installing…' : 'Install')
             : (installing
-                ? 'Updating…'
-                : (target.version == null
-                    ? 'Update'
-                    : 'Update to ${target.version}'));
+                  ? 'Updating…'
+                  : (target.version == null
+                        ? 'Update'
+                        : 'Update to ${target.version}'));
         rowChildren.add(UiButton('opener-install-${target.id}', label));
       }
       rows.add(UiColumn('opener-row-$selector', rowChildren));
