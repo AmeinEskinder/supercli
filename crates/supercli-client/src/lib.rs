@@ -70,9 +70,9 @@ pub mod remote_dto_adapters;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
 pub mod remote_terminal_websocket;
-pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_ws_transport;
+pub mod resume_command;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
 pub mod stream_frame_reconciler;
@@ -84,6 +84,7 @@ pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
 pub mod types;
+pub mod unix_ui_client;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod viewer_presence;
 #[cfg(not(target_arch = "wasm32"))]
