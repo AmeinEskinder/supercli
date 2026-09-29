@@ -4,6 +4,8 @@ library;
 import 'package:gpuidart/gpuidart.dart';
 import 'package:supercli_app/models.dart';
 import 'package:supercli_app/screens/screens.dart';
+import 'package:supercli_app/screens/settingspanels.dart';
+import 'package:supercli_app/screens/settingsshell.dart';
 import 'package:supercli_app/widgets/widgets.dart';
 import 'package:test/test.dart';
 
@@ -183,13 +185,16 @@ void main() {
   });
 
   group('SettingsView', () {
-    test('builds tab row with all tabs', () {
-      final settings = SettingsView();
+    test('builds sidebar + content', () {
+      final settings = SettingsView(settings: AppSettings());
       final node = settings.build() as UiRow;
       expect(node.children.length, 2);
-      final tabs = node.children[0] as UiColumn;
-      // heading + one button per tab
-      expect(tabs.children.length, 1 + SettingsTab.values.length);
+      final sidebar = node.children[0] as UiColumn;
+      // back row, scope picker, nav column, feedback footer
+      expect(sidebar.children.length, 4);
+      final nav = sidebar.children[2] as UiColumn;
+      // AppSettings defaults: sessionsMcp/remoteWorkspaces/gitWorktrees on
+      expect(nav.children.length, 10);
     });
   });
 

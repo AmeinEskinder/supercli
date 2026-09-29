@@ -19,6 +19,7 @@ import 'screens/mcpapprovalpanel.dart';
 import 'screens/projectsidebarview.dart';
 import 'screens/settings_controller.dart';
 import 'screens/settingsview.dart';
+import 'screens/settingsshell.dart';
 import 'screens/sidebarview.dart';
 import 'screens/terminalarea.dart';
 import 'screens/toastcenter.dart';
@@ -129,7 +130,7 @@ final class SupercliApp {
   bool settingsOpen = false;
 
   /// The currently selected settings tab.
-  SettingsTab activeSettingsTab = SettingsTab.general;
+  SettingsTab activeSettingsTab = SettingsTab.appearance;
 
   /// Open the settings overlay. No-op until [settingsController] is set.
   void openSettings() {
@@ -158,11 +159,10 @@ final class SupercliApp {
     }
     if (actionName.startsWith('settings.tab.')) {
       final tabName = actionName.substring('settings.tab.'.length);
-      for (final tab in SettingsTab.values) {
-        if (tab.name == tabName) {
-          activeSettingsTab = tab;
-          return true;
-        }
+      final tab = SettingsTab.compatibleRawValue(tabName);
+      if (tab != null) {
+        activeSettingsTab = tab;
+        return true;
       }
     }
     return false;
@@ -170,8 +170,9 @@ final class SupercliApp {
 
   /// Handle a click on a node by id. Returns true if consumed.
   ///
-  /// Tab buttons are rendered with ids `settings-tab-<name>` (see
-  /// [SettingsView.build]); clicking one switches the active tab.
+  /// Tab buttons are rendered with ids `settings-tab-<rawValue>` (see
+  /// [SettingsNavRow]); clicking one switches the active tab. Deep-link
+  /// spellings resolve through [SettingsTab.compatibleRawValue].
   /// Toggle buttons render as `<toggle-id>-toggle` (see [SettingsToggle]);
   /// clicking one flips the setting and persists via the controller.
   bool handleClick(String nodeId) {
@@ -183,11 +184,10 @@ final class SupercliApp {
     const tabPrefix = 'settings-tab-';
     if (nodeId.startsWith(tabPrefix)) {
       final tabName = nodeId.substring(tabPrefix.length);
-      for (final tab in SettingsTab.values) {
-        if (tab.name == tabName) {
-          activeSettingsTab = tab;
-          return true;
-        }
+      final tab = SettingsTab.compatibleRawValue(tabName);
+      if (tab != null) {
+        activeSettingsTab = tab;
+        return true;
       }
     }
     const toggleSuffix = '-toggle';

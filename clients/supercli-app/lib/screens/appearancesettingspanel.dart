@@ -1,110 +1,139 @@
 /// Appearance settings panel.
 ///
-/// Port of `AppearanceSettingsPanel` (SettingsView.swift, 2495-2731).
+/// Port of `AppearanceSettingsPanel` (SettingsView.swift, 2495-2730),
+/// `TerminalFontSection` (2731-2871), `TransparencySliderRow` (2872-2903),
+/// and `AppTintSwatch` (2904-2931).
+///
 /// Sections: theme mode, app tint swatches, session titles, transparency
 /// sliders, terminal font, open-resources editor picker, terminal options.
 ///
-/// Renders through the RLE fallback pattern (UiRow/UiColumn/UiText/UiButton)
-/// since gpuidart has no native settings widgets.
+/// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
+/// since gpuidart has no native settings widgets (see
+/// docs/gpuidart-gaps-settings.md).
 library;
 
 import 'package:gpuidart/gpuidart.dart';
 
+import 'settingsprimitives.dart';
 import 'settingspanels.dart';
+import 'openresourcessettingsrows.dart';
 
-/// App tint options (Swift: `AppTint.allCases`).
+/// App tint options (Swift: `AppTint` in Theme.swift).
 ///
 /// Washes the workspace's window chrome — sidebar, content, and terminal
 /// canvas. Each workspace keeps its own color.
 enum AppTint {
-  graphite,
+  none,
+  peel,
+  amber,
+  green,
+  teal,
   blue,
-  purple,
-  pink,
-  red,
-  orange,
-  yellow,
-  green;
+  indigo,
+  violet;
 
   String get title {
     switch (this) {
-      case AppTint.graphite:
-        return 'Graphite';
-      case AppTint.blue:
-        return 'Blue';
-      case AppTint.purple:
-        return 'Purple';
-      case AppTint.pink:
-        return 'Pink';
-      case AppTint.red:
-        return 'Red';
-      case AppTint.orange:
-        return 'Orange';
-      case AppTint.yellow:
-        return 'Yellow';
+      case AppTint.none:
+        return 'Default';
+      case AppTint.peel:
+        return 'Peel';
+      case AppTint.amber:
+        return 'Amber';
       case AppTint.green:
         return 'Green';
+      case AppTint.teal:
+        return 'Teal';
+      case AppTint.blue:
+        return 'Blue';
+      case AppTint.indigo:
+        return 'Indigo';
+      case AppTint.violet:
+        return 'Violet';
     }
   }
 }
 
-/// Session title mode (Swift: `SessionTitleMode`).
+/// Session title mode (Swift: `SessionTitleMode` in Models.swift).
 ///
 /// What names a session in the sidebar until renamed.
 enum SessionTitleMode {
   firstPrompt,
-  liveFromAgent,
-  manual;
+  agent,
+  off;
+
+  /// Raw value (Swift: `SessionTitleMode.rawValue`).
+  String get rawValue {
+    switch (this) {
+      case SessionTitleMode.firstPrompt:
+        return 'first_prompt';
+      case SessionTitleMode.agent:
+        return 'agent';
+      case SessionTitleMode.off:
+        return 'off';
+    }
+  }
 
   String get title {
     switch (this) {
       case SessionTitleMode.firstPrompt:
         return 'First prompt';
-      case SessionTitleMode.liveFromAgent:
+      case SessionTitleMode.agent:
         return 'Live from agent';
-      case SessionTitleMode.manual:
-        return 'Manual';
+      case SessionTitleMode.off:
+        return 'Off';
     }
   }
 }
 
-/// Command-T action (Swift: `CommandTAction`).
+/// ⌘T action (Swift: `CommandTAction` in Models.swift).
 enum CommandTAction {
-  newSession,
-  commandPalette,
-  quickOpen;
+  newTerminal,
+  presetPicker;
 
   String get title {
     switch (this) {
-      case CommandTAction.newSession:
-        return 'New session';
-      case CommandTAction.commandPalette:
-        return 'Command palette';
-      case CommandTAction.quickOpen:
-        return 'Quick open';
+      case CommandTAction.newTerminal:
+        return 'New terminal';
+      case CommandTAction.presetPicker:
+        return 'Preset screen';
     }
   }
 }
 
-/// Terminal font section (Swift: `TerminalFontSection`).
+/// Terminal font section (Swift: `TerminalFontSection`, 2731-2871).
 ///
 /// Shared by the local, scoped-local, and remote Appearance panels.
-/// The family picker lists monospaced faces; the size stepper shares its
-/// range with the zoom View-menu chords.
+/// The family picker lists this Mac's monospaced faces (plus the saved
+/// family even when it is not installed, so a choice never silently
+/// disappears); the size stepper shares its range with the ⌘+ / ⌘− / ⌘0
+/// View-menu chords.
 final class TerminalFontSection {
   TerminalFontSection({
     required this.family,
     required this.size,
     required this.lineHeight,
+    this.description = '',
   });
 
   final String family;
   final double size;
   final double lineHeight;
+  final String description;
+
+  /// Shared copy for the local panels: the chords are the same everywhere
+  /// (Swift: `TerminalFontSection.localDescription`).
+  static const String localDescription =
+      'Family and size for every terminal on this Mac. ⌘+ and ⌘− zoom all '
+      'panes together; ⌘0 returns to 13 pt. '
+      'Ghostty falls back to other installed faces for glyphs the chosen '
+      'font lacks.';
 
   UiNode build() {
     return UiColumn('terminal-font-section', [
       const UiText('terminal-font-title', 'Terminal font'),
+      if (description.isNotEmpty)
+        UiText('terminal-font-description', description),
       UiRow('terminal-font-family', [
         const UiText('terminal-font-family-label', 'Family'),
         UiText('terminal-font-family-value', family),
@@ -121,7 +150,10 @@ final class TerminalFontSection {
   }
 }
 
-/// Transparency slider row (Swift: `TransparencySliderRow`).
+/// Transparency slider row (Swift: `TransparencySliderRow`, 2872-2903).
+///
+/// Label, slider, and a fixed-width live percentage so the row doesn't
+/// wiggle while dragging.
 final class TransparencySliderRow {
   const TransparencySliderRow({
     required this.title,
@@ -142,7 +174,7 @@ final class TransparencySliderRow {
   }
 }
 
-/// App tint swatch (Swift: `AppTintSwatch`).
+/// App tint swatch (Swift: `AppTintSwatch`, 2904-2931).
 final class AppTintSwatch {
   const AppTintSwatch({
     required this.tint,
@@ -160,42 +192,68 @@ final class AppTintSwatch {
   }
 }
 
-/// Appearance settings panel.
+/// Appearance settings panel (Swift: `AppearanceSettingsPanel`, 2495-2730).
 ///
-/// Port of `AppearanceSettingsPanel` (SettingsView.swift).
+/// The local (Controller) appearance panel. A workspace instance inherits
+/// the default workspace's appearance until it sets its own; the revert is
+/// offered inline and drops its own mode, transparency and font — its color
+/// stays (workspace-only value).
 final class AppearanceSettingsPanel {
   AppearanceSettingsPanel({
     required this.settings,
+    this.isDefaultInstance = true,
+    this.defaultWorkspaceLabel = 'Personal',
     this.backgroundOpacity = 1.0,
     this.surfaceOpacity = 1.0,
+    this.transparencyIsDefault = true,
     this.sessionTitleMode = SessionTitleMode.firstPrompt,
-    this.commandTAction = CommandTAction.newSession,
+    this.commandTAction = CommandTAction.newTerminal,
     this.showSessionGallery = true,
     this.codeEditor = '',
+    this.editorOptions = const [],
+    this.openResources = const OpenResourcesSettingsRows(),
   });
 
   final AppSettings settings;
+  final bool isDefaultInstance;
+  final String defaultWorkspaceLabel;
   final double backgroundOpacity;
   final double surfaceOpacity;
+  final bool transparencyIsDefault;
   final SessionTitleMode sessionTitleMode;
   final CommandTAction commandTAction;
   final bool showSessionGallery;
   final String codeEditor;
+  final List<String> editorOptions;
+  final OpenResourcesSettingsRows openResources;
 
   UiNode build() {
-    return UiColumn('appearance-settings', [
-      const UiText('appearance-title', 'Appearance'),
-      const UiText(
-        'appearance-description',
-        'How Supercli looks. System follows your macOS appearance.',
-      ),
-      // Mode: theme preference (system/light/dark)
+    final sections = <UiNode>[
+      const SettingsPaneHeader(
+        title: 'Appearance',
+        description: 'How Supercli looks. System follows your macOS appearance.',
+      ).build(),
+    ];
+    if (!isDefaultInstance) {
+      sections.add(UiColumn('appearance-inherit', [
+        SettingsSectionHeader(
+          title: 'Inherits from $defaultWorkspaceLabel',
+          description: 'This workspace uses the default workspace\'s appearance '
+              'until a setting below is changed. Revert drops its own mode, '
+              'transparency and font; its color stays.',
+        ).build(),
+        UiButton('appearance-use-inherited',
+            'Use $defaultWorkspaceLabel\'s appearance'),
+      ]));
+    }
+    sections.addAll([
       UiColumn('appearance-mode', [
-        const UiText('appearance-mode-title', 'Mode'),
-        const UiText(
-          'appearance-mode-description',
-          'Applies to the window, sidebar and terminal colors.',
-        ),
+        const SettingsSectionHeader(
+          title: 'Mode',
+          description: 'Applies to the window, sidebar and terminal colors. '
+              'Claude Code has its own theme setting — run /config inside '
+              'Claude Code and change Theme to match.',
+        ).build(),
         UiRow('appearance-mode-picker', [
           for (final mode in ThemeMode.values)
             UiButton(
@@ -204,14 +262,13 @@ final class AppearanceSettingsPanel {
             ),
         ]),
       ]),
-      // App color: tint swatches
       UiColumn('appearance-tint', [
-        const UiText('appearance-tint-title', 'App color'),
-        const UiText(
-          'appearance-tint-description',
-          "Washes this workspace's window chrome — sidebar, content, and "
-          'terminal canvas.',
-        ),
+        const SettingsSectionHeader(
+          title: 'App color',
+          description: 'Washes this workspace\'s window chrome — sidebar, '
+              'content, and terminal canvas. Each workspace keeps its own color '
+              '(also editable per workspace in Settings ▸ Workspaces).',
+        ).build(),
         UiRow('appearance-tint-swatches', [
           for (final tint in AppTint.values)
             AppTintSwatch(
@@ -220,54 +277,77 @@ final class AppearanceSettingsPanel {
             ).build(),
         ]),
       ]),
-      // Session titles
       UiColumn('appearance-session-titles', [
-        const UiText('appearance-session-titles-title', 'Session titles'),
-        UiText(
-          'appearance-session-titles-value',
-          sessionTitleMode.title,
-        ),
+        const SettingsSectionHeader(
+          title: 'Session titles',
+          description: 'What names a session in the sidebar until you rename it. '
+              'First prompt titles it once from your first message. Live from '
+              'agent follows the agent\'s own task summary as it works (agents '
+              'that publish one — Claude today), falling back to the first prompt '
+              'until it appears. Renaming a session always wins.',
+        ).build(),
+        SettingsSelect(
+          id: 'appearance-session-titles-picker',
+          label: 'Session titles',
+          selected: sessionTitleMode.title,
+          options: [for (final m in SessionTitleMode.values) m.title],
+        ).fallback(),
       ]),
-      // Transparency
       UiColumn('appearance-transparency', [
-        const UiText('appearance-transparency-title', 'Transparency'),
-        const TransparencySliderRow(title: 'Background', value: 1.0).build(),
-        const TransparencySliderRow(title: 'Surface', value: 1.0).build(),
-        UiButton(
-          'transparency-revert',
-          'Revert to default',
-        ),
+        const SettingsSectionHeader(
+          title: 'Transparency',
+          description: 'Background is the window backdrop — the sidebar and '
+              'everything behind the content; below 100% the desktop shows '
+              'through it, natively blurred. Surface covers the terminal canvas, '
+              'settings, and the other pages on top of it. 100% is fully opaque. '
+              'Terminal text always stays fully opaque.',
+        ).build(),
+        TransparencySliderRow(title: 'Background', value: backgroundOpacity)
+            .build(),
+        TransparencySliderRow(title: 'Surface', value: surfaceOpacity).build(),
+        const UiButton('transparency-revert', 'Revert to default'),
       ]),
-      // Terminal font
       TerminalFontSection(
         family: settings.terminalFont,
         size: settings.terminalFontSize,
         lineHeight: settings.lineHeight,
+        description: TerminalFontSection.localDescription,
       ).build(),
-      // Open resources: editor picker
-      UiColumn('appearance-editor', [
-        const UiText('appearance-editor-title', 'Open resources'),
-        UiRow('appearance-editor-picker', [
-          const UiText('appearance-editor-label', 'Editor'),
-          UiText(
-            'appearance-editor-value',
-            codeEditor.isEmpty ? 'System default' : codeEditor,
-          ),
-        ]),
+      UiColumn('appearance-open-resources', [
+        const SettingsSectionHeader(
+          title: 'Open resources',
+          description: 'Choose what opens each supported type in this workspace. '
+              'The editor is also used by "Open in editor" and the titlebar open button.',
+        ).build(),
+        SettingsSelect(
+          id: 'appearance-editor',
+          label: 'Editor',
+          selected: codeEditor,
+          options: editorOptions,
+        ).fallback(),
+        openResources.build(),
       ]),
-      // Terminal: Command-T action + session gallery
       UiColumn('appearance-terminal', [
-        const UiText('appearance-terminal-title', 'Terminal'),
-        UiRow('appearance-commandt', [
-          const UiText('appearance-commandt-label', '⌘T'),
-          UiText('appearance-commandt-value', commandTAction.title),
+        const SettingsSectionHeader(
+          title: 'Terminal',
+          description: 'Choose what ⌘T opens and configure extras around the terminal view.',
+        ).build(),
+        UiRow('appearance-commandt-picker', [
+          for (final action in CommandTAction.values)
+            UiButton(
+              'commandt-${action.name}',
+              '${commandTAction == action ? '● ' : ''}${action.title}',
+            ),
         ]),
         SettingsToggle(
           id: 'appearance-session-gallery',
           label: 'Session gallery',
           value: showSessionGallery,
         ).fallback(),
+        const UiText('appearance-session-gallery-desc',
+            'Photo chip in the terminal title bar with the session\'s captures, plus Take Screenshot (⇧⌘S) to shoot into the session and attach it to the prompt. Turn off if you use your own screenshot tools.'),
       ]),
     ]);
+    return UiColumn('appearance-settings', sections);
   }
 }

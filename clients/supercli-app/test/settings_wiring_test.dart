@@ -21,6 +21,7 @@ import 'package:supercli_app/keymap.dart';
 import 'package:supercli_app/screens/sidebarview.dart';
 import 'package:supercli_app/screens/settings_controller.dart';
 import 'package:supercli_app/screens/settingsview.dart';
+import 'package:supercli_app/screens/settingsshell.dart';
 import 'package:test/test.dart';
 
 /// In-memory fake of the Host's workspace-settings store.
@@ -82,7 +83,7 @@ void main() {
       final app = SupercliApp();
       expect(app.settingsController, isNull);
       expect(app.settingsOpen, isFalse);
-      expect(app.activeSettingsTab, SettingsTab.general);
+      expect(app.activeSettingsTab, SettingsTab.appearance);
     });
 
     test('settings.open is a no-op until the controller is set', () {
@@ -114,22 +115,25 @@ void main() {
       final app = appWithController(FakeSettingsHost());
       expect(app.handleAction('settings.tab.plugins'), isTrue);
       expect(app.activeSettingsTab, SettingsTab.plugins);
-      expect(app.handleAction('settings.tab.license'), isTrue);
-      expect(app.activeSettingsTab, SettingsTab.license);
+      // Legacy deep-link spelling resolves through compatibleRawValue.
+      expect(app.handleAction('settings.tab.mcp'), isTrue);
+      expect(app.activeSettingsTab, SettingsTab.agents);
+      expect(app.handleAction('settings.tab.experimental'), isTrue);
+      expect(app.activeSettingsTab, SettingsTab.features);
     });
 
     test('settings.tab.<unknown> is not consumed', () {
       final app = appWithController(FakeSettingsHost());
       expect(app.handleAction('settings.tab.nope'), isFalse);
-      expect(app.activeSettingsTab, SettingsTab.general);
+      expect(app.activeSettingsTab, SettingsTab.appearance);
     });
 
     test('clicking a tab button switches tabs', () {
       final app = appWithController(FakeSettingsHost());
       expect(app.handleClick('settings-tab-agentAccess'), isTrue);
       expect(app.activeSettingsTab, SettingsTab.agentAccess);
-      expect(app.handleClick('settings-tab-remote'), isTrue);
-      expect(app.activeSettingsTab, SettingsTab.remote);
+      expect(app.handleClick('settings-tab-mobile'), isTrue);
+      expect(app.activeSettingsTab, SettingsTab.mobile);
     });
 
     test('clicking an unknown tab button is not consumed', () {
@@ -139,12 +143,7 @@ void main() {
 
     test('all SettingsTab values have titles', () {
       for (final tab in SettingsTab.values) {
-        expect(
-          SettingsView.tabTitles[tab],
-          isNotNull,
-          reason: 'Missing title for $tab',
-        );
-        expect(SettingsView.tabTitles[tab]!.isNotEmpty, isTrue);
+        expect(tab.title, isNotEmpty, reason: 'Missing title for $tab');
       }
     });
   });

@@ -1,65 +1,56 @@
-/// Settings: tabbed preferences panel.
+/// Settings: tab identifiers, deep-link compatibility, and feature gates.
 ///
-/// Port of `SettingsView.swift` (4910 lines). Tabs: General, Sessions,
-/// Agent Access, Browser, Workspaces, Worktrees, Plugins, Presets,
-/// Notifications, Transcripts, Features, Advanced, License, Remote,
-/// Developer.
+/// Port of `SettingsTab` (SettingsView.swift, lines 44-174). The Swift enum
+/// drives the settings sidebar nav; deep-link spellings, feature gates, and
+/// icons are ported here as [rawValue]/[compatibleRawValue], [visibleCases],
+/// [hostScopedCases], [title], and [iconName].
 ///
-/// Each tab renders its panel against a shared [AppSettings] model; edits
-/// serialize to the Host's `settings.workspace.set` wire format for
-/// allowlisted keys (see settingspanels.dart).
+/// Enum order is nav order (Swift): workspaces leads the nav. `features`
+/// keeps the released deep-link/snapshot spelling "experimental" as its raw
+/// value — never change it.
 ///
 /// Renders through the RLE fallback pattern (UiRow/UiText/UiButton/UiInput)
 /// since gpuidart has no native settings widgets (see
 /// docs/gpuidart-gaps-settings.md).
 library;
 
-import 'package:gpuidart/gpuidart.dart';
-
-import 'appearancesettingspanel.dart';
-import 'hostpickerview.dart';
-import 'licensesettings.dart';
-import 'pluginsettingspanel.dart';
-import 'presetssettingspanel.dart';
-import 'remotesettingspanel.dart';
-import 'sessionsaccesssections.dart';
-import 'settingspanels.dart';
-import 'workspacessettingspanel.dart';
-import 'worktreessettingspanel.dart';
-
 /// Settings tab identifiers.
 ///
-/// Port of `SettingsTab` (SettingsView.swift). The Swift enum drives the
-/// settings sidebar nav; deep-link spellings, feature gates, and icons are
-/// ported below as [compatibleRawValue], [visibleCases], and [iconName].
+/// Port of `SettingsTab` (SettingsView.swift). Cases: workspaces, agents,
+/// plugins, agentAccess, presets, appearance, mobile, transcripts,
+/// notifications, computer, worktrees, features, advanced.
 enum SettingsTab {
-  general,
-  sessions,
-  agentAccess,
-  browser,
   workspaces,
-  worktrees,
   agents,
   plugins,
+  agentAccess,
   presets,
-  notifications,
+  appearance,
+  mobile,
   transcripts,
+  notifications,
+  computer,
+  worktrees,
   features,
-  advanced,
-  license,
-  remote,
-  developer;
+  advanced;
+
+  /// Wire/deep-link spelling. `features` keeps the released spelling
+  /// "experimental" from when the tab was called Experimental (Swift:
+  /// `case features = "experimental"`); never change it.
+  String get rawValue => this == SettingsTab.features ? 'experimental' : name;
 
   /// Deep-link compatibility: maps legacy/renamed tab spellings to current tabs.
   ///
   /// Port of `SettingsTab.compatibleRawValue` (SettingsView.swift). The
   /// Agents & Apps split (2026-09-16) renamed several deep-link spellings;
   /// accepting the old ones keeps existing snapshot/dev commands valid.
-  /// The standalone license tab was merged into Remote (2026-08-13).
+  /// Note: "presets" is a live case but the switch maps it to .agents
+  /// first (Swift `case "presets", "agentsApps", "mcp": return .agents`).
   static SettingsTab? compatibleRawValue(String rawValue) {
     switch (rawValue) {
       // Agents & Apps split into Agents and Plugins (2026-09-16); the
       // one-page MCP group became Agents (connections) + Agent access (policies).
+      case 'presets':
       case 'agentsApps':
       case 'mcp':
         return SettingsTab.agents;
@@ -69,14 +60,10 @@ enum SettingsTab {
       case 'profiles':
         return SettingsTab.workspaces;
       case 'features':
-      case 'experimental':
         return SettingsTab.features;
-      // The standalone "Supercli Link" license tab was merged into Remote.
-      case 'license':
-        return SettingsTab.remote;
       default:
         for (final tab in SettingsTab.values) {
-          if (tab.name == rawValue) return tab;
+          if (tab.rawValue == rawValue) return tab;
         }
         return null;
     }
@@ -85,9 +72,13 @@ enum SettingsTab {
   /// Feature-gated tabs: the tabs visible given the current feature flags.
   ///
   /// Port of `SettingsTab.visibleCases(computerUseControllable:)`
-  /// (SettingsView.swift). Sessions/Browser use are Settings ▸ Features
-  /// toggles; the agent-access page exists while either is on. Git worktrees
-  /// is a Features toggle; its panel only exists while the feature is on.
+  /// (SettingsView.swift). The legacy `computerUseControllable` argument
+  /// cannot restore a retired tab (Swift comment) so it is not modelled.
+  /// Sessions/Browser use are Settings ▸ Features toggles; the agent-access
+  /// page exists while either is on. The mobile (Remote Control) tab needs
+  /// the mobile remote-control flag. Git worktrees is a Features toggle;
+  /// its panel only exists while the feature is on. `computer` and
+  /// `presets` never show their old panels.
   static List<SettingsTab> visibleCases({
     required bool sessionsMcp,
     required bool browserMcp,
@@ -97,32 +88,31 @@ enum SettingsTab {
   }) {
     return SettingsTab.values.where((tab) {
       switch (tab) {
-        case SettingsTab.remote:
+        case SettingsTab.mobile:
           return mobileRemoteControlEnabled;
         // Sessions use and Browser use are Settings ▸ Features toggles;
         // the access page exists while either is on.
         case SettingsTab.agentAccess:
           return sessionsMcp || browserMcp;
+        // Keep the saved enum case readable, but never show its old panel.
+        case SettingsTab.computer:
+        case SettingsTab.presets:
+          return false;
         case SettingsTab.workspaces:
           return workspacesEnabled;
         // Git worktrees is a Features toggle; its panel only exists while
         // the feature is on (same live gate as the sidebar folders).
         case SettingsTab.worktrees:
           return worktreesEnabled;
-        // Deprecated/merged tabs: never show their old panels.
-        // (sessions/browser merged into agentAccess; license into remote.)
-        case SettingsTab.sessions:
-        case SettingsTab.browser:
-        case SettingsTab.license:
-          return false;
         default:
           return true;
       }
     }).toList();
   }
 
-  /// The tabs whose settings operations exist on the Host contract — i.e.
-  /// that follow the Settings scope dropdown to the selected workspace/Host.
+  /// The tabs that follow the Settings scope dropdown to the selected
+  /// workspace/Host — i.e. whose settings operations exist on the Host
+  /// contract. Grows as verbs land; `settings.presets.set` is the first.
   ///
   /// Port of `SettingsTab.hostScopedCases` (SettingsView.swift).
   static List<SettingsTab> get hostScopedCases => [
@@ -130,195 +120,105 @@ enum SettingsTab {
         SettingsTab.plugins,
         SettingsTab.agentAccess,
         SettingsTab.presets,
-        SettingsTab.general,
+        SettingsTab.appearance,
         SettingsTab.transcripts,
         SettingsTab.notifications,
+        SettingsTab.computer,
         SettingsTab.features,
         SettingsTab.advanced,
       ];
 
-  /// Display title for the tab.
-  String get title => SettingsView.tabTitles[this] ?? name;
+  /// Resolve the selected tab, falling back to the first visible tab when
+  /// the stored tab's gate turned off (Swift: `resolvedSettingsTab`).
+  /// Workspaces leads the enum but is itself gated, so resolve through
+  /// [visibleCases].
+  static SettingsTab resolved(
+    SettingsTab selected, {
+    required bool sessionsMcp,
+    required bool browserMcp,
+    required bool workspacesEnabled,
+    required bool worktreesEnabled,
+    required bool mobileRemoteControlEnabled,
+  }) {
+    final visible = visibleCases(
+      sessionsMcp: sessionsMcp,
+      browserMcp: browserMcp,
+      workspacesEnabled: workspacesEnabled,
+      worktreesEnabled: worktreesEnabled,
+      mobileRemoteControlEnabled: mobileRemoteControlEnabled,
+    );
+    if (visible.contains(selected)) return selected;
+    return visible.isNotEmpty ? visible.first : SettingsTab.presets;
+  }
+
+  /// Display title for the tab (Swift: `SettingsTab.title`).
+  ///
+  /// Note: `presets` renders as "Agents" in Swift (the presets tab hosts
+  /// the agents preset editor).
+  String get title {
+    switch (this) {
+      case SettingsTab.appearance:
+        return 'Appearance';
+      case SettingsTab.agents:
+        return 'Agents';
+      case SettingsTab.plugins:
+        return 'Plugins';
+      case SettingsTab.agentAccess:
+        return 'Agent access';
+      case SettingsTab.presets:
+        return 'Agents';
+      case SettingsTab.mobile:
+        return 'Remote Control';
+      case SettingsTab.workspaces:
+        return 'Workspaces';
+      case SettingsTab.transcripts:
+        return 'Transcripts';
+      case SettingsTab.notifications:
+        return 'Notifications';
+      case SettingsTab.computer:
+        return 'Computer use';
+      case SettingsTab.worktrees:
+        return 'Worktrees';
+      case SettingsTab.features:
+        return 'Features';
+      case SettingsTab.advanced:
+        return 'Advanced';
+    }
+  }
 
   /// Icon name per tab, for the settings sidebar nav.
   ///
   /// Port of `SettingsTab.icon` (SettingsView.swift). Swift returns a
-  /// ChromeIcon; the Dart port uses icon asset names (the glass-gradient
-  /// nav treatment is applied by the renderer).
+  /// ChromeIcon (glass-gradient nav treatment); the Dart port uses icon
+  /// asset names — the treatment is applied by the renderer.
   String get iconName {
     switch (this) {
-      case SettingsTab.general:
+      case SettingsTab.appearance:
         return 'settings-appearance';
-      case SettingsTab.sessions:
-        return 'settings-sessions';
-      case SettingsTab.agentAccess:
-        return 'settings-agent-access';
-      case SettingsTab.browser:
-        return 'settings-browser';
-      case SettingsTab.workspaces:
-        return 'settings-workspaces';
-      case SettingsTab.worktrees:
-        return 'settings-worktrees';
       case SettingsTab.agents:
         return 'settings-agents';
       case SettingsTab.plugins:
         return 'settings-plugins';
+      case SettingsTab.agentAccess:
+        return 'settings-agent-access';
       case SettingsTab.presets:
         return 'settings-presets';
-      case SettingsTab.notifications:
-        return 'settings-notifications';
+      case SettingsTab.mobile:
+        return 'settings-remote';
+      case SettingsTab.workspaces:
+        return 'settings-workspaces';
       case SettingsTab.transcripts:
         return 'settings-transcripts';
+      case SettingsTab.notifications:
+        return 'settings-notifications';
+      case SettingsTab.computer:
+        return 'settings-computer';
+      case SettingsTab.worktrees:
+        return 'settings-worktrees';
       case SettingsTab.features:
         return 'settings-features';
       case SettingsTab.advanced:
         return 'settings-advanced';
-      case SettingsTab.license:
-        return 'settings-license';
-      case SettingsTab.remote:
-        return 'settings-remote';
-      case SettingsTab.developer:
-        return 'settings-developer';
-    }
-  }
-}
-
-/// The settings panel with tab navigation and scope picker.
-///
-/// Covers checklist items 200 (scope picker), 201 (workspaces), 202
-/// (agents — see AgentAccessSettingsPanel), 203 (plugins), 204/205 (agent
-/// access), 206 (appearance, in General tab), 207 (remote control), 209
-/// (license), 210 (transcripts), 211 (notifications), 212 (worktrees),
-/// 213 (features), 214 (advanced), 216 (presets).
-///
-/// ## Host persistence wiring
-///
-/// The view itself is stateless; persistence lives in [SettingsController]
-/// (see settings_controller.dart). The app shell wires them:
-///
-/// ```dart
-/// final controller = SettingsController(
-///   host: hostClient,
-///   onError: (msg) => toastCenter.show(msg), // route to ToastCenter
-/// );
-/// await controller.load(); // GET /mobile/workspace-settings on startup
-/// final view = SettingsView(settings: controller.settings);
-/// // After any user edit to controller.settings:
-/// controller.edited(); // debounced POST /mobile/workspace-settings
-/// ```
-final class SettingsView {
-  SettingsView({
-    AppSettings? settings,
-    this.activeTab = SettingsTab.general,
-    this.hostPicker,
-    this.plugins = const [],
-    this.presets = const [],
-    this.workspaces = const [],
-    this.worktrees = const [],
-    this.showAgentWorktrees = false,
-    this.approvedPairs = const [],
-    this.license = const LicenseSettingsPanel(),
-  }) : settings = settings ?? AppSettings();
-
-  final AppSettings settings;
-  final SettingsTab activeTab;
-  final HostPickerView? hostPicker;
-  final List<PluginEntry> plugins;
-  final List<PresetEntry> presets;
-  final List<WorkspaceEntry> workspaces;
-  final List<WorktreeEntry> worktrees;
-  final bool showAgentWorktrees;
-  final List<ApprovedPair> approvedPairs;
-  final LicenseSettingsPanel license;
-
-  static const tabTitles = {
-    SettingsTab.general: 'General',
-    SettingsTab.sessions: 'Sessions',
-    SettingsTab.agentAccess: 'Agent Access',
-    SettingsTab.browser: 'Browser',
-    SettingsTab.workspaces: 'Workspaces',
-    SettingsTab.worktrees: 'Worktrees',
-    SettingsTab.agents: 'Agents',
-    SettingsTab.plugins: 'Plugins',
-    SettingsTab.presets: 'Presets',
-    SettingsTab.notifications: 'Notifications',
-    SettingsTab.transcripts: 'Transcripts',
-    SettingsTab.features: 'Features',
-    SettingsTab.advanced: 'Advanced',
-    SettingsTab.license: 'License',
-    SettingsTab.remote: 'Remote',
-    SettingsTab.developer: 'Developer',
-  };
-
-  UiNode build() {
-    return UiRow('settings', [
-      UiColumn('settings-tabs', [
-        const UiText('settings-heading', 'Settings'),
-        for (final tab in SettingsTab.values)
-          UiButton('settings-tab-${tab.name}',
-              '${tab == activeTab ? '● ' : ''}${tabTitles[tab]}'),
-      ]),
-      UiColumn('settings-content', [
-        UiText('settings-title', tabTitles[activeTab] ?? ''),
-        _panelFor(activeTab),
-      ]),
-    ]);
-  }
-
-  UiNode _panelFor(SettingsTab tab) {
-    switch (tab) {
-      case SettingsTab.general:
-        // Swift: AppearanceSettingsPanel is the Appearance tab; in the Dart
-        // tab set it renders as the appearance section of General.
-        return UiColumn('general-with-appearance', [
-          GeneralSettingsPanel(settings: settings).build(),
-          AppearanceSettingsPanel(settings: settings).build(),
-        ]);
-      case SettingsTab.sessions:
-        return SessionsSettingsPanel(settings: settings).build();
-      case SettingsTab.agentAccess:
-        return AgentAccessSettingsPanel(
-          settings: settings,
-          approvedPairs: approvedPairs,
-        ).build();
-      case SettingsTab.browser:
-        return BrowserAccessSections(settings: settings).build();
-      case SettingsTab.workspaces:
-        return WorkspacesSettingsPanel(workspaces: workspaces).build();
-      case SettingsTab.worktrees:
-        return WorktreesSettingsPanel(
-          worktrees: worktrees,
-          showAgentWorktrees: showAgentWorktrees,
-        ).build();
-      case SettingsTab.plugins:
-        return PluginSettingsPanel(plugins: plugins).build();
-      case SettingsTab.agents:
-        // Swift: Agents tab shows PluginSettingsPanel with scope .agents
-        // (the agent CLIs: install, connect, launch). For now, reuse the
-        // plugins panel; agent-specific filtering comes with the Host
-        // runtime catalog integration.
-        return PluginSettingsPanel(plugins: plugins).build();
-      case SettingsTab.presets:
-        return PresetsSettingsPanel(presets: presets).build();
-      case SettingsTab.notifications:
-        return NotificationsSettingsPanel(settings: settings).build();
-      case SettingsTab.transcripts:
-        return TranscriptsSettingsPanel(settings: settings).build();
-      case SettingsTab.features:
-        return FeaturesSettingsPanel(settings: settings).build();
-      case SettingsTab.advanced:
-        return AdvancedSettingsPanel(settings: settings).build();
-      case SettingsTab.license:
-        return license.build();
-      case SettingsTab.remote:
-        // Swift: RemoteSettingsPanel (Remote Control). The HostPickerView
-        // (pairing + nearby hosts) is shown below it.
-        return UiColumn('remote-with-picker', [
-          const RemoteSettingsPanel().build(),
-          (hostPicker ?? HostPickerView()).build(),
-        ]);
-      case SettingsTab.developer:
-        return const DeveloperSettingsPanel().build();
     }
   }
 }
