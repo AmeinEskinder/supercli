@@ -30,6 +30,9 @@ const rustMenuActions = {
   'find_previous',
   'close_pane_or_window',
   'open_help',
+  'increase_font_size',
+  'decrease_font_size',
+  'reset_font_size',
 };
 
 List<MenuItemEntry> itemsOf(String menuId) => mainMenu
