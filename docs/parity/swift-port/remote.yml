@@ -269,7 +269,7 @@ files:
 
   ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalWebSocket.swift:
     destination: "Rust: supercli-client"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "RemoteTerminalWebSocketError (helloTimeout, protocolViolation, closed)"
@@ -294,7 +294,7 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift:
     destination: "Rust: supercli-client"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "GitHeadReader.currentBranch (parse .git/HEAD, follow worktree .git files, detached HEAD short commit)"
@@ -316,7 +316,7 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/LaunchConfig.swift:
     destination: "Rust: supercli-client"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "LaunchConfig.attachCommandEnvVar / hostCommandEnvVar constants"
