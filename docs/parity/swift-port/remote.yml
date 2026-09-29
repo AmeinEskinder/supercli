@@ -269,7 +269,7 @@ files:
 
   ios/SupercliIOS/Sources/SupercliIOS/RemoteTerminalWebSocket.swift:
     destination: "Rust: supercli-client"
-    status: partial
+    status: ported
     checklist: ""
     behaviours:
       - swift: "RemoteTerminalWebSocketError (helloTimeout, protocolViolation, closed)"
@@ -287,10 +287,33 @@ files:
       - swift: "WS send failure retires socket"
         target: "crates/supercli-client/src/remote_terminal_websocket.rs::on_ws_send_result"
         test: "crates/supercli-client/src/remote_terminal_websocket.rs::tests::ws_send_outcome_err_retires"
+      - swift: "RemoteServerDiscovery (update/clear endpoint)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteServerDiscovery"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::discovery_update_and_clear"
+      - swift: "Exact leaf SHA-256 pinning (no bypass, malformed fingerprint rejected)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalWsTransport::connect"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::wrong_pin_fails_handshake"
+      - swift: "Ephemeral WSS session (120s handshake bound, 16 MiB max message)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalWsTransport::connect"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::connect_and_hello_with_pinned_cert"
+      - swift: "First frame must be hello (10s timeout)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalWsTransport::connect"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::hello_timeout_when_server_is_silent"
+      - swift: "Non-hello first frame is a protocol violation"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalWsTransport::connect"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::non_hello_first_frame_is_protocol_violation"
+      - swift: "Ping watchdog (30s ping, abort on failure/stale)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalWsTransport::start_ping_watchdog"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::connect_and_hello_with_pinned_cert"
+      - swift: "Input router (one write ID per send, WS preferred, 0.5s bound, retire on failure, HTTP fallback)"
+        target: "crates/supercli-client/src/remote_ws_transport.rs::RemoteTerminalInputRouter"
+        test: "crates/supercli-client/src/remote_ws_transport.rs::tests::router_prefers_ws_then_falls_back_to_http"
     tests:
       - file: crates/supercli-client/src/remote_terminal_websocket.rs
         count: 8
-    notes: "304 LOC. Portable decision logic ported: error enum, input routing (WS-vs-HTTP with 0.5s timeout and 16KiB frame threshold), send outcome mapping. todo: port to supercli-client — URLSession WebSocket transport, certificate pinning delegate, and ping watchdog (tungstenite + tls::pinned_client_config already exist in the crate). Protocol parsing already in remote_terminal_stream.rs."
+      - file: crates/supercli-client/src/remote_ws_transport.rs
+        count: 8
+    notes: "304 LOC Swift. Fully ported: portable decision logic in remote_terminal_websocket.rs (error enum, input routing, 0.5s timeout, 32KiB frame threshold) plus live tungstenite WebSocket transport in remote_ws_transport.rs (exact leaf SHA-256 pinning via tls::pinned_client_config, 120s handshake bound, 16 MiB max message, 10s hello timeout, 30s ping watchdog with stale abort, input router with write IDs and HTTP fallback). 16 Rust tests total (8 per file) cover all behaviours against a local mock WSS server with runtime-generated certificates."
 
   native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift:
     destination: "Rust: supercli-client"

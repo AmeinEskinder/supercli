@@ -71,6 +71,8 @@ pub mod remote_dto_adapters;
 pub mod remote_runtime;
 pub mod remote_terminal_websocket;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod remote_ws_transport;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod terminal_stream;
