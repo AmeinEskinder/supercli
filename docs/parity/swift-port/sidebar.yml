@@ -187,14 +187,20 @@ files:
     notes: 'Worker D2: full port with session_move_rules_test.dart. Verified by porter
       K.'
   native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift:
-    destination: 'Dart: clients/supercli-app/lib/screens/workspace_registry.dart'
-    status: partial
+    destination: 'Rust: supercli-core::workspace_registry'
+    status: ported
     checklist: ''
-    behaviours: []
-    tests: []
-    notes: 'Porter K: SupercliWorkspaceRecord codec, slugify, create/rename/remove,
-      WorkspaceListOrder with workspace_registry_test.dart. AppKit/Process/UserDefaults
-      parts not portable. UNTESTED (no Dart SDK).'
+    behaviours:
+      - swift: 'SupercliWorkspaceRecord codec (profiles key, slugify, create/rename/remove)'
+        target: crates/supercli-core/src/workspace_registry.rs::WorkspaceRecord
+        test: crates/supercli-core/src/workspace_registry.rs::codec_round_trip
+      - swift: 'WorkspaceListOrder (list order keys, apply)'
+        target: crates/supercli-core/src/workspace_registry.rs::create_workspace
+        test: crates/supercli-core/src/workspace_registry.rs::list_order_keys_and_apply
+    tests:
+      - file: crates/supercli-core/src/workspace_registry.rs
+        count: 6
+    notes: 'Logic moved to Rust per Amein''s one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_registry.dart deleted. AppKit/Process/UserDefaults parts not portable.'
   native/SupercliNative/Sources/SupercliNative/Views/SessionGalleryMarkup.swift:
     destination: 'Dart: clients/supercli-app/lib/screens/sessiongallerypanel.dart
       (SessionGalleryMarkup) + gallery_markup_math.dart'
@@ -223,35 +229,35 @@ files:
       codeEditorId, editorTargets) with workspace_open_target_test.dart. macOS availability/icon
       code not portable. UNTESTED (no Dart SDK).'
   native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-client::workspace_pool"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "Background read-only polling and snapshot cache; equivalent (timestamp-only) snapshots never republish (acceptSnapshot, isEquivalent(to:))"
-        target: "lib/screens/workspace_pool.dart::acceptPooledSnapshot + PooledSnapshot.isEquivalentTo"
-        test: "test/workspace_pool_test.dart::poll caching (3)"
+        target: "crates/supercli-client/src/workspace_pool.rs::PooledSnapshot"
+        test: "crates/supercli-client/src/workspace_pool.rs::snapshot_equivalence_ignores_capture_timestamp"
       - swift: "Exponential backoff for unreachable hosts: base doubling, exponent clamp 16, cap 300ms (backoffDelayNanoseconds)"
-        target: "lib/screens/workspace_pool.dart::backoffDelayMs"
-        test: "test/workspace_pool_test.dart::backoff (2)"
+        target: "crates/supercli-client/src/workspace_pool.rs::backoff_delay_ms"
+        test: "crates/supercli-client/src/workspace_pool.rs::backoff_doubles_and_caps"
       - swift: "Remote concurrency cap with FIFO waiter queue; failing hosts release their slot during backoff (acquireRemoteSlot/releaseRemoteSlot/grantNextSlot)"
-        target: "lib/screens/workspace_pool.dart::RemoteSlotPool"
-        test: "test/workspace_pool_test.dart::remote concurrency cap (4)"
+        target: "crates/supercli-client/src/workspace_pool.rs::RemoteSlotPool"
+        test: "crates/supercli-client/src/workspace_pool.rs::slot_pool_grants_fifo_and_drops_stale_waiters"
       - swift: "Attention badge plus once-per-blocked-edge notification latch; silent initial seeding; foreground suppression"
-        target: "lib/screens/workspace_pool.dart::AttentionLatch + advanceAttention"
-        test: "test/workspace_pool_test.dart::attention edges and notification dedup (5)"
+        target: "crates/supercli-client/src/workspace_pool.rs::AttentionLatch + advance_attention"
+        test: "crates/supercli-client/src/workspace_pool.rs::attention_latch_seeds_silently_then_notifies_on_edge"
       - swift: "Target reconciliation: fingerprint change retires/reopens, runtime-excluded keys retire but keep cache, forgotten keys drop cache (refreshTargets)"
-        target: "lib/screens/workspace_pool.dart::reconcilePoolTargets"
-        test: "test/workspace_pool_test.dart::reconciliation and lend handoff (5)"
+        target: "crates/supercli-client/src/workspace_pool.rs::reconcile_pool_targets"
+        test: "crates/supercli-client/src/workspace_pool.rs::reconcile_retires_vanished_and_fingerprint_changed"
       - swift: "Identity mismatch fails closed and latches the fingerprint until the record changes"
-        target: "lib/screens/workspace_pool.dart::identityMismatchFingerprint"
-        test: "test/workspace_pool_test.dart::identity mismatch latches the fingerprint"
+        target: "crates/supercli-client/src/workspace_pool.rs::reconcile_pool_targets"
+        test: "crates/supercli-client/src/workspace_pool.rs::identity_mismatch_fails_closed"
       - swift: "Optimistic project/session reorder holds pinned over stale bootstraps, released by host confirmation or the 15s timeout (applyingOrganizationHolds, holdProjectOrder, holdSessionOrder)"
-        target: "lib/screens/workspace_pool.dart::OrganizationHolds"
-        test: "test/workspace_pool_test.dart::optimistic organization holds (3)"
+        target: "crates/supercli-client/src/workspace_pool.rs::OrganizationHolds"
+        test: "crates/supercli-client/src/workspace_pool.rs::relative_order_replaces_only_named_positions"
     tests:
-      - file: clients/supercli-app/test/workspace_pool_test.dart
-        count: 23
-    notes: "Ported 2026-09-29 (feat/port-workspace-pool): portable pool kernel in Dart. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and the MainActor orchestration are platform runtime machinery with no portable equivalent — not ported. Fidelity gaps: Swift async interleavings became a synchronous deterministic state machine; connection retirement/peek UI (lend/exclude/resume callsites) still to wire in the app shell. UNTESTED locally: no Dart SDK in this VM; count on CI. Logic moving to Rust per Amein's one-implementation rule. Dart workspace_pool.dart belongs next to remote_runtime.rs."
+      - file: crates/supercli-client/src/workspace_pool.rs
+        count: 20
+    notes: "Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart workspace_pool.dart deleted; FFI exposes via supercli-client-ffi. Swift async entry loops (Task poll loops, CheckedContinuation wake/slot primitives), @Published publishing, UNUserNotificationCenter delivery and MainActor orchestration are platform runtime machinery with no portable equivalent — not ported."
 
   native/SupercliNative/Tests/SupercliNativeTests/AgentWorktreeAdoptionTests.swift:
     destination: 'Dart: clients/supercli-app'
@@ -319,25 +325,26 @@ files:
       - 'test/session_title_defaults_test.dart (4 tests)'
     notes: 'Porter P: ported Models.swift SessionTitleDefaults enum to lib/session_title_defaults.dart. All 4 XCTest cases covered.'
   native/SupercliNative/Tests/SupercliNativeTests/UnpeelWorkspaceRegistryTests.swift:
-    destination: 'Dart: clients/supercli-app'
-    status: partial
+    destination: 'Rust: supercli-core::workspace_registry'
+    status: ported
     checklist: ''
     behaviours:
       - swift: 'WorkspaceRegistry codec: profiles key, slugify, create/rename/remove'
-        target: lib/screens/workspace_registry.dart::WorkspaceRegistry
-        test: test/workspace_registry_test.dart::encode/decode round-trips with "profiles" key
+        target: crates/supercli-core/src/workspace_registry.rs
+        test: crates/supercli-core/src/workspace_registry.rs::codec_round_trip
     tests:
-      - 'test/workspace_registry_test.dart (10 tests, covers codec)'
-    notes: 'Porter P: codec behaviours covered by Porter K Dart tests. 3 UI/settings tests (deep link, worktrees tab, unified tabs) not portable — belong to settings UI.'
+      - file: crates/supercli-core/src/workspace_registry.rs
+        count: 6
+    notes: 'Behaviours covered by 6 Rust tests. Dart workspace_registry_test.dart deleted with the FFI move. 3 UI/settings tests (deep link, worktrees tab, unified tabs) not portable — belong to settings UI.'
   native/SupercliNative/Tests/SupercliNativeTests/WorkspacePoolTests.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-client::workspace_pool"
+    status: ported
     checklist: ""
     behaviours:
       - swift: "XCTest suite for the background workspace pool: poll caching, backoff/recovery, remote cap, attention edges, lend/exclude, organization holds"
-        target: "lib/screens/workspace_pool.dart::(whole portable kernel)"
-        test: "test/workspace_pool_test.dart::WorkspacePool (23) — same assertions against the pure functions/state machines; the async entry-loop tests have no portable Dart equivalent"
+        target: "crates/supercli-client/src/workspace_pool.rs"
+        test: "crates/supercli-client/src/workspace_pool.rs (20 tests)"
     tests:
-      - file: clients/supercli-app/test/workspace_pool_test.dart
-        count: 23
-    notes: "Swift tests drive real async entry loops (Task poll loops, CheckedContinuation wakes) which are platform runtime machinery and intentionally not reproduced; every portable-behavior XCTest is mirrored against the Dart kernel. UNTESTED locally: no Dart SDK in this VM; count on CI. Logic moving to Rust per Amein's one-implementation rule."
+      - file: crates/supercli-client/src/workspace_pool.rs
+        count: 20
+    notes: "Behaviours covered by 20 Rust tests. Dart workspace_pool_test.dart deleted with the FFI move. Swift tests drive real async entry loops (Task poll loops, CheckedContinuation wakes) which are platform runtime machinery and intentionally not reproduced; every portable-behavior XCTest is mirrored against the Rust kernel."
