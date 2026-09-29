@@ -882,15 +882,15 @@ mod tests {
     fn finder_service_takes_first_folder_when_local() {
         let urls = [
             ("/tmp/file.txt", false),
-            ("/Users/a/proj", true),
-            ("/Users/a/other", true),
+            ("/Users/test/proj", true),
+            ("/Users/test/other", true),
         ];
-        assert_eq!(finder_service_folder(true, &urls), Some("/Users/a/proj"));
+        assert_eq!(finder_service_folder(true, &urls), Some("/Users/test/proj"));
     }
 
     #[test]
     fn finder_service_rejects_remote_scope_and_files() {
-        let urls = [("/Users/a/proj", true)];
+        let urls = [("/Users/test/proj", true)];
         assert_eq!(finder_service_folder(false, &urls), None);
         let files = [("/tmp/a.txt", false)];
         assert_eq!(finder_service_folder(true, &files), None);
