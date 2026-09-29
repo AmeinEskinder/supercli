@@ -13,6 +13,15 @@
 use std::collections::HashMap;
 
 #[cfg(feature = "native-host")]
+use std::collections::HashSet;
+
+#[cfg(feature = "native-host")]
+use std::path::{Path, PathBuf};
+
+#[cfg(feature = "native-host")]
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "native-host")]
 use crate::runtime_catalog::{RuntimeCatalog, RuntimeDescriptor};
 
 /// Blank-terminal pseudo-preset id.
@@ -615,6 +624,290 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+// MARK: - Tool usage (provider session stores)
+
+/// Counts each provider's on-disk session files to estimate real usage.
+///
+/// Roots mirror the transcript API's provider adapters: these are the CLIs'
+/// own conversation stores, so they reflect usage that predates Supercli —
+/// exactly what first-run seeding wants to rank by.
+///
+/// Native-host only: needs the generated runtime catalog and filesystem access.
+#[cfg(feature = "native-host")]
+pub mod tool_usage_scanner {
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::runtime_catalog::{RuntimeCatalog, RuntimeUsageStore};
+
+    use super::{SetupTool, ToolUsageStats};
+
+    /// Recent-usage window for `recent_count` (30 days, in seconds).
+    pub const RECENT_WINDOW_SECS: u64 = 30 * 24 * 60 * 60;
+    /// Stop enumerating after this many matches; ordering is long settled by
+    /// then and first-run must stay snappy on huge stores.
+    pub const SESSION_COUNT_CAP: u64 = 5000;
+
+    /// Portable approximation of `FileManager.skipsPackageDescendants`:
+    /// directories with these extensions are opaque packages and are never
+    /// descended into. Cocoa decides by UTI (`com.apple.package`); this
+    /// fixed list covers the common cases.
+    const PACKAGE_EXTENSIONS: &[&str] = &[
+        "action",
+        "appex",
+        "app",
+        "bundle",
+        "component",
+        "dictionary",
+        "framework",
+        "kext",
+        "mdimporter",
+        "mpkg",
+        "pkg",
+        "playground",
+        "plugin",
+        "qlgenerator",
+        "scptd",
+        "workflow",
+        "xcodeproj",
+        "xcworkspace",
+    ];
+
+    /// Usage stores declared for a tool by the runtime catalog.
+    pub fn stores_for_tool<'a>(
+        catalog: &'a RuntimeCatalog,
+        tool: &SetupTool,
+    ) -> &'a [RuntimeUsageStore] {
+        tool.metadata(catalog)
+            .map(|m| m.usage.stores.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Count a tool's session files under `home`.
+    ///
+    /// `now_ms` is milliseconds since the Unix epoch (injectable for tests).
+    pub fn stats_for_tool(
+        catalog: &RuntimeCatalog,
+        tool: &SetupTool,
+        home: &Path,
+        now_ms: u64,
+    ) -> ToolUsageStats {
+        stats_for_tool_with_cap(catalog, tool, home, now_ms, SESSION_COUNT_CAP)
+    }
+
+    pub(crate) fn stats_for_tool_with_cap(
+        catalog: &RuntimeCatalog,
+        tool: &SetupTool,
+        home: &Path,
+        now_ms: u64,
+        cap: u64,
+    ) -> ToolUsageStats {
+        let stores = stores_for_tool(catalog, tool);
+        if stores.is_empty() {
+            return ToolUsageStats::NONE;
+        }
+        let mut session_count: u64 = 0;
+        let mut recent_count: u64 = 0;
+        let mut last_used_ms: Option<u64> = None;
+        let recent_cutoff_ms = now_ms.saturating_sub(RECENT_WINDOW_SECS * 1000);
+
+        'stores: for store in stores {
+            let mut stack: Vec<PathBuf> = vec![home.join(&store.root)];
+            while let Some(dir) = stack.pop() {
+                if session_count >= cap {
+                    break 'stores;
+                }
+                let entries = match std::fs::read_dir(&dir) {
+                    Ok(entries) => entries,
+                    Err(_) => continue,
+                };
+                for entry in entries.flatten() {
+                    if session_count >= cap {
+                        break 'stores;
+                    }
+                    // Swift: FileManager enumerator with .skipsHiddenFiles —
+                    // skips hidden files and does not descend into hidden dirs.
+                    if entry.file_name().to_string_lossy().starts_with('.') {
+                        continue;
+                    }
+                    let file_type = match entry.file_type() {
+                        Ok(ft) => ft,
+                        Err(_) => continue,
+                    };
+                    let path = entry.path();
+                    if file_type.is_dir() {
+                        // Swift: .skipsPackageDescendants — never descend
+                        // into packages (e.g. Foo.app).
+                        let is_package =
+                            path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                                PACKAGE_EXTENSIONS.iter().any(|p| p.eq_ignore_ascii_case(e))
+                            });
+                        if !is_package {
+                            stack.push(path);
+                        }
+                        continue;
+                    }
+                    if !file_type.is_file() || !store_matches(store, &path) {
+                        continue;
+                    }
+                    if let Some(modified_ms) = file_modified_ms(&path) {
+                        if modified_ms > recent_cutoff_ms {
+                            recent_count += 1;
+                        }
+                        if last_used_ms.map(|last| modified_ms > last).unwrap_or(true) {
+                            last_used_ms = Some(modified_ms);
+                        }
+                    }
+                    session_count += 1;
+                }
+            }
+        }
+
+        ToolUsageStats {
+            session_count,
+            recent_count,
+            last_used_ms,
+        }
+    }
+
+    pub(crate) fn store_matches(store: &RuntimeUsageStore, path: &Path) -> bool {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase());
+        let ext_ok = match ext.as_deref() {
+            Some(e) => store.extensions.iter().any(|x| x.eq_ignore_ascii_case(e)),
+            // Swift: `url.pathExtension` is "" for extensionless files, so
+            // only a store declaring the empty extension matches them.
+            None => store.extensions.iter().any(|x| x.is_empty()),
+        };
+        if !ext_ok {
+            return false;
+        }
+        if let Some(file_name) = &store.file_name {
+            if path.file_name().and_then(|n| n.to_str()) != Some(file_name.as_str()) {
+                return false;
+            }
+        }
+        if let Some(suffix) = &store.file_name_suffix {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if !name.ends_with(suffix) {
+                return false;
+            }
+        }
+        if let Some(parent) = &store.parent_dir_name {
+            let parent_name = path
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            if parent_name != parent {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn file_modified_ms(path: &Path) -> Option<u64> {
+        path.metadata()
+            .ok()?
+            .modified()
+            .ok()
+            .and_then(system_time_ms)
+    }
+
+    fn system_time_ms(t: SystemTime) -> Option<u64> {
+        t.duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_millis() as u64)
+    }
+}
+
+/// Resolves which AI tool binaries exist, using the same search strategy as
+/// `setup::search_dirs`: process PATH + interactive-shell PATH + common bin dirs.
+///
+/// Until the (blocking) scan completes, `installed` is None and every preset
+/// counts as available — matching the null-report behavior.
+///
+/// Native-host only: needs the generated runtime catalog and process/shell access.
+#[cfg(feature = "native-host")]
+pub struct ToolAvailability {
+    report: Option<ToolScanReport>,
+}
+
+#[cfg(feature = "native-host")]
+impl Default for ToolAvailability {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "native-host")]
+impl ToolAvailability {
+    pub fn new() -> Self {
+        Self { report: None }
+    }
+    /// Installed quick-launch tools, or None before the first scan.
+    pub fn installed(&self, catalog: &RuntimeCatalog) -> Option<HashSet<QuickPresetTool>> {
+        self.report.as_ref().map(|r| {
+            r.installed_statuses()
+                .into_iter()
+                .filter_map(|s| s.tool.quick_preset_tool(catalog))
+                .collect()
+        })
+    }
+
+    pub fn report(&self) -> Option<&ToolScanReport> {
+        self.report.as_ref()
+    }
+
+    /// Whether a command's CLI is available. Unknown commands and the
+    /// pre-scan state count as available (null-report behavior).
+    pub fn is_available(&self, catalog: &RuntimeCatalog, command: &str) -> bool {
+        let Some(tool) = SetupTool::detect(catalog, command) else {
+            return true;
+        };
+        let Some(report) = self.report.as_ref() else {
+            return true;
+        };
+        report.status_for(&tool).is_none_or(|s| s.installed())
+    }
+
+    /// Run the blocking scan on the calling thread and cache the report.
+    /// Callers should run this off the UI thread (Swift used a utility-QoS queue).
+    pub fn scan(&mut self, catalog: &RuntimeCatalog) -> &ToolScanReport {
+        let dirs = crate::setup::search_dirs();
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        self.scan_with_dirs(catalog, &dirs, &home, now_ms)
+    }
+
+    fn scan_with_dirs(
+        &mut self,
+        catalog: &RuntimeCatalog,
+        dirs: &[PathBuf],
+        home: &Path,
+        now_ms: u64,
+    ) -> &ToolScanReport {
+        let statuses: Vec<ToolInstallStatus> = SetupTool::all_cases(catalog)
+            .into_iter()
+            .map(|tool| {
+                let path = tool
+                    .command_names(catalog)
+                    .iter()
+                    .find_map(|name| crate::setup::find_command_path(name, dirs));
+                let usage = tool_usage_scanner::stats_for_tool(catalog, &tool, home, now_ms);
+                ToolInstallStatus { tool, path, usage }
+            })
+            .collect();
+        self.report = Some(ToolScanReport { statuses });
+        self.report.as_ref().expect("report just set")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -820,5 +1113,222 @@ mod tests {
             split_presets_for_new_session_menu(&items, |c| c == "my-plugin-cmd");
         assert_eq!(agents.len(), 1);
         assert_eq!(plugins.len(), 1);
+    }
+
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_usage_scanner_counts_session_files() {
+        use std::fs;
+        let catalog = test_catalog();
+        // claude-code declares a usage store: .claude/projects, jsonl.
+        let tool = SetupTool::unchecked("claude");
+        let stores = tool_usage_scanner::stores_for_tool(catalog, &tool);
+        assert!(!stores.is_empty(), "claude declares usage stores");
+        let store = &stores[0];
+        assert_eq!(store.root, ".claude/projects");
+
+        let home = std::env::temp_dir().join(format!(
+            "supercli-usage-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        let root = home.join(&store.root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("session-a.jsonl"), "{}").unwrap();
+        fs::write(root.join("session-b.jsonl"), "{}").unwrap();
+        // Wrong extension: not counted.
+        fs::write(root.join("notes.txt"), "hi").unwrap();
+        // Hidden file: skipped like Swift's skipsHiddenFiles.
+        fs::write(root.join(".hidden.jsonl"), "{}").unwrap();
+        // Nested session file: the walker descends.
+        let nested = root.join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("session-c.jsonl"), "{}").unwrap();
+
+        let now_ms = crate::state::current_timestamp_ms();
+        let stats = tool_usage_scanner::stats_for_tool(catalog, &tool, &home, now_ms);
+        assert_eq!(stats.session_count, 3);
+        assert_eq!(stats.recent_count, 3);
+        assert!(stats.last_used_ms.is_some());
+
+        // Far-future now: the same files are no longer "recent".
+        let later = now_ms + 61 * 24 * 60 * 60 * 1000;
+        let aged = tool_usage_scanner::stats_for_tool(catalog, &tool, &home, later);
+        assert_eq!(aged.session_count, 3);
+        assert_eq!(aged.recent_count, 0);
+
+        // Tool with no usage stores: zero stats.
+        let unknown = SetupTool::unchecked("definitely-not-a-tool-xyz");
+        assert!(tool_usage_scanner::stores_for_tool(catalog, &unknown).is_empty());
+        let none_stats = tool_usage_scanner::stats_for_tool(catalog, &unknown, &home, now_ms);
+        assert_eq!(none_stats, ToolUsageStats::NONE);
+
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_usage_scanner_respects_session_count_cap() {
+        use std::fs;
+        let catalog = test_catalog();
+        let tool = SetupTool::unchecked("claude");
+        let home = std::env::temp_dir().join(format!(
+            "supercli-usage-cap-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        let root = home.join(".claude/projects");
+        fs::create_dir_all(&root).unwrap();
+        for i in 0..5 {
+            fs::write(root.join(format!("s{i}.jsonl")), "{}").unwrap();
+        }
+        let now_ms = crate::state::current_timestamp_ms();
+        let stats = tool_usage_scanner::stats_for_tool_with_cap(catalog, &tool, &home, now_ms, 2);
+        assert_eq!(stats.session_count, 2);
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_usage_scanner_store_filters() {
+        use std::path::Path;
+
+        use super::tool_usage_scanner::store_matches;
+        use crate::runtime_catalog::RuntimeUsageStore;
+
+        fn store() -> RuntimeUsageStore {
+            RuntimeUsageStore {
+                root: ".x".into(),
+                extensions: vec!["jsonl".into()],
+                file_name: None,
+                file_name_suffix: None,
+                parent_dir_name: None,
+            }
+        }
+
+        let s = store();
+        // Extension match is case-insensitive, like Swift's lowercased
+        // pathExtension check.
+        assert!(store_matches(&s, Path::new("a/session.JSONL")));
+        assert!(!store_matches(&s, Path::new("a/session.txt")));
+        // Extensionless files only match a store declaring the empty
+        // extension (Swift: pathExtension == "").
+        assert!(!store_matches(&s, Path::new("a/session")));
+        let mut empty_ext = store();
+        empty_ext.extensions = vec![];
+        assert!(!store_matches(&empty_ext, Path::new("a/session.jsonl")));
+        assert!(!store_matches(&empty_ext, Path::new("a/session")));
+
+        // Exact filename filter.
+        let mut named = store();
+        named.file_name = Some("session.jsonl".into());
+        assert!(store_matches(&named, Path::new("a/session.jsonl")));
+        assert!(!store_matches(&named, Path::new("a/other.jsonl")));
+
+        // Filename suffix filter.
+        let mut suffixed = store();
+        suffixed.file_name_suffix = Some(".messages.jsonl".into());
+        assert!(store_matches(&suffixed, Path::new("a/chat.messages.jsonl")));
+        assert!(!store_matches(&suffixed, Path::new("a/chat.jsonl")));
+
+        // Immediate-parent directory filter.
+        let mut parented = store();
+        parented.parent_dir_name = Some("chats".into());
+        assert!(store_matches(&parented, Path::new("a/chats/f.jsonl")));
+        assert!(!store_matches(&parented, Path::new("a/other/f.jsonl")));
+        assert!(
+            !store_matches(&parented, Path::new("a/chats/deep/f.jsonl")),
+            "only the immediate parent counts"
+        );
+    }
+
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_usage_scanner_skips_package_descendants() {
+        use std::fs;
+        let catalog = test_catalog();
+        let tool = SetupTool::unchecked("claude");
+        let home = std::env::temp_dir().join(format!(
+            "supercli-usage-pkg-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        let root = home.join(".claude/projects");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("session.jsonl"), "{}").unwrap();
+        // A package directory's contents are skipped, like Swift's
+        // skipsPackageDescendants.
+        let pkg = root.join("Foo.app");
+        fs::create_dir_all(&pkg).unwrap();
+        fs::write(pkg.join("session.jsonl"), "{}").unwrap();
+        // Ordinary nested directories are still descended into.
+        let nested = root.join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("session.jsonl"), "{}").unwrap();
+
+        let now_ms = crate::state::current_timestamp_ms();
+        let stats = tool_usage_scanner::stats_for_tool(catalog, &tool, &home, now_ms);
+        assert_eq!(stats.session_count, 2);
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_availability_no_report_means_available() {
+        let catalog = test_catalog();
+        let avail = ToolAvailability::new();
+        assert!(avail.report().is_none());
+        assert!(avail.installed(catalog).is_none());
+        // Unknown command and the pre-scan state count as available.
+        assert!(avail.is_available(catalog, "definitely-not-a-tool-xyz"));
+        assert!(avail.is_available(catalog, "claude"));
+    }
+
+    #[cfg(unix)]
+    #[cfg(feature = "native-host")]
+    #[test]
+    fn tool_availability_scan_finds_commands_in_dirs() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        let catalog = test_catalog();
+        let bin = std::env::temp_dir().join(format!(
+            "supercli-avail-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        fs::create_dir_all(&bin).unwrap();
+        // Fake the claude tool's primary command alias as an executable.
+        let tool = SetupTool::unchecked("claude");
+        let alias = tool.command_name(catalog);
+        let exe = bin.join(&alias);
+        fs::write(&exe, "#!/bin/sh\n").unwrap();
+        let mut perms = fs::metadata(&exe).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&exe, perms).unwrap();
+
+        let home = std::env::temp_dir().join(format!(
+            "supercli-avail-home-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        fs::create_dir_all(&home).unwrap();
+        let now_ms = crate::state::current_timestamp_ms();
+
+        let mut avail = ToolAvailability::new();
+        let report = avail.scan_with_dirs(catalog, &[bin.clone()], &home, now_ms);
+        let status = report.status_for(&tool).expect("claude status");
+        assert!(status.installed());
+        assert_eq!(status.path.as_deref(), Some(exe.to_string_lossy().as_ref()));
+        // After a scan, a known-but-missing tool is unavailable...
+        assert!(!avail.is_available(catalog, "codex"));
+        // ...while the found tool and unknown commands stay available.
+        assert!(avail.is_available(catalog, &alias));
+        assert!(avail.is_available(catalog, "definitely-not-a-tool-xyz"));
+        // Installed quick tools include claude.
+        let installed = avail.installed(catalog).expect("installed set");
+        assert!(installed.contains(&QuickPresetTool::unchecked("claude")));
+
+        fs::remove_dir_all(&bin).ok();
+        fs::remove_dir_all(&home).ok();
     }
 }
