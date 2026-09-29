@@ -40,6 +40,7 @@ pub mod hosts;
 pub mod link_authority;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod local_host_client;
+pub mod mouse_mode;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod nearby;
 #[cfg(not(target_arch = "wasm32"))]
