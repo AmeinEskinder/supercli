@@ -69,6 +69,9 @@ pub mod remote_connection;
 pub mod remote_dto_adapters;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_runtime;
+pub mod remote_session_cache;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote_supercli_peer;
 pub mod remote_terminal_websocket;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote_ws_transport;

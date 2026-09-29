@@ -50,6 +50,9 @@ files:
       - swift: "host_routing — Host-scope projection display and verb routing predicates"
         target: "crates/supercli-client/src/host_routing.rs"
         test: "host_routing::tests (5 tests)"
+      - swift: "RemoteArchivedSessionSummaryCache — per-project archived session summary cache (replaceProject drops stale rows, retainProjects prunes, removeAll clears)"
+        target: "crates/supercli-client/src/remote_session_cache.rs::RemoteArchivedSessionSummaryCache"
+        test: "remote_session_cache::tests (8 tests)"
     tests:
       - file: crates/supercli-core/src/store_policies.rs
         count: 23
@@ -61,4 +64,6 @@ files:
         count: 5
       - file: crates/supercli-client/src/host_routing.rs
         count: 5
-    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 5 pure-logic sections ported with 51 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5). The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
+      - file: crates/supercli-client/src/remote_session_cache.rs
+        count: 8
+    notes: "Merged from two duplicate macos-services.yml entries (the duplicate YAML key silently dropped the store_policies half). 6 pure-logic sections ported with 59 tests: store_policies (23), settings resolution (10), approval pairs (8), preset overlay (5), host routing (5), remote session cache (8). The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
