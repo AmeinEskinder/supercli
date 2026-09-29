@@ -56,6 +56,7 @@ pub mod direct_path_client;
 pub mod direct_path_punch;
 #[cfg(feature = "native-host")]
 pub mod durable_runs;
+pub mod feature_flags;
 #[cfg(feature = "native-host")]
 pub mod first_run;
 #[cfg(feature = "native-host")]
