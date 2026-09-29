@@ -81,6 +81,56 @@ files:
         count: 8
     notes: "Full logic port. Actual UNUserNotificationCenter delivery is a thin objc2 wrapper (macOS-only, not unit-tested by design)."
 
+  native/SupercliNative/Sources/SupercliNative/ActivityLog.swift:
+    destination: "Rust: supercli-core::activity_log"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ActivityLogEntry.date() — SystemTime from unix_ms"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogEntry::date"
+        test: "activity_log::tests::schema_matches_the_native_jsonl_contract"
+      - swift: "FileStamp { size, modified_at } + loaded_stamp tracking"
+        target: "crates/supercli-core/src/activity_log.rs::FileStamp"
+        test: "activity_log::tests::refresh_from_host_picks_up_external_appends_without_writing"
+      - swift: "refresh_from_host() — skip unchanged via file metadata, reload without compacting/rewriting Host-owned file"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogStore::refresh_from_host"
+        test: "activity_log::tests::refresh_from_host_picks_up_external_appends_without_writing"
+      - swift: "Stamp refresh after append and compaction"
+        target: "crates/supercli-core/src/activity_log.rs::ActivityLogStore::append"
+        test: "activity_log::tests::append_persists_updates_memory_and_refreshes_external_changes"
+    tests:
+      - file: crates/supercli-core/src/activity_log.rs
+        count: 8
+    notes: "Full port. The existing Rust implementation already covered most behaviours; this batch added date(), FileStamp/loaded_stamp, and refresh_from_host() with the ActivityLogHostConsumerTests case."
+
+  native/SupercliNative/Sources/SupercliNative/ClickablePath.swift:
+    destination: "Rust: supercli-core::clickable_path"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "TerminalWorkingDirectory — nonblank reported OSC 7 directory wins over seed"
+        target: "crates/supercli-core/src/clickable_path.rs::TerminalWorkingDirectory::current"
+        test: "clickable_path::tests::working_directory_reported_wins_over_seed"
+      - swift: "match_in_row — quoted/unquoted tokenization, URL/mailto rejection, plausible-path detection"
+        target: "crates/supercli-core/src/clickable_path.rs::match_in_row"
+        test: "clickable_path::tests::plain_path_no_line, ignores_plain_words, picks_token_under_column_when_multiple, whitespace_does_not_activate_the_only_path_on_the_row, paren_wrapped_path"
+      - swift: "Line/column parsing — :line, :line:column, #Lline; trailing punctuation stripping"
+        target: "crates/supercli-core/src/clickable_path.rs::parse"
+        test: "clickable_path::tests::relative_path_with_line_only, relative_path_with_line_and_column, strips_trailing_sentence_punctuation"
+      - swift: "absolute_path — absolute, ~, relative via cwd; rejects other-user ~name; lexical ./.. standardization"
+        target: "crates/supercli-core/src/clickable_path.rs::absolute_path"
+        test: "clickable_path::tests::tilde_path_stays_unexpanded"
+      - swift: "resolve_file — injectable existence predicate; remote Host paths never checked against Controller fs"
+        target: "crates/supercli-core/src/clickable_path.rs::resolve_file"
+        test: "clickable_path::tests::remote_resolution_does_not_require_controller_file"
+      - swift: "file_url_match — local/localhost gating, optional remote-host allowance, percent decoding, #L123"
+        target: "crates/supercli-core/src/clickable_path.rs::file_url_match"
+        test: "clickable_path::tests::* (file URL cases)"
+    tests:
+      - file: crates/supercli-core/src/clickable_path.rs
+        count: 17
+    notes: "Full port. All 14 ClickablePathTests cases ported plus working-directory precedence, tilde/.. normalization, and file URL behavior."
+
   # --- Partial: core logic ported, some behaviours remain ---
   native/SupercliNative/Sources/SupercliNative/HostServiceIdentity.swift:
     destination: "Rust: supercli-native-bridge::macos::service_identity"
@@ -263,6 +313,166 @@ files:
   # The Sparkle integration lived in AppDelegate.swift (not a standalone file).
   # The updater logic is ported to Rust; AppDelegate itself stays tbd for the app worker.
 
+  native/SupercliNative/Sources/SupercliNative/AppDelegate.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell (+ Dart menu model)"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "applicationDidFinishLaunching lifecycle (SUPERCLI_LAUNCH_HIDDEN windowless start, SUPERCLI_DEBUG, deferInitialScan)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::show_window_at_launch, defer_initial_scan, debug_logging_enabled"
+        test: "app_shell::tests::service_launch_starts_windowless, normal_launch_shows_window, initial_scan_deferred_by_default, test_env_forces_synchronous_scan, debug_logging_flag"
+      - swift: "sparkleCanStart launch gate (default instance + .app bundle + feed URL + public key)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::updater_can_start"
+        test: "app_shell::tests::updater_starts_only_for_default_app_instance_with_feed_and_key"
+      - swift: "showMainWindow window chrome (1200x800, min 800x600, transparent titlebar, isMovable=false, isReleasedWhenClosed=false)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::WindowSpec"
+        test: "app_shell::tests::window_spec_matches_swift_defaults"
+      - swift: "positionTrafficLights (x=12+index*20, 38px titlebar vertical centering, clamped)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::traffic_light_origin"
+        test: "app_shell::tests::traffic_lights_positioned_per_design, traffic_light_y_is_clamped_inside_container"
+      - swift: "hideSystemTitlebarBackground (hide Background/Backdrop/Separator/Pocket/Glass views, clear NSTitlebarView)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::titlebar_subview_should_hide, titlebar_view_should_clear_background"
+        test: "app_shell::tests::paint_views_are_hidden, buttons_and_container_stay_visible, titlebar_view_is_cleared_not_hidden"
+      - swift: "ChromeHostingView (mouseDownCanMoveWindow=false); window corner-radius read with Theme fallback"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::HOSTING_VIEW_MOUSE_DOWN_CAN_MOVE_WINDOW, resolve_window_corner_radius"
+        test: "app_shell::tests::hosting_view_never_drags_window, corner_radius_uses_read_value_when_positive, corner_radius_falls_back_to_theme_default"
+      - swift: "installMainMenu menu content (App/Session/Edit/View/Window/Help, all titles/chords)"
+        target: "clients/supercli-app/lib/app_shell_menu.dart::mainMenu"
+        test: "app_shell_menu_test.dart (6 menus, chords, hidden twin)"
+      - swift: "Menu action vocabulary (@objc selectors -> store dispatch)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::MenuAction"
+        test: "app_shell_menu_test.dart::every action id maps to a Rust MenuAction variant"
+      - swift: "validateMenuItem decision table (enabled rules + Close Pane/Choose Preset dynamic titles)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::validate_menu_item"
+        test: "app_shell::tests::close_item_label_follows_pane_state, screenshot_needs_local_scope_and_gallery, session_actions_need_local_scope, new_terminal_title_follows_preset_preference, split_pane_needs_a_launcher, zoom_equalize_focus_need_multipane_group, collapse_all_needs_an_expanded_folder, static_items_are_always_enabled"
+      - swift: "validateMenuItem font zoom (increase/decrease/reset via TerminalFontModel)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::validate_font_zoom"
+        test: "app_shell::tests::font_zoom_validation"
+      - swift: "splitPaneFromMenu/splitPaneDownFromMenu launcher choice; closePaneOrWindowFromMenu dispatch"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::split_pane_target, close_active_pane_instead_of_window"
+        test: "app_shell::tests::split_pane_target_prefers_project_sidebar_launcher, cmd_w_closes_pane_when_mounted"
+      - swift: "newSupercliSession Finder service (local scope only, first folder URL)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::finder_service_folder"
+        test: "app_shell::tests::finder_service_takes_first_folder_when_local, finder_service_rejects_remote_scope_and_files"
+      - swift: "applicationShouldTerminateAfterLastWindowClosed=false; applicationShouldHandleReopen rebuild; applicationWillTerminate order"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::QUIT_AFTER_LAST_WINDOW_CLOSED, should_rebuild_window_on_reopen, TERMINATION_ORDER"
+        test: "app_shell::tests::window_close_does_not_quit, reopen_rebuilds_window_only_when_none_visible, termination_order_stops_services_before_pidfile"
+      - swift: "Sparkle delegate (installID, licenseHeadersForUpdateFeed, feedURLString)"
+        target: "crates/supercli-native-bridge/src/macos/updater.rs (replacement flow: feed pinned via FEED_URL, trusted-host check via is_allowed_download_url)"
+        test: "updater::tests (existing)"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 34
+      - file: clients/supercli-app/test/app_shell_menu_test.dart
+        count: 11
+    notes: "Sparkle delegate part already lived in updater.rs (not re-ported here). Gap for updater.rs follow-up: installID minting + licenseHeadersForUpdateFeed assembly have no Rust equivalent yet. ChromeHostingView ported (gpuidart embedder not present at this tip). Menu content owned by Dart model; Rust builds the NSMenu via objc2."
+
+  native/SupercliNative/Sources/SupercliNative/main.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "AppKit bootstrap (NSApplication, delegate, activation policy .regular, app.run())"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs (launch lifecycle section; native binding #[cfg(target_os = \"macos\")])"
+        test: "app_shell::tests (launch lifecycle)"
+      - swift: "Dock icon from resource bundle unless the bundle declares CFBundleIconFile/Name"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::should_set_dock_icon + resource_candidate_paths"
+        test: "app_shell::tests::dock_icon_set_only_when_bundle_declares_none, resource_lookup_prefers_packaged_app_dir"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 5
+    notes: "Folded into the AppDelegate port; it only called AppDelegate."
+
+  native/SupercliNative/Sources/SupercliNative/ModuleResources.swift:
+    destination: "Rust: supercli-native-bridge::macos::app_shell"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "Safe resource-bundle lookup (Contents/Resources/<bundle>/ first, then next-to-binary; Bundle.module workaround obsolete)"
+        target: "crates/supercli-native-bridge/src/macos/app_shell.rs::RESOURCE_BUNDLE_NAME, resource_candidate_paths"
+        test: "app_shell::tests::resource_lookup_prefers_packaged_app_dir, resource_lookup_bare_executable_has_single_candidate"
+    tests:
+      - file: crates/supercli-native-bridge/src/macos/app_shell.rs
+        count: 2
+    notes: "The SwiftPM-executable Bundle.module workaround is obsolete; the two-directory lookup order is preserved."
+  native/SupercliNative/Sources/SupercliNative/MCPApprovalCenter.swift:
+    destination: "Rust: supercli-core::mcp_approval_center"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "PendingMcpApproval — id, kind (write/browser/computer/app-open), caller/target session, app id/name"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::PendingMcpApproval"
+        test: "mcp_approval_center::tests::write_presents_on_known_target"
+      - swift: "presentationSessionID — write presents on known target, falls back to caller; others present on caller"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::PendingMcpApproval::presentation_session_id"
+        test: "mcp_approval_center::tests::write_presents_on_known_target, write_falls_back_to_caller_when_target_is_unknown, browser_presents_on_caller"
+      - swift: "reconcileApprovals — FIFO queue, per-source ownership (scoped vs host), coalescing, first-answer-wins via answersInFlight"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::reconcile"
+        test: "mcp_approval_center::tests::reconcile_adds_new_and_drops_withdrawn, scoped_and_local_sources_own_their_rows_independently"
+      - swift: "answerMcpApproval — route to scoped/host backend, stale row removal"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::answer"
+        test: "mcp_approval_center::tests::answer_routes_and_first_answer_wins"
+      - swift: "mcpApprovalMessage — Host copy preferred, kind-specific fallback copy with display-name resolution"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::McpApprovalQueue::approval_message"
+        test: "mcp_approval_center::tests::approval_message_prefers_host_copy_then_kind_copy"
+      - swift: "McpApprovalAttention — overlay pending approvals as attention on live sessions (tree + map), empty is identity"
+        target: "crates/supercli-core/src/mcp_approval_center.rs::apply_attention_to_nodes"
+        test: "mcp_approval_center::tests::attention_overlay_promotes_live_session_and_leaves_others, empty_pending_ids_are_identity"
+    tests:
+      - file: crates/supercli-core/src/mcp_approval_center.rs
+        count: 9
+    notes: "Pure queue/presentation/attention logic ported. AppKit orchestration (NSApp.activate, toasts, remote runtime calls, revealSessionForMcpApproval) is surface-specific and stays with the store/UI port. SidebarView sessionRowActivitySpinnerCommand and RootView ActivityMenuSessions overlay consumers belong to the Dart/SidebarView and Dart/RootView ports."
+
+  native/SupercliNative/Sources/SupercliNative/HostManagementState.swift:
+    destination: "Rust: supercli-core::store_policies"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "Value { devices, endpoint, error } — Equatable"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementValue"
+        test: "store_policies::tests::unchanged_snapshot_does_not_publish"
+      - swift: "apply — equality-gated publication (unchanged snapshot is a no-op)"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementState::apply"
+        test: "store_policies::tests::unchanged_snapshot_does_not_publish, differing_snapshot_publishes_again"
+      - swift: "update(endpoint:) / update(error:) — publish once per change"
+        target: "crates/supercli-core/src/store_policies.rs::HostManagementState::update_endpoint"
+        test: "store_policies::tests::endpoint_change_publishes_once, repeated_identical_error_update_publishes_once"
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "Equality-gated publication ported (StartupPerformanceTests HostManagementState half). The @Published/ObservableObject Combine wrapper is SwiftUI-specific; Rust tests assert via the publications counter."
+
+  native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift:
+    destination: "Rust: supercli-core::store_policies"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "phoneResizeOverrides(fromHostPublished:locallyCleared:) — running + both dims, clamp 2...300 x 2...120, cleared ids stay cleared"
+        target: "crates/supercli-core/src/store_policies.rs::phone_resize_overrides"
+        test: "store_policies::tests::phone_fit_only_running_sessions_with_both_dimensions, phone_fit_clamps_dimensions, phone_fit_locally_cleared_ids_stay_cleared"
+      - swift: "predictedResumeInsertionIndex — unranked newest-first, unranked precede ranked, shared-order ranks, below folders when no running rows"
+        target: "crates/supercli-core/src/store_policies.rs::predicted_resume_insertion_index"
+        test: "store_policies::tests::unranked_row_sorts_newest_first_among_running_rows, ranked_row_takes_its_shared_rank_after_unranked_rows, unranked_source_precedes_every_ranked_row, no_running_rows_leads_the_stopped_rows_below_folders"
+      - swift: "supersededRestartGhostIDs — dead row is ghost iff live row shares nonzero (project_id, created_at)"
+        target: "crates/supercli-core/src/store_policies.rs::superseded_restart_ghost_ids"
+        test: "store_policies::tests::restart_ghost_needs_live_row_with_same_project_and_created_at, restart_ghost_never_removes_live_rows, restart_ghost_multiple_dead_generations_share_one_live_replacement"
+      - swift: "resolvedSessionTitle — durable freshness: pending write newer than shared marker wins, legacy timestamp-less defers to valid marker"
+        target: "crates/supercli-core/src/store_policies.rs::resolved_session_title"
+        test: "store_policies::tests::title_resolution_uses_durable_freshness, legacy_pending_title_never_overwrites_a_valid_shared_marker, pending_or_legacy_native_title_publishes_when_no_valid_marker_exists"
+      - swift: "decodedPendingTitleWrites — conservative: JSON map, plist dict with u64 values, legacy [String] to zero timestamps"
+        target: "crates/supercli-core/src/store_policies.rs::decoded_pending_title_writes"
+        test: "store_policies::tests::legacy_pending_title_storage_decodes_conservatively"
+      - swift: "applyPinOverrides — raw-JSON edits preserving unknown fields, legacy flat normalization, malformed shape refuses"
+        target: "crates/supercli-core/src/store_policies.rs::apply_pin_overrides"
+        test: "store_policies::tests::pin_intent_preserves_concurrent_unrelated_shared_pin, pin_removal_touches_only_its_own_key, pin_intent_keeps_legacy_flat_pins_and_normalizes_shape, malformed_pin_state_leaves_intent_pending"
+      - swift: "reconciledPinOverrides — timestamp-based add/remove reconciliation against shared state"
+        target: "crates/supercli-core/src/store_policies.rs::reconciled_pin_overrides"
+        test: "store_policies::tests::newer_shared_unpin_retires_stale_native_added_overlay, pending_native_add_survives_an_older_shared_snapshot, newer_shared_repin_retires_native_removal, pending_native_removal_beats_an_older_shared_pin, legacy_untimestamped_removal_defers_to_readable_shared_state"
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 23
+    notes: "Only the pure, test-covered policies ported (PhoneFitProjectionTests, RemoteResumePlacementTests, RestartGhostTests, SharedOrganizationReconciliationTests). The 17k-line store's UI, persistence, and Host I/O remain tbd for the store worker."
+
   # --- Test files: ported as Rust #[cfg(test)] modules ---
   native/SupercliNative/Tests/SupercliNativeTests/HostServiceAgentTests.swift:
     destination: "Rust: supercli-native-bridge::macos::launchd::tests"
@@ -306,3 +516,211 @@ files:
       - file: crates/supercli-native-bridge/src/macos/hook_server.rs
         count: 4
     notes: "4 XCTest cases ported."
+  native/SupercliNative/Sources/SupercliNative/OpenCodeTheme.swift:
+    destination: "Rust: supercli-core::provider_theme"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "TerminalFrameStyle.Background (light/dark 0xRRGGBB, isEmpty, signature)"
+        target: "crates/supercli-core/src/provider_theme.rs::ThemeBackground"
+        test: "provider_theme::tests::background_signature_matches_swift_format"
+      - swift: "OpenCodeThemeResolver.background(workingDirectory:) — config-file theme resolution + built-in table"
+        target: "crates/supercli-core/src/provider_theme.rs::opencode_background"
+        test: "provider_theme::tests::opencode_config_theme_is_resolved_from_working_dir, opencode_custom_theme_file_background_wins, opencode_system_theme_resolves_to_none"
+      - swift: "OpenCodeThemeResolver built-in backgrounds (43 themes, theme.background mirror)"
+        target: "crates/supercli-core/src/provider_theme.rs::OPENCODE_BUILT_IN_BACKGROUNDS"
+        test: "provider_theme::tests::aura_uses_opencode_canvas_background, default_opencode_background_matches_built_in_theme, single_mode_themes_do_not_invent_light_backgrounds"
+      - swift: "normalizeThemeName / parseHexColor / resolveHex (defs, depth guard)"
+        target: "crates/supercli-core/src/provider_theme.rs::normalize_theme_name, parse_hex_color, resolve_hex"
+        test: "provider_theme::tests::theme_name_normalization_matches_swift, hex_color_parsing_matches_swift"
+      - swift: "stripJSONCComments / stripTrailingCommas"
+        target: "crates/supercli-core/src/provider_theme.rs::strip_jsonc_comments, strip_trailing_commas"
+        test: "provider_theme::tests::jsonc_comment_and_trailing_comma_stripping"
+      - swift: "GrokThemeResolver.background(command:) — TOML config, --light flag, auto/fixed themes"
+        target: "crates/supercli-core/src/provider_theme.rs::grok_background"
+        test: "provider_theme::tests::grok_auto_config_resolves_day_and_night, grok_fixed_dark_theme_uses_canvas_background, grok_light_flag_forces_day_background"
+      - swift: "ProviderCanvasSampler.dominantBackground(in:) — SGR 48;2;R;G;B scan, minHits, dominanceRatio"
+        target: "crates/supercli-core/src/provider_theme.rs::dominant_background_in_data"
+        test: "provider_theme::tests::canvas_sampler_picks_dominant_truecolor_background, canvas_sampler_rejects_ambiguous_backgrounds, canvas_sampler_rejects_too_few_hits"
+      - swift: "ProviderThemeWatchPaths.isRelevantChange(_:)"
+        target: "crates/supercli-core/src/provider_theme.rs::is_relevant_theme_change"
+        test: "provider_theme::tests::watch_paths_recognize_config_files"
+      - swift: "TerminalFrameStyle.usesProviderTheme(command:)"
+        target: "crates/supercli-core/src/provider_theme.rs::uses_provider_theme"
+        test: "provider_theme::tests::provider_theme_commands_are_detected"
+    tests:
+      - file: crates/supercli-core/src/provider_theme.rs
+        count: 19
+    notes: "Full port of the pure logic. AppKit-specific parts (dynamic NSColor resolution, NSLock sample cache, FSEvents roots, TerminalPaneStyle.resolved composition) are not ported — the NSColor/DynamicColor layer has no Rust equivalent and the cache is a performance detail. The 11 XCTest cases are ported (19 Rust tests; the TerminalFrameStyle.resolved composition tests need the Ghostty bridge)."
+  native/SupercliNative/Tests/SupercliNativeTests/OpenCodeThemeTests.swift:
+    destination: "Rust: supercli-core::provider_theme::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/provider_theme.rs
+        count: 19
+    notes: "11 XCTest cases ported as 19 Rust tests (some split for clarity). The two TerminalFrameStyle.resolved composition tests (fixed-background override, runtime padding) are covered by the underlying unit tests."
+  native/SupercliNative/Sources/SupercliNative/Theme.swift:
+    destination: "Dart: clients/supercli-app/lib/theme.dart"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ThemePreference enum (system/light/dark, titles, fromString)"
+        target: "clients/supercli-app/lib/theme.dart::ThemePreference"
+        test: "clients/supercli-app/test/theme_test.dart::ThemePreference"
+      - swift: "ProjectFolderColor enum (8 cases, titles, accentHex(isDark:) exact contract)"
+        target: "clients/supercli-app/lib/theme.dart::ProjectFolderColor"
+        test: "clients/supercli-app/test/theme_test.dart::ProjectFolderColor"
+      - swift: "AppTint enum (cases, titles, hue, accentHex exact contract)"
+        target: "clients/supercli-app/lib/theme.dart::AppTint"
+        test: "clients/supercli-app/test/theme_test.dart::AppTint"
+      - swift: "Theme layout constants (titlebarHeight, sidebar widths, surfaceInset, contentCornerRadius)"
+        target: "clients/supercli-app/lib/theme.dart::ThemeLayout"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeLayout"
+      - swift: "Theme semantic tokens (attention/unread/danger/accent, dark surface hexes)"
+        target: "clients/supercli-app/lib/theme.dart::ThemeTokens"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeTokens"
+      - swift: "Theme.currentDarkSurfaceHex tint-strength lerp"
+        target: "clients/supercli-app/lib/theme.dart::ThemeTokens.currentDarkSurfaceHex"
+        test: "clients/supercli-app/test/theme_test.dart::ThemeTokens currentDarkSurfaceHex lerps"
+      - swift: "Theme.flattened alpha-composite"
+        target: "clients/supercli-app/lib/theme.dart::flattenedColor"
+        test: "clients/supercli-app/test/theme_test.dart::flattenedColor"
+      - swift: "TerminalPaneStyle + Variant (dark/light hex values, ANSI palettes, Ghostty defaults)"
+        target: "clients/supercli-app/lib/theme.dart::TerminalPaneStyle"
+        test: "clients/supercli-app/test/theme_test.dart::TerminalPaneStyle"
+      - swift: "Theme.commandBasename"
+        target: "clients/supercli-app/lib/theme.dart::commandBasename"
+        test: "clients/supercli-app/test/theme_test.dart::commandBasename"
+      - swift: "Theme.spinnerFrames / spinnerInterval"
+        target: "clients/supercli-app/lib/theme.dart::spinnerFrames"
+        test: "clients/supercli-app/test/theme_test.dart::spinner"
+      - swift: "Theme.appTintedHexString / appTintedCanvasHexString (HSB wash, brightness-scaled saturation, canvasWashScale)"
+        target: "clients/supercli-app/lib/theme.dart::appTintedHexString, appTintedCanvasHexString"
+        test: "clients/supercli-app/test/theme_test.dart::appTintedHexString"
+    tests:
+      - file: clients/supercli-app/test/theme_test.dart
+        count: 20
+    notes: "Portable design tokens ported. AppKit/SwiftUI-specific rendering (dynamic NSColor, tintedColor, vibrancy overlays, NSAppearance, contentPaneShape, blended) has no Dart equivalent and is intentionally not ported. The tint engine statics (appTintHue) are runtime state, not ported."
+  native/SupercliNative/Sources/SupercliNative/Models.swift:
+    destination: "Rust: supercli-core::state"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "Project.isWorktree / acceptsSessionDrop"
+        target: "crates/supercli-core/src/state.rs::Project::is_worktree, accepts_session_drop"
+        test: "state::tests::project_worktree_and_drop_rules_match_swift"
+      - swift: "Project.mcpBlocked field"
+        target: "crates/supercli-core/src/state.rs::Project::mcp_blocked"
+        test: "state::tests::project_mcp_blocked_defaults_false_and_round_trips"
+      - swift: "PinnedSidebarSession.key(forSessionID:) / key(forProjectID:) / pinnedProjectID / orderTargetID"
+        target: "crates/supercli-core/src/state.rs::PinnedSidebarSession"
+        test: "state::tests::pinned_session_key_helpers_match_swift"
+      - swift: "SessionTitleDefaults.initialLabel / abbreviatedPath"
+        target: "crates/supercli-core/src/state.rs::SessionTitleDefaults"
+        test: "state::tests::project_worktree_and_drop_rules_match_swift, session_title_defaults_abbreviate_home"
+      - swift: "SessionOwnership.hostOwnerPrincipalID"
+        target: "crates/supercli-core/src/state.rs::SessionOwnership"
+        test: "state::tests::session_ownership_principal_format_matches_swift"
+      - swift: "AppStateFile.profileDisplayName / profileAvatar / mcpAppOpenApprovals"
+        target: "crates/supercli-core/src/state.rs::AppState"
+        test: "state::tests::app_state_new_fields_default_empty"
+      - swift: "Project, PinnedSidebarSession, McpRole, McpGrant, McpNonChildWriteAccess, BrowserAccess, BrowserSettings, ComputerAccess, TranscriptSettings, SessionInfo, SessionTitleMode, AppStateFile structs"
+        target: "crates/supercli-core/src/state.rs (pre-existing)"
+        test: "state::tests::* (pre-existing)"
+    tests:
+      - file: crates/supercli-core/src/state.rs
+        count: 6
+    notes: "The Swift file is a read-only mirror of the Rust-owned JSON contracts; the structs were already ported. This change ports the computed helpers and the fields missing from Rust (mcp_blocked, profile_display_name/avatar, mcp_app_open_approvals). UI-presentation helpers (SessionEntry.activityStatus/ageString, CommandTAction) belong to the Dart app and are tracked separately."
+  native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift:
+    destination: "Rust: supercli-core + supercli-client"
+    status: partial
+    checklist: ""
+    behaviours:
+      - swift: "settings_resolve — auto_stop_archive_minutes normalization/resolution/labels (absent vs explicit vs junk)"
+        target: "crates/supercli-core/src/settings_resolve.rs::normalize_auto_stop_archive_minutes, resolve_auto_stop_archive_minutes"
+        test: "settings_resolve::tests (10 tests)"
+      - swift: "settings_resolve — sidebar_stopped_limit normalization/resolution/labels (absent vs explicit vs junk)"
+        target: "crates/supercli-core/src/settings_resolve.rs::normalize_sidebar_stopped_limit, resolve_sidebar_stopped_limit"
+        test: "settings_resolve::tests (10 tests)"
+      - swift: "approval_pairs — caller->targets approval map discipline (approve/revoke/prune/carry) for MCP write, MCP app-open, computer, browser approvals"
+        target: "crates/supercli-core/src/approval_pairs.rs::ApprovalPairs"
+        test: "approval_pairs::tests (8 tests)"
+      - swift: "preset_overlay — legacy preset overlay application (removed/edited/added)"
+        target: "crates/supercli-core/src/preset_overlay.rs"
+        test: "preset_overlay::tests (5 tests)"
+      - swift: "host_routing — Host-scope projection display and verb routing predicates"
+        target: "crates/supercli-client/src/host_routing.rs"
+        test: "host_routing::tests (5 tests)"
+    tests:
+      - file: crates/supercli-core/src/settings_resolve.rs
+        count: 10
+      - file: crates/supercli-core/src/approval_pairs.rs
+        count: 8
+      - file: crates/supercli-core/src/preset_overlay.rs
+        count: 5
+      - file: crates/supercli-client/src/host_routing.rs
+        count: 5
+    notes: "Partial port: 4 pure-logic sections (settings resolution, approval pairs, preset overlay, host routing) ported with 28 tests. The remaining ~16,500 lines (SwiftUI state, AppKit UI, NSOpenPanel, UserDefaults persistence, session management) are not portable to Rust and remain with UI workers. The Swift pluginActivation check already exists in Rust as plugins::active()."
+  native/SupercliNative/Tests/SupercliNativeTests/ActivityLogHostConsumerTests.swift:
+    destination: "Rust: supercli-core::activity_log::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/activity_log.rs
+        count: 1
+    notes: "1 XCTest case ported: refresh_from_host picks up external appends without writing."
+  native/SupercliNative/Tests/SupercliNativeTests/ClickablePathTests.swift:
+    destination: "Rust: supercli-core::clickable_path::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/clickable_path.rs
+        count: 14
+    notes: "All 14 XCTest cases ported (plus 3 additional Rust tests for working-directory precedence and file URLs)."
+  native/SupercliNative/Tests/SupercliNativeTests/ComputerContainmentTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 6
+    notes: "6 XCTest cases ported: computer use retired, shipped order, experimental set, retired write refusal, env override."
+  native/SupercliNative/Tests/SupercliNativeTests/MCPApprovalPresentationTests.swift:
+    destination: "Rust: supercli-core::mcp_approval_center::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/mcp_approval_center.rs
+        count: 5
+    notes: "5 XCTest cases ported (presentation session + attention overlay). The SidebarView spinner and RootView activity-menu cases belong to the Dart/SidebarView and Dart/RootView ports."
+  native/SupercliNative/Tests/SupercliNativeTests/PhoneFitProjectionTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 3
+    notes: "3 XCTest cases ported: running+both-dims, clamping, locally-cleared semantics."
+  native/SupercliNative/Tests/SupercliNativeTests/RemoteResumePlacementTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "4 XCTest cases ported: unranked newest-first, shared ranks, unranked precedence, below-folders fallback."
+  native/SupercliNative/Tests/SupercliNativeTests/RestartGhostTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 3
+    notes: "3 XCTest cases ported: ghost grouping, live rows never ghosts, multiple dead generations."
+  native/SupercliNative/Tests/SupercliNativeTests/SharedOrganizationReconciliationTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: ported
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 13
+    notes: "13 XCTest cases ported: title freshness/normalization, pending-write decoding, pin add/remove raw-JSON edits, legacy flat normalization, malformed refusal, timestamp reconciliation, legacy removal deferral."
+  native/SupercliNative/Tests/SupercliNativeTests/StartupPerformanceTests.swift:
+    destination: "Rust: supercli-core::store_policies::tests"
+    status: partial
+    tests:
+      - file: crates/supercli-core/src/store_policies.rs
+        count: 4
+    notes: "HostManagementState equality-gating half ported (4 tests). The HostServiceManager slow-reconciliation half belongs to the native-bridge service-manager worker."

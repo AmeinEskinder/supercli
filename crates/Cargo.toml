@@ -11,6 +11,7 @@ members = [
     "supercli-cli",
     "supercli-native-bridge",
     "supercli-client",
+    "supercli-client-ffi",
     "supercli-connector",
     "supercli-device",
     "supercli-load",

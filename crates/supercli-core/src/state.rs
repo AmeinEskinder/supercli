@@ -141,6 +141,25 @@ pub struct Project {
     /// When true, the sidebar offers the slide-in workspaces view for this project.
     #[serde(default)]
     pub workspaces_enabled: bool,
+    /// When true, this project is blocked from Sessions MCP access.
+    /// Kept optional so older state files remain readable.
+    #[serde(default)]
+    pub mcp_blocked: bool,
+}
+
+impl Project {
+    /// True when this project is a git-worktree workspace of its parent.
+    pub fn is_worktree(&self) -> bool {
+        self.worktree_branch.is_some() && self.parent_project_id.is_some()
+    }
+
+    /// Only plain organizational child groups accept a running session drop.
+    /// Worktree children need an explicit restart/resume to change checkout,
+    /// while top-level projects remain reorder targets rather than filing
+    /// targets.
+    pub fn accepts_session_drop(&self) -> bool {
+        self.parent_project_id.is_some() && self.worktree_branch.is_none() && self.is_folder
+    }
 }
 
 /// Reach of an Supercli Sessions MCP caller: how far a permitted caller can
@@ -699,6 +718,41 @@ pub struct PinnedSidebarSession {
     pub pinned_at: u64,
 }
 
+impl PinnedSidebarSession {
+    /// `key` is `"session:<session-id>"`; pins sort newest-first by `pinned_at`.
+    pub fn key_for_session_id(session_id: &str) -> String {
+        format!("session:{session_id}")
+    }
+
+    /// A pinned child GROUP gets a record with `key = "project:<group-id>"`
+    /// and no `session_id`, so the per-project records array is the ONE mixed
+    /// pinned order (sessions and groups interleaved).
+    pub fn key_for_project_id(project_id: &str) -> String {
+        format!("project:{project_id}")
+    }
+
+    /// The pinned child group's project id for a `"project:"` record; None
+    /// for ordinary session pins.
+    pub fn pinned_project_id(&self) -> Option<&str> {
+        if self.session_id.is_none() {
+            if let Some(id) = self.key.strip_prefix("project:") {
+                if !id.is_empty() {
+                    return Some(id);
+                }
+            }
+        }
+        None
+    }
+
+    /// The sidebar row this record ranks: the session id, or the pinned
+    /// child group's project id.
+    pub fn order_target_id(&self) -> Option<&str> {
+        self.session_id
+            .as_deref()
+            .or_else(|| self.pinned_project_id())
+    }
+}
+
 /// What drives a session's automatic title (the label shown until the user
 /// renames the row — a custom title permanently wins in every mode).
 /// Stored app-wide as `AppState.session_title_mode` and re-read from disk by
@@ -719,6 +773,54 @@ pub enum SessionTitleMode {
     #[default]
     #[serde(other)]
     Agent,
+}
+
+/// Default session title logic (port of `SessionTitleDefaults`).
+pub struct SessionTitleDefaults;
+
+impl SessionTitleDefaults {
+    /// Agent sessions begin with their command. A blank shell begins with its
+    /// working folder and is replaced by the Host after the first submitted
+    /// command, just like the former provisional "Terminal" label.
+    pub fn initial_label(command: &str, cwd: &str) -> String {
+        if !command.trim().is_empty() {
+            return command.to_string();
+        }
+        let folder = Self::abbreviated_path(cwd, None);
+        if folder.trim().is_empty() {
+            "Terminal".to_string()
+        } else {
+            folder
+        }
+    }
+
+    /// Abbreviate a path against the home directory (`~/...`).
+    pub fn abbreviated_path(path: &str, home: Option<&str>) -> String {
+        let home = home
+            .map(str::to_string)
+            .or_else(|| std::env::var("HOME").ok())
+            .unwrap_or_default();
+        if path == home {
+            return "~".to_string();
+        }
+        if !home.is_empty() {
+            if let Some(rest) = path.strip_prefix(&format!("{home}/")) {
+                return format!("~/{rest}");
+            }
+        }
+        path.to_string()
+    }
+}
+
+/// Compatibility identity for the one human who owns today's Host. A future
+/// Link account principal can replace it for newly created Sessions without
+/// changing the persisted Session contract.
+pub struct SessionOwnership;
+
+impl SessionOwnership {
+    pub fn host_owner_principal_id(host_id: &str) -> String {
+        format!("host-owner:{host_id}")
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -882,6 +984,18 @@ pub struct AppState {
     /// Shared knob for the app, the TUI, and every session host.
     #[serde(default)]
     pub session_title_mode: SessionTitleMode,
+    /// The Supercli Link profile: the nickname presence surfaces show for
+    /// this person. The TUI edits the same keys (Settings ▸ Remote ▸
+    /// Supercli Link). Absent ⇒ empty; surfaces fall back to the device name.
+    #[serde(default)]
+    pub profile_display_name: String,
+    /// The Supercli Link profile emoji avatar. Absent ⇒ empty.
+    #[serde(default)]
+    pub profile_avatar: String,
+    /// User-approved App launch pairs: caller session id → installed App ids.
+    /// Absent ⇒ empty.
+    #[serde(default)]
+    pub mcp_app_open_approvals: HashMap<String, Vec<String>>,
 }
 
 /// IDs of built-in global presets in preferred display order.
@@ -951,6 +1065,9 @@ impl Default for AppState {
             auto_stop_archive_minutes: None,
             sidebar_stopped_limit: None,
             session_title_mode: SessionTitleMode::default(),
+            profile_display_name: String::new(),
+            profile_avatar: String::new(),
+            mcp_app_open_approvals: HashMap::new(),
         }
     }
 }
@@ -1265,6 +1382,7 @@ mod tests {
             is_folder: false,
             worktree_branch: None,
             workspaces_enabled: false,
+            mcp_blocked: false,
         }
     }
 
@@ -1499,6 +1617,7 @@ mod tests {
                     is_folder: false,
                     worktree_branch: None,
                     workspaces_enabled: false,
+                    mcp_blocked: false,
                 },
                 Project {
                     id: "p2".into(),
@@ -1511,6 +1630,7 @@ mod tests {
                     is_folder: false,
                     worktree_branch: None,
                     workspaces_enabled: false,
+                    mcp_blocked: false,
                 },
             ],
             pinned_sessions: HashMap::from([
@@ -1612,5 +1732,131 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 1, 2]
         );
+    }
+
+    #[test]
+    fn project_worktree_and_drop_rules_match_swift() {
+        use super::SessionTitleDefaults;
+
+        // Top-level project: not a worktree, not a drop target.
+        let top = project("top", None, 0);
+        assert!(!top.is_worktree());
+        assert!(!top.accepts_session_drop());
+
+        // Plain child group: accepts session drops.
+        let mut group = project("group", Some("top"), 1);
+        group.is_folder = true;
+        assert!(!group.is_worktree());
+        assert!(group.accepts_session_drop());
+
+        // Worktree child: is a worktree, needs explicit restart (no drop).
+        let mut wt = project("wt", Some("top"), 2);
+        wt.is_folder = true;
+        wt.worktree_branch = Some("feature".into());
+        assert!(wt.is_worktree());
+        assert!(!wt.accepts_session_drop());
+
+        // Session title defaults: command wins; blank command falls back
+        // to the abbreviated cwd (or "Terminal" when empty).
+        assert_eq!(
+            SessionTitleDefaults::initial_label("claude", "/tmp/x"),
+            "claude"
+        );
+        assert_eq!(
+            SessionTitleDefaults::abbreviated_path("/Users/t/Dev", Some("/Users/t")),
+            "~/Dev"
+        );
+    }
+
+    #[test]
+    fn session_title_defaults_abbreviate_home() {
+        use super::SessionTitleDefaults;
+        assert_eq!(
+            SessionTitleDefaults::abbreviated_path("/Users/t", Some("/Users/t")),
+            "~"
+        );
+        assert_eq!(
+            SessionTitleDefaults::abbreviated_path("/Users/t/Dev", Some("/Users/t")),
+            "~/Dev"
+        );
+        assert_eq!(
+            SessionTitleDefaults::abbreviated_path("/other/path", Some("/Users/t")),
+            "/other/path"
+        );
+        // initial_label with an explicit home via env override is covered by
+        // abbreviated_path; here the blank-command fallback only asserts the
+        // "Terminal" placeholder when the cwd abbreviates to empty.
+        assert_eq!(SessionTitleDefaults::initial_label("  ", ""), "Terminal");
+        assert_eq!(
+            SessionTitleDefaults::initial_label("claude --help", "/anywhere"),
+            "claude --help"
+        );
+    }
+
+    #[test]
+    fn pinned_session_key_helpers_match_swift() {
+        use super::PinnedSidebarSession;
+        assert_eq!(PinnedSidebarSession::key_for_session_id("s1"), "session:s1");
+        assert_eq!(PinnedSidebarSession::key_for_project_id("g1"), "project:g1");
+
+        let session_pin = PinnedSidebarSession {
+            key: "session:s1".into(),
+            project_id: "p".into(),
+            session_id: Some("s1".into()),
+            pinned_at: 1,
+        };
+        assert_eq!(session_pin.pinned_project_id(), None);
+        assert_eq!(session_pin.order_target_id(), Some("s1"));
+
+        let group_pin = PinnedSidebarSession {
+            key: "project:g1".into(),
+            project_id: "p".into(),
+            session_id: None,
+            pinned_at: 2,
+        };
+        assert_eq!(group_pin.pinned_project_id(), Some("g1"));
+        assert_eq!(group_pin.order_target_id(), Some("g1"));
+
+        // Malformed project key yields None.
+        let bad = PinnedSidebarSession {
+            key: "project:".into(),
+            project_id: "p".into(),
+            session_id: None,
+            pinned_at: 3,
+        };
+        assert_eq!(bad.pinned_project_id(), None);
+        assert_eq!(bad.order_target_id(), None);
+    }
+
+    #[test]
+    fn session_ownership_principal_format_matches_swift() {
+        use super::SessionOwnership;
+        assert_eq!(
+            SessionOwnership::host_owner_principal_id("abc"),
+            "host-owner:abc"
+        );
+    }
+
+    #[test]
+    fn app_state_new_fields_default_empty() {
+        use super::AppState;
+        let state = AppState::default();
+        assert_eq!(state.profile_display_name, "");
+        assert_eq!(state.profile_avatar, "");
+        assert!(state.mcp_app_open_approvals.is_empty());
+    }
+
+    #[test]
+    fn project_mcp_blocked_defaults_false_and_round_trips() {
+        use super::Project;
+        let p = project("p", None, 0);
+        assert!(!p.mcp_blocked);
+        let json = serde_json::to_string(&p).unwrap();
+        let back: Project = serde_json::from_str(&json).unwrap();
+        assert!(!back.mcp_blocked);
+        // Old files without the key still decode.
+        let old: Project =
+            serde_json::from_str(r#"{"id":"p","name":"p","path":"/tmp/p"}"#).unwrap();
+        assert!(!old.mcp_blocked);
     }
 }
