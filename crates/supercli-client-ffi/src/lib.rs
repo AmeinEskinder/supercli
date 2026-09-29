@@ -782,7 +782,7 @@ mod ffi_tests {
             assert_eq!(
                 supercli_drop_map_accepts(
                     bad.as_ptr() as *const c_uchar,
-                    bad.as_bytes().len() as usize,
+                    bad.as_bytes().len(),
                     0,
                     0,
                     0
@@ -800,7 +800,7 @@ mod ffi_tests {
             let bad = c("not json");
             assert!(supercli_path_drag_map_path_at(
                 bad.as_ptr() as *const c_uchar,
-                bad.as_bytes().len() as usize,
+                bad.as_bytes().len(),
                 0,
                 0,
                 0

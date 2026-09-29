@@ -416,7 +416,7 @@ mod tests {
             home: outside.clone(),
             created_at_ms: 0,
         };
-        save_registry(&mut io, &[rec.clone()]).unwrap();
+        save_registry(&mut io, std::slice::from_ref(&rec)).unwrap();
         remove_workspace(&mut io, &dir, "x", true).unwrap();
         // The outside dir must survive
         assert!(io.dirs.contains(&outside));

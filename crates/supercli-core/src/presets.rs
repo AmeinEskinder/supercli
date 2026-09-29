@@ -6,10 +6,12 @@
 //!
 //! The preset list is FLAT and user-ordered (no per-CLI sections). Tool
 //! identification is catalog-backed: every lookup goes through the generated
-//! [`RuntimeCatalog`](crate::runtime_catalog::RuntimeCatalog).
+//! runtime catalog. Catalog-backed lookups are native-host only; the portable
+//! Controller core keeps the preset model, ordering, and grouping logic.
 
 use std::collections::HashMap;
 
+#[cfg(feature = "native-host")]
 use crate::runtime_catalog::{RuntimeCatalog, RuntimeDescriptor};
 
 /// Blank-terminal pseudo-preset id.
@@ -65,6 +67,9 @@ pub struct QuickPresetTool {
 
 impl QuickPresetTool {
     /// Creates a tool if the runtime exists and supports quick launch.
+    ///
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn new(catalog: &RuntimeCatalog, raw_value: &str) -> Option<Self> {
         let runtime = catalog.by_legacy_slug(raw_value)?;
         if !runtime.supports_quick_launch {
@@ -83,6 +88,9 @@ impl QuickPresetTool {
     }
 
     /// All quick-launchable tools in the catalog.
+    ///
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn all_cases(catalog: &RuntimeCatalog) -> Vec<Self> {
         catalog
             .descriptors()
@@ -98,10 +106,14 @@ impl QuickPresetTool {
         &self.raw_value
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn metadata<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a RuntimeDescriptor> {
         catalog.by_legacy_slug(&self.raw_value)
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn display_name(&self, catalog: &RuntimeCatalog) -> String {
         match self.metadata(catalog) {
             Some(m) => capitalize(&m.label),
@@ -109,6 +121,8 @@ impl QuickPresetTool {
         }
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn icon_key<'a>(&self, catalog: &'a RuntimeCatalog) -> &'a str {
         self.metadata(catalog)
             .map(|m| m.display.icon.as_str())
@@ -116,6 +130,9 @@ impl QuickPresetTool {
     }
 
     /// Detects the tool from a command string.
+    ///
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn detect(catalog: &RuntimeCatalog, command: &str) -> Option<Self> {
         let runtime = descriptor_for_command(catalog, command)?;
         if !runtime.supports_quick_launch {
@@ -136,6 +153,8 @@ pub struct SetupTool {
 }
 
 impl SetupTool {
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn new(catalog: &RuntimeCatalog, raw_value: &str) -> Option<Self> {
         let runtime = catalog.by_legacy_slug(raw_value)?;
         Some(Self {
@@ -149,6 +168,8 @@ impl SetupTool {
         }
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn all_cases(catalog: &RuntimeCatalog) -> Vec<Self> {
         catalog
             .descriptors()
@@ -163,10 +184,14 @@ impl SetupTool {
         &self.raw_value
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn metadata<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a RuntimeDescriptor> {
         catalog.by_legacy_slug(&self.raw_value)
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn display_name(&self, catalog: &RuntimeCatalog) -> String {
         match self.metadata(catalog) {
             Some(m) => capitalize(&m.label),
@@ -174,6 +199,8 @@ impl SetupTool {
         }
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn command_names(&self, catalog: &RuntimeCatalog) -> Vec<String> {
         match self.metadata(catalog) {
             Some(m) => m.detection.command_aliases.clone(),
@@ -181,35 +208,49 @@ impl SetupTool {
         }
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn command_name(&self, catalog: &RuntimeCatalog) -> String {
         self.metadata(catalog)
             .and_then(|m| m.detection.command_aliases.first().cloned())
             .unwrap_or_else(|| self.raw_value.clone())
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn default_preset_command(&self, catalog: &RuntimeCatalog) -> String {
         self.metadata(catalog)
             .and_then(|m| m.suggested_presets.first().map(|p| p.command.clone()))
             .unwrap_or_else(|| self.command_name(catalog))
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn quick_preset_tool(&self, catalog: &RuntimeCatalog) -> Option<QuickPresetTool> {
         QuickPresetTool::new(catalog, &self.raw_value)
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn is_favorite_capable(&self, catalog: &RuntimeCatalog) -> bool {
         self.metadata(catalog)
             .is_some_and(|m| m.supports_quick_launch)
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn install_command<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a str> {
         self.metadata(catalog)?.install.as_ref()?.command.as_deref()
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn website_url<'a>(&self, catalog: &'a RuntimeCatalog) -> Option<&'a str> {
         Some(&self.metadata(catalog)?.install.as_ref()?.official_url)
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn uses_lifecycle_hooks(&self, catalog: &RuntimeCatalog) -> bool {
         self.metadata(catalog).is_some_and(|m| {
             m.capabilities
@@ -218,6 +259,9 @@ impl SetupTool {
     }
 
     /// Resolves a command to the CLI it launches.
+    ///
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn detect(catalog: &RuntimeCatalog, command: &str) -> Option<Self> {
         let runtime = descriptor_for_command(catalog, command)?;
         Some(Self {
@@ -231,6 +275,9 @@ impl SetupTool {
 /// Mirrors the Dart `SupercliRuntimeCatalog.runtime(command:)` logic: take
 /// the first whitespace-separated token, strip surrounding quotes, take the
 /// basename, lowercase it, then match against command and process aliases.
+///
+/// Native-host only: needs the generated runtime catalog.
+#[cfg(feature = "native-host")]
 pub fn descriptor_for_command<'a>(
     catalog: &'a RuntimeCatalog,
     command: &str,
@@ -338,6 +385,8 @@ impl ToolScanReport {
         self.statuses.iter().any(|s| s.installed())
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn installed_quick_tools(&self, catalog: &RuntimeCatalog) -> Vec<QuickPresetTool> {
         self.installed_statuses()
             .into_iter()
@@ -412,6 +461,8 @@ impl QuickPresetGroup {
             .unwrap_or_default()
     }
 
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn display_name(&self, catalog: &RuntimeCatalog) -> String {
         if let Some(cli) = &self.cli {
             return cli.display_name(catalog);
@@ -433,6 +484,8 @@ impl QuickPresetGroup {
 /// `(id, name)` pair.
 type PresetIdentity = (Option<SetupTool>, Option<(String, String)>);
 
+/// Native-host only: needs the generated runtime catalog.
+#[cfg(feature = "native-host")]
 pub fn collect_quick_preset_groups(
     catalog: &RuntimeCatalog,
     items: &[Preset],
@@ -533,6 +586,9 @@ pub struct GlobalPresetFile {
 
 impl GlobalPresetFile {
     /// Converts to a Preset, filtering out project-scoped entries.
+    ///
+    /// Native-host only: needs the generated runtime catalog.
+    #[cfg(feature = "native-host")]
     pub fn to_preset(&self, catalog: &RuntimeCatalog) -> Option<Preset> {
         if self.project_id.is_some() {
             return None; // Filter out legacy project presets
@@ -560,6 +616,7 @@ fn capitalize(s: &str) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "native-host")]
     fn test_catalog() -> &'static RuntimeCatalog {
         crate::runtime_catalog::builtin_runtime_catalog()
     }
@@ -589,6 +646,7 @@ mod tests {
         assert_eq!(p.id, NEW_TERMINAL_ID);
     }
 
+    #[cfg(feature = "native-host")]
     #[test]
     fn quick_preset_tool_detect_from_command() {
         let catalog = test_catalog();
@@ -604,6 +662,7 @@ mod tests {
         assert!(QuickPresetTool::detect(catalog, "definitely-not-a-tool-xyz").is_none());
     }
 
+    #[cfg(feature = "native-host")]
     #[test]
     fn setup_tool_detect_and_display_name() {
         let catalog = test_catalog();
@@ -659,6 +718,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "native-host")]
     #[test]
     fn collect_quick_preset_groups_groups_by_cli() {
         let catalog = test_catalog();
@@ -702,6 +762,7 @@ mod tests {
         assert_eq!(cli_group.presets.len(), 2);
     }
 
+    #[cfg(feature = "native-host")]
     #[test]
     fn global_preset_file_filters_project_scoped() {
         let catalog = test_catalog();
@@ -716,6 +777,7 @@ mod tests {
         assert!(file.to_preset(catalog).is_none());
     }
 
+    #[cfg(feature = "native-host")]
     #[test]
     fn global_preset_file_converts_global_presets() {
         // Dart: 'converts global presets'.
