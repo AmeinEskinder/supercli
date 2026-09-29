@@ -684,3 +684,39 @@ files:
       - file: crates/supercli-core/src/provider_theme_request.rs
         count: 6
     notes: "Ported from ProviderThemeReadRequest.swift (30 LOC). read() wires to the existing provider_theme resolvers (opencode_background, grok_background, dominant_background_in_data); UUID identity carried as String."
+  native/SupercliNative/Sources/SupercliNative/HostHardware.swift:
+    destination: "Rust: supercli-core::host_hardware"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "HostHardware.resolve() — hw.model family-prefix mapping to (kind, model): macbook/macMini/macStudio/imac/macPro/unknown"
+        target: "crates/supercli-core/src/host_hardware.rs::resolve"
+        test: "host_hardware::tests::mac_studio_ids, host_hardware::tests::macbook_family_prefix, host_hardware::tests::mac_mini_prefix, host_hardware::tests::unrecognized_board_reports_raw_id"
+      - swift: "HostHardware.modelIdentifier() — sysctl hw.model read, nil on failure"
+        target: "crates/supercli-core/src/host_hardware.rs::model_identifier"
+        test: "host_hardware::tests::device_kind_and_model_do_not_panic"
+      - swift: "HostHardware.deviceKind/deviceModel — cached once"
+        target: "crates/supercli-core/src/host_hardware.rs::device_kind, device_model"
+        test: "host_hardware::tests::none_identifier_is_unknown_mac"
+    tests:
+      - file: crates/supercli-core/src/host_hardware.rs
+        count: 10
+    notes: "Ported from HostHardware.swift (70 LOC). sysctl read is macOS+native-host only (libc); other platforms fall back to (unknown, Mac) like the Swift nil path."
+  native/SupercliNative/Sources/SupercliNative/ResumeCommand.swift:
+    destination: "Rust: supercli-client::resume_command"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ResumeCommand.decodeRelaunchPlan — Host __resume__ JSON decode; legacy command-only payloads readable; empty markers filtered"
+        target: "crates/supercli-client/src/resume_command.rs::decode_relaunch_plan"
+        test: "resume_command::tests::decodes_full_plan, resume_command::tests::decodes_legacy_command_only_plan, resume_command::tests::empty_markers_filtered_out"
+      - swift: "ResumeCommand.hostRelaunchPlan(sessionID:forceFresh:) — spawns Host __resume__, fails closed"
+        target: "crates/supercli-client/src/resume_command.rs::host_relaunch_plan"
+        test: "resume_command::tests::invalid_json_is_none"
+      - swift: "ResumeCommand.hostManagedStoragePath(sessionID:) — spawns Host __managed_storage__, fails closed"
+        target: "crates/supercli-client/src/resume_command.rs::host_managed_storage_path"
+        test: "resume_command::tests::empty_command_is_none"
+    tests:
+      - file: crates/supercli-client/src/resume_command.rs
+        count: 7
+    notes: "Ported from ResumeCommand.swift (68 LOC). Process spawning via std::process::Command, gated not(wasm32); decode kept separate for testability as in Swift."
