@@ -30,7 +30,7 @@ files:
 
   shared/SupercliShared/Sources/SupercliShared/GeneratedRuntimeCatalog.swift:
     destination: "Rust: supercli-core::app_runtime (generated)"
-    status: partial
+    status: ported
     behaviours:
       - swift: "SupercliRuntimeMetadata (stableID, slug, label, platforms, kind, icons, lifecycle)"
         target: "crates/supercli-core/src/runtime_catalog.rs::RuntimeDescriptor"
@@ -40,7 +40,7 @@ files:
         test: "crates/supercli-core/src/runtime_catalog.rs::tests"
     tests:
       - "crates/supercli-core runtime_catalog tests"
-    notes: "Rust generates catalog at build time from runtimes/*/runtime.toml via build.rs. Logic moving to Rust per Amein's one-implementation rule. Dart runtime_catalog.dart is a hand-copied duplicate (4 of 16 runtimes); delete it and expose Rust catalog via FFI."
+    notes: "Rust generates catalog at build time from runtimes/*/runtime.toml via build.rs. Dart runtime_catalog.dart (hand-copied duplicate, 4 of 16 runtimes) deleted in feat/move-dart-logic-to-rust (next@5dc280a); Rust catalog exposed to Dart via supercli-client-ffi."
 
 
   shared/SupercliShared/Sources/SupercliShared/RelayProtocol.swift:

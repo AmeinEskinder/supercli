@@ -250,28 +250,29 @@ files:
     notes: "87 LOC ported. Pure logic; no UI."
 
   native/SupercliNative/Sources/SupercliNative/Presets.swift:
-    destination: "Dart: clients/supercli-app"
-    status: partial
+    destination: "Rust: supercli-core::presets"
+    status: ported
     checklist: "216"
     behaviours:
       - swift: "Preset struct (id, label, command, enabled, quickLaunch, newTerminal)"
-        target: "clients/supercli-app/lib/presets.dart::Preset"
-        test: "clients/supercli-app/test/presets_test.dart::Preset"
+        target: "crates/supercli-core/src/presets.rs::Preset"
+        test: "crates/supercli-core/src/presets.rs::preset_sanitized_clears_quick_launch_on_empty_command"
       - swift: "splitPresetsForNewSessionMenu() (splits into agents/plugins)"
-        target: "clients/supercli-app/lib/presets.dart::splitPresetsForNewSessionMenu"
-        test: "clients/supercli-app/test/presets_test.dart::splitPresetsForNewSessionMenu"
+        target: "crates/supercli-core/src/presets.rs::split_presets_for_new_session_menu"
+        test: "crates/supercli-core/src/presets.rs::split_presets_separates_plugins"
       - swift: "collectQuickPresetGroups() (groups starred presets by CLI/App)"
-        target: "clients/supercli-app/lib/presets.dart::collectQuickPresetGroups"
-        test: "clients/supercli-app/test/presets_test.dart::collectQuickPresetGroups"
+        target: "crates/supercli-core/src/presets.rs::collect_quick_preset_groups"
+        test: "crates/supercli-core/src/presets.rs::collect_quick_preset_groups_groups_by_cli"
       - swift: "ToolUsageStats (session counts, recency ordering, summary)"
-        target: "clients/supercli-app/lib/presets.dart::ToolUsageStats"
-        test: "clients/supercli-app/test/presets_test.dart::ToolUsageStats"
+        target: "crates/supercli-core/src/presets.rs::ToolUsageStats"
+        test: "crates/supercli-core/src/presets.rs::tool_usage_stats_ordering"
       - swift: "GlobalPresetFile (JSON decoding, filters project presets)"
-        target: "clients/supercli-app/lib/presets.dart::GlobalPresetFile"
-        test: "clients/supercli-app/test/presets_test.dart::GlobalPresetFile"
+        target: "crates/supercli-core/src/presets.rs::GlobalPresetFile"
+        test: "crates/supercli-core/src/presets.rs::global_preset_file_filters_project_scoped"
     tests:
-      - "clients/supercli-app/test/presets_test.dart (12 tests)"
-    notes: "650 LOC ported. Portable logic; filesystem scanner not yet implemented. Logic moving to Rust per Amein's one-implementation rule. Dart presets.dart duplicates preset_overlay.rs."
+      - file: crates/supercli-core/src/presets.rs
+        count: 10
+    notes: "650 LOC. Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart presets.dart and presets_test.dart deleted; FFI exposes via supercli-client-ffi."
 
 
   native/SupercliNative/Sources/SupercliNative/Views/PluginListDrag.swift:
@@ -330,11 +331,12 @@ files:
 
 
   native/SupercliNative/Tests/SupercliNativeTests/PresetsTests.swift:
-    destination: "Dart: clients/supercli-app"
+    destination: "Rust: supercli-core::presets"
     status: ported
     checklist: "216"
     behaviours:
     tests:
-      - "Covered by Dart tests in clients/supercli-app/test/"
-    notes: "Behaviours covered by Dart test equivalents."
+      - file: crates/supercli-core/src/presets.rs
+        count: 10
+    notes: "Behaviours covered by 10 Rust tests in presets.rs. Dart presets_test.dart deleted with the FFI move."
 
