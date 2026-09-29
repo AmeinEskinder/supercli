@@ -72,6 +72,47 @@ EXCLUDE_DIRNAMES = (".git", "gpuidart", "port-shared")
 # as delete-with-app rows so the headline counts every Swift file.
 EXCLUDE_FRAGMENTS = ("third-party", "third_party")
 
+# Baseline Swift LOC before any Swift-0% deletions. The deletion ledger
+# (docs/parity/swift-deleted.md) records every deleted file; the map headline
+# shows "Deleted: X of <baseline> baseline LOC (Y%)" so progress toward 0%
+# is visible, not just what remains.
+SWIFT_BASELINE_LOC = 167628
+
+
+def deleted_loc_from_ledger(root):
+    """Sum LOC of ledger rows with Status 'merged' in docs/parity/swift-deleted.md.
+
+    The ledger table columns are: File | LOC | Deleting commit | Status |
+    Rust/Dart target | Tests. Only rows whose Status cell is exactly 'merged'
+    count — 'pending' rows are verified but not yet deleted on this branch.
+    Returns 0 if the ledger is missing or unparseable.
+    """
+    ledger = os.path.join(root, "docs", "parity", "swift-deleted.md")
+    total = 0
+    try:
+        with open(ledger, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line.startswith("|"):
+                    continue
+                cells = [c.strip() for c in line.strip("|").split("|")]
+                if len(cells) < 6:
+                    continue
+                if cells[0].lower() == "file":
+                    continue  # header row
+                if set(cells[1]) <= set("- "):
+                    continue  # separator row
+                try:
+                    loc = int(cells[1].replace(",", ""))
+                except ValueError:
+                    continue
+                if cells[3].lower() == "merged":
+                    total += loc
+    except (FileNotFoundError, OSError):
+        pass
+    return total
+
+
 # Worker areas, each owning docs/parity/swift-port/<area>.yml.
 WORKER_AREAS = (
     "shared",
@@ -312,8 +353,11 @@ def tests_ported_count(entry):
     return total
 
 
-def render_map(files, rows, dropped, stale_sidecars):
-    """files: {rel: loc}; rows: {rel: (dest, status, checklist, tests)}."""
+def render_map(files, rows, dropped, stale_sidecars, deleted_loc=0):
+    """files: {rel: loc}; rows: {rel: (dest, status, checklist, tests)}.
+
+    deleted_loc: Swift LOC already deleted toward 0% (from the ledger).
+    """
     total_loc = sum(files.values())
     verified_loc = sum(loc for rel, loc in files.items()
                        if rows[rel][1] == "verified")
@@ -369,6 +413,8 @@ def render_map(files, rows, dropped, stale_sidecars):
     out.append("")
     out.append(f"- Total Swift files: {len(files):,}")
     out.append(f"- Total Swift LOC: {total_loc:,}")
+    out.append(f"- Deleted: {deleted_loc:,} of {SWIFT_BASELINE_LOC:,} baseline LOC "
+               f"({fmt_pct(deleted_loc, SWIFT_BASELINE_LOC)})")
     out.append(f"- Verified: {fmt_pct(verified_loc, total_loc)} of LOC "
                f"({verified_loc:,} / {total_loc:,} lines)")
     out.append(f"- Status breakdown: {breakdown(status_files, status_loc)}")
@@ -439,14 +485,17 @@ def main():
             rows[rel] = (heuristic_destination(rel), "todo", "", 0)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    deleted_loc = deleted_loc_from_ledger(root)
     with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(render_map(files, rows, [], stale_sidecars))
+        fh.write(render_map(files, rows, [], stale_sidecars, deleted_loc))
 
     total_loc = sum(files.values())
     n_claimed = len(claimed) - len(stale_sidecars)
     print(f"swift files: {len(files)}, total LOC: {total_loc}, "
           f"sidecar-claimed rows: {n_claimed}, "
-          f"stale sidecar entries: {len(stale_sidecars)}")
+          f"stale sidecar entries: {len(stale_sidecars)}, "
+          f"deleted: {deleted_loc:,} of {SWIFT_BASELINE_LOC:,} baseline LOC "
+          f"({fmt_pct(deleted_loc, SWIFT_BASELINE_LOC)})")
     for rel in stale_sidecars:
         print(f"  stale sidecar entry (file not on disk): {rel}")
 
