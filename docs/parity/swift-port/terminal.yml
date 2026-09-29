@@ -209,3 +209,60 @@ files:
     behaviours: []
     tests: []
     notes: ""
+
+  # --- Porter Y: viewer presence (pane-header presence chips) ---
+  native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift:
+    destination: "Dart: clients/supercli-app"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "ViewerInfo value type (id, deviceID, displayName, lastSeen)"
+        target: "lib/viewer_presence.dart::ViewerInfo"
+        test: "test/viewer_presence_test.dart::device identity parsing groups"
+      - swift: "Store init loads both feeds synchronously from disk"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore()"
+        test: "test/viewer_presence_test.dart::existing viewers are seeded without a connection toast"
+      - swift: "hasViewers — both output feeds count as presence"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.hasViewers"
+        test: "test/viewer_presence_test.dart::matching names and addresses do not merge different devices"
+      - swift: "isDeviceViewing — exact paired-Controller match per session"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.isDeviceViewing"
+        test: "test/viewer_presence_test.dart::one device across transports uses its newest name and lease"
+      - swift: "consumeGridReassertCandidate — waits for last viewer and explicit fit, runs once"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.consumeGridReassertCandidate"
+        test: "test/viewer_presence_test.dart::grid repair waits for last viewer and explicit fit then runs once"
+      - swift: "refresh(now:) — re-read files and prune expired entries"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.refresh"
+        test: "test/viewer_presence_test.dart::each transport expires before devices are merged"
+      - swift: "rebuild — per-feed TTL expiry before merge, newest-wins dedup, display-name sort"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore._rebuild"
+        test: "test/viewer_presence_test.dart::one device across transports uses its newest name and lease"
+      - swift: "announceConnectionChanges — silent seeding, one-shot arrival toasts, re-announce after drop"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore._announceConnectionChanges"
+        test: "test/viewer_presence_test.dart::transport and session changes do not announce another connection"
+      - swift: "parsePresence — JSON decode, identity/deviceID/displayName derivation"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.parsePresence"
+        test: "test/viewer_presence_test.dart::device identity parsing parsePresence tolerates malformed input"
+      - swift: "displayName — 'Name (id)' shows just the name, falls back to ip"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.displayNameFromDevice"
+        test: "test/viewer_presence_test.dart::device identity parsing displayNameFromDevice strips the device id suffix"
+      - swift: "deviceID — 'Name (id)' extracts the stable id; IP-only viewers have none"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore.deviceIDFromDevice"
+        test: "test/viewer_presence_test.dart::device identity parsing deviceIDFromDevice extracts the parenthesised id"
+    tests:
+      - file: clients/supercli-app/test/viewer_presence_test.dart
+        count: 10
+    notes: "Synchronous decision kernel ported; GAP-VIEWERPRESENCE-1 (DispatchSource watcher + 5s Timer), GAP-VIEWERPRESENCE-2 (shared singleton/ToastCenter), GAP-VIEWERPRESENCE-3 (locale-aware sort) not ported."
+
+  native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift:
+    destination: "Dart: clients/supercli-app"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "7 XCTest cases ported 1:1 plus 3 parsing unit tests"
+        target: "lib/viewer_presence.dart::ViewerPresenceStore"
+        test: "test/viewer_presence_test.dart::all 10 tests"
+    tests:
+      - file: clients/supercli-app/test/viewer_presence_test.dart
+        count: 10
+    notes: "Test source ported alongside the implementation."
