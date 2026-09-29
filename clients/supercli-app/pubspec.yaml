@@ -10,6 +10,7 @@ dependencies:
   gpuidart:
     path: ../gpuidart
   http: ^1.2.0
+  ffi: ^2.1.0
 
 dev_dependencies:
   test: ^1.26.0

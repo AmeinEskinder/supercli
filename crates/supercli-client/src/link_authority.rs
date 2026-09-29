@@ -420,9 +420,8 @@ impl LinkAuthorityStore {
                 reason,
                 disabled_at: now_unix(),
             };
-            let data = serde_json::to_vec(&record).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::other(e.to_string()))
-            })?;
+            let data = serde_json::to_vec(&record)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &suppression_url(home))?;
             Ok(SuppressionOutcome {
                 record,
@@ -461,9 +460,8 @@ impl LinkAuthorityStore {
                     .map(|r| r.disabled_at)
                     .unwrap_or_else(now_unix),
             };
-            let data = serde_json::to_vec(&pending).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::other(e.to_string()))
-            })?;
+            let data = serde_json::to_vec(&pending)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &suppression_url(home))?;
             // The marker already makes the retained bearer unusable; keep a
             // removal failure as a diagnostic only.
@@ -487,9 +485,8 @@ impl LinkAuthorityStore {
                     "Link authority changed while authorizing".to_string(),
                 ));
             }
-            let data = serde_json::to_vec(entitlement).map_err(|e| {
-                LinkAuthorityError::Io(std::io::Error::other(e.to_string()))
-            })?;
+            let data = serde_json::to_vec(entitlement)
+                .map_err(|e| LinkAuthorityError::Io(std::io::Error::other(e.to_string())))?;
             write_private_atomically(&data, &cache_url(home))?;
             if current.is_some() {
                 fs::remove_file(suppression_url(home)).map_err(|e| {

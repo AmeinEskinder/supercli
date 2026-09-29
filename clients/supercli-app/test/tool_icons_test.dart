@@ -1,11 +1,39 @@
 /// Tests for tool_icons.dart
-/// 
+///
 /// Port of RuntimeCatalogTests.swift icon-related behaviors.
+///
+/// Note: `SupercliToolIcon.resolving` calls through to the Rust catalog via
+/// FFI. Those tests require the real `supercli-client-ffi` cdylib: CI builds
+/// it (`cargo build -p supercli-client-ffi --release`) and sets
+/// `SUPERCLI_FFI_LIB`. Pure-icon tests (forRuntime/terminal) need no library.
 library;
+
 import 'package:test/test.dart';
 import 'package:supercli_app/tool_icons.dart';
 import 'package:supercli_app/plugin_settings_list.dart';
-import 'package:supercli_app/runtime_catalog.dart';
+
+/// Minimal runtime descriptor map, shaped like the JSON the Rust catalog
+/// returns over FFI.
+Map<String, dynamic> testRuntime({
+  String id = 'test.runtime',
+  String slug = 'test',
+  String legacySlug = 'test',
+  String label = 'Test',
+  bool supportsQuickLaunch = true,
+  String kind = 'agent',
+  String? icon,
+}) {
+  final m = <String, dynamic>{
+    'id': id,
+    'slug': slug,
+    'legacy_slug': legacySlug,
+    'label': label,
+    'supports_quick_launch': supportsQuickLaunch,
+    'kind': kind,
+  };
+  if (icon != null) m['icon'] = icon;
+  return m;
+}
 
 void main() {
   group('SupercliToolIcon', () {
@@ -17,76 +45,53 @@ void main() {
     });
 
     test('forRuntime uses authored SVG when available', () {
-      final runtime = SupercliRuntimeMetadata(
-        stableID: 'test.runtime',
-        slug: 'test',
-        legacySlug: 'test',
-        label: 'Test',
-        platforms: {SupercliRuntimePlatform.macos},
-        supportsQuickLaunch: true,
-        kind: SupercliRuntimeKind.agent,
-        iconKey: 'test',
-        iconSVG: '<svg>custom</svg>',
-        iconIsTemplate: false,
-        windowPaddingX: 8,
-        lifecycleSource: 'output',
-        lifecycleAuthority: 'none',
-        lifecycleFallback: 'none',
-        completionReliable: false,
-        attentionReliable: false,
-        anchorStartEventToOutput: true,
-        attentionClearsOnOutput: true,
-        distrustStopsWhileOutputGrows: false,
+      final icon = SupercliToolIcon.forRuntime(
+        testRuntime(icon: '<svg>custom</svg>'),
       );
-      final icon = SupercliToolIcon.forRuntime(runtime);
       expect(icon.id, 'test.runtime');
       expect(icon.svgSource, '<svg>custom</svg>');
       expect(icon.usesRuntimeAsset, true);
-      expect(icon.isTemplate, false);
+      expect(icon.isTemplate, true); // generic fallback template flag
     });
 
     test('forRuntime uses generic fallback when no authored SVG', () {
-      final runtime = SupercliRuntimeMetadata(
-        stableID: 'test.runtime',
-        slug: 'test',
-        legacySlug: 'test',
-        label: 'Test',
-        platforms: {SupercliRuntimePlatform.macos},
-        supportsQuickLaunch: true,
-        kind: SupercliRuntimeKind.editor,
-        iconKey: 'editor',
-        iconIsTemplate: true,
-        windowPaddingX: 8,
-        lifecycleSource: 'output',
-        lifecycleAuthority: 'none',
-        lifecycleFallback: 'none',
-        completionReliable: false,
-        attentionReliable: false,
-        anchorStartEventToOutput: true,
-        attentionClearsOnOutput: true,
-        distrustStopsWhileOutputGrows: false,
+      final icon = SupercliToolIcon.forRuntime(
+        testRuntime(kind: 'editor'),
       );
-      final icon = SupercliToolIcon.forRuntime(runtime);
       expect(icon.usesRuntimeAsset, false);
       expect(icon.isTemplate, true); // Generic fallback is always template
       expect(icon.fallbackSystemName, 'doc.plaintext');
+      expect(icon.kind, SupercliRuntimeKind.editor);
     });
 
-    test('resolving prefers provider ID over command', () {
-      final icon = SupercliToolIcon.resolving(
-        providerID: 'com.anthropic.claude-code',
-        command: 'codex',
-      );
-      expect(icon.id, 'com.anthropic.claude-code');
+    test('forRuntime maps unknown kind to terminal', () {
+      final icon = SupercliToolIcon.forRuntime(testRuntime(kind: 'bogus'));
+      expect(icon.kind, SupercliRuntimeKind.terminal);
     });
 
-    test('resolving falls back to terminal for unknown', () {
-      final icon = SupercliToolIcon.resolving(
-        providerID: null,
-        command: 'unknown-agent-xyz',
-      );
-      expect(icon, SupercliToolIcon.terminal);
-    });
+    test(
+      'resolving prefers provider ID over command (requires FFI lib)',
+      () {
+        final icon = SupercliToolIcon.resolving(
+          providerID: 'com.anthropic.claude-code',
+          command: 'codex',
+        );
+        expect(icon.id, 'com.anthropic.claude-code');
+      },
+      tags: 'ffi',
+    );
+
+    test(
+      'resolving falls back to terminal for unknown (requires FFI lib)',
+      () {
+        final icon = SupercliToolIcon.resolving(
+          providerID: null,
+          command: 'unknown-agent-xyz',
+        );
+        expect(icon, SupercliToolIcon.terminal);
+      },
+      tags: 'ffi',
+    );
   });
 
   group('SupercliAppIconCatalog', () {
@@ -102,7 +107,7 @@ void main() {
       final icon = SupercliAppIconCatalog.icon(appID: 'supercli.app.markdown');
       expect(icon, isNotNull);
       expect(icon!.id, 'app:supercli.app.markdown');
-      
+
       // Cleanup
       SupercliAppIconCatalog.update([]);
     });
@@ -118,7 +123,7 @@ void main() {
       ]);
       final icon = SupercliAppIconCatalog.icon(command: '/opt/bin/myapp --flag');
       expect(icon, isNotNull);
-      
+
       SupercliAppIconCatalog.update([]);
     });
 
@@ -133,7 +138,7 @@ void main() {
       ]);
       expect(SupercliAppIconCatalog.isPluginCommand('myapp --flag'), true);
       expect(SupercliAppIconCatalog.isPluginCommand('unknown'), false);
-      
+
       SupercliAppIconCatalog.update([]);
     });
   });

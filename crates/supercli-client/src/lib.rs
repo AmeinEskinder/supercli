@@ -67,6 +67,10 @@ pub mod tls;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
 pub mod types;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod viewer_presence;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod workspace_pool;
 
 pub use types::{ArtifactMeta, PairedHostRecord, TransportKind};
 

@@ -230,7 +230,11 @@ impl ControllerPairingProxy {
     /// Drop the reservation with `id`, if it is the active one.
     pub fn cancel(&self, id: &str) {
         let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if state.active.as_ref().is_some_and(|a| pairing_id_eq(&a.id, id)) {
+        if state
+            .active
+            .as_ref()
+            .is_some_and(|a| pairing_id_eq(&a.id, id))
+        {
             state.active = None;
         }
     }
@@ -466,7 +470,11 @@ fn forward(
             }
             // Success consumes the one-shot reservation.
             let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
-            if state.active.as_ref().is_some_and(|a| pairing_id_eq(&a.id, id)) {
+            if state
+                .active
+                .as_ref()
+                .is_some_and(|a| pairing_id_eq(&a.id, id))
+            {
                 state.active = None;
             }
             Ok(bytes)
