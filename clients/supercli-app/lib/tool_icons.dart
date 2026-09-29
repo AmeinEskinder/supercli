@@ -159,7 +159,10 @@ abstract final class SupercliAppIconCatalog {
         iconSVG: null, // RemoteAppSummary doesn't have iconSvg in Dart port
       );
       _byAppID[app.id.toLowerCase()] = icon;
-      final binary = app.command.split('/').last.toLowerCase();
+      // Extract binary name the same way icon() does: first token, unquoted, basename
+      final token = app.command.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
+      final unquoted = token.replaceAll(RegExp('^[\'"]|[\'"]\$'), '');
+      final binary = unquoted.split('/').last.toLowerCase();
       if (binary.isNotEmpty) {
         _byBinary[binary] = icon;
       }

@@ -94,7 +94,7 @@ void main() {
       ];
       final groups = collectQuickPresetGroups(presets);
       expect(groups.length, 1);
-      expect(groups[0].id, 'custom:custom');
+      expect(groups[0].id, 'custom');
     });
   });
 
