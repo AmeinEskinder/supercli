@@ -64,3 +64,5 @@ and sums LOC for rows with Status `merged` into the map headline
 | clients/legacy/app-kit/swift/Examples/KitchenSink/Sources/KitchenSink/WebComponentPane.swift | 151 | merged (feat/verify-delete-batch6) | merged | demo-only web pane — no Dart product equivalent | N/A — demo view |
 | clients/legacy/app-kit/swift/Package.swift | 17 | merged (feat/verify-delete-batch6) | merged | SwiftPM manifest, build file — no Dart equivalent | N/A — build file |
 | clients/legacy/shared/SupercliShared/Package.swift | 28 | merged (feat/verify-delete-batch6) | merged | SwiftPM manifest — no Rust equivalent (Rust uses Cargo) | N/A — build file |
+| clients/legacy/native/SupercliNative/Package.swift | 91 | feat/verify-delete-sweeper | pending | SwiftPM manifest ("Phase 0 spike"), Mac app build skipped in CI — no Rust/Dart equivalent | N/A — build file |
+| clients/legacy/ios/SupercliIOS/Package.swift | 35 | feat/verify-delete-sweeper | pending | SwiftPM manifest, iOS tests skipped in CI — no Rust/Dart equivalent | N/A — build file |
