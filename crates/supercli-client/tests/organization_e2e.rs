@@ -248,7 +248,7 @@ fn archived_sessions_encodes_project_id_and_parses_rows() {
                 "projectID": "my proj/1",
                 "title": "Old work",
                 "archived": true,
-                "capabilities": {"restart": true, "resume_agent": false, "archive": true, "notifyWhenDone": true}
+                "capabilities": {"restart": true, "resumeAgent": false, "archive": true, "notifyWhenDone": true}
             },
             {"id": "s-arch-2", "projectID": "my proj/1", "title": "Older", "archived": true}
         ]
@@ -268,7 +268,7 @@ fn archived_sessions_encodes_project_id_and_parses_rows() {
     assert_eq!(sessions[0].id, "s-arch-1");
     assert!(sessions[0].archived);
     assert!(sessions[0].capabilities.restart);
-    assert!(!sessions[0].capabilities.resume_agent);
+    assert_eq!(sessions[0].capabilities.resume_agent, Some(false));
     assert!(sessions[0].capabilities.notify_when_done);
     // Rows without a capabilities block default to all-false.
     assert!(!sessions[1].capabilities.restart);

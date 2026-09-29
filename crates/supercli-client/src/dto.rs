@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use base64::Engine as _;
+
 /// What the agent in a session is doing right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -48,20 +50,85 @@ pub enum ActivitySource {
 /// summary. The iOS organize sheet gates every verb on these — missing
 /// capability data fails closed so a Controller never promises a resume
 /// the Host cannot do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+///
+/// Mirrors `RemoteSessionCapabilities` in `RemoteControlProtocol.swift`,
+/// including its wire-compat rules: the retired keys `fork` and
+/// `appendSystemContext` are accepted (ignored) on decode so payloads from
+/// older Hosts still parse, and are always encoded as `false` because
+/// older Controllers require them when decoding a summary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SessionCapabilities {
     /// Legacy terminal-replacing Resume operation.
-    #[serde(default)]
     pub restart: bool,
-    /// Shell-only Resume Agent after the managed runtime exited.
-    #[serde(rename = "resumeAgent", default)]
-    pub resume_agent: bool,
+    /// Legacy protocol-minor-5 field. Decoded so newer Controllers remain
+    /// wire-compatible with older Hosts, but presentation must never use
+    /// it: an active managed runtime is no longer a user-facing restart
+    /// target.
+    pub restart_agent: Option<bool>,
+    /// The Host can safely resume the stable managed agent after it has
+    /// exited back to the shell, without replacing the Session or PTY.
+    /// `None` = older Host that predates the field; `Some(false)` = a
+    /// current Host where the operation is unavailable for this session.
+    pub resume_agent: Option<bool>,
     /// Whether the archive verb is offered (evidence-based).
-    #[serde(default)]
     pub archive: bool,
     /// Whether notify-when-done is offered for this session.
-    #[serde(rename = "notifyWhenDone", default)]
     pub notify_when_done: bool,
+}
+
+impl Serialize for SessionCapabilities {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("SessionCapabilities", 7)?;
+        s.serialize_field("restart", &self.restart)?;
+        if let Some(v) = self.restart_agent {
+            s.serialize_field("restartAgent", &v)?;
+        }
+        if let Some(v) = self.resume_agent {
+            s.serialize_field("resumeAgent", &v)?;
+        }
+        // Older Controllers require these legacy keys when decoding a
+        // summary (Swift's `encode(to:)` emits them as `false`).
+        s.serialize_field("fork", &false)?;
+        s.serialize_field("appendSystemContext", &false)?;
+        s.serialize_field("notifyWhenDone", &self.notify_when_done)?;
+        s.serialize_field("archive", &self.archive)?;
+        s.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionCapabilities {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Raw {
+            #[serde(default)]
+            restart: bool,
+            #[serde(rename = "restartAgent", default)]
+            restart_agent: Option<bool>,
+            #[serde(rename = "resumeAgent", default)]
+            resume_agent: Option<bool>,
+            // Decode-compatible tombstones. Retired actions remain accepted
+            // from older Hosts but are not represented in the current
+            // capability model.
+            #[serde(default)]
+            fork: Option<bool>,
+            #[serde(rename = "appendSystemContext", default)]
+            append_system_context: Option<bool>,
+            #[serde(rename = "notifyWhenDone")]
+            notify_when_done: bool,
+            #[serde(default)]
+            archive: bool,
+        }
+        let raw = Raw::deserialize(deserializer)?;
+        let _ = (raw.fork, raw.append_system_context);
+        Ok(SessionCapabilities {
+            restart: raw.restart,
+            restart_agent: raw.restart_agent,
+            resume_agent: raw.resume_agent,
+            archive: raw.archive,
+            notify_when_done: raw.notify_when_done,
+        })
+    }
 }
 
 /// A session row, as published by bootstrap.
@@ -146,6 +213,37 @@ pub struct ProjectSummary {
     pub is_group: Option<bool>,
     #[serde(rename = "worktreeBranch", default)]
     pub worktree_branch: Option<String>,
+    /// Plain organizational child folder id. Optional for wire
+    /// compatibility: older Hosts omit it.
+    #[serde(rename = "folderID", default)]
+    pub folder_id: Option<String>,
+    /// Sidebar folder tint id (`sky`, `blue`, …), resolved by the Host.
+    /// Optional so older Hosts and Controllers remain wire-compatible.
+    #[serde(rename = "colorID", default)]
+    pub color_id: Option<String>,
+    /// Plain group pinned above the parent's ordinary mixed rows. Optional
+    /// for protocol-minor compatibility; absent means unpinned.
+    #[serde(default)]
+    pub pinned: Option<bool>,
+    /// Current git branch of the checkout (HEAD), for the session subtitle.
+    #[serde(rename = "gitBranch", default)]
+    pub git_branch: Option<String>,
+    #[serde(rename = "mcpBlocked", default)]
+    pub mcp_blocked: bool,
+    /// How many archived sessions this project's archive library holds.
+    /// Absent on older Hosts => hide the archive entry.
+    #[serde(rename = "archivedSessionCount", default)]
+    pub archived_session_count: Option<i64>,
+    /// Whether this project's sessions are date-sorted (newest first)
+    /// instead of the manual drag order. Absent = default custom order.
+    #[serde(rename = "dateSorted", default)]
+    pub date_sorted: Option<bool>,
+    /// Mixed regular-section ranks from the Host's `session-order.json` —
+    /// session ids interleaved with child group/worktree ids. Present only
+    /// when that list actually contains a child folder; older Hosts omit it
+    /// and Controllers keep folders above sessions.
+    #[serde(rename = "sessionOrder", default)]
+    pub session_order: Option<Vec<String>>,
 }
 
 impl ProjectSummary {
@@ -160,6 +258,14 @@ impl ProjectSummary {
         self.parent_project_id.is_some()
             && self.worktree_branch.is_none()
             && self.is_group == Some(true)
+    }
+
+    /// Mirror of Swift's `RemoteProjectSummary.replacingSessionOrder`: a
+    /// copy of this project with the session order replaced.
+    pub fn replacing_session_order(&self, session_order: Option<Vec<String>>) -> Self {
+        let mut copy = self.clone();
+        copy.session_order = session_order;
+        copy
     }
 }
 
@@ -257,15 +363,55 @@ pub struct TranscriptSnapshot {
 }
 
 /// An MCP approval prompt waiting for the user's answer.
+///
+/// Mirrors `RemotePendingApproval` in `RemoteControlProtocol.swift`.
+/// `session_id` (the Rust-resolved presentation target) is additive on top
+/// of the Swift wire shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PendingApproval {
+    /// Stable prompt id, the target of `ApprovalAnswerRequest`.
     pub id: String,
-    #[serde(rename = "sessionID", default)]
-    pub session_id: Option<String>,
+    /// `"write" | "browser" | "computer"` today; free-form for new kinds.
+    #[serde(default)]
+    pub kind: String,
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
     pub detail: Option<String>,
+    #[serde(default)]
+    pub body: String,
+    /// The session asking for access.
+    #[serde(rename = "callerSessionID", default)]
+    pub caller_session_id: String,
+    /// Write approvals only: the session being written into.
+    #[serde(
+        rename = "targetSessionID",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub target_session_id: Option<String>,
+    #[serde(rename = "requestedAtUnixMs", default)]
+    pub requested_at_unix_ms: i64,
+    /// Resolved presentation target (see [`PendingApproval::presentation_session_id`]).
+    #[serde(rename = "sessionID", default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+impl PendingApproval {
+    /// Mirror of Swift's `RemotePendingApproval.presentationSessionID`:
+    /// the session that should show the in-pane prompt and the attention
+    /// badge. Write grants present on the destination so the user sees
+    /// where input would land; other kinds have no destination and present
+    /// on the caller. A missing/unknown destination falls back to the
+    /// caller.
+    pub fn presentation_session_id(&self, known_ids: &std::collections::HashSet<String>) -> String {
+        if let Some(target) = &self.target_session_id {
+            if known_ids.contains(target) {
+                return target.clone();
+            }
+        }
+        self.caller_session_id.clone()
+    }
 }
 
 /// A launch preset row, mirroring Swift's `RemotePresetSummary` wire shape
@@ -977,6 +1123,30 @@ pub struct WorkspaceSettingsPatch {
     )]
     pub plugin_activation: Option<PluginActivationPatch>,
     #[serde(
+        rename = "transcriptSettings",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub transcript_settings: Option<TranscriptSettingsUpdate>,
+    #[serde(
+        rename = "appearanceSettings",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub appearance_settings: Option<AppearanceSettingsUpdate>,
+    #[serde(
+        rename = "notificationSettings",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub notification_settings: Option<NotificationSettingsUpdate>,
+    #[serde(
+        rename = "experimentalSettings",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub experimental_settings: Option<ExperimentalSettingsUpdate>,
+    #[serde(
         rename = "autoStopArchiveMinutes",
         default,
         skip_serializing_if = "Option::is_none"
@@ -1018,6 +1188,26 @@ pub struct WorkspaceSettingsPatch {
         skip_serializing_if = "Option::is_none"
     )]
     pub mcp_auto_add_browser_screenshots: Option<bool>,
+}
+
+impl WorkspaceSettingsPatch {
+    /// Mirror of Swift's `RemoteWorkspaceSettingsPatch.isEmpty`: true when
+    /// no setting is being changed.
+    pub fn is_empty(&self) -> bool {
+        self.plugin_order.is_none()
+            && self.plugin_activation.is_none()
+            && self.transcript_settings.is_none()
+            && self.appearance_settings.is_none()
+            && self.notification_settings.is_none()
+            && self.experimental_settings.is_none()
+            && self.auto_stop_archive_minutes.is_none()
+            && self.sidebar_stopped_limit.is_none()
+            && self.browser_default_access.is_none()
+            && self.mcp_nonchild_write_access.is_none()
+            && self.computer_access.is_none()
+            && self.mcp_worktree_access.is_none()
+            && self.mcp_auto_add_browser_screenshots.is_none()
+    }
 }
 
 /// One-project organization patch. Mirrors Swift
@@ -1381,6 +1571,57 @@ pub struct TerminalMetrics {
     pub desktop_viewing: Option<bool>,
 }
 
+/// One offset-addressed read of a session's terminal tail.
+///
+/// Mirrors `RemoteTerminalOutputChunk` in `RemoteControlProtocol.swift`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TerminalOutputChunk {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub offset: u64,
+    #[serde(rename = "nextOffset")]
+    pub next_offset: u64,
+    #[serde(rename = "dataBase64")]
+    pub data_base64: String,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(rename = "capturedAtUnixMs")]
+    pub captured_at_unix_ms: i64,
+    /// DEC-mode restore preamble (base64) for a fresh tail read: the
+    /// sequences that established mouse tracking, alt screen, bracketed
+    /// paste, … usually precede the retained tail, so a client that resets
+    /// its VT before feeding this chunk feeds these bytes first. Not
+    /// journal bytes — never part of `offset`/`nextOffset`. Absent on
+    /// older Hosts and whenever there is nothing to restore.
+    #[serde(
+        rename = "modePreambleBase64",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mode_preamble_base64: Option<String>,
+}
+
+impl TerminalOutputChunk {
+    /// Mirror of Swift's `RemoteTerminalOutputChunk.modePreamble`: the
+    /// decoded preamble bytes, or `None` when absent, not valid base64, or
+    /// empty (Swift's `Data(base64Encoded:)` returns nil for all three).
+    pub fn mode_preamble(&self) -> Option<Vec<u8>> {
+        let encoded = self.mode_preamble_base64.as_deref()?;
+        let stripped: String = encoded.chars().filter(|c| !c.is_whitespace()).collect();
+        if stripped.is_empty() {
+            return None;
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&stripped)
+            .ok()?;
+        if bytes.is_empty() {
+            None
+        } else {
+            Some(bytes)
+        }
+    }
+}
+
 /// One file the browser MCP produced for a session — a screenshot or a
 /// download. Metadata only; bytes are fetched via [`BrowserArtifactChunk`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1715,6 +1956,14 @@ mod tests {
                 sort_order: Some(0),
                 is_group: None,
                 worktree_branch: None,
+                folder_id: None,
+                color_id: None,
+                pinned: None,
+                git_branch: None,
+                mcp_blocked: false,
+                archived_session_count: None,
+                date_sorted: None,
+                session_order: None,
             },
             ProjectSummary {
                 id: "group-a".into(),
@@ -1724,6 +1973,14 @@ mod tests {
                 sort_order: Some(1),
                 is_group: Some(true),
                 worktree_branch: None,
+                folder_id: None,
+                color_id: None,
+                pinned: None,
+                git_branch: None,
+                mcp_blocked: false,
+                archived_session_count: None,
+                date_sorted: None,
+                session_order: None,
             },
             ProjectSummary {
                 id: "group-b".into(),
@@ -1733,6 +1990,14 @@ mod tests {
                 sort_order: Some(0),
                 is_group: Some(true),
                 worktree_branch: None,
+                folder_id: None,
+                color_id: None,
+                pinned: None,
+                git_branch: None,
+                mcp_blocked: false,
+                archived_session_count: None,
+                date_sorted: None,
+                session_order: None,
             },
             // Not a plain group (no isFolder): not a filing destination.
             ProjectSummary {
@@ -1743,6 +2008,14 @@ mod tests {
                 sort_order: Some(2),
                 is_group: None,
                 worktree_branch: None,
+                folder_id: None,
+                color_id: None,
+                pinned: None,
+                git_branch: None,
+                mcp_blocked: false,
+                archived_session_count: None,
+                date_sorted: None,
+                session_order: None,
             },
             // Worktree child: never a filing destination.
             ProjectSummary {
@@ -1753,6 +2026,14 @@ mod tests {
                 sort_order: Some(3),
                 is_group: Some(true),
                 worktree_branch: Some("feature".into()),
+                folder_id: None,
+                color_id: None,
+                pinned: None,
+                git_branch: None,
+                mcp_blocked: false,
+                archived_session_count: None,
+                date_sorted: None,
+                session_order: None,
             },
         ]
     }
@@ -2687,5 +2968,239 @@ mod tests {
         .unwrap();
         assert_eq!(u.computer_use, Some(true));
         assert_eq!(u.worktrees, None);
+    }
+
+    // --- RemoteControlProtocol batch 3 (porter U) ---
+
+    #[test]
+    fn session_capabilities_decodes_restart_agent_and_tombstones() {
+        // Swift: RemoteSessionCapabilities decodes legacy `restartAgent` and
+        // accepts the retired `fork` / `appendSystemContext` keys.
+        let c: SessionCapabilities = serde_json::from_value(serde_json::json!({
+            "restart": true,
+            "restartAgent": false,
+            "resumeAgent": true,
+            "fork": true,
+            "appendSystemContext": true,
+            "notifyWhenDone": true,
+            "archive": false,
+        }))
+        .unwrap();
+        assert!(c.restart);
+        assert_eq!(c.restart_agent, Some(false));
+        assert_eq!(c.resume_agent, Some(true));
+        assert!(c.notify_when_done);
+        assert!(!c.archive);
+
+        // Encode: tombstones always emitted as `false` for older
+        // Controllers; absent optionals omitted.
+        let v = serde_json::to_value(c).unwrap();
+        assert_eq!(v["fork"], false);
+        assert_eq!(v["appendSystemContext"], false);
+        assert_eq!(v["restartAgent"], false);
+        assert_eq!(v["resumeAgent"], true);
+    }
+
+    #[test]
+    fn session_capabilities_distinguishes_old_host_from_unavailable() {
+        // Absent `resumeAgent` = older Host (None); explicit false = current
+        // Host where the operation is unavailable for this session.
+        let old: SessionCapabilities = serde_json::from_value(serde_json::json!({
+            "restart": false,
+            "notifyWhenDone": false,
+        }))
+        .unwrap();
+        assert_eq!(old.resume_agent, None);
+        assert_eq!(old.restart_agent, None);
+
+        let current: SessionCapabilities = serde_json::from_value(serde_json::json!({
+            "restart": false,
+            "resumeAgent": false,
+            "notifyWhenDone": false,
+        }))
+        .unwrap();
+        assert_eq!(current.resume_agent, Some(false));
+    }
+
+    #[test]
+    fn project_summary_decodes_full_wire_shape() {
+        // Swift: RemoteProjectSummary full shape incl. sessionOrder.
+        let p: ProjectSummary = serde_json::from_value(serde_json::json!({
+            "id": "g1",
+            "name": "G",
+            "path": "/g",
+            "folderID": "f0",
+            "colorID": "sky",
+            "pinned": true,
+            "gitBranch": "main",
+            "mcpBlocked": true,
+            "archivedSessionCount": 3,
+            "dateSorted": true,
+            "sessionOrder": ["s1", "s2"],
+        }))
+        .unwrap();
+        assert_eq!(p.folder_id.as_deref(), Some("f0"));
+        assert_eq!(p.color_id.as_deref(), Some("sky"));
+        assert_eq!(p.pinned, Some(true));
+        assert_eq!(p.git_branch.as_deref(), Some("main"));
+        assert!(p.mcp_blocked);
+        assert_eq!(p.archived_session_count, Some(3));
+        assert_eq!(p.date_sorted, Some(true));
+        assert_eq!(
+            p.session_order.as_deref(),
+            Some(&["s1".to_string(), "s2".to_string()][..])
+        );
+
+        // Older Hosts omit the additive fields.
+        let minimal: ProjectSummary =
+            serde_json::from_value(serde_json::json!({"id": "g1"})).unwrap();
+        assert_eq!(minimal.session_order, None);
+        assert!(!minimal.mcp_blocked);
+    }
+
+    #[test]
+    fn project_summary_replacing_session_order() {
+        let p: ProjectSummary = serde_json::from_value(serde_json::json!({
+            "id": "g1",
+            "sessionOrder": ["s1"],
+        }))
+        .unwrap();
+        let q = p.replacing_session_order(Some(vec!["s2".to_string()]));
+        assert_eq!(q.session_order.as_deref(), Some(&["s2".to_string()][..]));
+        // The original is unchanged (Swift returns a new value).
+        assert_eq!(q.id, "g1");
+        assert_eq!(p.session_order.as_deref(), Some(&["s1".to_string()][..]));
+        let cleared = q.replacing_session_order(None);
+        assert_eq!(cleared.session_order, None);
+    }
+
+    #[test]
+    fn pending_approval_presents_write_on_known_target_otherwise_caller() {
+        // Swift: RemotePendingApproval.presentationSessionID.
+        let a = PendingApproval {
+            id: "a1".into(),
+            kind: "write".into(),
+            title: None,
+            detail: None,
+            body: "".into(),
+            caller_session_id: "caller".into(),
+            target_session_id: Some("target".into()),
+            requested_at_unix_ms: 0,
+            session_id: None,
+        };
+        let known: std::collections::HashSet<String> = ["caller".to_string(), "target".to_string()]
+            .into_iter()
+            .collect();
+        assert_eq!(a.presentation_session_id(&known), "target");
+
+        // Unknown destination falls back to the caller.
+        let unknown: std::collections::HashSet<String> =
+            ["caller".to_string()].into_iter().collect();
+        assert_eq!(a.presentation_session_id(&unknown), "caller");
+
+        // Non-write kinds have no destination: present on the caller.
+        let browser = PendingApproval {
+            target_session_id: None,
+            ..a.clone()
+        };
+        assert_eq!(browser.presentation_session_id(&known), "caller");
+    }
+
+    #[test]
+    fn pending_approval_decodes_swift_wire_shape() {
+        let a: PendingApproval = serde_json::from_value(serde_json::json!({
+            "id": "a1",
+            "kind": "write",
+            "title": "Allow write?",
+            "body": "wants to write",
+            "callerSessionID": "caller",
+            "targetSessionID": "target",
+            "requestedAtUnixMs": 1789996800000i64,
+        }))
+        .unwrap();
+        assert_eq!(a.kind, "write");
+        assert_eq!(a.caller_session_id, "caller");
+        assert_eq!(a.target_session_id.as_deref(), Some("target"));
+        assert_eq!(a.requested_at_unix_ms, 1789996800000i64);
+    }
+
+    #[test]
+    fn terminal_output_chunk_round_trips_offsets() {
+        // Swift: RemoteTerminalOutputChunk wire shape.
+        let c: TerminalOutputChunk = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "offset": 100,
+            "nextOffset": 132,
+            "dataBase64": "aGVsbG8=",
+            "truncated": true,
+            "capturedAtUnixMs": 1789996800000i64,
+            "modePreambleBase64": "G1s=",
+        }))
+        .unwrap();
+        assert_eq!(c.offset, 100);
+        assert_eq!(c.next_offset, 132);
+        assert!(c.truncated);
+        assert_eq!(c.mode_preamble(), Some(vec![0x1b, 0x5b]));
+
+        let back = serde_json::to_value(&c).unwrap();
+        let again: TerminalOutputChunk = serde_json::from_value(back).unwrap();
+        assert_eq!(again, c);
+    }
+
+    #[test]
+    fn terminal_output_chunk_mode_preamble_edge_cases() {
+        let base = || TerminalOutputChunk {
+            session_id: "s1".into(),
+            offset: 0,
+            next_offset: 0,
+            data_base64: "".into(),
+            truncated: false,
+            captured_at_unix_ms: 0,
+            mode_preamble_base64: None,
+        };
+        // Absent -> None.
+        assert_eq!(base().mode_preamble(), None);
+        // Not valid base64 -> None (Swift returns nil).
+        let mut bad = base();
+        bad.mode_preamble_base64 = Some("!!!".into());
+        assert_eq!(bad.mode_preamble(), None);
+        // Empty -> None (Swift returns nil for empty Data).
+        let mut empty = base();
+        empty.mode_preamble_base64 = Some("".into());
+        assert_eq!(empty.mode_preamble(), None);
+        // Older Hosts omit the key entirely.
+        let decoded: TerminalOutputChunk = serde_json::from_value(serde_json::json!({
+            "sessionID": "s1",
+            "offset": 0,
+            "nextOffset": 0,
+            "dataBase64": "",
+            "capturedAtUnixMs": 0,
+        }))
+        .unwrap();
+        assert_eq!(decoded.mode_preamble_base64, None);
+        assert_eq!(decoded.mode_preamble(), None);
+    }
+
+    #[test]
+    fn workspace_settings_patch_is_empty() {
+        // Swift: RemoteWorkspaceSettingsPatch.isEmpty.
+        let empty = WorkspaceSettingsPatch::default();
+        assert!(empty.is_empty());
+
+        let p = WorkspaceSettingsPatch {
+            sidebar_stopped_limit: Some(5),
+            ..Default::default()
+        };
+        assert!(!p.is_empty());
+
+        // The newly added settings groups participate too.
+        let q = WorkspaceSettingsPatch {
+            transcript_settings: Some(TranscriptSettingsUpdate {
+                include_user: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(!q.is_empty());
     }
 }

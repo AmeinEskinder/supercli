@@ -69,7 +69,7 @@ files:
       by design; Rust/JS interop preserved. Do NOT regress to Swift v1 vectors.'
   shared/SupercliShared/Sources/SupercliShared/RemoteControlProtocol.swift:
     destination: 'Rust: supercli-client::dto, supercli-client::protocol, supercli-core::remote_session_backend'
-    status: partial
+    status: ported
     behaviours:
     - swift: RemoteControlProtocol version (major 1, minor 22)
       target: supercli-client::protocol::PROTOCOL_MAJOR, PROTOCOL_MINOR
@@ -204,6 +204,36 @@ files:
     - swift: RemoteWorkspaceSettings
       target: dto::WorkspaceSettings
       test: dto::tests::workspace_settings_decodes
+    - swift: RemoteSessionCapabilities tombstone wire-compat (decode fork/appendSystemContext,
+        encode them false; restartAgent optional)
+      target: supercli-client::dto::SessionCapabilities (custom Serialize/Deserialize)
+      test: supercli-client/src/dto.rs::session_capabilities_decodes_restart_agent_and_tombstones,
+        session_capabilities_distinguishes_old_host_from_unavailable
+    - swift: RemoteProjectSummary full wire shape (folderID, colorID, pinned, gitBranch,
+        mcpBlocked, archivedSessionCount, dateSorted, sessionOrder)
+      target: supercli-client::dto::ProjectSummary
+      test: supercli-client/src/dto.rs::project_summary_decodes_full_wire_shape
+    - swift: RemoteProjectSummary.replacingSessionOrder(_:)
+      target: supercli-client::dto::ProjectSummary::replacing_session_order
+      test: supercli-client/src/dto.rs::project_summary_replacing_session_order
+    - swift: RemotePendingApproval full wire shape (kind, body, callerSessionID, targetSessionID,
+        requestedAtUnixMs)
+      target: supercli-client::dto::PendingApproval
+      test: supercli-client/src/dto.rs::pending_approval_decodes_swift_wire_shape
+    - swift: RemotePendingApproval.presentationSessionID(knownIDs:)
+      target: supercli-client::dto::PendingApproval::presentation_session_id
+      test: supercli-client/src/dto.rs::pending_approval_presents_write_on_known_target_otherwise_caller
+    - swift: RemoteTerminalOutputChunk (+modePreamble base64 helper)
+      target: supercli-client::dto::TerminalOutputChunk::mode_preamble
+      test: supercli-client/src/dto.rs::terminal_output_chunk_round_trips_offsets,
+        terminal_output_chunk_mode_preamble_edge_cases
+    - swift: RemoteWorkspaceSettingsPatch settings groups (transcript/appearance/notification/experimental)
+        + isEmpty
+      target: supercli-client::dto::WorkspaceSettingsPatch::is_empty
+      test: supercli-client/src/dto.rs::workspace_settings_patch_is_empty
+    - swift: RemotePairingEnvelope.salt / .sealed (base64 accessors)
+      target: supercli-client::pairing::RemotePairingEnvelope::salt, sealed
+      test: supercli-client/src/pairing.rs::envelope_salt_and_sealed_decode
     - swift: RemoteSessionOrderRequest
       target: dto::SessionOrderRequest
       test: dto::tests::session_order_request_decodes
@@ -213,13 +243,14 @@ files:
     - file: crates/supercli-client/src/pairing.rs
       count: 12
     - crates/supercli-client/src/dto.rs::tests (24 new, batch 2)
-    notes: '2739 LOC, ~80 types. ~30 DTOs ported to supercli-client::dto with 22 tests.
-      Many types already in supercli-core (remote_session_backend, transcripts). Remaining:
-      RemoteAppPresentationsFile, RemoteBrowserArtifact*, RemoteDesktopResizeRequest,
-      RemoteHostEnvironment, RemoteKeyName, RemoteSessionKeyInput, RemoteSessionTextInput,
-      RemoteTranscriptMarkdown (in core), RemoteWorkspaceSelectRequest/Response, and
-      others. Status is partial until all behaviours mapped.
-
+    notes: '2739 LOC, ~80 types. All top-level types now mapped to Rust.
+      Batch 3 (porter U, 2026-09-29): closed the remaining behaviour gaps in
+      supercli-client: SessionCapabilities tombstone wire-compat (decode
+      fork/appendSystemContext, encode them false; restartAgent optional),
+      ProjectSummary full wire shape + replacingSessionOrder, PendingApproval
+      full wire shape + presentationSessionID, new TerminalOutputChunk DTO +
+      modePreamble helper, WorkspaceSettingsPatch gained the four missing
+      settings groups + isEmpty, RemotePairingEnvelope.salt/.sealed accessors.
 
       Batch 2 (porter T, 2026-09-29): 30 more DTOs ported to supercli-client::dto
 

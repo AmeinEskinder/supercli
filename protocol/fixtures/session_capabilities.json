@@ -1,1 +1,1 @@
-{"restart":true,"resumeAgent":true,"archive":false,"notifyWhenDone":false}
+{"restart":true,"resumeAgent":true,"fork":false,"appendSystemContext":false,"notifyWhenDone":false,"archive":false}

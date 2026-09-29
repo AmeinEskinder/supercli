@@ -108,6 +108,24 @@ pub struct RemotePairingEnvelope {
     pub sealed_b64: String,
 }
 
+impl RemotePairingEnvelope {
+    /// Mirror of Swift's `RemotePairingEnvelope.salt`: the base64-decoded
+    /// salt, or `None` when it is not valid base64.
+    pub fn salt(&self) -> Option<Vec<u8>> {
+        base64::engine::general_purpose::STANDARD
+            .decode(&self.salt_b64)
+            .ok()
+    }
+
+    /// Mirror of Swift's `RemotePairingEnvelope.sealed`: the base64-decoded
+    /// sealed payload, or `None` when it is not valid base64.
+    pub fn sealed(&self) -> Option<Vec<u8>> {
+        base64::engine::general_purpose::STANDARD
+            .decode(&self.sealed_b64)
+            .ok()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct RemotePairingRequest {
     pub token: String,
@@ -748,6 +766,30 @@ mod tests {
         )
         .expect("open");
         assert_eq!(opened, plaintext);
+    }
+
+    #[test]
+    fn envelope_salt_and_sealed_decode() {
+        // Swift: RemotePairingEnvelope.salt / .sealed base64 accessors.
+        let envelope = seal_pairing(
+            b"hello",
+            "secret",
+            "mac-1",
+            "http://h:1/mobile",
+            PairingDirection::Request,
+        )
+        .expect("seal");
+        // Salt is 16 bytes; sealed is nonce (12) + ciphertext + tag.
+        assert_eq!(envelope.salt().map(|s| s.len()), Some(16));
+        assert!(envelope.sealed().map(|s| s.len() > 12).unwrap_or(false));
+
+        let bad = RemotePairingEnvelope {
+            v: PAIRING_ENVELOPE_VERSION,
+            salt_b64: "not-base64!!!".into(),
+            sealed_b64: "also-bad".into(),
+        };
+        assert_eq!(bad.salt(), None);
+        assert_eq!(bad.sealed(), None);
     }
 
     #[test]

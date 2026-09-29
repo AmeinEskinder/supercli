@@ -3324,6 +3324,10 @@ mod port_tests {
         let patch = WorkspaceSettingsPatch {
             plugin_order: None,
             plugin_activation: None,
+            transcript_settings: None,
+            appearance_settings: None,
+            notification_settings: None,
+            experimental_settings: None,
             auto_stop_archive_minutes: Some(30),
             sidebar_stopped_limit: None,
             browser_default_access: None,

@@ -1,1 +1,1 @@
-{"id":"a1","sessionID":"target","title":"Allow write?","detail":"body"}
+{"id":"a1","kind":"write","title":"Allow write?","detail":"body","body":"body","callerSessionID":"caller","targetSessionID":"target","requestedAtUnixMs":1789996800000,"sessionID":"target"}

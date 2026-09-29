@@ -37,7 +37,8 @@ fn fixtures_dir() -> PathBuf {
 fn b_session_capabilities() -> SessionCapabilities {
     SessionCapabilities {
         restart: true,
-        resume_agent: true,
+        restart_agent: None,
+        resume_agent: Some(true),
         archive: false,
         notify_when_done: false,
     }
@@ -87,6 +88,14 @@ fn b_project_summary() -> ProjectSummary {
         sort_order: None,
         is_group: Some(true),
         worktree_branch: None,
+        folder_id: None,
+        color_id: None,
+        pinned: None,
+        git_branch: None,
+        mcp_blocked: false,
+        archived_session_count: None,
+        date_sorted: None,
+        session_order: None,
     }
 }
 
@@ -132,13 +141,18 @@ fn b_transcript_snapshot() -> TranscriptSnapshot {
 }
 
 /// Swift: `testPendingApprovalPresentsWriteOnKnownTargetOtherwiseCaller`.
-/// The Rust DTO carries the resolved target in `sessionID`.
 fn b_pending_approval() -> PendingApproval {
     PendingApproval {
         id: "a1".into(),
-        session_id: Some("target".into()),
+        kind: "write".into(),
         title: Some("Allow write?".into()),
         detail: Some("body".into()),
+        body: "body".into(),
+        caller_session_id: "caller".into(),
+        target_session_id: Some("target".into()),
+        requested_at_unix_ms: 1789996800000,
+        // The Rust DTO carries the resolved target in `sessionID`.
+        session_id: Some("target".into()),
     }
 }
 
@@ -283,7 +297,8 @@ fn b_create_session_response() -> CreateSessionResponse {
             latest_alert_at_unix_ms: None,
             capabilities: SessionCapabilities {
                 restart: false,
-                resume_agent: false,
+                restart_agent: None,
+                resume_agent: Some(false),
                 archive: false,
                 notify_when_done: false,
             },
@@ -402,6 +417,19 @@ fn b_terminal_cell_run() -> TerminalCellRun {
                 style: b_terminal_style(),
             },
         ],
+    }
+}
+
+/// Shape: `RemoteTerminalOutputChunk` in `RemoteControlProtocol.swift`.
+fn b_terminal_output_chunk() -> TerminalOutputChunk {
+    TerminalOutputChunk {
+        session_id: "session-1".into(),
+        offset: 100,
+        next_offset: 132,
+        data_base64: "aGVsbG8gd29ybGQ=".into(),
+        truncated: false,
+        captured_at_unix_ms: 1789996800000,
+        mode_preamble_base64: Some("G1s=".into()),
     }
 }
 
@@ -812,6 +840,11 @@ checker!(
     PushTokenRegistration,
     b_push_token_registration()
 );
+checker!(
+    c_terminal_output_chunk,
+    TerminalOutputChunk,
+    b_terminal_output_chunk()
+);
 
 type CheckCase = (&'static str, fn(&str));
 
@@ -859,6 +892,7 @@ fn check_cases() -> Vec<CheckCase> {
         ("plugin_updates.json", c_plugin_updates),
         ("restart_session_request.json", c_restart_session_request),
         ("push_token_registration.json", c_push_token_registration),
+        ("terminal_output_chunk.json", c_terminal_output_chunk),
     ]
 }
 
@@ -869,7 +903,7 @@ fn wire_fixtures_decode_and_reencode_byte_stable() {
     let dir = fixtures_dir();
     assert_eq!(
         check_cases().len(),
-        36,
+        37,
         "every DTO in dto.rs needs a fixture"
     );
     for (name, check) in check_cases() {
