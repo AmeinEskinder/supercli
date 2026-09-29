@@ -3,20 +3,13 @@
 # The gpuidart app (clients/supercli-app/) will get its own workflow.
 name: Apple prep (Dioxus, legacy frozen)
 
+# Manual dispatch only. The push/pull_request triggers were removed: this
+# workflow checks the frozen clients/legacy/dioxus tree, whose workspace
+# metadata is broken (see linux.yml dioxus-launchers), so every automatic
+# run fails at the iOS staticlib step. Workflow-only change;
+# clients/legacy stays frozen.
 on:
   workflow_dispatch:
-  push:
-    branches: ['main', 'next', 'feat/**']
-    paths:
-      # Legacy Dioxus tree is frozen — no CI triggers. Manual dispatch only.
-      - 'crates/supercli-client/**'
-      - 'tests/device/**'
-      - '.github/workflows/apple.yml'
-  pull_request:
-    paths:
-      - 'crates/supercli-client/**'
-      - 'tests/device/**'
-      - '.github/workflows/apple.yml'
 
 permissions:
   contents: read
