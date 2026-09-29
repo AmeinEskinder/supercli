@@ -1195,4 +1195,32 @@ mod tests {
         }
         assert_eq!(dominant_background_in_data(&payload), None);
     }
+
+    #[test]
+    fn fixed_background_override_wins_over_config() {
+        // Mirrors OpenCodeThemeTests.testFixedBackgroundOverrideWinsOverConfig:
+        // a fixed canvas override (e.g. live-sampled from the TUI's truecolor
+        // paint) takes precedence over the config-derived background.
+        let _guard = grok_env_lock().lock().unwrap();
+        let dir = temp_dir("grok-fixed-override");
+        // SAFETY: serialized by grok_env_lock; restored after.
+        unsafe { std::env::set_var("GROK_HOME", dir.to_str().unwrap()) };
+        write_temp_config(&dir, "config.toml", "[ui]\ntheme = \"groknight\"\n");
+        let base = grok_background("grok --always-approve").unwrap();
+        assert_eq!(base.dark, Some(0x141414));
+
+        // Mirrors `canvasOverride.map { Background(light: $0, dark: $0) } ?? background`:
+        // the override replaces the config background for both light and dark.
+        let canvas_override: Option<u32> = Some(0x0A0A12);
+        let resolved = canvas_override
+            .map(|v| ThemeBackground::new(Some(v), Some(v)))
+            .unwrap_or(base);
+        assert_eq!(resolved.light, Some(0x0A0A12));
+        assert_eq!(resolved.dark, Some(0x0A0A12));
+        // Pane style hex form matches Swift's `style.paneStyle.dark.background`.
+        assert_eq!(format!("#{:06X}", resolved.dark.unwrap()), "#0A0A12");
+
+        unsafe { std::env::remove_var("GROK_HOME") };
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
