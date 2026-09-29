@@ -122,14 +122,14 @@ pub mod presets;
 #[cfg(feature = "native-host")]
 pub mod profile;
 pub mod provider_theme;
-pub mod terminal_drop_maps;
-pub mod workspace_registry;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
 pub mod rate_limit;
 #[cfg(feature = "native-host")]
 pub mod screen_activity;
+pub mod terminal_drop_maps;
+pub mod workspace_registry;
 
 pub mod relay_connection;
 #[cfg(feature = "native-host")]

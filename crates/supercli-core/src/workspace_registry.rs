@@ -76,10 +76,7 @@ pub fn decode_registry(data: &[u8]) -> Vec<WorkspaceRecord> {
                         id: e.get("id")?.as_str()?.to_string(),
                         name: e.get("name")?.as_str()?.to_string(),
                         home: PathBuf::from(e.get("home")?.as_str()?),
-                        created_at_ms: e
-                            .get("createdAt")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0),
+                        created_at_ms: e.get("createdAt").and_then(|v| v.as_u64()).unwrap_or(0),
                     })
                 })
                 .collect()
@@ -106,7 +103,9 @@ pub fn encode_registry(workspaces: &[WorkspaceRecord]) -> Vec<u8> {
 
 /// Load the registry, returning empty on any failure.
 pub fn load_registry(io: &dyn WorkspaceRegistryIo) -> Vec<WorkspaceRecord> {
-    io.read_registry().map(|d| decode_registry(&d)).unwrap_or_default()
+    io.read_registry()
+        .map(|d| decode_registry(&d))
+        .unwrap_or_default()
 }
 
 /// Save the registry.
@@ -142,8 +141,7 @@ pub fn create_workspace(
         created_at_ms: io.now_ms(),
     };
     workspaces.push(record.clone());
-    save_registry(io, &workspaces)
-        .map_err(|e| WorkspaceError(format!("save registry: {e}")))?;
+    save_registry(io, &workspaces).map_err(|e| WorkspaceError(format!("save registry: {e}")))?;
     Ok(record)
 }
 
@@ -386,11 +384,17 @@ mod tests {
 
         rename_workspace(&mut io, &rec.id, "Renamed").unwrap();
         let loaded = load_registry(&io);
-        assert_eq!(loaded.iter().find(|r| r.id == rec.id).unwrap().name, "Renamed");
+        assert_eq!(
+            loaded.iter().find(|r| r.id == rec.id).unwrap().name,
+            "Renamed"
+        );
         // Empty rename is a no-op
         rename_workspace(&mut io, &rec.id, "   ").unwrap();
         let loaded = load_registry(&io);
-        assert_eq!(loaded.iter().find(|r| r.id == rec.id).unwrap().name, "Renamed");
+        assert_eq!(
+            loaded.iter().find(|r| r.id == rec.id).unwrap().name,
+            "Renamed"
+        );
 
         // Remove without deleting data keeps the dir
         remove_workspace(&mut io, &dir, &rec.id, false).unwrap();
