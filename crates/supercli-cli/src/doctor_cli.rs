@@ -299,29 +299,67 @@ fn check_grants_file(home: &Path) -> (&'static str, bool, String) {
     }
 }
 
-/// Phase 13 v2: Check grant audit chain (grants ⊆ chain).
-/// Every grant in grants.json must have a corresponding grant_created entry
-/// in the tamper-evident audit log. A grant without an audit entry is a
-/// security violation (quarantined on startup).
+/// Phase 13 v2 + revoke tightening: Check grant audit chain.
+/// - Chain integrity (hash-linked, tamper-evident).
+/// - grants ⊆ created: every grant in grants.json must have a corresponding
+///   grant_created entry in the audit log. A grant without an audit entry is
+///   a security violation (quarantined on startup).
+/// - Revocation consistency: a created key with no live grant and a
+///   grant_revoked entry is a legitimate revocation; without one it is an
+///   anomaly (possible deletion). A live grant whose latest revocation is
+///   newer than its latest creation reappeared without re-approval.
 fn check_grant_audit(_home: &Path) -> (&'static str, bool, String) {
     // Verify the audit chain integrity.
-    match supercli_core::grant_audit::verify_grant_audit() {
-        Ok(count) => {
-            // Check grants ⊆ chain.
-            match supercli_core::grant_audit::doctor_check_grants_subset() {
-                Ok(()) => (
-                    "grant-audit",
-                    true,
-                    format!("{count} entries verified, grants ⊆ chain"),
-                ),
-                Err(e) => ("grant-audit", false, e),
-            }
+    let count = match supercli_core::grant_audit::verify_grant_audit() {
+        Ok(count) => count,
+        Err(e) => {
+            return (
+                "grant-audit",
+                false,
+                format!("audit chain verification failed: {e}"),
+            )
         }
-        Err(e) => (
-            "grant-audit",
-            false,
-            format!("audit chain verification failed: {e}"),
-        ),
+    };
+    // Check grants ⊆ created.
+    if let Err(e) = supercli_core::grant_audit::doctor_check_grants_subset() {
+        return ("grant-audit", false, e);
+    }
+    // Check revocation consistency.
+    match supercli_core::grant_audit::check_revocation_consistency() {
+        Ok(rep) => {
+            let mut detail = format!("{count} entries verified, grants ⊆ chain");
+            if !rep.revoked_clean.is_empty() {
+                detail.push_str(&format!(
+                    "; {} revoked (audit trail present)",
+                    rep.revoked_clean.len()
+                ));
+            }
+            if !rep.revoked_but_present.is_empty() {
+                return (
+                    "grant-audit",
+                    false,
+                    format!(
+                        "{detail}; ANOMALY: live grant(s) revoked after last creation \
+                         (possible tamper): {:?}",
+                        rep.revoked_but_present
+                    ),
+                );
+            }
+            if !rep.anomalous.is_empty() {
+                return (
+                    "grant-audit",
+                    false,
+                    format!(
+                        "{detail}; ANOMALY: {} created grant(s) missing with no revoke \
+                         entry (possible deletion): {:?}",
+                        rep.anomalous.len(),
+                        rep.anomalous
+                    ),
+                );
+            }
+            ("grant-audit", true, detail)
+        }
+        Err(e) => ("grant-audit", false, e),
     }
 }
 

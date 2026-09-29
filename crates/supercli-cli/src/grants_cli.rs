@@ -23,10 +23,11 @@ so repeat requests skip the prompt):
   revoke --caller C --target APP --kind app-open
                              revoke a remembered app-open approval
 
-Kinds: write (default), browser, computer, app-open. Revocation edits
-grants.json through the real grant store; the audit chain keeps the
-creation entry as history (audit entry without a grant = revoked).
-Exit 0 on success; exit 1 with an error when the grant does not exist.";
+Kinds: write (default), browser, computer, app-open. Revocation removes the
+grant from grants.json and appends a chained `grant_revoked` audit entry
+(actor, key, time), so the chain distinguishes a legitimate revoke from a
+deleted grant. Exit 0 on success; exit 1 with an error when the grant does
+not exist.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GrantKind {
@@ -138,7 +139,10 @@ fn cmd_revoke(args: &[String], json: bool) -> Result<(), String> {
     }
 
     let key = canonical_key(kind, &caller, target.as_deref());
-    grant_store::remove_grants(std::slice::from_ref(&key))?;
+    // Remove the grant first (fail closed), then append the chained
+    // grant_revoked audit entry — never rely on "audit entry without a
+    // grant" to mean revoked.
+    supercli_core::grant_audit::revoke_grant("human:cli", &key)?;
     if json {
         println!("{}", serde_json::json!({ "revoked": key }));
     } else {

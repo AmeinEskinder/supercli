@@ -26,10 +26,25 @@
 //!   `grants.json.quarantined`) and report a doctor error. This is a
 //!   tamper-evidence violation — a grant exists without an audit record.
 //!
+//! ## Revocation
+//!
+//! `supercli grants revoke` removes the grant from `grants.json` FIRST, then
+//! appends a chained `grant_revoked` entry (actor, key, time) to the audit
+//! log. The explicit entry is what lets the chain distinguish a legitimate
+//! revoke from a deleted grant: without it, "audit entry without grant" is
+//! ambiguous (crash during creation vs. tampered store).
+//!
+//! Ordering note: the permission removal lands before the audit entry (fail
+//! closed — a crash leaves the grant revoked). A crash between the two is
+//! fail-visible: doctor reports the key as anomalous.
+//!
 //! ## Doctor check
 //!
-//! `doctor` verifies `grants ⊆ chain`: every grant in `grants.json` must have
-//! a corresponding `grant_created` entry in the audit log.
+//! `doctor` verifies `grants ⊆ created`: every grant in `grants.json` must
+//! have a corresponding `grant_created` entry, and a live grant's latest
+//! creation must postdate any revocation. It also classifies created keys
+//! with no live grant: `grant_revoked` present → legitimate revocation;
+//! absent → anomaly (possible deletion).
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -105,6 +120,14 @@ fn acquire_audit_lock(audit_path: &std::path::Path) -> Result<AuditLock, String>
     }
 }
 
+/// Audit event types recorded in grant-audit.jsonl.
+pub const EVENT_GRANT_CREATED: &str = "grant_created";
+pub const EVENT_GRANT_REVOKED: &str = "grant_revoked";
+
+fn default_event() -> String {
+    EVENT_GRANT_CREATED.to_string()
+}
+
 /// A grant audit entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrantAuditEntry {
@@ -119,6 +142,11 @@ pub struct GrantAuditEntry {
     pub tool: String,
     /// The grant key (e.g. "write:session-a:session-b")
     pub grant_key: String,
+    /// "grant_created" or "grant_revoked". Entries written before the
+    /// revoke-tightening have no such field on disk and default to
+    /// "grant_created".
+    #[serde(default = "default_event")]
+    pub event: String,
     pub prev_hash: String,
     pub entry_hash: String,
 }
@@ -188,6 +216,7 @@ fn last_entry_hash_at(path: &std::path::Path) -> Result<Option<String>, String> 
 
 /// Build a single audit entry, chaining off `prev_hash`.
 fn build_entry(
+    event: &str,
     actor: &str,
     scope: &str,
     tool: &str,
@@ -201,6 +230,7 @@ fn build_entry(
         scope: scope.to_string(),
         tool: tool.to_string(),
         grant_key: grant_key.to_string(),
+        event: event.to_string(),
         prev_hash,
         entry_hash: String::new(),
     };
@@ -242,11 +272,24 @@ pub fn record_grants_created_batch(
     record_grants_created_batch_at(&crate::app_paths::supercli_home(), items)
 }
 
-/// Same as `record_grants_created_batch` but with an explicit home directory,
-/// for tests that must not mutate the process-global SUPERCLI_HOME env var.
-pub fn record_grants_created_batch_at(
+/// A single audit entry to append (chaining resolved by the appender).
+struct PendingEntry {
+    event: String,
+    actor: String,
+    scope: String,
+    tool: String,
+    grant_key: String,
+}
+
+/// Append entries to the audit log with correct chaining and a single fsync.
+///
+/// Holds the cross-process audit lock for the read-tail + append + fsync
+/// sequence so concurrent writers (Host and CLI) cannot fork the chain.
+/// Without this, two processes can both read the same prev_hash and append
+/// entries with the same prev_hash, forking the hash chain.
+fn append_entries_at(
     home: &std::path::Path,
-    items: &[(&str, &str, &str, &str)],
+    pending: Vec<PendingEntry>,
 ) -> Result<Vec<GrantAuditEntry>, String> {
     let path = home.join(AUDIT_FILE);
     if let Some(parent) = path.parent() {
@@ -254,20 +297,25 @@ pub fn record_grants_created_batch_at(
     }
 
     // Cross-process serialization: acquire exclusive flock on the audit
-    // lockfile before reading the tail and appending. Without this, two
-    // processes (e.g. Host and CLI) can both read the same prev_hash and
-    // append entries with the same prev_hash, forking the chain.
-    // The lock is held for the read-tail + append + fsync sequence.
+    // lockfile before reading the tail and appending. The lock is held for
+    // the read-tail + append + fsync sequence.
     let _lock = acquire_audit_lock(&path)?;
 
     let mut prev_hash = last_entry_hash_at(&path)
         .map_err(|e| format!("read audit log: {e}"))?
         .unwrap_or_else(|| GENESIS_PREV_HASH.to_string());
 
-    let mut entries = Vec::with_capacity(items.len());
+    let mut entries = Vec::with_capacity(pending.len());
     let mut buf = String::new();
-    for (actor, scope, tool, grant_key) in items {
-        let entry = build_entry(actor, scope, tool, grant_key, prev_hash)?;
+    for p in pending {
+        let entry = build_entry(
+            &p.event,
+            &p.actor,
+            &p.scope,
+            &p.tool,
+            &p.grant_key,
+            prev_hash,
+        )?;
         prev_hash = entry.entry_hash.clone();
         let mut line = serde_json::to_string(&entry).map_err(|e| e.to_string())?;
         line.push('\n');
@@ -288,6 +336,77 @@ pub fn record_grants_created_batch_at(
         .map_err(|e| format!("fsync {}: {e}", path.display()))?;
 
     Ok(entries)
+}
+
+/// Same as `record_grants_created_batch` but with an explicit home directory,
+/// for tests that must not mutate the process-global SUPERCLI_HOME env var.
+pub fn record_grants_created_batch_at(
+    home: &std::path::Path,
+    items: &[(&str, &str, &str, &str)],
+) -> Result<Vec<GrantAuditEntry>, String> {
+    append_entries_at(
+        home,
+        items
+            .iter()
+            .map(|(actor, scope, tool, grant_key)| PendingEntry {
+                event: EVENT_GRANT_CREATED.to_string(),
+                actor: actor.to_string(),
+                scope: scope.to_string(),
+                tool: tool.to_string(),
+                grant_key: grant_key.to_string(),
+            })
+            .collect(),
+    )
+}
+
+/// Append a `grant_revoked` entry to the audit log.
+///
+/// Records actor, grant key, and timestamp as a new chained entry (same
+/// hash-chain discipline as creation entries, so the hash continuity of the
+/// log is preserved). This is the explicit revocation record: without it the
+/// chain cannot distinguish a legitimate revoke from a deleted grant.
+pub fn record_grant_revoked(actor: &str, grant_key: &str) -> Result<GrantAuditEntry, String> {
+    record_grant_revoked_at(&crate::app_paths::supercli_home(), actor, grant_key)
+}
+
+/// Same as `record_grant_revoked` but with an explicit home directory.
+pub fn record_grant_revoked_at(
+    home: &std::path::Path,
+    actor: &str,
+    grant_key: &str,
+) -> Result<GrantAuditEntry, String> {
+    // scope/tool mirror the creation convention (the grant kind prefix, also
+    // the first component of the canonical key); the `event` field carries
+    // the revoke semantics.
+    let kind = grant_key.split(':').next().unwrap_or("");
+    let entries = append_entries_at(
+        home,
+        vec![PendingEntry {
+            event: EVENT_GRANT_REVOKED.to_string(),
+            actor: actor.to_string(),
+            scope: kind.to_string(),
+            tool: kind.to_string(),
+            grant_key: grant_key.to_string(),
+        }],
+    )?;
+    Ok(entries.into_iter().next().unwrap())
+}
+
+/// Revoke a grant: remove it from `grants.json`, then append the chained
+/// `grant_revoked` audit entry.
+///
+/// Ordering is deliberate: the permission removal lands first (fail closed —
+/// a crash leaves the grant revoked), then the audit entry. A crash between
+/// the two is fail-visible: doctor flags the created-without-revoke gap as
+/// an anomaly instead of silently treating the grant as revoked.
+///
+/// Quarantining (`reconcile_grants`) intentionally does NOT go through here:
+/// a quarantined grant is not a user revocation, and the quarantine file is
+/// its own forensic record.
+pub fn revoke_grant(actor: &str, grant_key: &str) -> Result<(), String> {
+    crate::grant_store::remove_grants(std::slice::from_ref(&grant_key.to_string()))?;
+    record_grant_revoked(actor, grant_key)?;
+    Ok(())
 }
 
 /// Verify the grant audit chain. Returns the number of entries verified.
@@ -311,8 +430,15 @@ pub fn verify_grant_audit_at(home: &std::path::Path) -> Result<usize, String> {
         if line.is_empty() {
             continue;
         }
-        let entry: GrantAuditEntry =
+        // Parse the raw JSON first. The entry_hash was computed over the
+        // stored bytes (minus entry_hash) at write time. Entries written
+        // before the `event` field existed hash WITHOUT it; re-serializing
+        // through the struct would add the defaulted field and break their
+        // hashes. Hashing the raw value keeps both generations verifiable.
+        let raw: serde_json::Value =
             serde_json::from_str(line).map_err(|e| format!("line {idx}: parse: {e}"))?;
+        let entry: GrantAuditEntry =
+            serde_json::from_value(raw.clone()).map_err(|e| format!("line {idx}: schema: {e}"))?;
 
         // Verify prev_hash links.
         if entry.prev_hash != prev_hash {
@@ -322,8 +448,8 @@ pub fn verify_grant_audit_at(home: &std::path::Path) -> Result<usize, String> {
             ));
         }
 
-        // Verify entry_hash.
-        let mut canonical = serde_json::to_value(&entry).map_err(|e| e.to_string())?;
+        // Verify entry_hash over the raw stored bytes (minus entry_hash).
+        let mut canonical = raw;
         if let Some(obj) = canonical.as_object_mut() {
             obj.remove("entry_hash");
         }
@@ -340,21 +466,102 @@ pub fn verify_grant_audit_at(home: &std::path::Path) -> Result<usize, String> {
     Ok(count)
 }
 
-/// Get all grant keys that have audit entries.
-fn audited_grant_keys() -> Result<std::collections::HashSet<String>, String> {
+/// Read every audit entry (typed). A malformed line is an error — the log is
+/// tamper-evident and must parse cleanly.
+fn read_all_entries() -> Result<Vec<GrantAuditEntry>, String> {
     let path = audit_path();
     let content = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut keys = std::collections::HashSet::new();
-    for line in content.lines() {
+    let mut entries = Vec::new();
+    for (idx, line) in content.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        if let Ok(entry) = serde_json::from_str::<GrantAuditEntry>(line) {
-            keys.insert(entry.grant_key);
+        let entry: GrantAuditEntry =
+            serde_json::from_str(line).map_err(|e| format!("line {idx}: parse: {e}"))?;
+        entries.push(entry);
+    }
+    Ok(entries)
+}
+
+/// Grant keys with a `grant_created` entry, and keys with a `grant_revoked`
+/// entry. Entries predating the `event` field count as created.
+fn audit_key_sets() -> Result<
+    (
+        std::collections::HashSet<String>,
+        std::collections::HashSet<String>,
+    ),
+    String,
+> {
+    let mut created = std::collections::HashSet::new();
+    let mut revoked = std::collections::HashSet::new();
+    for entry in read_all_entries()? {
+        if entry.event == EVENT_GRANT_REVOKED {
+            revoked.insert(entry.grant_key);
+        } else {
+            created.insert(entry.grant_key);
         }
     }
-    Ok(keys)
+    Ok((created, revoked))
+}
+
+/// Revocation consistency report for doctor.
+///
+/// - `revoked_clean`: keys with a `grant_created` entry, no live grant, and
+///   a `grant_revoked` entry — legitimate revocations.
+/// - `anomalous`: keys with a `grant_created` entry, no live grant, and NO
+///   `grant_revoked` entry. The chain cannot tell a legitimate revoke from a
+///   deleted grant here (possible deletion, or a crash between the creation
+///   write-ahead and the grants.json write).
+/// - `revoked_but_present`: live grants whose latest `grant_revoked` entry is
+///   newer than their latest `grant_created` entry — the grant reappeared
+///   without re-approval (possible tamper).
+#[derive(Debug, Default)]
+pub struct RevocationConsistency {
+    pub revoked_clean: Vec<String>,
+    pub anomalous: Vec<String>,
+    pub revoked_but_present: Vec<String>,
+}
+
+/// Check revocation consistency (see `RevocationConsistency`).
+pub fn check_revocation_consistency() -> Result<RevocationConsistency, String> {
+    let grants = crate::grant_store::load_grants_for_reconcile();
+    let live: std::collections::HashSet<String> = crate::grant_store::flatten_grant_keys(&grants);
+    let entries = read_all_entries()?;
+
+    // Latest event index per key, per event type.
+    let mut last_created: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    let mut last_revoked: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for (idx, entry) in entries.iter().enumerate() {
+        if entry.event == EVENT_GRANT_REVOKED {
+            last_revoked.insert(entry.grant_key.clone(), idx);
+        } else {
+            last_created.insert(entry.grant_key.clone(), idx);
+        }
+    }
+
+    let mut report = RevocationConsistency::default();
+    for (key, &created_idx) in &last_created {
+        let revoked_idx = last_revoked.get(key).copied();
+        if live.contains(key) {
+            // Live grant: its latest creation must postdate any revocation.
+            if let Some(ridx) = revoked_idx {
+                if ridx > created_idx {
+                    report.revoked_but_present.push(key.clone());
+                }
+            }
+        } else if revoked_idx.is_some() {
+            report.revoked_clean.push(key.clone());
+        } else {
+            report.anomalous.push(key.clone());
+        }
+    }
+    report.revoked_clean.sort();
+    report.anomalous.sort();
+    report.revoked_but_present.sort();
+    Ok(report)
 }
 
 /// Startup reconciliation.
@@ -369,7 +576,9 @@ pub fn reconcile_grants() -> Result<(), String> {
     // Flatten to canonical keys (kind:caller:target) so the comparison is
     // against the same key space the audit log records.
     let grant_keys = crate::grant_store::flatten_grant_keys(&grants);
-    let audited = audited_grant_keys()?;
+    // Only grant_created entries authorize a grant; grant_revoked entries
+    // are history, not authorization.
+    let (audited, _) = audit_key_sets()?;
 
     let mut orphaned = Vec::new();
     for key in &grant_keys {
@@ -434,11 +643,13 @@ fn crash_safe_write(path: &std::path::Path, data: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Doctor check: every grant must have an audit entry (grants ⊆ chain).
+/// Doctor check: every grant must have a grant_created audit entry
+/// (grants ⊆ created), and a live grant's latest creation must postdate any
+/// revocation (see `check_revocation_consistency`).
 pub fn doctor_check_grants_subset() -> Result<(), String> {
     let grants = crate::grant_store::load_grants_for_reconcile();
     let grant_keys = crate::grant_store::flatten_grant_keys(&grants);
-    let audited = audited_grant_keys()?;
+    let (audited, _) = audit_key_sets()?;
 
     let mut missing = Vec::new();
     for key in &grant_keys {
@@ -600,8 +811,17 @@ mod tests {
             let keys = crate::grant_store::flatten_grant_keys(&grants);
             assert!(!keys.contains("write:ghost:target"), "{keys:?}");
 
-            // Doctor is satisfied (grants ⊆ chain holds vacuously).
+            // Doctor is satisfied on the subset (grants ⊆ created holds
+            // vacuously)...
             doctor_check_grants_subset().unwrap();
+
+            // ...but the revocation consistency check flags it: there is no
+            // grant_revoked entry, so the chain cannot tell a legitimate
+            // revoke from a deleted grant.
+            let rep = check_revocation_consistency().unwrap();
+            assert_eq!(rep.anomalous, vec!["write:ghost:target".to_string()]);
+            assert!(rep.revoked_clean.is_empty());
+            assert!(rep.revoked_but_present.is_empty());
         });
     }
 
@@ -632,6 +852,121 @@ mod tests {
 
             let err = doctor_check_grants_subset().unwrap_err();
             assert!(err.contains("browser:sneaky"), "{err}");
+        });
+    }
+
+    #[test]
+    fn revoke_appends_grant_revoked_entry() {
+        with_test_home("revoke-entry", |_dir| {
+            // The production order: audit entry first, then the grant.
+            record_grant_created("human:device-7", "write", "write", "write:alice:bob").unwrap();
+            crate::grant_store::edit_grants(|root| {
+                crate::grant_writer::apply_grant_mutation(root, "write", "alice", Some("bob"));
+                Ok::<(), String>(())
+            })
+            .unwrap();
+
+            revoke_grant("human:cli", "write:alice:bob").unwrap();
+
+            // The grant is gone...
+            let grants = crate::grant_store::load_grants_for_reconcile();
+            let keys = crate::grant_store::flatten_grant_keys(&grants);
+            assert!(!keys.contains("write:alice:bob"), "{keys:?}");
+
+            // ...and the audit log ends with a chained grant_revoked entry
+            // carrying actor, key, and time.
+            let entries = read_all_entries().unwrap();
+            assert_eq!(entries.len(), 2);
+            let revoked = entries.last().unwrap();
+            assert_eq!(revoked.event, EVENT_GRANT_REVOKED);
+            assert_eq!(revoked.actor, "human:cli");
+            assert_eq!(revoked.grant_key, "write:alice:bob");
+            assert!(revoked.ts_ms > 0);
+            // Chained off the creation entry.
+            assert_eq!(revoked.prev_hash, entries[0].entry_hash);
+
+            // Chain still verifies (the hash covers the new event field).
+            assert_eq!(verify_grant_audit().unwrap(), 2);
+
+            // Doctor: consistent — a legitimate revocation, nothing anomalous.
+            doctor_check_grants_subset().unwrap();
+            let rep = check_revocation_consistency().unwrap();
+            assert_eq!(rep.revoked_clean, vec!["write:alice:bob".to_string()]);
+            assert!(rep.anomalous.is_empty());
+            assert!(rep.revoked_but_present.is_empty());
+
+            // Startup reconciliation stays quiet on a clean revoke.
+            reconcile_grants().unwrap();
+        });
+    }
+
+    #[test]
+    fn doctor_flags_live_grant_revoked_after_creation() {
+        with_test_home("revoked-present", |_dir| {
+            // created -> revoked -> the grant reappears without re-approval
+            // (hand-edit or tamper): the latest event for the key is a
+            // revocation, so the live grant is unauthorized.
+            record_grant_created("human:device-8", "write", "write", "write:eve:mall").unwrap();
+            crate::grant_store::edit_grants(|root| {
+                crate::grant_writer::apply_grant_mutation(root, "write", "eve", Some("mall"));
+                Ok::<(), String>(())
+            })
+            .unwrap();
+            revoke_grant("human:cli", "write:eve:mall").unwrap();
+            // Re-add the grant without a new approval.
+            crate::grant_store::edit_grants(|root| {
+                crate::grant_writer::apply_grant_mutation(root, "write", "eve", Some("mall"));
+                Ok::<(), String>(())
+            })
+            .unwrap();
+
+            let rep = check_revocation_consistency().unwrap();
+            assert_eq!(rep.revoked_but_present, vec!["write:eve:mall".to_string()]);
+            assert!(rep.anomalous.is_empty());
+        });
+    }
+
+    #[test]
+    fn legacy_entries_without_event_field_still_verify() {
+        with_test_home("legacy", |_dir| {
+            // Simulate an entry written by a binary predating the `event`
+            // field: no "event" key on disk, hash over the event-less
+            // canonical form.
+            let mut obj = serde_json::json!({
+                "entry_id": "legacy-1",
+                "ts_ms": 1234567890u64,
+                "actor": "human:device-1",
+                "scope": "write",
+                "tool": "write",
+                "grant_key": "write:a:b",
+                "prev_hash": "0",
+            });
+            let hash = sha256_hex(&serde_json::to_vec(&obj).unwrap());
+            obj["entry_hash"] = serde_json::json!(hash);
+            std::fs::write(
+                audit_path(),
+                format!("{}\n", serde_json::to_string(&obj).unwrap()),
+            )
+            .unwrap();
+
+            // The chain verifies with the event defaulting to grant_created...
+            assert_eq!(verify_grant_audit().unwrap(), 1);
+
+            // ...and the key counts as a created entry: a matching live grant
+            // passes the subset check and is not anomalous.
+            crate::grant_store::edit_grants(|root| {
+                crate::grant_writer::apply_grant_mutation(root, "write", "a", Some("b"));
+                Ok::<(), String>(())
+            })
+            .unwrap();
+            doctor_check_grants_subset().unwrap();
+            let rep = check_revocation_consistency().unwrap();
+            assert!(rep.anomalous.is_empty());
+            assert!(rep.revoked_but_present.is_empty());
+
+            // New entries chain onto the legacy entry without breaking it.
+            record_grant_revoked("human:cli", "write:a:b").unwrap();
+            assert_eq!(verify_grant_audit().unwrap(), 2);
         });
     }
 }
