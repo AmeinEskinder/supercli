@@ -122,6 +122,7 @@ pub mod presets;
 #[cfg(feature = "native-host")]
 pub mod profile;
 pub mod provider_theme;
+pub mod provider_theme_request;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
