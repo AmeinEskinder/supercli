@@ -4,8 +4,30 @@
 /// A resolved, client-renderable runtime icon.
 library;
 
-import 'runtime_catalog.dart';
+import 'native_client.dart';
 import 'plugin_settings_list.dart';
+
+/// Runtime kind for icon selection. The authoritative kind lives in the Rust
+/// catalog; this mirrors it for UI switch statements.
+enum SupercliRuntimeKind {
+  agent,
+  app,
+  editor,
+  terminal;
+
+  static SupercliRuntimeKind fromString(String? value) {
+    switch (value) {
+      case 'agent':
+        return SupercliRuntimeKind.agent;
+      case 'app':
+        return SupercliRuntimeKind.app;
+      case 'editor':
+        return SupercliRuntimeKind.editor;
+      default:
+        return SupercliRuntimeKind.terminal;
+    }
+  }
+}
 
 /// A resolved, client-renderable runtime icon. Provider artwork is generated
 /// from `runtimes/<slug>/assets/icon.svg`; this type owns only generic agent
@@ -31,9 +53,10 @@ final class SupercliToolIcon {
   final String fallbackSystemName;
   final bool usesRuntimeAsset;
 
-  /// All icons: one per runtime plus the terminal fallback.
+  /// All icons: one per runtime (from the Rust catalog via FFI) plus the
+  /// terminal fallback.
   static List<SupercliToolIcon> get allCases => [
-    ...SupercliRuntimeCatalog.runtimes.map(forRuntime),
+    ...SupercliNative.runtimeCatalog().map(forRuntime),
     terminal,
   ];
 
@@ -44,8 +67,14 @@ final class SupercliToolIcon {
     String? providerID,
     required String command,
   }) {
-    final runtime = SupercliRuntimeCatalog.runtime(id: providerID) ??
-        SupercliRuntimeCatalog.runtime(command: command);
+    Map<String, dynamic>? runtime;
+    if (providerID != null) {
+      runtime = SupercliNative.runtimeById(providerID);
+    }
+    runtime ??= () {
+      final slug = SupercliNative.runtimeDetectTool(command);
+      return slug == null ? null : SupercliNative.runtimeById(slug);
+    }();
     if (runtime != null) {
       return forRuntime(runtime);
     }
@@ -75,19 +104,20 @@ final class SupercliToolIcon {
     );
   }
 
-  static SupercliToolIcon forRuntime(SupercliRuntimeMetadata runtime) {
-    final authoredSVG = runtime.iconSVG?.trim();
+  static SupercliToolIcon forRuntime(Map<String, dynamic> runtime) {
+    final authoredSVG = (runtime['icon'] as String?)?.trim();
     final hasAuthoredSVG = authoredSVG?.isNotEmpty == true;
+    final kind = SupercliRuntimeKind.fromString(runtime['kind'] as String?);
     return SupercliToolIcon(
-      id: runtime.stableID,
-      key: runtime.iconKey,
-      label: runtime.label,
-      kind: runtime.kind,
-      svgSource: hasAuthoredSVG ? authoredSVG! : _genericSvg(runtime.kind),
+      id: runtime['id'] as String? ?? '',
+      key: runtime['slug'] as String? ?? '',
+      label: runtime['label'] as String? ?? '',
+      kind: kind,
+      svgSource: hasAuthoredSVG ? authoredSVG! : _genericSvg(kind),
       // The generic fallback is always monochrome regardless of a
       // malformed descriptor's rendering hint.
-      isTemplate: hasAuthoredSVG ? runtime.iconIsTemplate : true,
-      fallbackSystemName: _fallbackSystemName(runtime.kind),
+      isTemplate: true,
+      fallbackSystemName: _fallbackSystemName(kind),
       usesRuntimeAsset: hasAuthoredSVG,
     );
   }

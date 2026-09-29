@@ -118,9 +118,12 @@ pub mod plugins;
 mod portable_gating_tests;
 #[cfg(feature = "native-host")]
 pub mod preset_overlay;
+pub mod presets;
 #[cfg(feature = "native-host")]
 pub mod profile;
 pub mod provider_theme;
+pub mod terminal_drop_maps;
+pub mod workspace_registry;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
