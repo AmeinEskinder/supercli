@@ -453,3 +453,36 @@ files:
       - file: crates/supercli-client/src/remote_supercli_peer.rs
         count: 19
     notes: "172 LOC. Ported as remote_supercli_peer.rs: peer credential parsing, session row decoding, SHA-256 cert pinning verification (reuses tls::), error mapping, and owner-only peer file persistence. The URLSession-based fetchSessions HTTP call is not ported (Apple-specific networking); the pure request-building and response-parsing logic is covered."
+  native/SupercliNative/Sources/SupercliNative/NativeRemoteBackend.swift:
+    destination: "Rust: supercli-core/client"
+    status: ported
+    checklist: ""
+    behaviours:
+      - swift: "RemoteSSHConnectionMode (command vs interactiveShell) SSH open/install config"
+        target: "crates/supercli-core::SshLaunchMode + crates/supercli-native-bridge::NativeSshLaunchMode"
+        test: "crates/supercli-native-bridge/src/lib.rs::remote_ssh_config_open_accepts_interactive_askpass_without_returning_secret"
+      - swift: "NativeRemoteBackendError outcome taxonomy (effectOutcomeIsUnknown / effectWasNotApplied)"
+        target: "crates/supercli-client/src/remote_runtime.rs::BackendError::effect_outcome_is_unknown / effect_was_not_applied"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::outcome_unknown_triggers_refresh"
+      - swift: "NativeRemoteBackendError.effectCanContinueOnCurrentGeneration (notApplied + host_operation_rejected keeps generation callable)"
+        target: "crates/supercli-client/src/remote_runtime.rs::BackendError::effect_can_continue_on_current_generation"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::effect_can_continue_on_current_generation"
+      - swift: "NativeRemoteOutputPage one-shot claim lease + deinit discard"
+        target: "crates/supercli-native-bridge::supercli_native_bridge_remote_output_commit / remote_output_discard"
+        test: "crates/supercli-native-bridge/src/lib.rs::remote_output_discard_replays_the_uncommitted_cursor"
+      - swift: "NativeRemoteBackendProtocol full verb surface (bootstrap, poll/commit/discard output, session effects, create, metrics)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteBackend trait + crates/supercli-core/src/remote_session_backend.rs::RemoteSessionBackend"
+        test: "crates/supercli-core/src/remote_session_backend.rs::tests (read_session_metrics, generation_changed_effect_is_not_applied_or_retried)"
+      - swift: "Saved-host identity trust boundary (validateHostIdentity: bootstrap macID must match expected host)"
+        target: "crates/supercli-client/src/remote_runtime.rs::validate_probed_identity"
+        test: "crates/supercli-core/src/remote_session_backend.rs::bootstrap_is_typed_versioned_and_pins_host_identity"
+      - swift: "Protocol fail-closed defaults for backends predating verbs (opener/app/install/upload/preset unavailable)"
+        target: "crates/supercli-client/src/remote_runtime.rs::RemoteHostRuntime capability gating (CapabilityUnavailable)"
+        test: "crates/supercli-client/src/remote_runtime.rs::tests::set_opener_uses_capability"
+      - swift: "NativeRemoteSessionMetrics (grid + optional outputOffset) and NativeRemoteCreatedSession receipts"
+        target: "crates/supercli-core/src/remote_session_backend.rs::RemoteSessionMetrics + crates/supercli-client/src/dto.rs::CreatedSession"
+        test: "crates/supercli-core/src/remote_session_backend.rs::session_metrics_read_uses_the_v1_query_contract"
+    tests:
+      - file: native/SupercliNative/Tests/SupercliNativeTests/NativeRemoteBackendTests.swift
+        count: 10
+    notes: "2195 LOC. Swift ownership boundary for the Rust RemoteSessionBackend; the backend logic, FFI entry points, error taxonomy, and identity validation were already ported by prior work (no duplication). This slice adds the one genuine gap: BackendError::effect_can_continue_on_current_generation (semantic-rejection-keeps-generation predicate) with 1 new test. Swift file retained (not deleted) pending verify-delete review."

@@ -385,6 +385,15 @@ impl BackendError {
     pub fn effect_was_not_applied(&self) -> bool {
         self.kind == Some(BackendErrorKind::NotApplied)
     }
+
+    /// Only a correlated semantic Host rejection proves both non-application
+    /// and that the accepted generation remains callable. Transport-level
+    /// NotSent failures are also `not_applied`, but Rust invalidates their
+    /// generation; later queued effects must not reconnect behind the UI gate.
+    /// Mirrors Swift `NativeRemoteBackendError.effectCanContinueOnCurrentGeneration`.
+    pub fn effect_can_continue_on_current_generation(&self) -> bool {
+        self.effect_was_not_applied() && self.code == "host_operation_rejected"
+    }
 }
 
 impl std::fmt::Display for BackendError {
@@ -3605,6 +3614,30 @@ mod port_tests {
         assert!(err.to_string().contains("timeout"));
         let auth = BackendError::new("auth", "denied");
         assert!(auth.kind.is_none());
+    }
+
+    #[test]
+    fn effect_can_continue_on_current_generation() {
+        // Swift: NativeRemoteBackendError.effectCanContinueOnCurrentGeneration
+        // Only a correlated semantic Host rejection (not_applied +
+        // host_operation_rejected) proves the generation stays callable.
+        let semantic = BackendError::not_applied("host_operation_rejected", "denied");
+        assert!(semantic.effect_was_not_applied());
+        assert!(semantic.effect_can_continue_on_current_generation());
+
+        // Transport-level NotSent is also not_applied, but Rust invalidates
+        // the generation — callers must not continue on it.
+        let transport = BackendError::not_applied("not_sent", "transport down");
+        assert!(transport.effect_was_not_applied());
+        assert!(!transport.effect_can_continue_on_current_generation());
+
+        // Outcome-unknown never continues.
+        let unknown = BackendError::outcome_unknown("timeout", "uncertain");
+        assert!(!unknown.effect_can_continue_on_current_generation());
+
+        // Plain errors never continue.
+        let plain = BackendError::new("denied", "no");
+        assert!(!plain.effect_can_continue_on_current_generation());
     }
 
     #[test]
