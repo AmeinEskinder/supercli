@@ -213,7 +213,7 @@ files:
   # --- Porter Y: viewer presence (pane-header presence chips) ---
   native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "ViewerInfo value type (id, deviceID, displayName, lastSeen)"
@@ -252,11 +252,11 @@ files:
     tests:
       - file: clients/supercli-app/test/viewer_presence_test.dart
         count: 10
-    notes: "Synchronous decision kernel ported; GAP-VIEWERPRESENCE-1 (DispatchSource watcher + 5s Timer), GAP-VIEWERPRESENCE-2 (shared singleton/ToastCenter), GAP-VIEWERPRESENCE-3 (locale-aware sort) not ported."
+    notes: "Synchronous decision kernel ported; GAP-VIEWERPRESENCE-1 (DispatchSource watcher + 5s Timer), GAP-VIEWERPRESENCE-2 (shared singleton/ToastCenter), GAP-VIEWERPRESENCE-3 (locale-aware sort) not ported. Logic moving to Rust per Amein's one-implementation rule. TTL logic (15s/20s) belongs in Rust; Dart parses files written by supercli-serve/src/presence.rs."
 
   native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: ported
+    status: partial
     checklist: ""
     behaviours:
       - swift: "7 XCTest cases ported 1:1 plus 3 parsing unit tests"
@@ -265,4 +265,4 @@ files:
     tests:
       - file: clients/supercli-app/test/viewer_presence_test.dart
         count: 10
-    notes: "Test source ported alongside the implementation."
+    notes: "Test source ported alongside the implementation. Logic moving to Rust per Amein's one-implementation rule."
