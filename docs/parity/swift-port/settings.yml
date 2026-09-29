@@ -66,7 +66,7 @@ files:
         count: 16
     notes: "2026-09-29 (porter D): SettingsTab behaviours ported (compatibleRawValue, visibleCases, iconName, title, hostScopedCases). AppearanceSettingsPanel and RemoteSettingsPanel (+ShareSheet, PairingQRCodeView) ported with tests. Remaining: SettingsSidebarPanel nav structure, SettingsContentHost, ShareWorkspaceSheet details, Notifications/Transcripts panel depth."
     wired: "2026-09-27: SettingsView mounted in SupercliApp shell (app.dart) behind settingsOpen state; SettingsController loads GET /mobile/workspace-settings from authenticated live Host (TLS, cert-pinned, bearer token from sealed /mobile/pair); toggle edits call controller.edited() → debounced POST; theme + desktop-only fields persist via SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json). 18 wiring tests + 12 local-store tests pass."
-    verified: "2026-09-27 (fix): screenshot PENDING — settings-shot.png is still the rejected placeholder and must be replaced with a real 1440x900 native window (gpuidart, Xvfb) showing Connected status, real bootstrap sessions, and the General tab's actual controls with Host-loaded values. The canonical settings.open chord Ctrl-,/Cmd-, (Keymap.settings) is NOT registered natively — gpuidart's native key parser rejects punctuation keys (see docs/gpuidart-gaps-keys.md). Settings is reachable from the command palette ('Open settings'); menu reachability still to be implemented."
+    verified: "2026-09-27 (fix): screenshot PENDING — the rejected placeholder PNG was removed from the repo root (2026-09-29); a real 1440x900 native window (gpuidart, Xvfb) is still required showing Connected status, real bootstrap sessions, and the General tab's actual controls with Host-loaded values. The canonical settings.open chord Ctrl-,/Cmd-, (Keymap.settings) is NOT registered natively — gpuidart's native key parser rejects punctuation keys (see docs/gpuidart-gaps-keys.md). Settings is reachable from the command palette ('Open settings'); menu reachability still to be implemented."
     dedup: "2026-09-27: DUPLICATE with feat/swift-settings@7b7e7c0. That branch wired SettingsController, the overlay, and the agents tab from the same 32abb60 base. KEEP from this branch: SettingsLocalStore ($SUPERCLI_HOME/desktop/settings.json, theme + desktop-only fields local-only, never sent to Host) — swift-settings has no local store. KEEP from swift-settings: the SettingsController/overlay/agents-tab wiring as the canonical mount (it is the queued/canonical candidate; as of 2026-09-27 next is at 32abb60 and neither branch has landed). The integrator must merge ONE settings wiring: take swift-settings as the base and cherry-pick this branch's SettingsLocalStore + local-only theme semantics + palette reachability + gpuidart-gaps-keys.md. Do NOT ship both overlays."
 
   native/SupercliNative/Sources/SupercliNative/Views/WorkspacesSettingsPanel.swift:
@@ -233,56 +233,108 @@ files:
   # --- Todo: destinations assigned, behaviour not yet ported ---
   native/SupercliNative/Sources/SupercliNative/PluginSettingsList.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: "203"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "PluginSettingsItem struct (id, name, command, appID, installed, versions, isApp, isCustom, integration fields)"
+        target: "clients/supercli-app/lib/plugin_settings_list.dart::PluginSettingsItem"
+        test: "clients/supercli-app/test/plugin_settings_list_test.dart::PluginSettingsItem displayVersion"
+      - swift: "PluginSettingsList.items(in:) (builds list from snapshot: agents, apps, presets grouped by pluginID)"
+        target: "clients/supercli-app/lib/plugin_settings_list.dart::PluginSettingsList.items"
+        test: "clients/supercli-app/test/plugin_settings_list_test.dart::PluginSettingsList.items"
+      - swift: "PluginSettingsList.merging(_:into:) (reorder visible subset, preserve hidden slots)"
+        target: "clients/supercli-app/lib/plugin_settings_list.dart::PluginSettingsList.merging"
+        test: "clients/supercli-app/test/plugin_settings_list_test.dart::PluginSettingsList.merging"
+    tests:
+      - "clients/supercli-app/test/plugin_settings_list_test.dart (7 tests)"
+    notes: "87 LOC ported. Pure logic; no UI."
 
   native/SupercliNative/Sources/SupercliNative/Presets.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: "216"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "Preset struct (id, label, command, enabled, quickLaunch, newTerminal)"
+        target: "clients/supercli-app/lib/presets.dart::Preset"
+        test: "clients/supercli-app/test/presets_test.dart::Preset"
+      - swift: "splitPresetsForNewSessionMenu() (splits into agents/plugins)"
+        target: "clients/supercli-app/lib/presets.dart::splitPresetsForNewSessionMenu"
+        test: "clients/supercli-app/test/presets_test.dart::splitPresetsForNewSessionMenu"
+      - swift: "collectQuickPresetGroups() (groups starred presets by CLI/App)"
+        target: "clients/supercli-app/lib/presets.dart::collectQuickPresetGroups"
+        test: "clients/supercli-app/test/presets_test.dart::collectQuickPresetGroups"
+      - swift: "ToolUsageStats (session counts, recency ordering, summary)"
+        target: "clients/supercli-app/lib/presets.dart::ToolUsageStats"
+        test: "clients/supercli-app/test/presets_test.dart::ToolUsageStats"
+      - swift: "GlobalPresetFile (JSON decoding, filters project presets)"
+        target: "clients/supercli-app/lib/presets.dart::GlobalPresetFile"
+        test: "clients/supercli-app/test/presets_test.dart::GlobalPresetFile"
+    tests:
+      - "clients/supercli-app/test/presets_test.dart (12 tests)"
+    notes: "650 LOC ported. Portable logic; filesystem scanner not yet implemented. Logic moving to Rust per Amein's one-implementation rule. Dart presets.dart duplicates preset_overlay.rs."
+
 
   native/SupercliNative/Sources/SupercliNative/Views/PluginListDrag.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: "203"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "slotOffset (calculates row offset during drag)"
+        target: "clients/supercli-app/lib/plugin_list_drag.dart::PluginListDrag.slotOffset"
+        test: "clients/supercli-app/test/plugin_list_drag_test.dart::slotOffset"
+      - swift: "reordered (moves item in list)"
+        target: "clients/supercli-app/lib/plugin_list_drag.dart::PluginListDrag.reordered"
+        test: "clients/supercli-app/test/plugin_list_drag_test.dart::reordered"
+      - swift: "destinationFrame (calculates drag card destination)"
+        target: "clients/supercli-app/lib/plugin_list_drag.dart::PluginListDrag.destinationFrame"
+        test: "clients/supercli-app/test/plugin_list_drag_test.dart::destinationFrame"
+    tests:
+      - "clients/supercli-app/test/plugin_list_drag_test.dart (9 tests)"
+    notes: "Pure functions ported. AppKit drag controller not portable to Dart."
+
 
   native/SupercliNative/Sources/SupercliNative/Views/SessionsAccessSections.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: "204"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "approvedPairs (flattens caller->targets map, sorts)"
+        target: "clients/supercli-app/lib/sessions_access_sections.dart::SessionsAccessData.approvedPairs"
+        test: "clients/supercli-app/test/sessions_access_sections_test.dart::approvedPairs"
+      - swift: "approvedApps (flattens caller->appIDs map, sorts)"
+        target: "clients/supercli-app/lib/sessions_access_sections.dart::SessionsAccessData.approvedApps"
+        test: "clients/supercli-app/test/sessions_access_sections_test.dart::approvedApps"
+    tests:
+      - "clients/supercli-app/test/sessions_access_sections_test.dart (4 tests)"
+    notes: "Data logic ported. SwiftUI View not portable to Dart."
+
 
   native/SupercliNative/Tests/SupercliNativeTests/PluginListDragTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: "203"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+    tests:
+      - "Covered by Dart tests in clients/supercli-app/test/"
+    notes: "Behaviours covered by Dart test equivalents."
+
 
   native/SupercliNative/Tests/SupercliNativeTests/PluginSettingsListTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: "203"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+    tests:
+      - "Covered by Dart tests in clients/supercli-app/test/"
+    notes: "Behaviours covered by Dart test equivalents."
+
 
   native/SupercliNative/Tests/SupercliNativeTests/PresetsTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: "216"
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+    tests:
+      - "Covered by Dart tests in clients/supercli-app/test/"
+    notes: "Behaviours covered by Dart test equivalents."
+

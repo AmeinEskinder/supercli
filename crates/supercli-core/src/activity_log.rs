@@ -53,12 +53,38 @@ pub struct ActivityLogEntry {
     pub message: Option<String>,
 }
 
+impl ActivityLogEntry {
+    /// Wall-clock time of the event. Ports `ActivityLogEntry.date`.
+    pub fn date(&self) -> SystemTime {
+        UNIX_EPOCH + std::time::Duration::from_millis(self.at)
+    }
+}
+
 /// In-memory view of the shared append-only activity feed.
 #[derive(Debug)]
 pub struct ActivityLogStore {
     path: PathBuf,
     entries: Vec<ActivityLogEntry>,
     physical_line_count: usize,
+    /// Last observed `(size, mtime)` of the feed file. Lets
+    /// [`Self::refresh_from_host`] skip the re-read when the Host has not
+    /// appended anything since the last load.
+    loaded_stamp: Option<FileStamp>,
+}
+
+/// File identity used to detect external appends without re-reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileStamp {
+    size: u64,
+    modified_at: Option<SystemTime>,
+}
+
+fn file_stamp(path: &Path) -> Option<FileStamp> {
+    let metadata = fs::metadata(path).ok()?;
+    Some(FileStamp {
+        size: metadata.len(),
+        modified_at: metadata.modified().ok(),
+    })
 }
 
 impl Default for ActivityLogStore {
@@ -95,11 +121,38 @@ impl ActivityLogStore {
     /// repeat-collapse rule as [`Self::append`]. A missing file is an empty
     /// feed, not an error.
     pub fn refresh(&mut self) -> io::Result<()> {
+        self.load()?;
+        if self.physical_line_count >= COMPACT_AT_PHYSICAL_LINES {
+            self.compact()?;
+        }
+        Ok(())
+    }
+
+    /// Refresh the read model after the canonical Host appends lifecycle
+    /// events. Client-only frontends never compact or rewrite the Host-owned
+    /// file; the metadata stamp keeps the common unchanged snapshot cheap.
+    /// Returns whether the in-memory entries changed.
+    ///
+    /// Ports `ActivityLogStore.refreshFromHost()` from `ActivityLog.swift`.
+    pub fn refresh_from_host(&mut self) -> io::Result<bool> {
+        let stamp = file_stamp(&self.path);
+        if stamp == self.loaded_stamp {
+            return Ok(false);
+        }
+        let previous = std::mem::take(&mut self.entries);
+        self.load()?;
+        Ok(self.entries != previous)
+    }
+
+    /// Load the file into memory without compacting. Shared by
+    /// [`Self::refresh`] and [`Self::refresh_from_host`].
+    fn load(&mut self) -> io::Result<()> {
         let raw = match fs::read(&self.path) {
             Ok(raw) => raw,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 self.entries.clear();
                 self.physical_line_count = 0;
+                self.loaded_stamp = None;
                 return Ok(());
             }
             Err(error) => return Err(error),
@@ -120,9 +173,7 @@ impl ActivityLogStore {
 
         self.entries = entries;
         self.physical_line_count = physical_line_count;
-        if self.physical_line_count >= COMPACT_AT_PHYSICAL_LINES {
-            self.compact()?;
-        }
+        self.loaded_stamp = file_stamp(&self.path);
         Ok(())
     }
 
@@ -149,6 +200,7 @@ impl ActivityLogStore {
         file.write_all(&line)?;
         file.flush()?;
         self.physical_line_count = self.physical_line_count.saturating_add(1);
+        self.loaded_stamp = file_stamp(&self.path);
 
         if self.physical_line_count >= COMPACT_AT_PHYSICAL_LINES {
             self.compact()?;
@@ -161,6 +213,7 @@ impl ActivityLogStore {
             path,
             entries: Vec::new(),
             physical_line_count: 0,
+            loaded_stamp: None,
         }
     }
 
@@ -187,6 +240,7 @@ impl ActivityLogStore {
             let _ = fs::remove_file(&temporary_path);
         } else {
             self.physical_line_count = self.entries.len();
+            self.loaded_stamp = file_stamp(&self.path);
         }
         result
     }
@@ -484,6 +538,42 @@ mod tests {
         assert_eq!(store.entries().len(), MAX_ENTRIES);
         assert_eq!(store.physical_line_count, MAX_ENTRIES);
         assert_eq!(count_physical_lines(&fs::read(&path).unwrap()), MAX_ENTRIES);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn refresh_from_host_picks_up_external_appends_without_writing() {
+        // Ports ActivityLogHostConsumerTests.testClientRefreshesHostAppendsWithoutWritingTheFeed.
+        let (directory, path) = explicit_test_path("host-consumer");
+        let mut store = ActivityLogStore::load_from(&path).unwrap();
+        assert!(store.entries().is_empty());
+
+        let expected = ActivityLogEntry {
+            id: "event-1".to_string(),
+            session_id: "session-1".to_string(),
+            kind: ActivityLogKind::Finished,
+            at: 42,
+            title: "A session".to_string(),
+            command: "claude".to_string(),
+            project_id: "project-1".to_string(),
+            project_name: "Project".to_string(),
+            message: None,
+        };
+        // The Host appends directly; the client must not rewrite the file.
+        let mut line = serde_json::to_vec(&expected).unwrap();
+        line.push(b'\n');
+        fs::write(&path, &line).unwrap();
+        let before = fs::read(&path).unwrap();
+
+        assert!(store.refresh_from_host().unwrap());
+        assert_eq!(store.entries(), &[expected]);
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(!store.refresh_from_host().unwrap());
+
+        fs::remove_file(&path).unwrap();
+        assert!(store.refresh_from_host().unwrap());
+        assert!(store.entries().is_empty());
 
         fs::remove_dir_all(directory).unwrap();
     }

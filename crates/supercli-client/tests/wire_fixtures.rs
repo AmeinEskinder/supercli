@@ -67,6 +67,9 @@ fn b_session_summary() -> SessionSummary {
         notify_when_done: false,
         terminal_background_hex: None,
         archived: false,
+        spinner_color_hex: None,
+        latest_alert_body: None,
+        latest_alert_at_unix_ms: None,
         capabilities: b_session_capabilities(),
     }
 }
@@ -171,6 +174,7 @@ fn b_bootstrap_snapshot() -> BootstrapSnapshot {
         }),
         host_id: Some("mac-1".into()),
         host_name: Some("Studio Mac".into()),
+        folders: vec![],
         presets: vec![b_preset_summary()],
         sessions: vec![b_session_summary()],
         projects: vec![b_project_summary()],
@@ -179,6 +183,15 @@ fn b_bootstrap_snapshot() -> BootstrapSnapshot {
         remote_server_port: None,
         remote_server_certificate_fingerprint: None,
         pro_entitled: Some(true),
+        workspace_settings: None,
+        available_apps: None,
+        installed_apps: None,
+        openers: None,
+        app_presentations: None,
+        experimental_worktrees_enabled: None,
+        host_tint_hue: None,
+        host_device_kind: None,
+        host_device_model: None,
     }
 }
 
@@ -265,6 +278,9 @@ fn b_create_session_response() -> CreateSessionResponse {
             notify_when_done: false,
             terminal_background_hex: None,
             archived: false,
+            spinner_color_hex: None,
+            latest_alert_body: None,
+            latest_alert_at_unix_ms: None,
             capabilities: SessionCapabilities {
                 restart: false,
                 resume_agent: false,

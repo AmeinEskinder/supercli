@@ -1,0 +1,1274 @@
+{
+  "generated_by": "scripts/generate-runtime-client-catalog.mjs",
+  "source_of_truth": "runtimes/*/runtime.toml — do not edit by hand",
+  "runtime_count": 15,
+  "runtimes": [
+    {
+      "schema_version": 1,
+      "id": "com.anthropic.claude-code",
+      "slug": "claude-code",
+      "legacy_slug": "claude",
+      "label": "Claude",
+      "adapter": "builtin:claude",
+      "legacy_order": 0,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done",
+        "semantic_terminal_title"
+      ],
+      "display": {
+        "tint": "#D97757",
+        "spinner_tint": "#D97757",
+        "icon": "claude",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://claude.com/claude-code",
+        "command": "curl -fsSL https://claude.ai/install.sh | bash",
+        "update_command": "command claude update"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://downloads.claude.ai/claude-code-releases/latest",
+        "channel_settings_path": ".claude/settings.json",
+        "channel_settings_pointer": "/autoUpdatesChannel",
+        "channel_urls": {
+          "stable": "https://downloads.claude.ai/claude-code-releases/stable",
+          "latest": "https://downloads.claude.ai/claude-code-releases/latest"
+        }
+      },
+      "detection": {
+        "command_aliases": [
+          "claude"
+        ],
+        "process_aliases": [
+          "claude",
+          "claude-code"
+        ],
+        "script_path_signatures": [
+          {
+            "components": [
+              "@anthropic-ai",
+              "claude-code"
+            ]
+          }
+        ]
+      },
+      "environment": {
+        "strip_inherited": [
+          "CLAUDE_CODE_CHILD_SESSION",
+          "CLAUDECODE",
+          "CLAUDE_CODE_ENTRYPOINT",
+          "CLAUDE_CODE_SESSION_ID",
+          "CLAUDE_PID"
+        ]
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "screen",
+        "completion_reliable": true,
+        "attention_reliable": true,
+        "escape_cancels_turn": true
+      },
+      "screen": {
+        "working": [
+          "… (",
+          "esc to interrupt"
+        ],
+        "idle_prompt": [
+          "❯"
+        ]
+      },
+      "integration": {
+        "summary": "Registers Supercli's lifecycle hooks in ~/.claude/settings.json and the supercli MCP server in ~/.claude.json (user scope).",
+        "manual_command": "claude mcp add --scope user supercli {shim}",
+        "legacy_evidence": [
+          "hooks/claude-hooks.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".claude/projects",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "claude",
+          "label": "claude",
+          "command": "claude",
+          "quick_launch": true
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z\" fill-rule=\"nonzero\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.openai.codex",
+      "slug": "codex",
+      "legacy_slug": "codex",
+      "label": "Codex",
+      "adapter": "builtin:codex",
+      "legacy_order": 1,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#C292FE",
+        "spinner_tint": "#C292FE",
+        "icon": "codex",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://openai.com/codex",
+        "command": "npm install -g @openai/codex"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/@openai/codex/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "codex"
+        ],
+        "process_aliases": [
+          "codex"
+        ],
+        "script_path_signatures": [
+          {
+            "components": [
+              "@openai",
+              "codex"
+            ]
+          }
+        ]
+      },
+      "environment": {
+        "strip_inherited": [
+          "CODEX_CI",
+          "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+          "CODEX_SHELL",
+          "CODEX_THREAD_ID",
+          "CODEX_TUI_RECORD_SESSION",
+          "CODEX_TUI_SESSION_LOG_PATH"
+        ]
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "screen",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "screen": {
+        "working": [
+          "esc to interrupt",
+          "• Working"
+        ],
+        "idle_prompt": [
+          "›"
+        ]
+      },
+      "integration": {
+        "summary": "Registers native hooks in ~/.codex/hooks.json, the notify reporter and [mcp_servers.supercli] in ~/.codex/config.toml.",
+        "legacy_evidence": [
+          "hooks/codex-notify-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".codex/sessions",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "codex",
+          "label": "codex --dangerously-bypass-approvals-and-sandbox",
+          "command": "codex --dangerously-bypass-approvals-and-sandbox",
+          "quick_launch": true
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" fill-rule=\"evenodd\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "bot.cline.cli",
+      "slug": "cline",
+      "legacy_slug": "cline",
+      "label": "Cline",
+      "adapter": "builtin:cline",
+      "legacy_order": 2,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#F26C5A",
+        "spinner_tint": "#98C4FA",
+        "icon": "cline",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://cline.bot",
+        "command": "npm install -g cline"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/cline/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "cline"
+        ],
+        "process_aliases": [
+          "cline"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "partial",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": false
+      },
+      "integration": {
+        "summary": "Installs one managed hook per event under ~/.cline/hooks and adds the supercli server to Cline's MCP settings.",
+        "legacy_evidence": [
+          "hooks/cline-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".cline/data/sessions",
+            "extensions": [
+              "json"
+            ],
+            "file_name_suffix": ".messages.json"
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "cline",
+          "label": "cline",
+          "command": "cline",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 466.73 487.04\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M463.6,275.08l-29.26-58.75v-33.83c0-56.08-45.01-101.5-100.53-101.5h-50.01c3.62-7.43,5.61-15.79,5.61-24.61,0-31.17-25.08-56.39-56.07-56.39s-56.07,25.22-56.07,56.39c0,8.82,1.99,17.17,5.61,24.61h-50.01c-55.51,0-100.52,45.42-100.52,101.5v33.83l-29.87,58.59c-3.01,5.9-3.01,12.92,0,18.81l29.87,57.93v33.83c0,56.08,45.01,101.5,100.52,101.5h200.95c55.51,0,100.53-45.42,100.53-101.5v-33.83l29.21-58.13c2.9-5.79,2.9-12.61.05-18.46ZM202.75,322.96c0,25.48-20.54,46.14-45.88,46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48,20.54-46.14,45.88-46.14s45.88,20.66,45.88,46.14v82.02ZM350.58,322.96c0,25.48-20.54,46.14-45.88,46.14s-45.88-20.66-45.88-46.14v-82.02c0-25.48,20.54-46.14,45.88-46.14s45.88,20.66,45.88,46.14v82.02Z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.sourcegraph.amp",
+      "slug": "amp",
+      "legacy_slug": "amp",
+      "label": "Amp",
+      "adapter": "builtin:amp",
+      "legacy_order": 3,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#F97316",
+        "spinner_tint": "#F97316",
+        "icon": "amp",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://ampcode.com",
+        "command": "npm install -g @sourcegraph/amp"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/@sourcegraph/amp/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "amp"
+        ],
+        "process_aliases": [
+          "amp",
+          "amp-local"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "partial",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": false
+      },
+      "integration": {
+        "summary": "Installs the shared reporter; Amp reads plugins per project (supercli integrations install amp --project DIR)."
+      },
+      "suggested_presets": [
+        {
+          "id": "amp",
+          "label": "amp",
+          "command": "amp",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M12 2 2 22h4.4l1.82-4.2h7.56L17.6 22H22L12 2Zm-2.05 11.9L12 9.08l2.05 4.82H9.95Z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.google.gemini-cli",
+      "slug": "gemini",
+      "legacy_slug": "gemini",
+      "label": "Gemini",
+      "adapter": "builtin:gemini",
+      "legacy_order": 4,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#6EA8FF",
+        "spinner_tint": "#6EA8FF",
+        "icon": "gemini",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://github.com/google-gemini/gemini-cli",
+        "command": "npm install -g @google/gemini-cli"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/@google/gemini-cli/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "gemini"
+        ],
+        "process_aliases": [
+          "gemini"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "screen",
+        "completion_reliable": true,
+        "attention_reliable": true,
+        "escape_cancels_turn": true
+      },
+      "screen": {
+        "working": [
+          "esc to cancel"
+        ],
+        "idle_prompt": [
+          "Type your message",
+          "> Type your message"
+        ]
+      },
+      "integration": {
+        "summary": "Registers Supercli's lifecycle hooks in ~/.gemini/settings.json.",
+        "legacy_evidence": [
+          "hooks/gemini-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".gemini/tmp",
+            "extensions": [
+              "json",
+              "jsonl"
+            ],
+            "parent_dir_name": "chats"
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "gemini",
+          "label": "gemini --yolo",
+          "command": "gemini --yolo",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><path d=\"M16 8.016A8.522 8.522 0 008.016 16h-.032A8.521 8.521 0 000 8.016v-.032A8.521 8.521 0 007.984 0h.032A8.522 8.522 0 0016 7.984v.032z\" fill=\"#FFFFFF\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "dev.mariozechner.pi",
+      "slug": "pi",
+      "legacy_slug": "pi",
+      "label": "Pi",
+      "adapter": "builtin:pi",
+      "legacy_order": 5,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "resume",
+        "restart_agent"
+      ],
+      "display": {
+        "tint": "#7C95FF",
+        "spinner_tint": "#7C95FF",
+        "icon": "pi",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://github.com/badlogic/pi-mono",
+        "command": "npm install -g @mariozechner/pi-coding-agent"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/@mariozechner/pi-coding-agent/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "pi"
+        ],
+        "process_aliases": [
+          "pi"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "output",
+        "authority": "none",
+        "fallback": "none",
+        "completion_reliable": false,
+        "attention_reliable": false
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".pi/agent/sessions",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "pi",
+          "label": "pi",
+          "command": "pi",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 800 800\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" d=\"M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z\"/><path d=\"M517.36 400H634.72V634.72H517.36Z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "ai.opencode.cli",
+      "slug": "opencode",
+      "legacy_slug": "opencode",
+      "label": "OpenCode",
+      "adapter": "builtin:opencode",
+      "legacy_order": 6,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#8F8787",
+        "spinner_tint": "#8F8787",
+        "icon": "opencode",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "icon_template": false
+      },
+      "install": {
+        "official_url": "https://opencode.ai",
+        "command": "npm install -g opencode-ai"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/opencode-ai/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "opencode"
+        ],
+        "process_aliases": [
+          "opencode",
+          "opencode2"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "integration": {
+        "summary": "Installs the supercli notify plugin in ~/.config/opencode/plugin."
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".local/share/opencode/storage/session",
+            "extensions": [
+              "json"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "opencode",
+          "label": "opencode",
+          "command": "opencode",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"13\" height=\"16\" viewBox=\"0 0 240 300\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M0 0H240V300H0V0ZM60 60H180V240H60V60Z\" fill=\"#F1ECEC\"/><path d=\"M60 120H180V240H60V120Z\" fill=\"#4B4646\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.github.copilot-cli",
+      "slug": "github-copilot",
+      "legacy_slug": "copilot",
+      "label": "Copilot",
+      "adapter": "builtin:copilot",
+      "legacy_order": 7,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "notify_when_done"
+      ],
+      "display": {
+        "icon": "agent",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://github.com/github/copilot-cli",
+        "command": "npm install -g @github/copilot"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://registry.npmjs.org/@github/copilot/latest",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "copilot"
+        ],
+        "process_aliases": [
+          "copilot",
+          "github-copilot",
+          "ghcs"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "integration": {
+        "summary": "Installs the shared reporter; Copilot reads hooks per repository (supercli integrations install github-copilot --project DIR).",
+        "legacy_evidence": [
+          "hooks/copilot-hook.sh"
+        ]
+      },
+      "icon_svg": null
+    },
+    {
+      "schema_version": 1,
+      "id": "com.cursor.agent",
+      "slug": "cursor-agent",
+      "legacy_slug": "cursor-agent",
+      "label": "Cursor Agent",
+      "adapter": "builtin:cursor-agent",
+      "legacy_order": 8,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#22C55D",
+        "spinner_tint": "#22C55D",
+        "icon": "cursor",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://cursor.com/cli",
+        "command": "curl https://cursor.com/install -fsS | bash"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://cursor.com/install",
+        "version_prefix": "https://downloads.cursor.com/lab/",
+        "version_suffix": "/",
+        "date_version": true
+      },
+      "detection": {
+        "command_aliases": [
+          "cursor-agent"
+        ],
+        "process_aliases": [
+          "cursor-agent"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "integration": {
+        "summary": "Registers hooks in ~/.cursor/hooks.json and the supercli MCP server in ~/.cursor/mcp.json.",
+        "legacy_evidence": [
+          "hooks/cursor-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".cursor/projects",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "cursor-agent",
+          "label": "cursor-agent --force",
+          "command": "cursor-agent --force",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" fill-rule=\"evenodd\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "ai.x.grok-cli",
+      "slug": "grok",
+      "legacy_slug": "grok",
+      "label": "Grok",
+      "adapter": "builtin:grok",
+      "legacy_order": 9,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#8F8787",
+        "spinner_tint": "#8F8787",
+        "icon": "grok",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset"
+      },
+      "install": {
+        "official_url": "https://x.ai",
+        "command": "curl -fsSL https://x.ai/cli/install.sh | bash"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://x.ai/cli/stable",
+        "channel_env": "GROK_CHANNEL",
+        "channel_urls": {
+          "stable": "https://x.ai/cli/stable",
+          "alpha": "https://x.ai/cli/alpha",
+          "enterprise": "https://x.ai/cli/enterprise"
+        }
+      },
+      "detection": {
+        "command_aliases": [
+          "grok"
+        ],
+        "process_aliases": [
+          "grok",
+          "grok-build"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true,
+        "escape_cancels_turn": true,
+        "anchor_start_event_to_output": false,
+        "attention_clears_on_output": false
+      },
+      "integration": {
+        "summary": "Writes Supercli's hook file ~/.grok/hooks/supercli.json.",
+        "legacy_evidence": [
+          "hooks/grok-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".grok/sessions",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "grok",
+          "label": "grok --always-approve",
+          "command": "grok --always-approve",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" fill-rule=\"evenodd\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.moonshot.kimi-code",
+      "slug": "kimi",
+      "legacy_slug": "kimi",
+      "label": "Kimi",
+      "adapter": "builtin:kimi",
+      "legacy_order": 10,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#8B7CFF",
+        "spinner_tint": "#B88A2A",
+        "icon": "kimi",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://kimi.com"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://pypi.org/pypi/kimi-cli/json",
+        "json_pointer": "/info/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "kimi"
+        ],
+        "process_aliases": [
+          "kimi",
+          "kimi-code"
+        ],
+        "search_path_suffixes": [
+          ".kimi-code/bin"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "integration": {
+        "summary": "Adds a managed [[hooks]] block to Kimi's config.toml and the supercli MCP server to ~/.kimi-code/mcp.json.",
+        "legacy_evidence": [
+          "hooks/kimi-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".kimi-code/sessions",
+            "extensions": [
+              "jsonl"
+            ],
+            "file_name": "wire.jsonl",
+            "parent_dir_name": "main"
+          },
+          {
+            "root": ".kimi/sessions",
+            "extensions": [
+              "jsonl"
+            ],
+            "file_name": "context.jsonl"
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "kimi",
+          "label": "kimi --yolo",
+          "command": "kimi --yolo",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" fill-rule=\"evenodd\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M21.846 0a1.923 1.923 0 110 3.846H20.15a.226.226 0 01-.227-.226V1.923C19.923.861 20.784 0 21.846 0z\"/><path d=\"M11.065 11.199l7.257-7.2c.137-.136.06-.41-.116-.41H14.3a.164.164 0 00-.117.051l-7.82 7.756c-.122.12-.302.013-.302-.179V3.82c0-.127-.083-.23-.185-.23H3.186c-.103 0-.186.103-.186.23V19.77c0 .128.083.23.186.23h2.69c.103 0 .186-.102.186-.23v-3.25c0-.069.025-.135.069-.178l2.424-2.406a.158.158 0 01.205-.023l6.484 4.772a7.677 7.677 0 003.453 1.283c.108.012.2-.095.2-.23v-3.06c0-.117-.07-.212-.164-.227a5.028 5.028 0 01-2.027-.807l-5.613-4.064c-.117-.078-.132-.279-.028-.381z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "dev.kiro.cli",
+      "slug": "kiro",
+      "legacy_slug": "kiro-cli",
+      "label": "Kiro",
+      "adapter": "builtin:kiro-cli",
+      "legacy_order": 11,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#A78BFA",
+        "spinner_tint": "#A78BFA",
+        "icon": "kiro",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://kiro.dev"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://prod.download.cli.kiro.dev/stable/latest/manifest.json",
+        "json_pointer": "/version"
+      },
+      "detection": {
+        "command_aliases": [
+          "kiro-cli"
+        ],
+        "process_aliases": [
+          "kiro",
+          "kiro-cli"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true
+      },
+      "integration": {
+        "summary": "Writes ~/.kiro/hooks/supercli.json (v3), the compatibility agent for v2, and the supercli server in ~/.kiro/settings/mcp.json.",
+        "legacy_evidence": [
+          "hooks/kiro-hook.sh"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".kiro/sessions",
+            "extensions": [
+              "jsonl"
+            ]
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "kiro-cli",
+          "label": "kiro-cli --v3",
+          "command": "kiro-cli --v3",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"#FFFFFF\" fill-rule=\"evenodd\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M4.594 6.677C6.67-2.226 18.746-2.211 21.16 6.632c.353 1.297 1.725 7.582-1.673 13.747-1.545 2.797-5.841 5.49-6.99 1.883C8.6 25.477 3.315 24.1 5.789 18.609l-.318.143c-3.57 1.305-3.863-1.208-3.173-2.513.45-.84.727-1.335.937-1.897.353-.975.458-1.568.593-2.498.27-1.837.277-3.607.765-5.167zm8.37.01a.92.92 0 00-.81.428c-.217.323-.33.825-.33 1.462 0 .705.15 1.89 1.14 1.89h.008c.757 0 1.214-.705 1.214-1.89 0-.622-.127-1.125-.367-1.455a1.014 1.014 0 00-.855-.435zm4.08 0a.92.92 0 00-.81.428c-.217.323-.33.825-.33 1.462 0 .705.15 1.89 1.14 1.89h.008c.757 0 1.215-.705 1.215-1.89 0-.622-.128-1.125-.368-1.455a1.014 1.014 0 00-.855-.435z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "ai.meta.muse-code",
+      "slug": "muse-code",
+      "legacy_slug": "muse",
+      "label": "Muse Code",
+      "adapter": "builtin:muse",
+      "legacy_order": 12,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "lifecycle_hooks",
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser",
+        "mcp_computer",
+        "transcript",
+        "notify_when_done"
+      ],
+      "display": {
+        "tint": "#0082FB",
+        "spinner_tint": "#0082FB",
+        "icon": "muse",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "internal:legacy-supercli-tool-icons",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://dev.meta.ai",
+        "command": "curl -fsSL https://dev.meta.ai/install.sh | bash"
+      },
+      "detection": {
+        "command_aliases": [
+          "muse"
+        ],
+        "process_aliases": [
+          "muse"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "hooks",
+        "authority": "complete",
+        "fallback": "none",
+        "completion_reliable": true,
+        "attention_reliable": true,
+        "escape_cancels_turn": true
+      },
+      "integration": {
+        "summary": "Stages and registers the supercli plugin with `muse plugins install`; the plugin carries the hooks and the MCP server.",
+        "legacy_evidence": [
+          "hooks/muse-plugin.installed"
+        ]
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".local/share/muse/sessions",
+            "extensions": [
+              "jsonl"
+            ],
+            "file_name": "session.jsonl"
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "muse",
+          "label": "muse --yolo",
+          "command": "muse --yolo",
+          "quick_launch": false
+        }
+      ],
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 800 800\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M197 313C131 313 63 277 63 225C63 177 120 145 182 145C248 145 316 181 316 234C316 284 256 313 197 313Z\"/><path d=\"M95 567C55 567 29 540 29 499C29 429 105 349 175 349C216 349 240 376 240 416C240 488 164 567 95 567Z\"/><path d=\"M365 660C365 712 338 769 290 769C234 769 194 691 194 626C194 573 221 518 269 518C327 518 365 599 365 660Z\"/><path d=\"M553 742C482 742 398 680 398 614C398 571 434 550 476 550C548 550 633 613 633 677C633 719 596 742 553 742Z\"/><path d=\"M785 439C785 505 695 555 627 555C575 555 542 525 542 486C542 422 630 371 700 371C751 371 785 398 785 439Z\"/><path d=\"M596 356C550 356 525 310 525 261C525 195 570 109 632 109C678 109 702 157 702 205C702 269 659 356 596 356Z\"/><path d=\"M502 172C502 213 480 243 439 243C370 243 303 157 303 87C303 47 325 15 367 15C436 15 502 101 502 172Z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.vercel.fx",
+      "slug": "fx",
+      "legacy_slug": "fx",
+      "label": "fx",
+      "adapter": "builtin:fx",
+      "legacy_order": 13,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser"
+      ],
+      "display": {
+        "tint": "#EDEDED",
+        "spinner_tint": "#EDEDED",
+        "icon": "fx",
+        "icon_asset": "assets/icon.svg",
+        "icon_source": "https://fx.sh",
+        "icon_license": "vendor-brand-asset",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://fx.sh",
+        "command": "curl -fsSL https://fx.sh/setup.sh | bash"
+      },
+      "updates": {
+        "version_args": [
+          "--version"
+        ],
+        "latest_url": "https://releases.fx.sh/latest.txt"
+      },
+      "detection": {
+        "command_aliases": [
+          "fx"
+        ],
+        "process_aliases": [
+          "fx"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "output",
+        "authority": "none",
+        "fallback": "none",
+        "completion_reliable": false,
+        "attention_reliable": false
+      },
+      "usage": {
+        "stores": [
+          {
+            "root": ".fx/sessions",
+            "extensions": [
+              "jsonl"
+            ],
+            "file_name": "events.jsonl"
+          }
+        ]
+      },
+      "suggested_presets": [
+        {
+          "id": "fx",
+          "label": "fx",
+          "command": "fx",
+          "quick_launch": false
+        }
+      ],
+      "integration": {
+        "summary": "Adds the supercli MCP server to ~/.fx/mcp.json."
+      },
+      "icon_svg": "<svg width=\"16\" height=\"16\" viewBox=\"166.241 0 155.861 156\" fill=\"#FFFFFF\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M237.89 0C243.18 0 249.38 1.42 253.03 3.07L255.09 4.01L250.08 18.63L247.68 17.75C244.9 16.72 241.94 15.8 238.49 15.8C234.98 15.8 232.79 16.56 231.08 18.32C229.23 20.23 227.63 23.64 226.23 29.76L226.23 29.76L226.23 29.76L225.14 34.85H241.67L260.43 34.95L260.69 34.95L260.84 35.17L278.85 61.63L296.74 34.95H320.87L291.68 76.74L322.1 119.75H299.33L299.18 119.55L241.14 40.48L239.35 49.4H222.07L205.69 127.21C203.93 135.71 201.19 142.84 196.78 147.87C192.27 153.01 186.2 155.75 178.34 155.75C174.18 155.75 170.75 155.11 167.91 154.11L166.24 153.52V137.18L166.9 137.4L169.53 138.28C172.18 139.16 174.41 139.8 177.14 139.8C178.53 139.8 179.7 139.53 180.73 138.98C181.76 138.43 182.68 137.6 183.52 136.44C185.3 133.99 186.72 130.13 187.9 124.67L203.76 49.4H189.87L191.76 39.44L192.04 39.35L206.82 34.47L208.15 28.64C210.52 18.21 213.77 10.94 218.71 6.32C223.74 1.61 230.13 0 237.89 0ZM273.99 99.08L260.07 120.25H234.54L261 82.02L273.99 99.08Z\"/></svg>"
+    },
+    {
+      "schema_version": 1,
+      "id": "com.google.antigravity-cli",
+      "slug": "antigravity",
+      "legacy_slug": "agy",
+      "label": "Antigravity",
+      "adapter": "builtin:agy",
+      "legacy_order": 14,
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "supports_quick_launch": true,
+      "capabilities": [
+        "resume",
+        "restart_agent",
+        "mcp_sessions",
+        "mcp_browser"
+      ],
+      "display": {
+        "tint": "#4285F4",
+        "spinner_tint": "#4285F4",
+        "icon": "agent",
+        "window_padding_x": 8
+      },
+      "install": {
+        "official_url": "https://antigravity.google/product/antigravity-cli",
+        "command": "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+      },
+      "detection": {
+        "command_aliases": [
+          "agy"
+        ],
+        "process_aliases": [
+          "agy"
+        ],
+        "script_path_signatures": []
+      },
+      "lifecycle": {
+        "source": "output",
+        "authority": "none",
+        "fallback": "none",
+        "completion_reliable": false,
+        "attention_reliable": false
+      },
+      "suggested_presets": [
+        {
+          "id": "agy",
+          "label": "agy --dangerously-skip-permissions",
+          "command": "agy --dangerously-skip-permissions",
+          "quick_launch": false
+        }
+      ],
+      "integration": {
+        "summary": "Adds the supercli MCP server to Antigravity's global MCP config, ~/.gemini/config/mcp_config.json."
+      },
+      "icon_svg": null
+    }
+  ]
+}

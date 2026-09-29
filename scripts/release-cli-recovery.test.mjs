@@ -52,7 +52,7 @@ function fixture({ withProtocol = true } = {}) {
         writeFileSync(resolve(stage, 'protocol', name), '{}\n')
       }
       mkdirSync(resolve(stage, 'generated'))
-      writeFileSync(resolve(stage, 'generated', 'GeneratedRuntimeCatalog.swift'), '// fixture\n')
+      writeFileSync(resolve(stage, 'generated', 'runtime-catalog.json'), '{"fixture":true}\n')
     }
     for (const binary of ['supercli', 'supercli-host', 'supercli-attach']) {
       const path = resolve(stage, binary)

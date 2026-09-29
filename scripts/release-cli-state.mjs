@@ -27,13 +27,13 @@ export const CLI_ARCHIVE_PAYLOAD = Object.freeze([
 ])
 export const CLI_ARCHIVE_PROTOCOL_DIR = 'protocol'
 // `generated/` carries the client-safe runtime catalog the Apple repo copies
-// (GeneratedRuntimeCatalog.swift), so a pinned client needs no server
+// (runtime-catalog.json), so a pinned client needs no server
 // checkout; install.sh ignores it like protocol/.
 export const CLI_ARCHIVE_GENERATED_DIR = 'generated'
 export const CLI_ARCHIVE_PROTOCOL_REQUIRED = Object.freeze([
   'protocol/host-capabilities-v1.json',
   'protocol/host-conformance-v1.json',
-  'generated/GeneratedRuntimeCatalog.swift'
+  'generated/runtime-catalog.json'
 ])
 
 /**

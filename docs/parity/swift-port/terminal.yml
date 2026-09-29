@@ -6,12 +6,23 @@ area: terminal
 files:
   # --- iOS terminal tests triaged by worker C ---
   ios/SupercliIOS/Tests/SupercliIOSTests/RemoteMouseWheelPreferenceTests.swift:
-    destination: "Rust: supercli-client/core (iOS non-UI)"
-    status: todo
+    destination: "Rust: supercli-client (mouse_mode)"
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: "Mouse-wheel preference parsing is protocol logic, not UI."
+    behaviours:
+      - swift: "prefersRemoteMouseWheel(providerID:command:activeRuntimeID:)"
+        target: "crates/supercli-client/src/mouse_mode.rs::prefers_remote_mouse_wheel"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::observed_runtime_qualifies_without_provider_or_command_head"
+      - swift: "wheelForwarding(hasHostModeSnapshot:mouseTrackingEnabled:alternateScreenEnabled:sawMouseOrAlternateDisable:providerPrefersRemoteMouseWheel:)"
+        target: "crates/supercli-client/src/mouse_mode.rs::wheel_forwarding"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::classic_claude_with_snapshot_leaves_flick_to_local_scrollback"
+      - swift: "alternateScrollSequence(direction:steps:applicationCursorKeys:)"
+        target: "crates/supercli-client/src/mouse_mode.rs::alternate_scroll_sequence"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::alternate_screen_without_mouse_emulates_alternate_scroll"
+    tests:
+      - file: crates/supercli-client/src/mouse_mode.rs
+        count: 7
+    notes: "Ported 2026-09-29: wheel-forwarding gate logic (provider heuristic, snapshot-authoritative forwarding, alternate-scroll key sequences). UI wiring (RemoteGhosttyRenderer view) not portable."
 
   ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalCanvasLayoutTests.swift:
     destination: "gpuidart gap: iOS UI (waits for gpuidart mobile)"
@@ -19,15 +30,26 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: "iOS-specific canvas layout; waits for gpuidart mobile."
+    notes: "iOS-specific canvas layout; waits for gpuidart mobile. BLOCKED."
 
   ios/SupercliIOS/Tests/SupercliIOSTests/RemoteTerminalMouseModeTrackerTests.swift:
-    destination: "Rust: supercli-client/core (iOS non-UI)"
-    status: todo
+    destination: "Rust: supercli-client (mouse_mode)"
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: "ANSI mouse-mode parsing is protocol logic, not UI."
+    behaviours:
+      - swift: "RemoteTerminalMouseModeTracker.feed(_:) — CSI ? params h/l parsing with cross-chunk carry"
+        target: "crates/supercli-client/src/mouse_mode.rs::RemoteTerminalMouseModeTracker::feed"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::sequence_split_across_chunks_is_carried"
+      - swift: "RemoteTerminalMouseModeTracker — alternate screen / mouse tracking / DECCKM state"
+        target: "crates/supercli-client/src/mouse_mode.rs::RemoteTerminalMouseModeTracker"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::enables_and_disables_mouse_tracking"
+      - swift: "RemoteMacClientError description"
+        target: "crates/supercli-client/src/mouse_mode.rs::RemoteMacClientError"
+        test: "crates/supercli-client/src/mouse_mode.rs::tests::error_description_carries_status_and_server_message"
+    tests:
+      - file: crates/supercli-client/src/mouse_mode.rs
+        count: 11
+    notes: "Ported 2026-09-29: ANSI mode tracker (CSI parsing, split-sequence carry, overflow drop, ESC c reset) + RemoteMacClientError. UI wiring not portable."
 
   # --- Native terminal/pane files ---
   native/SupercliNative/Sources/SupercliNative/Views/TerminalPaneView.swift:
@@ -88,11 +110,22 @@ files:
 
   native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "TerminalDropTargetMap.Region.contains(row:column:) — half-open hit test"
+        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetRegion.contains"
+        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap target hit testing is fresh, bounded, and half-open"
+      - swift: "TerminalDropTargetMap.accepts(row:column:nowMilliseconds:) — version/pid/freshness gate"
+        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetMap.accepts"
+        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap target hit testing is fresh, bounded, and half-open"
+      - swift: "TerminalDropTargetEvent JSON wire contract"
+        target: "lib/terminal/terminal_drop_target_map.dart::TerminalDropTargetEvent.toJson"
+        test: "test/terminal_drop_target_map_test.dart::TerminalDropTargetMap event JSON uses the shared wire contract"
+    tests:
+      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+        count: 6
+    notes: "Ported 2026-09-29: pure logic (JSON codec, hit testing, freshness gate, event serialization). File I/O (load/writeEvent) not portable — uses FileManager. Logic moving to Rust per Amein's one-implementation rule. Codec belongs in Rust (producer is app-kit drop_target.rs)."
 
   native/SupercliNative/Sources/SupercliNative/TerminalFindBar.swift:
     destination: "Dart: clients/supercli-app"
@@ -100,15 +133,23 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: "OVERCLAIM REVERTED 2026-09-27: was marked 'ported' against a 35-line Dart file with 0 tests ported (Swift: 176 lines). Needs behaviour-level audit before any status above todo."
+    notes: "OVERCLAIM REVERTED 2026-09-27: was marked 'ported' against a 35-line Dart file with 0 tests ported (Swift: 176 lines). Dart port exists at lib/screens/terminalfindbar.dart but has 0 tests. The AppKit NSView (NSTextField, NSStackView, focus management) is not portable; the updateCounts(total:selected:) display logic ('3 of 17' / 'No results' / bare total) is portable and needs tests. Needs behaviour-level audit before any status above todo."
 
   native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "TerminalPathDragMap.path(atScreenRow:column:nowMilliseconds:) — row match + absolute-path gate"
+        target: "lib/terminal/terminal_path_drag_map.dart::TerminalPathDragMap.pathAt"
+        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap fresh mapped cell resolves an absolute path"
+      - swift: "Stale/future/relative maps fail closed"
+        target: "lib/terminal/terminal_path_drag_map.dart::TerminalPathDragMap.pathAt"
+        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap stale, future, and relative maps fail closed"
+    tests:
+      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+        count: 6
+    notes: "Ported 2026-09-29: pure logic (JSON codec, row hit test, freshness gate, absolute-path check). File I/O (load) not portable — uses FileManager. Logic moving to Rust per Amein's one-implementation rule. Codec belongs in Rust (producer is app-kit drop_target.rs)."
 
   native/SupercliNative/Sources/SupercliNative/Views/TerminalArea.swift:
     destination: "Dart: clients/supercli-app"
@@ -144,7 +185,7 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "Tests MobilePaneGroupProjection.summaries(from:) and scopeID(forSelectionKey:). Depends on PaneLayoutState (already ported to Dart). The scopeID mapping (local:/tmp/client -> workspace:/tmp/client, ssh:host -> host:host) is portable logic. Needs a dedicated port."
 
   native/SupercliNative/Tests/SupercliNativeTests/PaneWorkingDirectoryTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -152,7 +193,7 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "Tests SupercliStore.paneWorkingDirectory (cwd resolution: session cwd wins, project path fallback, blank-is-nil) and ClickablePath.resolveFile (relative resolution, dot-segment normalization, missing-file rejection). Depends on the ClickablePath port. Should be ported together with TerminalLinkRegressionTests."
 
   native/SupercliNative/Tests/SupercliNativeTests/RemoteGhosttyPaneRetentionTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -160,15 +201,20 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "AppKit UI (NSView, CGRect, superview hierarchy, SwapContainer attach/detach). The pane-cache retention policy (RemoteGhosttyPaneCache) may have portable logic, but the tests are view-hierarchy tests. Not portable without a native window."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalDropTargetMapTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "TerminalDropTargetMapTests — hit testing, freshness, event wire contract"
+        target: "lib/terminal/terminal_drop_target_map.dart"
+        test: "test/terminal_drop_target_map_test.dart"
+    tests:
+      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+        count: 6
+    notes: "Test file ported 2026-09-29 alongside TerminalDropTargetMap.swift. Logic moving to Rust per Amein's one-implementation rule."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalFontModelTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -176,7 +222,7 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "Terminal font settings persistence (UserDefaults, GhosttyTerminal import). The font-size clamping and family normalization logic is portable, but the persistence layer is platform-specific. Needs a settings-store abstraction before porting."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalLinkRegressionTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -184,15 +230,20 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "Tests ClickablePath.match(inRow:column:), fileURLMatch, absolutePath, and GhosttyTerminalPane.sanitizedURL. The Swift ClickablePath.swift is 209 lines of link-detection logic (path regex, URL sanitization, working-directory resolution). The existing Dart clickablepath.dart is a UI widget (23 lines), not the detection logic. This is a substantial port — needs a dedicated worker."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneClosePolicyTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: ported
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "terminalPaneCloseAction(for:canArchiveSession:) — launcher detaches, plain terminal removes, resumable agent confirms archive"
+        target: "lib/terminal/terminal_pane_close.dart::terminalPaneCloseAction"
+        test: "test/terminal_pane_stream_test.dart::terminalPaneCloseAction group"
+    tests:
+      - file: clients/supercli-app/test/terminal_pane_stream_test.dart
+        count: 3
+    notes: "Behaviour already ported by earlier worker (terminal_pane_close.dart). This Swift test file verifies the same logic."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalPaneDropTargetTests.swift:
     destination: "Dart: clients/supercli-app"
@@ -200,12 +251,17 @@ files:
     checklist: ""
     behaviours: []
     tests: []
-    notes: ""
+    notes: "Tests SidebarSessionDragController.dropTarget (AppKit NSRect/NSPoint hit testing, 285 lines). The drop-zone geometry logic may be portable, but the tests are in AppKit window coordinates (y-up). Needs coordinate-system translation before porting to Dart."
 
   native/SupercliNative/Tests/SupercliNativeTests/TerminalPathDragMapTests.swift:
     destination: "Dart: clients/supercli-app"
-    status: todo
+    status: partial
     checklist: ""
-    behaviours: []
-    tests: []
-    notes: ""
+    behaviours:
+      - swift: "TerminalPathDragMapTests — fresh resolution, stale/future/relative fail-closed"
+        target: "lib/terminal/terminal_path_drag_map.dart"
+        test: "test/terminal_drop_target_map_test.dart::TerminalPathDragMap"
+    tests:
+      - file: clients/supercli-app/test/terminal_drop_target_map_test.dart
+        count: 6
+    notes: "Test file ported 2026-09-29 alongside TerminalPathDragMap.swift. Oversized-marker loader test not portable (requires FileManager). Logic moving to Rust per Amein's one-implementation rule."

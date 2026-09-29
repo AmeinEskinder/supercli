@@ -27,6 +27,8 @@ pub mod app_runtime;
 #[cfg(feature = "native-host")]
 pub mod app_state;
 #[cfg(feature = "native-host")]
+pub mod approval_pairs;
+#[cfg(feature = "native-host")]
 pub mod apps_mcp;
 #[cfg(feature = "native-host")]
 pub mod backup;
@@ -36,6 +38,8 @@ pub mod browser_engine;
 pub mod browser_mcp;
 #[cfg(feature = "native-host")]
 pub mod browser_takeover;
+#[cfg(feature = "native-host")]
+pub mod clickable_path;
 #[cfg(feature = "native-host")]
 pub mod config;
 #[cfg(feature = "native-host")]
@@ -88,6 +92,8 @@ pub mod license;
 #[cfg(feature = "native-host")]
 pub mod local_urls;
 #[cfg(feature = "native-host")]
+pub mod mcp_approval_center;
+#[cfg(feature = "native-host")]
 pub mod mcp_auth;
 #[cfg(feature = "native-host")]
 mod mcp_cancel;
@@ -111,13 +117,19 @@ pub mod plugins;
 #[cfg(all(test, feature = "controller-core"))]
 mod portable_gating_tests;
 #[cfg(feature = "native-host")]
+pub mod preset_overlay;
+pub mod presets;
+#[cfg(feature = "native-host")]
 pub mod profile;
+pub mod provider_theme;
 #[cfg(feature = "controller-core")]
 #[cfg(feature = "native-host")]
 pub mod pty_core;
 pub mod rate_limit;
 #[cfg(feature = "native-host")]
 pub mod screen_activity;
+pub mod terminal_drop_maps;
+pub mod workspace_registry;
 
 pub mod relay_connection;
 #[cfg(feature = "native-host")]
@@ -163,6 +175,8 @@ pub mod session_input;
 #[cfg(feature = "native-host")]
 pub mod session_ops;
 #[cfg(feature = "native-host")]
+pub mod settings_resolve;
+#[cfg(feature = "native-host")]
 pub mod setup;
 #[cfg(feature = "native-host")]
 pub mod skills_mcp;
@@ -173,8 +187,12 @@ pub mod state;
 #[cfg(feature = "native-host")]
 pub mod state_bus;
 #[cfg(feature = "native-host")]
+pub mod store_policies;
+#[cfg(feature = "native-host")]
 pub mod terminal_viewport;
 #[cfg(feature = "native-host")]
 pub mod transcripts;
+#[cfg(feature = "native-host")]
+pub mod workspace_move;
 #[cfg(feature = "native-host")]
 pub mod worktrees;
