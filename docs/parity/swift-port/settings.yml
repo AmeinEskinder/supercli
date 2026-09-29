@@ -269,10 +269,22 @@ files:
       - swift: "GlobalPresetFile (JSON decoding, filters project presets)"
         target: "crates/supercli-core/src/presets.rs::GlobalPresetFile"
         test: "crates/supercli-core/src/presets.rs::global_preset_file_filters_project_scoped"
+      - swift: "ToolUsageScanner.stats (30-day window, 5000-match cap, extension/exact-filename/suffix/parent-dir filters, skips hidden files and package descendants)"
+        target: "crates/supercli-core/src/presets.rs::tool_usage_scanner"
+        test: "crates/supercli-core/src/presets.rs::tool_usage_scanner_counts_session_files"
+      - swift: "ToolUsageScanner store filters (exact fileName, fileNameSuffix, parentDirName; empty extensions match nothing)"
+        target: "crates/supercli-core/src/presets.rs::tool_usage_scanner::store_matches"
+        test: "crates/supercli-core/src/presets.rs::tool_usage_scanner_store_filters"
+      - swift: "ToolUsageScanner skips package descendants (.app etc.)"
+        target: "crates/supercli-core/src/presets.rs::tool_usage_scanner"
+        test: "crates/supercli-core/src/presets.rs::tool_usage_scanner_skips_package_descendants"
+      - swift: "ToolAvailability (pre-scan null-report means available; executable alias discovery; installed quick-tool set)"
+        target: "crates/supercli-core/src/presets.rs::ToolAvailability"
+        test: "crates/supercli-core/src/presets.rs::tool_availability_scan_finds_commands_in_dirs"
     tests:
       - file: crates/supercli-core/src/presets.rs
-        count: 10
-    notes: "650 LOC. Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart presets.dart and presets_test.dart deleted; FFI exposes via supercli-client-ffi."
+        count: 16
+    notes: "650 LOC. Logic moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart presets.dart and presets_test.dart deleted; FFI exposes via supercli-client-ffi. ToolUsageScanner.stats enumerates synchronously under the caller's home (the Swift DispatchQueue hop is caller-side); skipsPackageDescendants is approximated by a fixed package-extension list (Cocoa decides by UTI)."
 
 
   native/SupercliNative/Sources/SupercliNative/Views/PluginListDrag.swift:

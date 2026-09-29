@@ -249,10 +249,16 @@ files:
       - swift: "announceConnectionChanges (silent initial seeding, announce on edge)"
         target: "crates/supercli-client/src/viewer_presence.rs::connection_arrivals"
         test: "crates/supercli-client/src/viewer_presence.rs::connection_arrivals_seed_silently_then_announce"
+      - swift: "hasViewers(sessionID:) — both output feeds count as presence"
+        target: "crates/supercli-client/src/viewer_presence.rs::has_viewers"
+        test: "crates/supercli-client/src/viewer_presence.rs::has_viewers_reflects_merged_presence"
+      - swift: "gridReassertCandidates latch-on-sight; consumeGridReassertCandidate(_:hasActiveFit:) consumes exactly once, preserved while viewers present or a fit is active"
+        target: "crates/supercli-client/src/viewer_presence.rs::GridReassertTracker"
+        test: "crates/supercli-client/src/viewer_presence.rs::grid_reassert_preserved_while_viewers_present_or_fit_active"
     tests:
       - file: crates/supercli-client/src/viewer_presence.rs
-        count: 7
-    notes: "327 LOC. Decision kernel moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart viewer_presence.dart deleted; FFI exposes via supercli-client-ffi. File watching, timers, and toast callbacks are platform runtime machinery and stay on the caller side."
+        count: 11
+    notes: "327 LOC. Decision kernel moved to Rust per Amein's one-implementation rule (feat/move-dart-logic-to-rust, next@5dc280a). Dart viewer_presence.dart deleted; FFI exposes via supercli-client-ffi. File watching (DispatchSource), timers, toast callbacks, and the TerminalArea grid re-assert itself are platform runtime machinery and stay on the caller side; the candidacy state they consume is ported."
 
   native/SupercliNative/Tests/SupercliNativeTests/ViewerPresenceTests.swift:
     destination: "Rust: supercli-client::viewer_presence"

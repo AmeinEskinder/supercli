@@ -169,7 +169,7 @@ _Note: 9 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/PaneLayoutState.swift | 1394 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/PluginSettingsList.swift | 87 | Dart: clients/supercli-app | ported | 203 | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/PresetStateFile.swift | 142 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/Presets.swift | 650 | Rust: supercli-core::presets | ported | 216 | 10 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/Presets.swift | 650 | Rust: supercli-core::presets | ported | 216 | 16 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ProviderCapabilities.swift | 94 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RelayUplinkManager.swift | 769 | Rust: supercli-client | ported |  | 11 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/RemoteDTOAdapters.swift | 247 | Rust: supercli-client | partial |  | 7 |
@@ -183,15 +183,15 @@ _Note: 9 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Snapshot.swift | 803 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/StartupPresentationCache.swift | 50 | Rust: supercli-core/client | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/SurfaceCache.swift | 655 | Rust: supercli-core/client | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift | 133 | Rust: supercli-core::terminal_drop_maps | ported |  | 6 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalDropTargetMap.swift | 133 | Rust: supercli-core::terminal_drop_maps | ported |  | 13 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalFindBar.swift | 176 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPaneWindow.swift | 39 | Dart: clients/supercli-app | todo |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift | 75 | Rust: supercli-core::terminal_drop_maps | ported |  | 6 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/TerminalPathDragMap.swift | 75 | Rust: supercli-core::terminal_drop_maps | ported |  | 13 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Theme.swift | 1758 | Dart: clients/supercli-app/lib/theme.dart | ported |  | 20 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/ToolIcons.swift | 100 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelStore.swift | 16559 | Rust: supercli-core + supercli-client | partial |  | 51 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift | 422 | Rust: supercli-core::workspace_registry | ported |  | 6 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift | 327 | Rust: supercli-client::viewer_presence | ported |  | 7 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/UnpeelWorkspaceRegistry.swift | 422 | Rust: supercli-core::workspace_registry | ported |  | 13 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/ViewerPresence.swift | 327 | Rust: supercli-client::viewer_presence | ported |  | 11 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/AgentAccessSettingsPanel.swift | 52 | Dart: clients/supercli-app | partial | 202, 204, 205 | 3 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/ArchivedSessionsView.swift | 324 | Dart: clients/supercli-app | todo |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/BrowserAccessSections.swift | 390 | Dart: clients/supercli-app | partial | 204, 205 | 2 |
@@ -228,7 +228,7 @@ _Note: 9 sidecar entr(ies) reference files not on disk (kept in the yml, exclude
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/WorkspacesSettingsPanel.swift | 870 | Dart: clients/supercli-app | partial | 201 | 1 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/Views/WorktreesSettingsPanel.swift | 312 | Dart: clients/supercli-app | partial | 212 | 3 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspaceOpenTarget.swift | 353 | Dart: clients/supercli-app/lib/screens/workspace_open_target.dart | ported |  | 0 |
-| clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift | 879 | Rust: supercli-client::workspace_pool | ported |  | 20 |
+| clients/legacy/native/SupercliNative/Sources/SupercliNative/WorkspacePool.swift | 879 | Rust: supercli-client::workspace_pool | ported |  | 34 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/WorktreeGit.swift | 484 | dropped: Host does it (crates/supercli-core/src/host_git.rs) | ported |  | 0 |
 | clients/legacy/native/SupercliNative/Sources/SupercliNative/main.swift | 28 | Rust: supercli-native-bridge::macos::app_shell | ported |  | 5 |
 | clients/legacy/native/SupercliNative/Tests/SupercliNativeTests/ActivityMenuSessionsTests.swift | 187 | Dart: clients/supercli-app | todo |  | 0 |

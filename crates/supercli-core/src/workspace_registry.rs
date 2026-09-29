@@ -11,8 +11,12 @@
 //! and UI surface calls the product concept Workspaces now.
 //!
 //! Only the portable logic is here (record codec, slugify, path normalization,
-//! list-order keys, create/rename/remove). Platform I/O is injected via the
-//! [`WorkspaceRegistryIo`] trait.
+//! list-order keys + persisted order, create/rename/remove, environment
+//! context, pid-file liveness, launcher env construction). Platform I/O is
+//! injected via the [`WorkspaceRegistryIo`] trait.
+//!
+//! DROPPED: `SupercliWorkspaceLauncher.showWindow(home:)` — AppKit/UI-only
+//! (asks a running GUI instance to show its window); no portable behavior.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -45,6 +49,24 @@ pub trait WorkspaceRegistryIo {
     fn now_ms(&self) -> u64;
     /// Generate a random UUID (lowercased).
     fn new_uuid(&self) -> String;
+    /// Read the persisted default-workspace display alias, if any.
+    /// (Swift: UserDefaults `supercli.native.defaultWorkspaceName`.)
+    fn read_default_workspace_name(&self) -> Option<String> {
+        None
+    }
+    /// Persist the default-workspace display alias.
+    fn write_default_workspace_name(&mut self, _name: &str) -> std::io::Result<()> {
+        Ok(())
+    }
+    /// Read the persisted unified workspace-list order (kind-prefixed keys).
+    /// (Swift: AppDefaults `supercli.native.workspaceOrder`.)
+    fn read_workspace_order(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Persist the unified workspace-list order.
+    fn write_workspace_order(&mut self, _keys: &[String]) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 /// Error for workspace operations.
@@ -293,6 +315,284 @@ pub mod list_order {
     }
 }
 
+/// Load the persisted unified workspace-list order.
+pub fn load_workspace_order(io: &dyn WorkspaceRegistryIo) -> Vec<String> {
+    io.read_workspace_order()
+}
+
+/// Save the unified workspace-list order. Saving rewrites the full list, so
+/// removed workspaces age out on their own.
+pub fn save_workspace_order(
+    io: &mut dyn WorkspaceRegistryIo,
+    keys: &[String],
+) -> std::io::Result<()> {
+    io.write_workspace_order(keys)
+}
+
+/// Optional user alias for the implicit/default workspace. Keeping this
+/// separate from `display_name` preserves None as the default-instance
+/// sentinel. Mirrors `SupercliWorkspaceContext.defaultWorkspaceName`
+/// (trims; empty reads as None).
+pub fn default_workspace_name(io: &dyn WorkspaceRegistryIo) -> Option<String> {
+    io.read_default_workspace_name().and_then(|name| {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+/// Rename the default workspace's display alias. Returns false on empty
+/// name (no-op). Mirrors `SupercliWorkspaceContext.renameDefaultWorkspace`.
+pub fn rename_default_workspace(
+    io: &mut dyn WorkspaceRegistryIo,
+    raw_name: &str,
+) -> std::io::Result<bool> {
+    let name = raw_name.trim();
+    if name.is_empty() {
+        return Ok(false);
+    }
+    io.write_default_workspace_name(name)?;
+    Ok(true)
+}
+
+/// Which workspace THIS process is, resolved from its `SUPERCLI_HOME`
+/// environment value against the registry.
+///
+/// `supercli_home` is `None` when the variable is unset — pass
+/// `std::env::var("SUPERCLI_HOME").ok()` at the real call site; tests inject
+/// values directly. Mirrors `SupercliWorkspaceContext`.
+pub mod context {
+    use super::{
+        default_workspace_name, load_registry, normalize_path, WorkspaceRecord, WorkspaceRegistryIo,
+    };
+    use std::path::Path;
+
+    /// The env var that selects the workspace instance.
+    pub const HOME_ENV_VAR: &str = "SUPERCLI_HOME";
+
+    /// True when this process is the default instance (no `SUPERCLI_HOME`,
+    /// or a blank one). Mirrors `SupercliWorkspaceContext.isDefaultInstance`.
+    pub fn is_default_instance(supercli_home: Option<&str>) -> bool {
+        supercli_home.is_none_or(|h| h.trim().is_empty())
+    }
+
+    /// Registry entry for this instance's `SUPERCLI_HOME`; None for the
+    /// default instance and for unregistered homes (dev-blank runs).
+    /// Re-reads the registry per call so renames from another instance apply
+    /// live. Mirrors `SupercliWorkspaceContext.currentWorkspace`.
+    pub fn current_workspace(
+        io: &dyn WorkspaceRegistryIo,
+        supercli_home: Option<&str>,
+    ) -> Option<WorkspaceRecord> {
+        if is_default_instance(supercli_home) {
+            return None;
+        }
+        let home = normalize_path(Path::new(supercli_home.unwrap_or_default()));
+        load_registry(io)
+            .into_iter()
+            .find(|w| normalize_path(&w.home) == home)
+    }
+
+    /// Display name for this instance: None for the default instance; the
+    /// registry name when registered; the `SUPERCLI_HOME` dir name for
+    /// unregistered homes so even those are tellable apart.
+    /// Mirrors `SupercliWorkspaceContext.displayName`.
+    pub fn display_name(
+        io: &dyn WorkspaceRegistryIo,
+        supercli_home: Option<&str>,
+    ) -> Option<String> {
+        if is_default_instance(supercli_home) {
+            return None;
+        }
+        if let Some(workspace) = current_workspace(io, supercli_home) {
+            return Some(workspace.name);
+        }
+        Path::new(supercli_home.unwrap_or_default())
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+    }
+
+    /// The single choke point for the name this instance advertises to
+    /// phones (pairing, bootstrap, Bonjour): workspace name for an isolated
+    /// instance, otherwise the default-workspace alias, otherwise the
+    /// machine's local host name, otherwise "Mac".
+    /// Mirrors `SupercliWorkspaceContext.advertisedHostName`.
+    pub fn advertised_host_name(
+        io: &dyn WorkspaceRegistryIo,
+        supercli_home: Option<&str>,
+        local_host_name: Option<&str>,
+    ) -> String {
+        display_name(io, supercli_home)
+            .or_else(|| default_workspace_name(io))
+            .or_else(|| local_host_name.map(|s| s.to_string()))
+            .unwrap_or_else(|| "Mac".to_string())
+    }
+}
+
+/// Launching and liveness of workspace instances.
+///
+/// A per-home `app.pid` (written at startup) is the running marker; identity
+/// is verified against the kernel-reported process start time before trusting
+/// it — same pid-reuse discipline as the hosted-session manifests.
+///
+/// DROPPED: `SupercliWorkspaceLauncher.showWindow(home:)` — AppKit/UI-only.
+/// Its entire purpose is to make a running GUI instance show its window
+/// (POST /show-window to that home's hook-server ports); there is no
+/// portable behavior to keep.
+pub mod launcher {
+    use super::{WorkspaceError, WorkspaceRecord};
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::process::Stdio;
+
+    /// Pid-reuse tolerance: recorded vs kernel-reported start times must agree
+    /// within this window. Mirrors `pidStartToleranceMs`.
+    pub const PID_START_TOLERANCE_MS: u64 = 10_000;
+
+    /// Env marker for a windowless (menu-bar agent) launch.
+    pub const LAUNCH_HIDDEN_ENV_VAR: &str = "SUPERCLI_LAUNCH_HIDDEN";
+
+    /// Contents of `<home>/app.pid`.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct AppPidFile {
+        pub pid: u32,
+        pub pid_started_at: Option<u64>,
+    }
+
+    pub fn pid_file_path(home: &Path) -> PathBuf {
+        home.join("app.pid")
+    }
+
+    /// Pid of the live instance owning `home`, or None (missing/stale/
+    /// unverifiable pidfile). `process_start_time_ms` is injected for
+    /// testability — pass the host's process-start-time lookup in
+    /// production. Mirrors `SupercliWorkspaceLauncher.runningPid`.
+    pub fn running_pid(
+        home: &Path,
+        process_start_time_ms: impl Fn(u32) -> Option<u64>,
+    ) -> Option<u32> {
+        let data = std::fs::read(pid_file_path(home)).ok()?;
+        let file: AppPidFile = serde_json::from_slice(&data).ok()?;
+        if file.pid <= 1 {
+            return None;
+        }
+        let actual = process_start_time_ms(file.pid)?;
+        let recorded = file.pid_started_at?;
+        if actual.abs_diff(recorded) <= PID_START_TOLERANCE_MS {
+            Some(file.pid)
+        } else {
+            None
+        }
+    }
+
+    /// Written by every instance for its own home at startup (atomic).
+    /// Mirrors `SupercliWorkspaceLauncher.writeOwnPidFile`.
+    pub fn write_own_pid_file(
+        home: &Path,
+        pid: u32,
+        process_start_time_ms: impl Fn(u32) -> Option<u64>,
+    ) -> std::io::Result<()> {
+        std::fs::create_dir_all(home)?;
+        let file = AppPidFile {
+            pid,
+            pid_started_at: process_start_time_ms(pid),
+        };
+        let data = serde_json::to_vec(&file).map_err(std::io::Error::other)?;
+        let tmp = home.join("app.pid.tmp");
+        std::fs::write(&tmp, &data)?;
+        std::fs::rename(&tmp, pid_file_path(home))?;
+        Ok(())
+    }
+
+    /// Mirrors `SupercliWorkspaceLauncher.removeOwnPidFile`.
+    pub fn remove_own_pid_file(home: &Path) -> std::io::Result<()> {
+        let path = pid_file_path(home);
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+        }
+        Ok(())
+    }
+
+    /// True when another live process already owns this instance's home.
+    /// Mirrors `SupercliWorkspaceLauncher.otherInstanceOwnsCurrentHome`.
+    pub fn other_instance_owns_home(
+        home: &Path,
+        own_pid: u32,
+        process_start_time_ms: impl Fn(u32) -> Option<u64>,
+    ) -> bool {
+        running_pid(home, process_start_time_ms).is_some_and(|pid| pid != own_pid)
+    }
+
+    /// Build the child environment for launching a workspace instance:
+    /// sets `SUPERCLI_HOME`, strips test/snapshot vars so they never leak
+    /// into a user-facing instance, and sets (or removes) the hidden-launch
+    /// marker. Pure and directly testable.
+    pub fn launch_env(
+        workspace_home: &Path,
+        base_env: &HashMap<String, String>,
+        hidden: bool,
+    ) -> HashMap<String, String> {
+        let mut env: HashMap<String, String> = base_env
+            .iter()
+            .filter(|(k, _)| {
+                !k.starts_with("SUPERCLI_TEST_") && !k.starts_with("SUPERCLI_SNAPSHOT")
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        env.insert(
+            super::context::HOME_ENV_VAR.to_string(),
+            workspace_home.to_string_lossy().into_owned(),
+        );
+        if hidden {
+            env.insert(LAUNCH_HIDDEN_ENV_VAR.to_string(), "1".to_string());
+        } else {
+            // Never inherit a hidden marker from a hidden-launched parent.
+            env.remove(LAUNCH_HIDDEN_ENV_VAR);
+        }
+        env
+    }
+
+    /// Launch a workspace as a second instance of the app binary.
+    /// Direct-exec on purpose: `open`/NSWorkspace neither forwards env nor
+    /// starts a second instance of an already-running bundle id.
+    /// `hidden` starts the instance WINDOWLESS (menu-bar agent state).
+    /// `executable` is the app binary (Swift: `Bundle.main.executableURL`).
+    /// Refuses while the workspace is already running.
+    /// Mirrors `SupercliWorkspaceLauncher.launch(_:hidden:)`.
+    pub fn launch_workspace(
+        workspace: &WorkspaceRecord,
+        executable: &Path,
+        base_env: &HashMap<String, String>,
+        hidden: bool,
+        process_start_time_ms: impl Fn(u32) -> Option<u64>,
+    ) -> Result<(), WorkspaceError> {
+        if running_pid(&workspace.home, &process_start_time_ms).is_some() {
+            return Err(WorkspaceError(format!(
+                "{} is already running.",
+                workspace.name
+            )));
+        }
+        std::fs::create_dir_all(&workspace.home)
+            .map_err(|e| WorkspaceError(format!("create workspace home: {e}")))?;
+        let env = launch_env(&workspace.home, base_env, hidden);
+        std::process::Command::new(executable)
+            .env_clear()
+            .envs(&env)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| WorkspaceError(format!("launch workspace: {e}")))?;
+        // No wait: the child is a full GUI app that outlives us.
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,6 +603,8 @@ mod tests {
         dirs: HashSet<PathBuf>,
         now: u64,
         uuid_counter: RefCell<u32>,
+        default_name: Option<String>,
+        order: Vec<String>,
     }
 
     impl MemIo {
@@ -312,6 +614,8 @@ mod tests {
                 dirs: HashSet::new(),
                 now: 1_700_000_000_000,
                 uuid_counter: RefCell::new(0),
+                default_name: None,
+                order: Vec::new(),
             }
         }
     }
@@ -342,6 +646,20 @@ mod tests {
             let mut c = self.uuid_counter.borrow_mut();
             *c += 1;
             format!("uuid-{c:04}")
+        }
+        fn read_default_workspace_name(&self) -> Option<String> {
+            self.default_name.clone()
+        }
+        fn write_default_workspace_name(&mut self, name: &str) -> std::io::Result<()> {
+            self.default_name = Some(name.to_string());
+            Ok(())
+        }
+        fn read_workspace_order(&self) -> Vec<String> {
+            self.order.clone()
+        }
+        fn write_workspace_order(&mut self, keys: &[String]) -> std::io::Result<()> {
+            self.order = keys.to_vec();
+            Ok(())
         }
     }
 
@@ -454,5 +772,256 @@ mod tests {
         let mut io2 = MemIo::new();
         io2.registry = Some(b"{{{".to_vec());
         assert!(load_registry(&io2).is_empty());
+    }
+
+    // ------------------------------------------------------------------
+    // Gap 3: environment context, persisted ordering, PID management,
+    // launcher.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn context_resolves_instance_from_env() {
+        use context::*;
+        let mut io = MemIo::new();
+        let dir = PathBuf::from("/real");
+        let rec = create_workspace(&mut io, &dir, "Isolated").unwrap();
+
+        assert!(is_default_instance(None));
+        assert!(is_default_instance(Some("")));
+        assert!(is_default_instance(Some("   ")));
+        assert!(!is_default_instance(Some("/real/profiles/isolated")));
+
+        // Registered home resolves to its record.
+        let home = rec.home.to_string_lossy().into_owned();
+        let found = current_workspace(&io, Some(&home)).expect("registered");
+        assert_eq!(found.name, "Isolated");
+        // Default instance and unregistered homes: None.
+        assert!(current_workspace(&io, None).is_none());
+        assert!(current_workspace(&io, Some("/tmp/dev-blank")).is_none());
+
+        // displayName: registry name when registered...
+        assert_eq!(display_name(&io, Some(&home)).as_deref(), Some("Isolated"));
+        // ...dir basename for unregistered homes...
+        assert_eq!(
+            display_name(&io, Some("/tmp/dev-blank")).as_deref(),
+            Some("dev-blank")
+        );
+        // ...None for the default instance.
+        assert_eq!(display_name(&io, None), None);
+    }
+
+    #[test]
+    fn default_workspace_name_trims_and_rejects_empty() {
+        let mut io = MemIo::new();
+        assert_eq!(default_workspace_name(&io), None);
+        assert!(!rename_default_workspace(&mut io, "   ").unwrap());
+        assert_eq!(default_workspace_name(&io), None);
+        assert!(rename_default_workspace(&mut io, "  Main Mac  ").unwrap());
+        assert_eq!(default_workspace_name(&io).as_deref(), Some("Main Mac"));
+        // A stored blank collapses to None.
+        io.default_name = Some("   ".into());
+        assert_eq!(default_workspace_name(&io), None);
+    }
+
+    #[test]
+    fn advertised_host_name_precedence() {
+        use context::*;
+        let mut io = MemIo::new();
+        let dir = PathBuf::from("/real");
+        let rec = create_workspace(&mut io, &dir, "Isolated").unwrap();
+        let home = rec.home.to_string_lossy().into_owned();
+
+        // Isolated instance: workspace name wins over everything.
+        rename_default_workspace(&mut io, "Alias").unwrap();
+        assert_eq!(
+            advertised_host_name(&io, Some(&home), Some("MacBook")),
+            "Isolated"
+        );
+        // Default instance: alias, then machine name, then "Mac".
+        assert_eq!(advertised_host_name(&io, None, Some("MacBook")), "Alias");
+        let io2 = MemIo::new();
+        assert_eq!(advertised_host_name(&io2, None, Some("MacBook")), "MacBook");
+        assert_eq!(advertised_host_name(&io2, None, None), "Mac");
+    }
+
+    #[test]
+    fn workspace_order_persists_round_trip() {
+        let mut io = MemIo::new();
+        assert!(load_workspace_order(&io).is_empty());
+        let keys = vec!["host:abc".to_string(), "local:/x".to_string()];
+        save_workspace_order(&mut io, &keys).unwrap();
+        assert_eq!(load_workspace_order(&io), keys);
+        // Saving rewrites the full list (removed workspaces age out).
+        save_workspace_order(&mut io, &["ssh:1".to_string()]).unwrap();
+        assert_eq!(load_workspace_order(&io), vec!["ssh:1".to_string()]);
+    }
+
+    #[test]
+    #[cfg(feature = "native-host")]
+    fn pid_file_liveness_verifies_start_time() {
+        use launcher::*;
+        let home = std::env::temp_dir().join(format!(
+            "supercli-pid-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        std::fs::create_dir_all(&home).unwrap();
+        let pid = std::process::id();
+
+        // No pidfile: not running.
+        assert_eq!(
+            running_pid(&home, crate::session_host::process_start_time_ms),
+            None
+        );
+
+        // Positive path only where the kernel reports start times.
+        if crate::session_host::process_start_time_ms(pid).is_some() {
+            write_own_pid_file(&home, pid, crate::session_host::process_start_time_ms).unwrap();
+            assert_eq!(
+                running_pid(&home, crate::session_host::process_start_time_ms),
+                Some(pid)
+            );
+            assert!(!other_instance_owns_home(
+                &home,
+                pid,
+                crate::session_host::process_start_time_ms
+            ));
+            assert!(other_instance_owns_home(
+                &home,
+                pid + 1,
+                crate::session_host::process_start_time_ms
+            ));
+            remove_own_pid_file(&home).unwrap();
+            assert_eq!(
+                running_pid(&home, crate::session_host::process_start_time_ms),
+                None
+            );
+        }
+
+        // Stale pid (start time mismatch or missing process): None.
+        let stale = AppPidFile {
+            pid: u32::MAX - 7,
+            pid_started_at: Some(1),
+        };
+        std::fs::write(pid_file_path(&home), serde_json::to_vec(&stale).unwrap()).unwrap();
+        assert_eq!(
+            running_pid(&home, crate::session_host::process_start_time_ms),
+            None
+        );
+
+        // pid <= 1 is never trusted.
+        let root = AppPidFile {
+            pid: 1,
+            pid_started_at: Some(1),
+        };
+        std::fs::write(pid_file_path(&home), serde_json::to_vec(&root).unwrap()).unwrap();
+        assert_eq!(
+            running_pid(&home, |_| Some(1)),
+            None,
+            "pid 1 rejected even with matching start time"
+        );
+
+        // Corrupt pidfile: None.
+        std::fs::write(pid_file_path(&home), b"not json").unwrap();
+        assert_eq!(
+            running_pid(&home, crate::session_host::process_start_time_ms),
+            None
+        );
+
+        std::fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn launch_env_sanitizes_and_sets_home() {
+        use launcher::*;
+        let base: std::collections::HashMap<String, String> = [
+            ("PATH".to_string(), "/usr/bin".to_string()),
+            ("SUPERCLI_TEST_MODE".to_string(), "1".to_string()),
+            ("SUPERCLI_SNAPSHOT_X".to_string(), "y".to_string()),
+            (LAUNCH_HIDDEN_ENV_VAR.to_string(), "1".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let home = Path::new("/real/profiles/w");
+
+        let env = launch_env(home, &base, true);
+        assert_eq!(
+            env.get("SUPERCLI_HOME").map(String::as_str),
+            Some("/real/profiles/w")
+        );
+        assert!(
+            !env.contains_key("SUPERCLI_TEST_MODE"),
+            "test vars never leak"
+        );
+        assert!(
+            !env.contains_key("SUPERCLI_SNAPSHOT_X"),
+            "snapshot vars never leak"
+        );
+        assert_eq!(env.get("PATH").map(String::as_str), Some("/usr/bin"));
+        assert_eq!(
+            env.get(LAUNCH_HIDDEN_ENV_VAR).map(String::as_str),
+            Some("1")
+        );
+
+        // Non-hidden launch removes an inherited hidden marker.
+        let env2 = launch_env(home, &base, false);
+        assert!(!env2.contains_key(LAUNCH_HIDDEN_ENV_VAR));
+        assert_eq!(
+            env2.get("SUPERCLI_HOME").map(String::as_str),
+            Some("/real/profiles/w")
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "native-host")]
+    fn launch_refuses_while_running() {
+        use launcher::*;
+        let home = std::env::temp_dir().join(format!(
+            "supercli-launch-test-{}-{}",
+            std::process::id(),
+            crate::state::current_timestamp_ms()
+        ));
+        std::fs::create_dir_all(&home).unwrap();
+        let workspace = WorkspaceRecord {
+            id: "w1".into(),
+            name: "Busy".into(),
+            home: home.clone(),
+            created_at_ms: 0,
+        };
+        let base = std::collections::HashMap::new();
+
+        if crate::session_host::process_start_time_ms(std::process::id()).is_some() {
+            // Mark the home as owned by this process: launch must refuse.
+            write_own_pid_file(
+                &home,
+                std::process::id(),
+                crate::session_host::process_start_time_ms,
+            )
+            .unwrap();
+            let err = launch_workspace(
+                &workspace,
+                Path::new("/bin/true"),
+                &base,
+                false,
+                crate::session_host::process_start_time_ms,
+            )
+            .expect_err("must refuse while running");
+            assert!(err.0.contains("already running"), "got: {err}");
+            remove_own_pid_file(&home).unwrap();
+        }
+
+        // Nothing running: launch proceeds (spawns a no-op that exits at once).
+        if Path::new("/bin/true").exists() {
+            launch_workspace(
+                &workspace,
+                Path::new("/bin/true"),
+                &base,
+                false,
+                crate::session_host::process_start_time_ms,
+            )
+            .expect("launch succeeds when idle");
+        }
+
+        std::fs::remove_dir_all(&home).ok();
     }
 }
