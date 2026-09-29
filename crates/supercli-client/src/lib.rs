@@ -45,6 +45,8 @@ pub mod host_routing;
 pub mod host_store;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hosts;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ios_remote_connection;
 pub mod launch_config;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod link_authority;
