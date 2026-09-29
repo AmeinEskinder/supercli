@@ -780,6 +780,19 @@ fn grok_auto_background(config: &GrokUiConfig) -> ThemeBackground {
     ThemeBackground::new(Some(light), Some(dark))
 }
 
+/// Extract the command head from a launch command: the first whitespace-delimited
+/// token's file name, lowercased (e.g. `/usr/local/bin/opencode --help` → `opencode`).
+fn command_head(command: &str) -> String {
+    command
+        .split([' ', '\t'])
+        .next()
+        .unwrap_or("")
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .to_lowercase()
+}
+
 /// Resolve the provider background for a launch command.
 /// Mirrors `TerminalFrameStyle.providerBackground(command:workingDirectory:)`:
 /// detect the provider tool from the command head and resolve its theme
@@ -788,14 +801,7 @@ pub fn provider_background(
     command: &str,
     working_directory: Option<&str>,
 ) -> Option<ThemeBackground> {
-    let head = command
-        .split([' ', '\t'])
-        .next()
-        .unwrap_or("")
-        .rsplit('/')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let head = command_head(command);
     match head.as_str() {
         "opencode" => opencode_background(working_directory),
         "grok" => grok_background(command),
@@ -1010,14 +1016,7 @@ pub fn is_relevant_theme_change(path: &str) -> bool {
 /// mirrors into the terminal frame (OpenCode / Grok).
 /// Mirrors `TerminalFrameStyle.usesProviderTheme(command:)`.
 pub fn uses_provider_theme(command: &str) -> bool {
-    let head = command
-        .split([' ', '\t'])
-        .next()
-        .unwrap_or("")
-        .rsplit('/')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let head = command_head(command);
     matches!(head.as_str(), "opencode" | "grok")
 }
 
