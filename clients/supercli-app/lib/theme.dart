@@ -450,7 +450,7 @@ final class TerminalPaneStyle {
 /// normalization the Host's App detection index uses.
 String commandBasename(String command) {
   final head = command.split(RegExp(r'[ \t]')).firstWhere(
-        (t) => t.isNotEmpty(),
+        (t) => t.isNotEmpty,
         orElse: () => '',
       );
   if (head.isEmpty) return '';
